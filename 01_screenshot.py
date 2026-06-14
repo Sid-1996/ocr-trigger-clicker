@@ -28,8 +28,14 @@ def list_windows() -> list[str]:
     return [w.title for w in gw.getWindowsWithTitle("") if w.title and w.visible]
 
 
-def activate_window(title: str) -> bool:
+def _matching_windows(title: str):
     matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
+    exact = [w for w in matches if w.title == title]
+    return exact or matches
+
+
+def activate_window(title: str) -> bool:
+    matches = _matching_windows(title)
     if not matches:
         return False
     try:
@@ -40,7 +46,7 @@ def activate_window(title: str) -> bool:
 
 
 def get_window_rect(title: str) -> dict | None:
-    matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
+    matches = _matching_windows(title)
     if not matches:
         return None
     window = matches[0]
@@ -139,7 +145,7 @@ def capture_window_content(title: str) -> np.ndarray | None:
     BitBlt + CAPTUREBLT 從視窗 DC 讀取畫面。
     兩者都失敗則回傳 None，由呼叫端處理。
     """
-    matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
+    matches = _matching_windows(title)
     if not matches:
         return None
     hwnd = matches[0]._hWnd

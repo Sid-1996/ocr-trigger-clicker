@@ -2,16 +2,19 @@ import threading
 import time
 
 import numpy as np
-from PyQt6.QtCore import QObject, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QComboBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
     QStatusBar,
@@ -55,6 +58,12 @@ class _OcrSignals(QObject):
 class OcrDebugWindow(QMainWindow):
     roi_selected = pyqtSignal(dict)
 
+    _OCR_MODES = {
+        "完整測試": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
+        "平衡": {"preprocess": True, "max_side_len": 960, "min_confidence": 0.35},
+        "快速": {"preprocess": True, "max_side_len": 640, "min_confidence": 0.5},
+    }
+
     def __init__(self, window_title: str, parent=None):
         super().__init__(parent)
         self._window_title = window_title
@@ -62,6 +71,7 @@ class OcrDebugWindow(QMainWindow):
         self._ocr_results: list = []
         self._latest_raw: np.ndarray | None = None
         self._annotated_pixmap: QPixmap | None = None
+        self._crop_pixmap: QPixmap | None = None
         self._capture_source = ""
         self._selected_index = -1
         self._signals = _OcrSignals()
@@ -74,13 +84,19 @@ class OcrDebugWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(8)
 
         toolbar = QHBoxLayout()
         self._capture_btn = QPushButton("拍一張")
         self._capture_btn.setToolTip("擷取一次畫面並執行 OCR 辨識")
+        self._ocr_mode = QComboBox()
+        self._ocr_mode.addItems(list(self._OCR_MODES))
+        self._ocr_mode.setCurrentText("完整測試")
+        self._ocr_mode.setToolTip("完整測試：保留更多細節；快速：偏向即時回饋")
         self._close_btn = QPushButton("關閉")
         self._close_btn.clicked.connect(self.close)
         toolbar.addWidget(self._capture_btn)
+        toolbar.addWidget(self._ocr_mode)
         toolbar.addWidget(self._close_btn)
         toolbar.addStretch()
         self._info_label = QLabel("")
@@ -92,11 +108,19 @@ class OcrDebugWindow(QMainWindow):
         self._image_label = _ImageLabel()
         self._image_label.setText("尚未截圖 — 點擊「拍一張」開始")
         self._image_label.clicked.connect(self._on_image_clicked)
+        self._image_label.installEventFilter(self)
         splitter.addWidget(self._image_label)
 
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(8)
+
+        self._summary_label = QLabel("視窗：-\n來源：-\n尺寸：-\n區塊：-\n耗時：-")
+        self._summary_label.setWordWrap(True)
+        self._summary_label.setMinimumHeight(96)
+        self._style_card(self._summary_label, dark=False)
+        right_layout.addWidget(self._summary_label)
 
         self._result_table = QTableWidget()
         self._result_table.setFont(QFont("Consolas", 9))
@@ -115,14 +139,50 @@ class OcrDebugWindow(QMainWindow):
         self._result_table.itemSelectionChanged.connect(self._on_table_selection_changed)
         right_layout.addWidget(self._result_table)
 
+        crop_title = QLabel("選取區塊預覽")
+        crop_title.setStyleSheet("font-weight: 600; color: #666;")
+        right_layout.addWidget(crop_title)
+
+        self._crop_label = QLabel("點選表格中的一列，這裡會顯示裁切預覽")
+        self._crop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._crop_label.setMinimumHeight(180)
+        self._crop_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._crop_label.setStyleSheet(
+            "QLabel {"
+            "  background: #111;"
+            "  color: #a8a8a8;"
+            "  border: 1px solid #2a2d33;"
+            "  border-radius: 8px;"
+            "  padding: 6px;"
+            "}"
+        )
+        self._crop_label.installEventFilter(self)
+        right_layout.addWidget(self._crop_label)
+
+        self._selected_detail = QLabel("選取區塊：尚未選取")
+        self._selected_detail.setWordWrap(True)
+        self._selected_detail.setMinimumHeight(110)
+        self._style_card(self._selected_detail, dark=True)
+        right_layout.addWidget(self._selected_detail)
+
         self._apply_roi_btn = QPushButton("套用至目前規則 ROI")
         self._apply_roi_btn.setEnabled(False)
         self._apply_roi_btn.setToolTip("將選取的文字區塊座標設為目前規則的偵測範圍")
         self._apply_roi_btn.clicked.connect(self._on_apply_roi)
         right_layout.addWidget(self._apply_roi_btn)
+        right_layout.addStretch()
 
-        splitter.addWidget(right_panel)
-        splitter.setSizes([650, 350])
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setWidget(right_panel)
+
+        splitter.addWidget(right_scroll)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
+        splitter.setSizes([720, 420])
         layout.addWidget(splitter)
 
         self._status_bar = QStatusBar()
@@ -131,31 +191,62 @@ class OcrDebugWindow(QMainWindow):
 
         self._capture_btn.clicked.connect(self._take_snapshot)
 
+    def _style_card(self, widget: QLabel, *, dark: bool = False):
+        if dark:
+            widget.setStyleSheet(
+                "QLabel {"
+                "  background: #101215;"
+                "  color: #d8d8d8;"
+                "  border: 1px solid #2a2d33;"
+                "  border-radius: 8px;"
+                "  padding: 8px;"
+                "}"
+            )
+        else:
+            widget.setStyleSheet(
+                "QLabel {"
+                "  background: #f6f7f9;"
+                "  color: #222;"
+                "  border: 1px solid #d9dde3;"
+                "  border-radius: 8px;"
+                "  padding: 8px;"
+                "}"
+            )
+
+    def _ocr_options(self) -> dict:
+        mode = self._ocr_mode.currentText()
+        return self._OCR_MODES.get(mode, self._OCR_MODES["完整測試"])
+
     def _minimize_and_capture(self):
         try:
             parent = self.parent() if self.parent() else None
-            self_vis = self.isVisible()
-            parent_vis = parent.isVisible() if parent else False
 
             self.showMinimized()
             if parent:
                 parent.showMinimized()
             QApplication.processEvents()
-            time.sleep(0.03)
+            time.sleep(0.08)
 
             activate_window(self._window_title)
-            time.sleep(0.03)
+            time.sleep(0.12)
 
             img = capture(self._window_title)
+            source = "螢幕截圖"
 
-            if parent_vis:
+            if img is None:
+                img = capture_window_content(self._window_title)
+                source = "視窗內容"
+
+            return img, source
+        except Exception:
+            return None, ""
+        finally:
+            parent = self.parent() if self.parent() else None
+            if parent and parent.isMinimized():
                 parent.showNormal()
                 parent.activateWindow()
-            if self_vis:
+            if self.isMinimized():
                 self.showNormal()
-            return img
-        except Exception:
-            return None
 
     def _take_snapshot(self):
         self._capture_btn.setEnabled(False)
@@ -164,11 +255,7 @@ class OcrDebugWindow(QMainWindow):
         self._selected_index = -1
         self._apply_roi_btn.setEnabled(False)
 
-        raw = capture_window_content(self._window_title)
-        src = "PrintWindow"
-        if raw is None:
-            raw = self._minimize_and_capture()
-            src = "mss (minimized)" if raw is not None else "mss (failed)"
+        raw, src = self._minimize_and_capture()
         self._capture_source = src
 
         if raw is None:
@@ -184,7 +271,8 @@ class OcrDebugWindow(QMainWindow):
     def _do_ocr(self, img: np.ndarray):
         try:
             t0 = time.monotonic()
-            results = recognize(img)
+            opts = self._ocr_options()
+            results = recognize(img, **opts)
             elapsed = (time.monotonic() - t0) * 1000
             self._signals.ocr_done.emit(results, elapsed)
         finally:
@@ -199,6 +287,13 @@ class OcrDebugWindow(QMainWindow):
         self._update_display()
         h, w = self._latest_raw.shape[:2]
         self._info_label.setText(f"耗時: {elapsed_ms:.0f} ms  {len(results)} 個區塊")
+        self._summary_label.setText(
+            f"視窗：{self._window_title}\n"
+            f"來源：{self._capture_source or '未知'}\n"
+            f"尺寸：{w} × {h}\n"
+            f"區塊：{len(results)}\n"
+            f"耗時：{elapsed_ms:.0f} ms"
+        )
         self._status_bar.showMessage(
             f"[{self._capture_source}] {w}×{h} | {len(results)} 個區塊 | {elapsed_ms:.0f} ms"
         )
@@ -272,6 +367,7 @@ class OcrDebugWindow(QMainWindow):
     def _rebuild_annotated(self):
         if self._latest_raw is None:
             self._annotated_pixmap = None
+            self._crop_pixmap = None
             return
         img = np.ascontiguousarray(self._latest_raw)
         h, w, ch = img.shape
@@ -312,6 +408,57 @@ class OcrDebugWindow(QMainWindow):
 
         painter.end()
         self._annotated_pixmap = pixmap
+        self._update_crop_preview()
+
+    def _update_crop_preview(self):
+        self._crop_pixmap = None
+        self._selected_detail.setText("選取區塊：尚未選取")
+        if self._latest_raw is None:
+            self._crop_label.setText("無預覽")
+            self._crop_label.setPixmap(QPixmap())
+            return
+
+        if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
+            self._crop_label.setText("點選表格中的一列，這裡會顯示裁切預覽")
+            self._crop_label.setPixmap(QPixmap())
+            return
+
+        r = self._ocr_results[self._selected_index]
+        pad = 24
+        x0 = max(0, r.x - pad)
+        y0 = max(0, r.y - pad)
+        x1 = min(self._latest_raw.shape[1], r.x + r.w + pad)
+        y1 = min(self._latest_raw.shape[0], r.y + r.h + pad)
+        if x1 <= x0 or y1 <= y0:
+            self._crop_label.setText("無法產生裁切預覽")
+            self._crop_label.setPixmap(QPixmap())
+            return
+
+        crop = np.ascontiguousarray(self._latest_raw[y0:y1, x0:x1])
+        ch = crop.shape[2]
+        q_img = QImage(
+            crop.tobytes(),
+            crop.shape[1],
+            crop.shape[0],
+            ch * crop.shape[1],
+            QImage.Format.Format_RGB888,
+        ).rgbSwapped()
+        pixmap = QPixmap.fromImage(q_img)
+        self._crop_pixmap = pixmap
+        self._crop_label.setPixmap(
+            pixmap.scaled(
+                self._crop_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        self._selected_detail.setText(
+            "選取區塊："
+            f"#{self._selected_index + 1}\n"
+            f"文字：{r.text}\n"
+            f"座標：x={r.x}, y={r.y}, w={r.w}, h={r.h}\n"
+            f"信心度：{r.confidence:.2f}"
+        )
 
     def _update_display(self):
         if self._annotated_pixmap is None:
@@ -325,7 +472,23 @@ class OcrDebugWindow(QMainWindow):
             Qt.TransformationMode.SmoothTransformation,
         )
         self._image_label.setPixmap(scaled)
+        if self._crop_pixmap is not None:
+            self._crop_label.setPixmap(
+                self._crop_pixmap.scaled(
+                    self._crop_label.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._update_display()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Resize:
+            if obj is self._image_label:
+                self._update_display()
+            elif obj is self._crop_label:
+                self._update_crop_preview()
+        return super().eventFilter(obj, event)

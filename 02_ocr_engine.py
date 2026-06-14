@@ -1,3 +1,4 @@
+import threading
 import time
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -9,6 +10,9 @@ import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 
 _engine: Optional[RapidOCR] = None
+_engine_lock = threading.RLock()
+_DEFAULT_DET_LIMIT_SIDE_LEN = 960
+_DEFAULT_MAX_SIDE_LEN = 640
 
 
 @dataclass
@@ -39,35 +43,91 @@ def _box_to_rect(box) -> tuple[int, int, int, int]:
 
 def init_engine() -> None:
     global _engine
-    _engine = RapidOCR()
+    with _engine_lock:
+        if _engine is None:
+            _engine = RapidOCR(
+                det_limit_type="max",
+                det_limit_side_len=_DEFAULT_DET_LIMIT_SIDE_LEN,
+                use_cls=False,
+            )
+            # 預先跑一次極小測試圖，避免第一次正式 OCR 才做模型 warm-up。
+            warmup = np.full((96, 256, 3), 255, dtype=np.uint8)
+            cv2.putText(
+                warmup,
+                "warmup",
+                (12, 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                (0, 0, 0),
+                2,
+                cv2.LINE_AA,
+            )
+            try:
+                _engine(warmup, use_cls=False)
+            except Exception:
+                pass
+
+
+def _prepare_image(
+    image: np.ndarray,
+    max_side_len: int,
+    preprocess: bool,
+) -> tuple[np.ndarray, float]:
+    img = image.copy()
+    scale = 1.0
+
+    h, w = img.shape[:2]
+    max_side = max(h, w)
+    if max_side_len > 0 and max_side > max_side_len:
+        scale = max_side_len / max_side
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    if preprocess:
+        if len(img.shape) == 3:
+            if img.shape[2] == 4:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
+            else:
+                # capture() 回傳 RGB，這裡要用 RGB2GRAY 才能保留正確亮度權重。
+                gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+        img = cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
+
+    return img, scale
+
+
+def _rescale_box(box, scale: float):
+    if scale == 1.0:
+        return box
+    arr = np.asarray(box, dtype=np.float32)
+    arr /= scale
+    return arr.astype(np.int32).tolist()
 
 
 def recognize(
     image: np.ndarray,
     roi_offset: dict | None = None,
     preprocess: bool = True,
+    max_side_len: int = _DEFAULT_MAX_SIDE_LEN,
+    min_confidence: float = 0.5,
 ) -> list[OcrResult]:
     if _engine is None:
         init_engine()
     if image is None or image.size == 0:
         return []
-    img = image.copy()
-    if preprocess:
-        if len(img.shape) == 3:
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = img
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-        img = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+    img, scale = _prepare_image(image, max_side_len, preprocess)
     ox, oy = (roi_offset["x"], roi_offset["y"]) if roi_offset else (0, 0)
-    result = _engine(img)
+    result = _engine(img, use_cls=False)
     results: list[OcrResult] = []
     if result is None or result[0] is None:
         return results
     for box, text, score in result[0]:
-        if score is None or score < 0.5:
+        if score is None or score < min_confidence:
             continue
-        rx, ry, rw, rh = _box_to_rect(box)
+        rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
         results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
     return results
 

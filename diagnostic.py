@@ -41,6 +41,7 @@ def step1_python() -> list[tuple[bool, str]]:
 
 def step2_screenshot() -> list[tuple[bool, str]]:
     items = []
+    windows = []
     try:
         mod = _import("screenshot", _here / "01_screenshot.py")
         items.append(_check(True, "import 成功"))
@@ -102,7 +103,7 @@ def step3_ocr() -> list[tuple[bool, str]]:
             img = ss_mod.capture(windows[0])
             if img is not None:
                 t0 = time.time()
-                results = mod.recognize(img)
+                results = mod.recognize(img, max_side_len=640)
                 t1 = time.time()
                 items.append(
                     _check(
@@ -442,4 +443,3 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-    input("\n按 Enter 鍵結束...")
