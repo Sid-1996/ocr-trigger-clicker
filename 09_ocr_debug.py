@@ -32,6 +32,7 @@ class OcrDebugWindow(QMainWindow):
         self._ocr_busy = False
         self._ocr_results: list = []
         self._latest_raw: np.ndarray | None = None
+        self._current_pixmap: QPixmap | None = None
         self._capture_source = ""
         self._signals = _OcrSignals()
         self._signals.frame_ready.connect(self._on_frame)
@@ -51,6 +52,7 @@ class OcrDebugWindow(QMainWindow):
         self._image_label.setStyleSheet("background-color: #1e1e1e; color: #aaa; font-size: 14px;")
         self._image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._image_label.setMinimumSize(320, 240)
+        self._image_label.setScaledContents(False)
         layout.addWidget(self._image_label)
 
         self._status_bar = QStatusBar()
@@ -167,10 +169,20 @@ class OcrDebugWindow(QMainWindow):
         q_img = QImage(
             img.tobytes(), w, h, bytes_per_line, QImage.Format.Format_RGB888
         ).rgbSwapped()
-        pixmap = QPixmap.fromImage(q_img)
-        scaled = pixmap.scaled(
-            self._image_label.size(),
+        self._current_pixmap = QPixmap.fromImage(q_img)
+        self._refresh_pixmap()
+
+    def _refresh_pixmap(self):
+        if self._current_pixmap is None:
+            return
+        available = self.centralWidget().size()
+        scaled = self._current_pixmap.scaled(
+            available,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
         self._image_label.setPixmap(scaled)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._refresh_pixmap()
