@@ -1,3 +1,4 @@
+import ctypes
 import threading
 import time
 
@@ -70,12 +71,36 @@ class OcrDebugWindow(QMainWindow):
         self.stop()
         super().closeEvent(event)
 
+    def _exclude_self_from_capture(self):
+        try:
+            hwnd = int(self.winId())
+            if not hwnd:
+                return None
+            ret = ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x11)
+            if not ret:
+                return None
+
+            def _restore():
+                try:
+                    ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0)
+                except Exception:
+                    pass
+
+            return _restore
+        except Exception:
+            return None
+
     def _tick(self):
         raw = capture_window_content(self._window_title)
         src = "PrintWindow"
         if raw is None:
+            restore = self._exclude_self_from_capture()
+            if restore:
+                time.sleep(0.05)
             raw = capture(self._window_title)
-            src = "mss (fallback)"
+            src = "mss (excluded)" if restore else "mss (overlap possible)"
+            if restore:
+                restore()
         self._capture_source = src
 
         if raw is None:
