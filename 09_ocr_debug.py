@@ -13,6 +13,7 @@ _screenshot = load_sibling("screenshot", "01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "02_ocr_engine.py")
 
 capture = _screenshot.capture
+activate_window = _screenshot.activate_window
 recognize = _ocr.recognize
 OcrResult = _ocr.OcrResult
 
@@ -54,6 +55,7 @@ class OcrDebugWindow(QMainWindow):
         self._timer.timeout.connect(self._tick)
 
     def start(self, interval_ms: int = 1000):
+        activate_window(self._window_title)
         self._timer.start(interval_ms)
         self._tick()
 
@@ -127,9 +129,12 @@ class OcrDebugWindow(QMainWindow):
         self._status_bar.showMessage(status)
 
     def _show_image(self, img: np.ndarray):
+        img = np.ascontiguousarray(img)
         h, w, ch = img.shape
         bytes_per_line = ch * w
-        q_img = QImage(img.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+        q_img = QImage(
+            img.tobytes(), w, h, bytes_per_line, QImage.Format.Format_RGB888
+        ).rgbSwapped()
         pixmap = QPixmap.fromImage(q_img)
         scaled = pixmap.scaled(
             self._image_label.size(),

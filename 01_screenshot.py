@@ -9,6 +9,17 @@ def list_windows() -> list[str]:
     return [w.title for w in gw.getWindowsWithTitle("") if w.title and w.visible]
 
 
+def activate_window(title: str) -> bool:
+    matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
+    if not matches:
+        return False
+    try:
+        matches[0].activate()
+        return True
+    except Exception:
+        return False
+
+
 def get_window_rect(title: str) -> dict | None:
     matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
     if not matches:

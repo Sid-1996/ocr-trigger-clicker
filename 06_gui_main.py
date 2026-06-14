@@ -482,7 +482,7 @@ class MainWindow(QMainWindow):
             return
         mod = load_sibling("ocr_debug", "09_ocr_debug.py")
         self._debug_window = mod.OcrDebugWindow(title, self)
-        self._debug_window.destroyed.connect(lambda: setattr(self, '_debug_window', None))
+        self._debug_window.destroyed.connect(lambda: setattr(self, "_debug_window", None))
         self._debug_window.start()
         self._debug_window.show()
 
