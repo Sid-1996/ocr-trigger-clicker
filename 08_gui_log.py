@@ -84,6 +84,10 @@ class LogWidget(QWidget):
 
         layout.addWidget(self._table)
 
+        self._empty_hint = QLabel("偵測記錄會在此顯示")
+        self._empty_hint.setStyleSheet("color: #aaa; font-size: 11px; padding: 2px 0;")
+        layout.addWidget(self._empty_hint)
+
         self._clear_btn.clicked.connect(self._on_clear)
         self._export_btn.clicked.connect(self._on_export)
 
@@ -95,6 +99,7 @@ class LogWidget(QWidget):
 
     def clear(self) -> None:
         self._table.setRowCount(0)
+        self._empty_hint.show()
 
     def export_txt(self, path: str) -> bool:
         try:
@@ -122,6 +127,7 @@ class LogWidget(QWidget):
         return item
 
     def _insert_trigger(self, log: TriggerLog):
+        self._empty_hint.hide()
         ts = datetime.fromtimestamp(log.timestamp).strftime("%H:%M:%S")
         click = f"({log.click_x}, {log.click_y})"
         row = self._table.rowCount()
@@ -140,6 +146,7 @@ class LogWidget(QWidget):
             self._table.scrollToBottom()
 
     def _insert_error(self, message: str):
+        self._empty_hint.hide()
         ts = datetime.now().strftime("%H:%M:%S")
         row = self._table.rowCount()
         self._table.insertRow(row)

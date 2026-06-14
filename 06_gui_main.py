@@ -19,6 +19,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QStackedWidget,
+    QStatusBar,
     QVBoxLayout,
     QWidget,
 )
@@ -104,11 +106,16 @@ class MainWindow(QMainWindow):
         toolbar = QHBoxLayout()
         self._window_combo = QComboBox()
         self._window_combo.setMinimumWidth(250)
+        self._window_combo.setPlaceholderText("← 點擊「重新整理」載入視窗")
         self._refresh_btn = QPushButton("重新整理")
+        self._refresh_btn.setToolTip("重新掃描所有可見視窗")
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
+        self._btn_toggle.setToolTip("開始偵測所選視窗")
         self._import_btn = QPushButton("匯入規則")
+        self._import_btn.setToolTip("從 JSON 檔案載入規則")
         self._export_btn = QPushButton("匯出規則")
+        self._export_btn.setToolTip("將規則備份為 JSON 檔案")
 
         toolbar.addWidget(QLabel("目標視窗:"))
         toolbar.addWidget(self._window_combo)
@@ -131,55 +138,98 @@ class MainWindow(QMainWindow):
         self._rule_list.setMinimumWidth(180)
         left_layout.addWidget(self._rule_list)
 
+        self._rule_hint = QLabel("← 點擊「新增」建立第一條規則")
+        self._rule_hint.setStyleSheet("color: #888; font-size: 11px;")
+        left_layout.addWidget(self._rule_hint)
+
         rule_btn_bar = QHBoxLayout()
         self._add_rule_btn = QPushButton("新增")
+        self._add_rule_btn.setToolTip("新增一條空白規則")
         self._del_rule_btn = QPushButton("刪除")
+        self._del_rule_btn.setToolTip("刪除目前選取的規則")
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
         left_layout.addLayout(rule_btn_bar)
 
         mid.addWidget(left_widget, 1)
 
-        # Right: edit panel
+        # Right: stacked edit panel (guide / form)
+        self._edit_stack = QStackedWidget()
+
+        # -- Page 0: guide --
+        guide_page = QWidget()
+        guide_layout = QVBoxLayout(guide_page)
+        guide_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        guide_label = QLabel(
+            "使用步驟\n\n"
+            "① 選擇目標視窗\n"
+            "② 點擊「新增」建立規則\n"
+            "③ 設定觸發文字與點擊參數\n"
+            "④ 點擊「儲存規則」\n"
+            "⑤ 點擊「啟動」開始自動偵測\n\n"
+            "按 F9 可暫停／繼續\n"
+            "框選偵測區域可限制 OCR 範圍"
+        )
+        guide_label.setStyleSheet("color: #666; font-size: 13px;")
+        guide_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        guide_layout.addWidget(guide_label)
+        self._edit_stack.addWidget(guide_page)
+
+        # -- Page 1: edit form --
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         self._edit_panel = QWidget()
         self._edit_form = QFormLayout(self._edit_panel)
 
         self._edit_name = QLineEdit()
+        self._edit_name.setToolTip("觸發規則的名稱，便於辨識")
         self._edit_target = QLineEdit()
+        self._edit_target.setToolTip("OCR 比對的目標文字，支援模糊比對")
         self._edit_enabled = QCheckBox()
+        self._edit_enabled.setToolTip("啟用或停用此規則")
         self._edit_roi_label = QLabel("全視窗")
         self._edit_roi_btn = QPushButton("框選偵測區域")
+        self._edit_roi_btn.setToolTip("用滑鼠拖曳選取螢幕上的偵測範圍")
         self._edit_cooldown = QSpinBox()
         self._edit_cooldown.setRange(0, 60000)
         self._edit_cooldown.setSuffix(" ms")
+        self._edit_cooldown.setToolTip("觸發後冷卻時間，期間內不重複觸發")
         self._edit_trigger_mode = QComboBox()
         self._edit_trigger_mode.addItems(["once", "repeat"])
+        self._edit_trigger_mode.setToolTip("once：觸發一次後停用 ｜ repeat：持續觸發")
         self._edit_click_button = QComboBox()
         self._edit_click_button.addItems(["left", "right"])
+        self._edit_click_button.setToolTip("點擊使用的滑鼠按鍵")
         self._edit_click_position = QComboBox()
         self._edit_click_position.addItems(["text_center", "custom"])
+        self._edit_click_position.setToolTip("text_center：點擊文字中心 ｜ custom：自訂座標")
         self._edit_custom_x = QSpinBox()
         self._edit_custom_x.setRange(0, 99999)
+        self._edit_custom_x.setToolTip("自訂點擊的 X 座標（相對視窗左上角）")
         self._edit_custom_y = QSpinBox()
         self._edit_custom_y.setRange(0, 99999)
+        self._edit_custom_y.setToolTip("自訂點擊的 Y 座標（相對視窗左上角）")
         self._edit_fuzzy = QCheckBox()
+        self._edit_fuzzy.setToolTip("啟用模糊比對，可容許文字拼寫差異")
         self._edit_fuzzy_threshold = QSpinBox()
         self._edit_fuzzy_threshold.setRange(1, 100)
         self._edit_fuzzy_threshold.setSuffix(" %")
         self._edit_fuzzy_threshold.setValue(80)
+        self._edit_fuzzy_threshold.setToolTip("模糊比對的相似度門檻（越高越嚴格）")
         self._edit_max_triggers = QSpinBox()
         self._edit_max_triggers.setRange(-1, 9999)
         self._edit_max_triggers.setSpecialValueText("無限")
         self._edit_max_triggers.setValue(-1)
+        self._edit_max_triggers.setToolTip("此規則最多觸發次數（-1 = 無限制）")
         self._edit_random_offset = QSpinBox()
         self._edit_random_offset.setRange(0, 100)
         self._edit_random_offset.setSuffix(" px")
         self._edit_random_offset.setValue(3)
+        self._edit_random_offset.setToolTip("點擊位置隨機偏移像素，模擬真人點擊")
 
         self._edit_save_btn = QPushButton("儲存規則")
         self._edit_save_btn.setEnabled(False)
+        self._edit_save_btn.setToolTip("儲存目前編輯的規則")
 
         # Build form
         self._edit_form.addRow("啟用:", self._edit_enabled)
@@ -200,13 +250,20 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow(self._edit_save_btn)
 
         scroll.setWidget(self._edit_panel)
-        mid.addWidget(scroll, 2)
+        self._edit_stack.addWidget(scroll)
+        self._edit_stack.setCurrentIndex(0)
+        mid.addWidget(self._edit_stack, 2)
         layout.addLayout(mid)
 
         # === Bottom: log area ===
         log_mod = load_sibling("gui_log", "08_gui_log.py")
         self._log_widget = log_mod.LogWidget()
         layout.addWidget(self._log_widget)
+
+        # === Status bar ===
+        self._status_bar = QStatusBar()
+        self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
+        layout.addWidget(self._status_bar)
 
     def _connect_signals(self):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
@@ -229,8 +286,13 @@ class MainWindow(QMainWindow):
     # === Window list ===
     def _refresh_window_list(self):
         self._window_combo.clear()
-        for w in list_windows():
-            self._window_combo.addItem(w)
+        windows = list_windows()
+        if not windows:
+            self._window_combo.setPlaceholderText("⚠ 未發現任何視窗，請先開啟目標程式")
+        else:
+            self._window_combo.setPlaceholderText("← 請選擇目標視窗")
+            for w in windows:
+                self._window_combo.addItem(w)
 
     # === Rule list ===
     def _refresh_rule_list(self):
@@ -244,6 +306,7 @@ class MainWindow(QMainWindow):
             item.setData(Qt.ItemDataRole.UserRole, r.id)
             self._rule_list.addItem(item)
         self._rule_list.blockSignals(False)
+        self._rule_hint.setVisible(len(self._rules) == 0)
         if self._rules:
             self._rule_list.setCurrentRow(0)
         else:
@@ -266,40 +329,28 @@ class MainWindow(QMainWindow):
             self._show_rule_detail(None)
 
     def _show_rule_detail(self, rule: Optional[Rule]):
-        enabled = rule is not None
-        self._edit_name.setText(rule.name if rule else "")
-        self._edit_name.setEnabled(enabled)
-        self._edit_target.setText(rule.target_text if rule else "")
-        self._edit_target.setEnabled(enabled)
-        self._edit_enabled.setEnabled(enabled)
-        self._edit_enabled.setChecked(rule.enabled if rule else False)
+        if rule is None:
+            self._edit_stack.setCurrentIndex(0)
+            return
+        self._edit_stack.setCurrentIndex(1)
+        self._edit_name.setText(rule.name)
+        self._edit_target.setText(rule.target_text)
+        self._edit_enabled.setChecked(rule.enabled)
         self._edit_roi_label.setText(
             f"x={rule.roi['x']} y={rule.roi['y']} w={rule.roi['w']} h={rule.roi['h']}"
-            if rule and not all(rule.roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+            if not all(rule.roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
             else "全視窗"
         )
-        self._edit_roi_btn.setEnabled(enabled)
-        self._edit_cooldown.setEnabled(enabled)
-        self._edit_cooldown.setValue(rule.cooldown_ms if rule else 2000)
-        self._edit_trigger_mode.setEnabled(enabled)
-        self._edit_trigger_mode.setCurrentText(rule.trigger_mode if rule else "once")
-        self._edit_click_button.setEnabled(enabled)
-        self._edit_click_button.setCurrentText(rule.click_button if rule else "left")
-        self._edit_click_position.setEnabled(enabled)
-        self._edit_click_position.setCurrentText(rule.click_position if rule else "text_center")
-        self._edit_custom_x.setEnabled(enabled)
-        self._edit_custom_x.setValue(rule.custom_x if rule else 0)
-        self._edit_custom_y.setEnabled(enabled)
-        self._edit_custom_y.setValue(rule.custom_y if rule else 0)
-        self._edit_fuzzy.setEnabled(enabled)
-        self._edit_fuzzy.setChecked(rule.fuzzy if rule else False)
-        self._edit_fuzzy_threshold.setEnabled(enabled)
-        self._edit_fuzzy_threshold.setValue(int(rule.fuzzy_threshold * 100) if rule else 80)
-        self._edit_max_triggers.setEnabled(enabled)
-        self._edit_max_triggers.setValue(rule.max_triggers if rule else -1)
-        self._edit_random_offset.setEnabled(enabled)
-        self._edit_random_offset.setValue(rule.random_offset if rule else 3)
-        self._edit_save_btn.setEnabled(enabled)
+        self._edit_cooldown.setValue(rule.cooldown_ms)
+        self._edit_trigger_mode.setCurrentText(rule.trigger_mode)
+        self._edit_click_button.setCurrentText(rule.click_button)
+        self._edit_click_position.setCurrentText(rule.click_position)
+        self._edit_custom_x.setValue(rule.custom_x)
+        self._edit_custom_y.setValue(rule.custom_y)
+        self._edit_fuzzy.setChecked(rule.fuzzy)
+        self._edit_fuzzy_threshold.setValue(int(rule.fuzzy_threshold * 100))
+        self._edit_max_triggers.setValue(rule.max_triggers)
+        self._edit_random_offset.setValue(rule.random_offset)
 
     def _add_rule(self):
         import uuid
@@ -393,8 +444,12 @@ class MainWindow(QMainWindow):
         if not title:
             QMessageBox.warning(self, "警告", "請先選擇目標視窗")
             return
+        if not self._rules:
+            QMessageBox.warning(self, "警告", "尚未建立任何規則！\n請先新增至少一條規則。")
+            return
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
+        self._status_bar.showMessage("正在初始化 OCR 引擎…")
         self._init_worker = InitWorker(self._rules_path, title, self._signals)
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
@@ -405,9 +460,11 @@ class MainWindow(QMainWindow):
             self._loop = self._init_worker.loop
             self._btn_toggle.setText("暫停")
             self._update_edit_enabled(False)
+            self._status_bar.showMessage(f"偵測中 — 目標: {self._window_combo.currentText()}")
         else:
             QMessageBox.critical(self, "初始化失敗", f"無法啟動主迴圈：\n{error_msg}")
             self._btn_toggle.setText("啟動")
+            self._status_bar.showMessage(f"初始化失敗 — {error_msg}")
 
     def _stop_loop(self):
         if self._loop:
@@ -415,6 +472,7 @@ class MainWindow(QMainWindow):
             self._loop = None
         self._btn_toggle.setText("啟動")
         self._update_edit_enabled(True)
+        self._status_bar.showMessage("已停止")
 
     def _toggle_pause(self):
         if self._loop is None or not self._loop.is_running:
@@ -423,10 +481,12 @@ class MainWindow(QMainWindow):
             self._loop.resume()
             self._btn_toggle.setText("暫停")
             self._log_widget.append_error("▶ 恢復偵測")
+            self._status_bar.showMessage("偵測中")
         else:
             self._loop.pause()
             self._btn_toggle.setText("繼續")
             self._log_widget.append_error("⏸ 暫停偵測")
+            self._status_bar.showMessage("已暫停 — 按 F9 繼續")
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)
@@ -466,6 +526,7 @@ class MainWindow(QMainWindow):
     def _on_window_lost_from_thread(self):
         self._btn_toggle.setText("繼續")
         self._log_widget.append_error("⚠ 目標視窗消失，偵測已暫停")
+        self._status_bar.showMessage("⚠ 目標視窗已關閉，偵測已暫停")
 
     # === Close ===
     def closeEvent(self, event):

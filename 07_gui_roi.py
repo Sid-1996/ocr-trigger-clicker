@@ -79,8 +79,9 @@ class ROISelector(QWidget):
         font.setPointSize(16)
         painter.setFont(font)
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        dim = f"  |  尺寸: {rect.width()}×{rect.height()}" if rect else ""
         painter.drawText(
-            16, self.rect().height() - 32, "拖拉選取偵測區域  |  Enter 確認  |  Esc 取消"
+            16, self.rect().height() - 32, f"拖拉選取偵測區域{dim}  |  Enter 確認  |  Esc 取消"
         )
 
     def mousePressEvent(self, event):
