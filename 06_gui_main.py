@@ -519,14 +519,29 @@ class MainWindow(QMainWindow):
             return
         mod = load_sibling("ocr_debug", "09_ocr_debug.py")
         self._debug_window = mod.OcrDebugWindow(title, self)
+        self._debug_window.roi_selected.connect(self._on_debug_roi_selected)
         self._debug_window.destroyed.connect(self._on_debug_closed)
-        self._debug_window.start()
         self._debug_window.show()
         self._debug_btn.setText("關閉診斷")
 
     def _on_debug_closed(self):
         self._debug_window = None
         self._debug_btn.setText("OCR 診斷")
+
+    def _on_debug_roi_selected(self, roi: dict):
+        rule = self._get_current_rule()
+        if rule is None:
+            QMessageBox.information(self, "提示", "請先在左側選取一條規則再套用 ROI。")
+            return
+        rule.roi = roi
+        save_rules(self._rules, self._rules_path)
+        self._show_rule_detail(rule)
+        self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
+        self._status_bar.showMessage(
+            f"已套用 ROI 至規則「{rule.name}」: x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
+        )
 
     # === Start / Pause ===
     def _toggle_start(self):
