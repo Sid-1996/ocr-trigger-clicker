@@ -1,24 +1,13 @@
-import importlib.util
 import json
 import random
-import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
+from _loader import load_sibling
 
-def _import_ocr():
-    here = Path(__file__).parent
-    path = str(here / "02_ocr_engine.py")
-    spec = importlib.util.spec_from_file_location("ocr_engine", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["ocr_engine"] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_ocr_mod = _import_ocr()
+_ocr_mod = load_sibling("ocr_engine", "02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
 find_text = _ocr_mod.find_text
 

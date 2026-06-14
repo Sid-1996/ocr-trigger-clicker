@@ -1,5 +1,3 @@
-import importlib.util
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -25,13 +23,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from _loader import load_sibling
+
 _here = Path(__file__).parent
 
-spec = importlib.util.spec_from_file_location("main_loop", str(_here / "05_main_loop.py"))
-_main_loop_mod = importlib.util.module_from_spec(spec)
-sys.modules["main_loop"] = _main_loop_mod
-spec.loader.exec_module(_main_loop_mod)
-
+_main_loop_mod = load_sibling("main_loop", "05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
 TriggerLog = _main_loop_mod.TriggerLog
 Rule = _main_loop_mod.Rule
@@ -208,10 +204,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(mid)
 
         # === Bottom: log area ===
-        log_spec = importlib.util.spec_from_file_location("gui_log", str(_here / "08_gui_log.py"))
-        log_mod = importlib.util.module_from_spec(log_spec)
-        sys.modules["gui_log"] = log_mod
-        log_spec.loader.exec_module(log_mod)
+        log_mod = load_sibling("gui_log", "08_gui_log.py")
         self._log_widget = log_mod.LogWidget()
         layout.addWidget(self._log_widget)
 
@@ -374,10 +367,7 @@ class MainWindow(QMainWindow):
 
     # === ROI selector ===
     def _open_roi_selector(self):
-        spec = importlib.util.spec_from_file_location("roi", str(_here / "07_gui_roi.py"))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["roi"] = mod
-        spec.loader.exec_module(mod)
+        mod = load_sibling("roi", "07_gui_roi.py")
         result = mod.select_roi(parent_window=self)
         rule = self._get_current_rule()
         if result and rule:
@@ -485,6 +475,8 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
+    import sys
+
     app = QApplication(sys.argv)
     win = MainWindow()
     win.show()

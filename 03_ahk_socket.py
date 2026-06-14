@@ -36,14 +36,16 @@ def _recv_line(conn: socket.socket, timeout: float = 3.0) -> str:
     buf = b""
     while True:
         try:
-            ch = conn.recv(1)
+            chunk = conn.recv(4096)
         except socket.timeout:
             break
-        if not ch:
+        if not chunk:
             break
-        if ch == b"\n":
+        idx = chunk.find(b"\n")
+        if idx != -1:
+            buf += chunk[:idx]
             break
-        buf += ch
+        buf += chunk
     return buf.decode("utf-8", errors="replace").strip()
 
 

@@ -1,5 +1,3 @@
-import importlib.util
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -7,7 +5,6 @@ from typing import Optional
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
@@ -21,12 +18,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-_here = Path(__file__).parent
+from _loader import load_sibling
 
-spec = importlib.util.spec_from_file_location("main_loop", str(_here / "05_main_loop.py"))
-_mod = importlib.util.module_from_spec(spec)
-sys.modules["main_loop"] = _mod
-spec.loader.exec_module(_mod)
+_mod = load_sibling("main_loop", "05_main_loop.py")
 TriggerLog = _mod.TriggerLog
 
 MAX_ROWS = 500
@@ -182,7 +176,7 @@ class LogWidget(QWidget):
 
     def _on_export(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "匯出日誌", str(_here / "trigger_log.txt"), "文字檔 (*.txt)"
+            self, "匯出日誌", str(Path(__file__).parent / "trigger_log.txt"), "文字檔 (*.txt)"
         )
         if not path:
             return
@@ -191,6 +185,11 @@ class LogWidget(QWidget):
 
 
 if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    from PyQt6.QtWidgets import QApplication
+
     app = QApplication(sys.argv)
 
     w = QWidget()

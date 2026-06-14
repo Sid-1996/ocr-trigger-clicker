@@ -60,6 +60,8 @@ if __name__ == "__main__":
         print(f"平均 FPS: {count / elapsed:.1f}")
 
         if last_img is not None:
-            with mss.mss() as sct:
-                sct.shot(output="test_output.png")
+            import cv2
+
+            bgr = cv2.cvtColor(last_img, cv2.COLOR_RGB2BGR)
+            cv2.imwrite("test_output.png", bgr)
             print("已儲存 test_output.png")

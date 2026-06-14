@@ -1,27 +1,16 @@
-import importlib.util
 import random
-import sys
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Optional
 
+from _loader import load_sibling
 
-def _import_module(name: str, path: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_here = Path(__file__).parent
-_screenshot = _import_module("screenshot", str(_here / "01_screenshot.py"))
-_ocr = _import_module("ocr_engine", str(_here / "02_ocr_engine.py"))
-_ahk = _import_module("ahk_socket", str(_here / "03_ahk_socket.py"))
-_rule = _import_module("rule_engine", str(_here / "04_rule_engine.py"))
+_screenshot = load_sibling("screenshot", "01_screenshot.py")
+_ocr = load_sibling("ocr_engine", "02_ocr_engine.py")
+_ahk = load_sibling("ahk_socket", "03_ahk_socket.py")
+_rule = load_sibling("rule_engine", "04_rule_engine.py")
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -89,17 +78,29 @@ class MainLoop:
                     self._stop_event.wait(1.0)
                     continue
 
+                img = capture(self._window_title)
+                if img is None:
+                    continue
+
                 for rule in self._rules:
                     if not rule.enabled:
                         continue
 
                     roi = get_roi(rule)
-                    img = capture(self._window_title, roi)
-                    if img is None:
+                    if roi:
+                        rx, ry, rw, rh = roi["x"], roi["y"], roi["w"], roi["h"]
+                        if rw <= 0 or rh <= 0:
+                            continue
+                        roi_img = img[ry : ry + rh, rx : rx + rw]
+                        roi_offset = {"x": rx, "y": ry}
+                    else:
+                        roi_img = img
+                        roi_offset = None
+
+                    if roi_img is None or roi_img.size == 0:
                         continue
 
-                    roi_offset = {"x": roi["x"], "y": roi["y"]} if roi else None
-                    results = recognize(img, roi_offset=roi_offset)
+                    results = recognize(roi_img, roi_offset=roi_offset)
 
                     hit, matched = check_trigger(rule, results)
                     if not hit or matched is None:
@@ -181,6 +182,9 @@ class MainLoop:
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
+    _here = Path(__file__).parent
     windows = list_windows()
     print("=== 所有可見視窗 ===")
     for i, w in enumerate(windows, 1):
