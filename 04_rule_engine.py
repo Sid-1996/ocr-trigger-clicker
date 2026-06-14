@@ -50,24 +50,48 @@ _FIELD_DEFAULTS = {
 }
 
 
+def _as_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _sanitize_roi(roi: dict | None) -> dict:
+    roi = roi if isinstance(roi, dict) else {}
+    return {
+        "x": max(0, _as_int(roi.get("x", 0))),
+        "y": max(0, _as_int(roi.get("y", 0))),
+        "w": max(0, _as_int(roi.get("w", 0))),
+        "h": max(0, _as_int(roi.get("h", 0))),
+    }
+
+
 def _dict_to_rule(d: dict) -> Rule:
-    merged = {**_FIELD_DEFAULTS, **d}
+    merged = {**_FIELD_DEFAULTS, **(d if isinstance(d, dict) else {})}
     return Rule(
-        id=merged["id"],
-        name=merged["name"],
-        enabled=merged["enabled"],
-        target_text=merged["target_text"],
-        fuzzy=merged["fuzzy"],
-        fuzzy_threshold=merged["fuzzy_threshold"],
-        roi=merged["roi"],
-        click_position=merged["click_position"],
-        click_button=merged["click_button"],
-        cooldown_ms=merged["cooldown_ms"],
-        trigger_mode=merged["trigger_mode"],
-        max_triggers=merged["max_triggers"],
-        random_offset=merged["random_offset"],
-        custom_x=merged["custom_x"],
-        custom_y=merged["custom_y"],
+        id=str(merged.get("id", "")),
+        name=str(merged.get("name", "")),
+        enabled=bool(merged.get("enabled", True)),
+        target_text=str(merged.get("target_text", "")).strip(),
+        fuzzy=bool(merged.get("fuzzy", False)),
+        fuzzy_threshold=max(0.0, min(1.0, _as_float(merged.get("fuzzy_threshold", 0.8), 0.8))),
+        roi=_sanitize_roi(merged.get("roi")),
+        click_position=str(merged.get("click_position", "text_center")),
+        click_button=str(merged.get("click_button", "left")),
+        cooldown_ms=max(0, _as_int(merged.get("cooldown_ms", 2000), 2000)),
+        trigger_mode=str(merged.get("trigger_mode", "once")),
+        max_triggers=_as_int(merged.get("max_triggers", -1), -1),
+        random_offset=max(0, _as_int(merged.get("random_offset", 3), 3)),
+        custom_x=_as_int(merged.get("custom_x", 0), 0),
+        custom_y=_as_int(merged.get("custom_y", 0), 0),
     )
 
 
@@ -87,7 +111,13 @@ def load_rules(path: str) -> list[Rule]:
             data = json.load(f)
     except (json.JSONDecodeError, OSError, KeyError):
         return []
-    return [_dict_to_rule(r) for r in data.get("rules", [])]
+    rules: list[Rule] = []
+    for raw in data.get("rules", []):
+        try:
+            rules.append(_dict_to_rule(raw))
+        except Exception:
+            continue
+    return rules
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
@@ -105,6 +135,8 @@ def check_trigger(
     ocr_results: list[OcrResult],
 ) -> tuple[bool, Optional[OcrResult]]:
     if not rule.enabled:
+        return False, None
+    if not rule.target_text.strip():
         return False, None
     elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
     if elapsed_ms < rule.cooldown_ms:

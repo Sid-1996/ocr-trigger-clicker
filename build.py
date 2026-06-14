@@ -87,7 +87,6 @@ def main():
         "shapely",
         "yaml",
         "tqdm",
-        "build",
     ]
 
     args = [

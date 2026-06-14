@@ -34,6 +34,13 @@ def _matching_windows(title: str):
     return exact or matches
 
 
+def get_window_hwnd(title: str) -> int | None:
+    matches = _matching_windows(title)
+    if not matches:
+        return None
+    return getattr(matches[0], "_hWnd", None)
+
+
 def activate_window(title: str) -> bool:
     matches = _matching_windows(title)
     if not matches:
@@ -65,14 +72,53 @@ def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
         y += roi["y"]
         w = roi["w"]
         h = roi["h"]
-    region = {"left": int(x), "top": int(y), "width": int(w), "height": int(h)}
     try:
         with mss.mss() as sct:
+            screen = sct.monitors[0]
+            left = int(screen["left"])
+            top = int(screen["top"])
+            right = left + int(screen["width"])
+            bottom = top + int(screen["height"])
+
+            x1 = max(int(x), left)
+            y1 = max(int(y), top)
+            x2 = min(int(x + w), right)
+            y2 = min(int(y + h), bottom)
+            if x2 <= x1 or y2 <= y1:
+                return None
+
+            region = {"left": x1, "top": y1, "width": x2 - x1, "height": y2 - y1}
             img = sct.grab(region)
             arr = np.array(img)
             return arr[:, :, :3]
     except Exception:
         return None
+
+
+def get_dpi_scaling_factor(hwnd: int | None) -> float:
+    if not hwnd:
+        return 1.0
+    try:
+        from ctypes import byref, c_int, windll
+
+        try:
+            windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
+        dpi_x = c_int()
+        dpi_y = c_int()
+        if hasattr(windll.user32, "GetDpiForWindow"):
+            dpi = windll.user32.GetDpiForWindow(hwnd)
+            if dpi:
+                return dpi / 96.0
+        monitor = windll.user32.MonitorFromWindow(hwnd, 2)
+        if monitor and hasattr(windll.shcore, "GetDpiForMonitor"):
+            windll.shcore.GetDpiForMonitor(monitor, 0, byref(dpi_x), byref(dpi_y))
+            if dpi_x.value:
+                return dpi_x.value / 96.0
+    except Exception:
+        pass
+    return 1.0
 
 
 def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:

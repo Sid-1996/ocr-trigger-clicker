@@ -233,9 +233,10 @@ def step5_rule() -> list[tuple[bool, str]]:
                 f"load_rules() → {len(loaded)} 條規則",
             )
         )
-        tmp.unlink(missing_ok=True)
     except Exception as e:
         items.append(_check(False, f"讀寫測試失敗 → {e}"))
+    finally:
+        tmp.unlink(missing_ok=True)
 
     items.append(_check(rule.random_offset == 0, f"get_roi() → {mod.get_roi(rule)}"))
     return items
@@ -267,7 +268,7 @@ def step6_mainloop() -> list[tuple[bool, str]]:
             id="diag_ml",
             name="診斷ML",
             enabled=True,
-            target_text="",
+            target_text="__diag__",
             fuzzy=False,
             fuzzy_threshold=0.8,
             roi={"x": 0, "y": 0, "w": 0, "h": 0},

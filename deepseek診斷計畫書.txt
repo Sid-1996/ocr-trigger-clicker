@@ -1,0 +1,455 @@
+# OCR Trigger Clicker 完整修復計畫
+
+本計畫基於深度診斷報告，列出 **必須修復的關鍵 Bug** 與 **重要改善項目**，每個任務都包含精確的修改指令，可直接交由開發人員或 AI Agent 執行。
+
+---
+
+## 修復優先級定義
+
+| 等級 | 說明 |
+|------|------|
+| **P0** | 會導致程式崩潰、無限迴圈、資料損毀的嚴重錯誤 |
+| **P1** | 會導致功能異常、效能嚴重低落、使用者體驗重大瑕疵 |
+| **P2** | 會導致操作不便、潛在錯誤、跨版本相容性問題 |
+| **P3** | 程式碼整潔、維護性、邊緣情況處理 |
+
+---
+
+## P0 修復項目（必須立即處理）
+
+### 🔴 P0-1：AHK 心跳線程與重啟的競爭條件
+
+**檔案**：`03_ahk_socket.py`
+
+**問題**：`_heartbeat_loop` 中 `_send_cmd` 失敗後呼叫 `_restart_ahk()`，但 `_restart_ahk` 未使用鎖與事件同步，可能導致多個心跳同時重啟、連線狀態錯誤。
+
+**修改步驟**：
+
+1. 在 `_restart_ahk` 函數開頭加上 `with _lock:`。
+2. 在 `_restart_ahk` 內重啟前，先設定 `_heartbeat_event.set()` 停止舊心跳線程（但心跳線程自己呼叫重啟，會死鎖？）—— 改為：重啟時不停止心跳線程，而是在重啟過程中關閉舊連線並等待新連線，心跳線程短暫休眠後繼續。
+3. 修改 `_heartbeat_loop`，捕獲 `_send_cmd` 異常後，設定一個標誌「重啟中」，然後呼叫 `_restart_ahk`，但 `_restart_ahk` 應返回新連線是否成功，若不成功則跳過本次心跳週期。
+
+**具體程式碼修改**（部分）：
+
+```python
+def _restart_ahk():
+    global _conn, _ahk_process
+    with _lock:
+        # 關閉舊連線
+        if _conn:
+            try:
+                _conn.close()
+            except OSError:
+                pass
+            _conn = None
+        if _ahk_process:
+            try:
+                _ahk_process.kill()
+            except OSError:
+                pass
+            _ahk_process = None
+    
+    # 等待舊進程徹底結束
+    time.sleep(0.5)
+    
+    # 重新啟動 AHK
+    _launch_ahk()
+    
+    # 等待新連線建立（最長 5 秒）
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        with _lock:
+            if _conn is not None:
+                return True
+        time.sleep(0.2)
+    return False
+
+def _heartbeat_loop():
+    consecutive_failures = 0
+    while not _heartbeat_event.is_set():
+        if not _send_cmd("PING"):
+            consecutive_failures += 1
+            if consecutive_failures >= 2:  # 連續失敗兩次才重啟
+                _restart_ahk()
+                consecutive_failures = 0
+        else:
+            consecutive_failures = 0
+        _heartbeat_event.wait(5)
+```
+
+---
+
+### 🔴 P0-2：多規則重複執行 OCR 導致效能崩潰
+
+**檔案**：`05_main_loop.py`
+
+**問題**：迴圈中對每個規則分別呼叫 `recognize`，若有多條規則且無 ROI 或 ROI 重疊，同一畫面會被 OCR 多次，嚴重浪費 CPU。
+
+**修改步驟**：改為先收集所有需要辨識的 ROI（去重），對每個唯一 ROI 執行一次 OCR，然後將結果分發給所有使用該 ROI 的規則。
+
+具體演算法：
+- 將規則分組，key 為 ROI 的 tuple `(x,y,w,h)`，其中全視窗 ROI 表示為 `None`。
+- 對每組，若 ROI 為 None，則對整張圖 OCR 一次；否則擷取 ROI 區域後 OCR。
+- 將辨識結果配上 ROI 偏移量儲存。
+- 對組內每個規則，用 `check_trigger` 檢查結果。
+
+**程式碼修改**（新增函數）：
+
+```python
+def _process_rules(self, img: np.ndarray):
+    # 分組
+    groups = {}
+    for rule in self._rules:
+        if not rule.enabled:
+            continue
+        roi = get_roi(rule)  # 回傳 dict 或 None
+        key = tuple(roi.values()) if roi else None
+        groups.setdefault(key, []).append(rule)
+    
+    for roi_key, rules_in_group in groups.items():
+        if roi_key is None:
+            roi_img = img
+            offset = None
+        else:
+            x, y, w, h = roi_key
+            # 邊界裁剪
+            h_img, w_img = img.shape[:2]
+            x2 = min(x + w, w_img)
+            y2 = min(y + h, h_img)
+            x = max(x, 0)
+            y = max(y, 0)
+            if x2 <= x or y2 <= y:
+                continue
+            roi_img = img[y:y2, x:x2]
+            offset = {"x": x, "y": y}
+        
+        if roi_img.size == 0:
+            continue
+        
+        results = recognize(roi_img, roi_offset=offset)
+        
+        for rule in rules_in_group:
+            hit, matched = check_trigger(rule, results)
+            if hit and matched:
+                params = apply_trigger(rule)
+                # 後續點擊邏輯...
+```
+
+並將原 `_loop` 中的規則迭代改為呼叫 `_process_rules`。
+
+---
+
+### 🔴 P0-3：截圖座標可能為負數導致 mss 異常
+
+**檔案**：`01_screenshot.py`
+
+**問題**：`get_window_rect` 回傳的 `left`/`top` 可能為負（視窗部分超出螢幕），直接傳給 `mss` 會拋出 `mss.exception.ScreenShotError`。
+
+**修改步驟**：在 `capture` 函數中，建立 region 之前，將座標與螢幕邊界進行交集裁剪。
+
+```python
+def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
+    rect = get_window_rect(title)
+    if rect is None:
+        return None
+    x, y, w, h = rect["x"], rect["y"], rect["w"], rect["h"]
+    if roi:
+        x += roi["x"]
+        y += roi["y"]
+        w = roi["w"]
+        h = roi["h"]
+    
+    # 獲取螢幕大小
+    import mss
+    with mss.mss() as sct:
+        screen = sct.monitors[1]  # 主螢幕
+        screen_w, screen_h = screen["width"], screen["height"]
+    
+    # 裁剪至螢幕範圍
+    x2 = min(x + w, screen_w)
+    y2 = min(y + h, screen_h)
+    x = max(x, 0)
+    y = max(y, 0)
+    w = x2 - x
+    h = y2 - y
+    if w <= 0 or h <= 0:
+        return None
+    
+    region = {"left": x, "top": y, "width": w, "height": h}
+    # ... 其餘不變
+```
+
+---
+
+### 🔴 P0-4：OCR 診斷視窗中 `_latest_raw` 被覆蓋導致顯示錯亂
+
+**檔案**：`09_ocr_debug.py`
+
+**問題**：使用者快速連續點擊「拍一張」時，後一次截圖會覆蓋 `self._latest_raw`，而前一次 OCR 結果可能還在背景執行緒中，完成後使用新影像繪製舊文字框。
+
+**修改步驟**：引入序列號（request ID），確保結果對應正確的截圖。
+
+```python
+class OcrDebugWindow:
+    def __init__(self, ...):
+        ...
+        self._request_id = 0
+    
+    def _take_snapshot(self):
+        self._request_id += 1
+        current_id = self._request_id
+        raw, src = self._minimize_and_capture()
+        if raw is None:
+            return
+        self._latest_raw = raw  # 仍然儲存，但供顯示用
+        threading.Thread(target=self._do_ocr, args=(raw.copy(), current_id), daemon=True).start()
+    
+    def _do_ocr(self, img, req_id):
+        # 辨識...
+        self._signals.ocr_done.emit(results, elapsed, req_id)
+    
+    def _on_ocr_done(self, results, elapsed_ms, req_id):
+        if req_id != self._request_id:
+            return  # 丟棄過期結果
+        # 其餘更新 UI 的程式碼...
+```
+
+---
+
+## P1 修復項目（重要功能與效能）
+
+### 🟠 P1-1：高 DPI 縮放導致點擊位置偏移
+
+**檔案**：`03_ahk_socket.py` 與 `01_screenshot.py`
+
+**問題**：截圖使用的邏輯座標與 AHK 點擊的座標在 DPI 縮放下可能不一致，點擊位置偏移。
+
+**修改步驟**：在 `send_click` 前，獲取目標視窗的 DPI 縮放因子，將座標轉換為實際螢幕座標。
+
+```python
+# 新增輔助函數（可放在 ahk_socket.py 或 screenshot.py）
+def get_dpi_scaling_factor(hwnd):
+    try:
+        from ctypes import windll, c_int, byref
+        shcore = windll.shcore
+        shcore.SetProcessDpiAwareness(1)  # PROCESS_PER_MONITOR_DPI_AWARE
+        monitor = windll.user32.MonitorFromWindow(hwnd, 0x00000002)  # MONITOR_DEFAULTTONEAREST
+        dpi_x = c_int()
+        dpi_y = c_int()
+        shcore.GetDpiForMonitor(monitor, 0, byref(dpi_x), byref(dpi_y))
+        return dpi_x.value / 96.0
+    except:
+        return 1.0
+
+# 在 send_click 中
+def send_click(x: int, y: int, button: str = "left") -> bool:
+    # 需要 hwnd，但 ahk_socket 模組目前沒有視窗 HWND
+    # 解決方案：由 MainLoop 傳遞 hwnd，或全局紀錄當前目標視窗的 hwnd
+    # 簡化：假設 DPI 為 100% (不處理)
+    return _send_cmd(f"CLICK,{x},{y},{button}")
+```
+
+較完整的作法：在 `MainLoop` 中儲存目標視窗的 HWND，並在點擊時查詢 DPI。需要修改 `MainLoop.__init__` 接收 HWND 或增加 `get_window_hwnd` 函數。建議新增 `get_window_hwnd` 在 `01_screenshot.py` 中。
+
+---
+
+### 🟠 P1-2：啟動主迴圈後仍可新增/編輯規則
+
+**檔案**：`06_gui_main.py`
+
+**問題**：點擊「啟動」後，規則列表與編輯按鈕被停用，但快捷鍵（Ctrl+N, Delete 等）仍然有效，使用者可以新增規則導致狀態不一致。
+
+**修改步驟**：在 `_add_rule`、`_delete_rule`、`_save_current_rule` 等方法開頭檢查 `self._loop and self._loop.is_running`，若為 True 則直接返回或提示。
+
+```python
+def _add_rule(self):
+    if self._loop and self._loop.is_running:
+        QMessageBox.warning(self, "提示", "請先停止偵測再新增規則")
+        return
+    # 原有程式碼...
+```
+
+同理應用於 `_delete_rule` 和 `_save_current_rule`。另外快捷鍵 `Ctrl+S` 也應觸發同樣檢查。
+
+---
+
+### 🟠 P1-3：AHK TCP 粘包與部分接收問題
+
+**檔案**：`clicker.ahk`
+
+**問題**：`recv` 可能一次只收到部分命令，導致命令被截斷。
+
+**修改步驟**：在 AHK 中實作緩衝區，直到收到換行符才處理完整命令。
+
+```autohotkey
+; 緩衝區
+cmd_buffer := ""
+
+loop {
+    bytes := DllCall("ws2_32\recv", "Ptr", s, "Ptr", buf, "Int", 4095, "Int", 0, "Int")
+    if bytes <= 0
+        break
+    cmd_buffer .= StrGet(buf, bytes, "UTF-8")
+    
+    ; 處理所有完整的命令（以換行分隔）
+    while (pos := InStr(cmd_buffer, "`n")) {
+        cmd := SubStr(cmd_buffer, 1, pos-1)
+        cmd_buffer := SubStr(cmd_buffer, pos+1)
+        cmd := Trim(cmd, "`r")
+        
+        ; 原有命令處理邏輯...
+        if cmd = "PING" {
+            ; ...
+        } else if SubStr(cmd, 1, 5) = "CLICK" {
+            ; ...
+        }
+        
+        ; 回覆 OK
+        response := "OK`n"
+        ; 發送 response...
+    }
+}
+```
+
+---
+
+### 🟠 P1-4：目標文字為空時規則會匹配所有文字
+
+**檔案**：`04_rule_engine.py` 與 `06_gui_main.py`
+
+**問題**：使用者可儲存 `target_text` 為空字串，導致 `find_text` 中 `target_lower in r.text.lower()` 永遠為 True，規則無條件觸發。
+
+**修改步驟**：
+1. 在 `_save_current_rule` 中檢查 `self._edit_target.text().strip()` 是否為空，若是則彈出警告並拒絕儲存。
+2. 在 `_dict_to_rule` 中如果 `target_text` 為空，可設定為預設佔位符或載入時設為 None 並跳過該規則。
+
+```python
+# 在 _save_current_rule 中
+target = self._edit_target.text().strip()
+if not target:
+    QMessageBox.warning(self, "無效規則", "目標文字不可為空白")
+    return
+rule.target_text = target
+```
+
+---
+
+## P2 修復項目（使用體驗與邊界情況）
+
+### 🟡 P2-1：規則 JSON 載入時缺少資料驗證
+
+**檔案**：`04_rule_engine.py`
+
+**問題**：外部匯入的 JSON 可能含有非法值（例如 ROI 負數、cooldown_ms 負數等）。
+
+**修改步驟**：在 `_dict_to_rule` 中增加清理函數：
+
+```python
+def _sanitize_roi(roi: dict) -> dict:
+    return {
+        "x": max(0, roi.get("x", 0)),
+        "y": max(0, roi.get("y", 0)),
+        "w": max(0, roi.get("w", 0)),
+        "h": max(0, roi.get("h", 0)),
+    }
+
+def _dict_to_rule(d: dict) -> Rule:
+    merged = {**_FIELD_DEFAULTS, **d}
+    merged["roi"] = _sanitize_roi(merged.get("roi", {}))
+    merged["cooldown_ms"] = max(0, merged.get("cooldown_ms", 0))
+    merged["fuzzy_threshold"] = min(1.0, max(0.0, merged.get("fuzzy_threshold", 0.8)))
+    # 其他必要欄位...
+    return Rule(...)
+```
+
+---
+
+### 🟡 P2-2：日誌表格手動設定背景與交替顏色衝突
+
+**檔案**：`08_gui_log.py`
+
+**問題**：`_insert_trigger` 中手動設定每行背景，但 `setAlternatingRowColors(True)` 也會自動上色，導致疊加效果混亂。
+
+**修改步驟**：移除手動背景設定，僅依賴 `setAlternatingRowColors(True)`。或關閉交替顏色後完全手動控制。建議使用 `setAlternatingRowColors(True)` 並刪除 `_insert_trigger` 中的 `setBackground` 呼叫。
+
+---
+
+### 🟡 P2-3：ROI 選取器恢復父視窗時可能無法獲得焦點
+
+**檔案**：`07_gui_roi.py`
+
+**問題**：`select_roi` 結束後呼叫 `parent_window.showNormal()` 和 `activateWindow()`，在某些 Windows 版本中可能無效。
+
+**修改步驟**：增加強制提升視窗的程式碼：
+
+```python
+parent_window.showNormal()
+parent_window.raise_()
+parent_window.activateWindow()
+# 對於 Qt 6，可能需要
+parent_window.setWindowState(parent_window.windowState() & ~Qt.WindowState.WindowMinimized)
+```
+
+---
+
+### 🟡 P2-4：OCR 引擎 warmup 失敗靜默忽略
+
+**檔案**：`02_ocr_engine.py`
+
+**問題**：`init_engine` 中的 warmup 若失敗，不會有任何提示，可能導致後續首次 OCR 更慢。
+
+**修改步驟**：增加日誌記錄（可選），或在診斷模式中顯示警告。由於 warmup 非必要，可不修改。
+
+---
+
+## P3 修復項目（程式碼整潔與維護）
+
+### 🔵 P3-1：`build.py` 中錯誤的隱藏導入 `"build"`
+
+**檔案**：`build.py`
+
+**修改步驟**：從 `hidden` 列表中移除 `"build"`。
+
+---
+
+### 🔵 P3-2：`03_ahk_socket.py` 中 `_find_ahk` 重複 import
+
+**檔案**：`03_ahk_socket.py`
+
+**問題**：每次呼叫 `_find_ahk` 都會嘗試 `from build import get_resource_path`，效率低且可能引發異常。
+
+**修改步驟**：將 `get_resource_path` 的導入移到模組頂層，並用 try-except 包裝。
+
+```python
+try:
+    from build import get_resource_path
+except ImportError:
+    def get_resource_path(p):
+        return str(Path(__file__).parent / p)
+```
+
+然後在 `_find_ahk` 中直接使用。
+
+---
+
+### 🔵 P3-3：診斷工具 `diagnostic.py` 中 step6 可能留下殘留規則檔案
+
+**檔案**：`diagnostic.py`
+
+**問題**：`step6_mainloop` 中建立的 `_diag_rules.json` 在 return 前已 unlink，但若中途異常可能未刪除。
+
+**修改步驟**：使用 `try-finally` 確保刪除。
+
+---
+
+## 執行順序建議
+
+1. **先修復 P0 項目**：確保程式不會崩潰或效能崩潰（P0-1, P0-2, P0-3, P0-4）。
+2. **再修復 P1 項目**：提升功能正確性與使用者體驗（P1-1, P1-2, P1-3, P1-4）。
+3. **最後處理 P2/P3**：邊界情況與程式碼整潔。
+
+每個修改完成後，請執行對應的單元測試（若有）或手動驗證（使用 `diagnostic.py` 及實際執行 GUI 測試）。建議在修復後執行完整診斷工具確認無回歸問題。
+
+---
+
+**計畫制定完畢，可將此文件提供給開發者或 AI Agent 按步驟執行。**

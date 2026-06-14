@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -156,8 +157,16 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._window_combo)
         toolbar.addWidget(self._refresh_btn)
         toolbar.addSpacing(12)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        toolbar.addWidget(sep)
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.VLine)
+        sep2.setFrameShadow(QFrame.Shadow.Sunken)
+        toolbar.addWidget(sep2)
         toolbar.addWidget(self._import_btn)
         toolbar.addWidget(self._export_btn)
         toolbar.addStretch()
@@ -426,13 +435,16 @@ class MainWindow(QMainWindow):
         self._edit_fuzzy_threshold.setEnabled(state == 2)
 
     def _add_rule(self):
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再新增規則")
+            return
         import uuid
 
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
             name="新規則",
             enabled=True,
-            target_text="",
+            target_text="請輸入文字",
             fuzzy=False,
             fuzzy_threshold=0.8,
             roi={"x": 0, "y": 0, "w": 0, "h": 0},
@@ -452,6 +464,9 @@ class MainWindow(QMainWindow):
         self._rule_list.setCurrentRow(idx)
 
     def _delete_rule(self):
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再刪除規則")
+            return
         rule = self._get_current_rule()
         if rule is None:
             return
@@ -472,11 +487,18 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
 
     def _save_current_rule(self):
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再儲存規則")
+            return
         rule = self._get_current_rule()
         if rule is None:
             return
+        target = self._edit_target.text().strip()
+        if not target:
+            QMessageBox.warning(self, "無效規則", "目標文字不可為空白")
+            return
         rule.name = self._edit_name.text()
-        rule.target_text = self._edit_target.text()
+        rule.target_text = target
         rule.enabled = self._edit_enabled.isChecked()
         rule.cooldown_ms = self._edit_cooldown.value()
         rule.trigger_mode = self._edit_trigger_mode.currentText()
@@ -520,7 +542,8 @@ class MainWindow(QMainWindow):
         mod = load_sibling("ocr_debug", "09_ocr_debug.py")
         self._debug_window = mod.OcrDebugWindow(title, self)
         self._debug_window.roi_selected.connect(self._on_debug_roi_selected)
-        self._debug_window.destroyed.connect(self._on_debug_closed)
+        self._debug_window.rule_requested.connect(self._on_debug_rule_requested)
+        self._debug_window.closed.connect(self._on_debug_closed)
         self._debug_window.show()
         self._debug_btn.setText("關閉診斷")
 
@@ -541,6 +564,35 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
         self._status_bar.showMessage(
             f"已套用 ROI 至規則「{rule.name}」: x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
+        )
+
+    def _on_debug_rule_requested(self, rule_data: dict):
+        import uuid
+
+        rule = Rule(
+            id=f"rule_{uuid.uuid4().hex[:8]}",
+            name=rule_data["target_text"],
+            enabled=True,
+            target_text=str(rule_data["target_text"]).strip() or "請輸入文字",
+            fuzzy=rule_data.get("fuzzy", False),
+            fuzzy_threshold=0.8,
+            roi=rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
+            click_position=rule_data.get("click_position", "text_center"),
+            click_button="left",
+            cooldown_ms=int(rule_data.get("cooldown", 1.0) * 1000),
+            trigger_mode="once",
+            max_triggers=-1,
+            random_offset=3,
+        )
+        self._rules.append(rule)
+        save_rules(self._rules, self._rules_path)
+        self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
+        idx = len(self._rules) - 1
+        self._rule_list.setCurrentRow(idx)
+        self._status_bar.showMessage(
+            f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」"
         )
 
     # === Start / Pause ===

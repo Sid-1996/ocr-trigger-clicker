@@ -9,6 +9,7 @@ _server: Optional[socket.socket] = None
 _conn: Optional[socket.socket] = None
 _ahk_process: Optional[subprocess.Popen] = None
 _lock = threading.Lock()
+_restart_lock = threading.Lock()
 _heartbeat_event = threading.Event()
 
 
@@ -70,8 +71,10 @@ def _heartbeat_loop():
         _heartbeat_event.wait(5)
 
 
-def _restart_ahk():
+def _restart_ahk() -> bool:
     global _conn, _ahk_process
+    if not _restart_lock.acquire(blocking=False):
+        return False
     with _lock:
         if _conn:
             try:
@@ -85,8 +88,19 @@ def _restart_ahk():
             except OSError:
                 pass
             _ahk_process = None
-    time.sleep(0.5)
-    _launch_ahk()
+    try:
+        time.sleep(0.5)
+        _launch_ahk()
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with _lock:
+                if _conn is not None:
+                    return True
+            time.sleep(0.2)
+        return False
+    finally:
+        _restart_lock.release()
 
 
 def _launch_ahk():
@@ -113,10 +127,16 @@ def _accept_loop():
         try:
             conn, _ = _server.accept()
             with _lock:
+                if _conn:
+                    try:
+                        _conn.close()
+                    except OSError:
+                        pass
                 _conn = conn
-            return
         except socket.timeout:
             continue
+        except OSError:
+            break
 
 
 def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
@@ -159,6 +179,7 @@ def send_move(x: int, y: int) -> bool:
 
 
 def shutdown() -> None:
+    global _server, _conn, _ahk_process
     _heartbeat_event.set()
     with _lock:
         if _conn:
@@ -166,16 +187,19 @@ def shutdown() -> None:
                 _conn.close()
             except OSError:
                 pass
+            _conn = None
         if _server:
             try:
                 _server.close()
             except OSError:
                 pass
+            _server = None
         if _ahk_process:
             try:
                 _ahk_process.kill()
             except OSError:
                 pass
+            _ahk_process = None
 
 
 if __name__ == "__main__":

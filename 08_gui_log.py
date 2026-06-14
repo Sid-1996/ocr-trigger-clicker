@@ -30,6 +30,7 @@ COL_TEXT = 2
 COL_CLICK = 3
 
 _COLORS = {
+    "text_fg": QColor(0, 0, 0),
     "bg_odd": QColor(245, 245, 245),
     "bg_even": QColor(255, 255, 255),
     "error_fg": QColor(200, 40, 40),
@@ -122,8 +123,6 @@ class LogWidget(QWidget):
         item = QTableWidgetItem(text)
         if fg:
             item.setForeground(fg)
-        if bg:
-            item.setBackground(bg)
         return item
 
     def _insert_trigger(self, log: TriggerLog):
@@ -132,14 +131,10 @@ class LogWidget(QWidget):
         click = f"({log.click_x}, {log.click_y})"
         row = self._table.rowCount()
         self._table.insertRow(row)
-        self._table.setItem(row, COL_TIME, self._mkitem(ts))
-        self._table.setItem(row, COL_RULE, self._mkitem(log.rule_name))
-        self._table.setItem(row, COL_TEXT, self._mkitem(log.matched_text))
-        self._table.setItem(row, COL_CLICK, self._mkitem(click))
-
-        bg = _COLORS["bg_odd"] if row % 2 else _COLORS["bg_even"]
-        for col in range(4):
-            self._table.item(row, col).setBackground(bg)
+        self._table.setItem(row, COL_TIME, self._mkitem(ts, fg=_COLORS["text_fg"]))
+        self._table.setItem(row, COL_RULE, self._mkitem(log.rule_name, fg=_COLORS["text_fg"]))
+        self._table.setItem(row, COL_TEXT, self._mkitem(log.matched_text, fg=_COLORS["text_fg"]))
+        self._table.setItem(row, COL_CLICK, self._mkitem(click, fg=_COLORS["text_fg"]))
 
         self._trim()
         if self._auto_scroll_cb.isChecked():
@@ -150,18 +145,10 @@ class LogWidget(QWidget):
         ts = datetime.now().strftime("%H:%M:%S")
         row = self._table.rowCount()
         self._table.insertRow(row)
-        self._table.setItem(
-            row, COL_TIME, self._mkitem(ts, fg=_COLORS["error_fg"], bg=_COLORS["error_bg"])
-        )
-        self._table.setItem(
-            row, COL_RULE, self._mkitem("⚠ 錯誤", fg=_COLORS["error_fg"], bg=_COLORS["error_bg"])
-        )
-        self._table.setItem(
-            row, COL_TEXT, self._mkitem(message, fg=_COLORS["error_fg"], bg=_COLORS["error_bg"])
-        )
-        self._table.setItem(
-            row, COL_CLICK, self._mkitem("—", fg=_COLORS["error_fg"], bg=_COLORS["error_bg"])
-        )
+        self._table.setItem(row, COL_TIME, self._mkitem(ts, fg=_COLORS["error_fg"]))
+        self._table.setItem(row, COL_RULE, self._mkitem("⚠ 錯誤", fg=_COLORS["error_fg"]))
+        self._table.setItem(row, COL_TEXT, self._mkitem(message, fg=_COLORS["error_fg"]))
+        self._table.setItem(row, COL_CLICK, self._mkitem("—", fg=_COLORS["error_fg"]))
 
         self._trim()
         if self._auto_scroll_cb.isChecked():

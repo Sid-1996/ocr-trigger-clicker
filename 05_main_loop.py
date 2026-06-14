@@ -5,6 +5,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+import numpy as np
+
 from _loader import load_sibling
 
 _screenshot = load_sibling("screenshot", "01_screenshot.py")
@@ -14,6 +16,8 @@ _rule = load_sibling("rule_engine", "04_rule_engine.py")
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
+get_window_hwnd = getattr(_screenshot, "get_window_hwnd", lambda title: None)
+get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
@@ -41,6 +45,8 @@ class MainLoop:
         self._rules_path = rules_path
         self._window_title = window_title
         self._interval = interval_ms / 1000.0
+        self._window_hwnd = get_window_hwnd(window_title)
+        self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
 
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
@@ -63,6 +69,78 @@ class MainLoop:
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
 
+    def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
+        scale = self._dpi_scale if self._dpi_scale > 0 else 1.0
+        return (
+            int(round(rect["x"] + x * scale)),
+            int(round(rect["y"] + y * scale)),
+        )
+
+    def _process_rules(self, img: np.ndarray, rect: dict) -> None:
+        groups: dict[tuple[int, int, int, int] | None, list[Rule]] = {}
+        for rule in self._rules:
+            if not rule.enabled:
+                continue
+            roi = get_roi(rule)
+            key = None if roi is None else (roi["x"], roi["y"], roi["w"], roi["h"])
+            groups.setdefault(key, []).append(rule)
+
+        for roi_key, rules_in_group in groups.items():
+            if roi_key is None:
+                roi_img = img
+                roi_offset = None
+            else:
+                rx, ry, rw, rh = roi_key
+                h_img, w_img = img.shape[:2]
+                x1 = max(0, rx)
+                y1 = max(0, ry)
+                x2 = min(w_img, rx + rw)
+                y2 = min(h_img, ry + rh)
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                roi_img = img[y1:y2, x1:x2]
+                if roi_img.size == 0:
+                    continue
+                roi_offset = {"x": x1, "y": y1}
+
+            if roi_img.size == 0:
+                continue
+
+            results = recognize(roi_img, roi_offset=roi_offset)
+
+            for rule in rules_in_group:
+                hit, matched = check_trigger(rule, results)
+                if not hit or matched is None:
+                    continue
+
+                params = apply_trigger(rule)
+
+                if rule.click_position == "text_center":
+                    off = rule.random_offset
+                    dx = random.randint(-off, off) if off else 0
+                    dy = random.randint(-off, off) if off else 0
+                    cx = matched.center_x + dx
+                    cy = matched.center_y + dy
+                else:
+                    cx, cy = params["x"], params["y"]
+
+                sx, sy = self._to_screen_coords(rect, cx, cy)
+                self._send_click(sx, sy, params["button"])
+
+                log = TriggerLog(
+                    timestamp=time.time(),
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    matched_text=matched.text,
+                    click_x=sx,
+                    click_y=sy,
+                )
+                with self._logs_lock:
+                    self._logs.append(log)
+
+                if self.on_trigger:
+                    self.on_trigger(log)
+
     def _loop(self):
         while not self._stop_event.is_set():
             try:
@@ -82,56 +160,7 @@ class MainLoop:
                 if img is None:
                     continue
 
-                for rule in self._rules:
-                    if not rule.enabled:
-                        continue
-
-                    roi = get_roi(rule)
-                    if roi:
-                        rx, ry, rw, rh = roi["x"], roi["y"], roi["w"], roi["h"]
-                        if rw <= 0 or rh <= 0:
-                            continue
-                        roi_img = img[ry : ry + rh, rx : rx + rw]
-                        roi_offset = {"x": rx, "y": ry}
-                    else:
-                        roi_img = img
-                        roi_offset = None
-
-                    if roi_img is None or roi_img.size == 0:
-                        continue
-
-                    results = recognize(roi_img, roi_offset=roi_offset)
-
-                    hit, matched = check_trigger(rule, results)
-                    if not hit or matched is None:
-                        continue
-
-                    params = apply_trigger(rule)
-
-                    if rule.click_position == "text_center":
-                        off = rule.random_offset
-                        dx = random.randint(-off, off) if off else 0
-                        dy = random.randint(-off, off) if off else 0
-                        cx = matched.center_x + dx
-                        cy = matched.center_y + dy
-                    else:
-                        cx, cy = params["x"], params["y"]
-
-                    self._send_click(cx, cy, params["button"])
-
-                    log = TriggerLog(
-                        timestamp=time.time(),
-                        rule_id=rule.id,
-                        rule_name=rule.name,
-                        matched_text=matched.text,
-                        click_x=cx,
-                        click_y=cy,
-                    )
-                    with self._logs_lock:
-                        self._logs.append(log)
-
-                    if self.on_trigger:
-                        self.on_trigger(log)
+                self._process_rules(img, rect)
 
             except Exception as e:
                 if self.on_error:
@@ -178,6 +207,8 @@ class MainLoop:
         if get_window_rect(title) is None:
             return False
         self._window_title = title
+        self._window_hwnd = get_window_hwnd(title)
+        self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
         return True
 
 
