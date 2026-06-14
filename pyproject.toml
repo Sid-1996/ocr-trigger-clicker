@@ -1,0 +1,13 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = ["dist", "build", "__pycache__", "*.spec"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

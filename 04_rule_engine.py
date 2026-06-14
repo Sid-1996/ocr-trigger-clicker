@@ -1,0 +1,253 @@
+import importlib.util
+import json
+import random
+import sys
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Optional
+
+
+def _import_ocr():
+    here = Path(__file__).parent
+    path = str(here / "02_ocr_engine.py")
+    spec = importlib.util.spec_from_file_location("ocr_engine", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["ocr_engine"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_ocr_mod = _import_ocr()
+OcrResult = _ocr_mod.OcrResult
+find_text = _ocr_mod.find_text
+
+
+@dataclass
+class Rule:
+    id: str
+    name: str
+    enabled: bool
+    target_text: str
+    fuzzy: bool
+    fuzzy_threshold: float
+    roi: dict
+    click_position: str
+    click_button: str
+    cooldown_ms: int
+    trigger_mode: str
+    max_triggers: int
+    random_offset: int
+    custom_x: int = 0
+    custom_y: int = 0
+    trigger_count: int = 0
+    last_trigger_time: float = 0.0
+
+
+_RUNTIME_FIELDS = {"trigger_count", "last_trigger_time"}
+
+_FIELD_DEFAULTS = {
+    "fuzzy": False,
+    "fuzzy_threshold": 0.8,
+    "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+    "click_position": "text_center",
+    "click_button": "left",
+    "cooldown_ms": 2000,
+    "trigger_mode": "once",
+    "max_triggers": -1,
+    "random_offset": 3,
+    "custom_x": 0,
+    "custom_y": 0,
+}
+
+
+def _dict_to_rule(d: dict) -> Rule:
+    merged = {**_FIELD_DEFAULTS, **d}
+    return Rule(
+        id=merged["id"],
+        name=merged["name"],
+        enabled=merged["enabled"],
+        target_text=merged["target_text"],
+        fuzzy=merged["fuzzy"],
+        fuzzy_threshold=merged["fuzzy_threshold"],
+        roi=merged["roi"],
+        click_position=merged["click_position"],
+        click_button=merged["click_button"],
+        cooldown_ms=merged["cooldown_ms"],
+        trigger_mode=merged["trigger_mode"],
+        max_triggers=merged["max_triggers"],
+        random_offset=merged["random_offset"],
+        custom_x=merged["custom_x"],
+        custom_y=merged["custom_y"],
+    )
+
+
+def _rule_to_dict(r: Rule) -> dict:
+    d = asdict(r)
+    for key in _RUNTIME_FIELDS:
+        d.pop(key, None)
+    return d
+
+
+def load_rules(path: str) -> list[Rule]:
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    return [_dict_to_rule(r) for r in data.get("rules", [])]
+
+
+def save_rules(rules: list[Rule], path: str) -> bool:
+    try:
+        data = {"rules": [_rule_to_dict(r) for r in rules]}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except OSError:
+        return False
+
+
+def check_trigger(
+    rule: Rule,
+    ocr_results: list[OcrResult],
+) -> tuple[bool, Optional[OcrResult]]:
+    if not rule.enabled:
+        return False, None
+    elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
+    if elapsed_ms < rule.cooldown_ms:
+        return False, None
+    if rule.trigger_mode == "once" and rule.trigger_count > 0:
+        return False, None
+    if rule.max_triggers > 0 and rule.trigger_count >= rule.max_triggers:
+        return False, None
+    matches = find_text(ocr_results, rule.target_text, rule.fuzzy, rule.fuzzy_threshold)
+    if not matches:
+        return False, None
+    return True, matches[0]
+
+
+def apply_trigger(rule: Rule) -> dict:
+    rule.trigger_count += 1
+    rule.last_trigger_time = time.monotonic()
+    if 0 < rule.max_triggers <= rule.trigger_count:
+        rule.enabled = False
+    off = rule.random_offset
+    dx = random.randint(-off, off) if off else 0
+    dy = random.randint(-off, off) if off else 0
+    return {"x": rule.custom_x + dx, "y": rule.custom_y + dy, "button": rule.click_button}
+
+
+def get_roi(rule: Rule) -> Optional[dict]:
+    if all(rule.roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+        return None
+    return dict(rule.roi)
+
+
+if __name__ == "__main__":
+    json_path = str(Path(__file__).parent / "rules.json")
+
+    test_rules = [
+        Rule(
+            id="rule_001",
+            name="確認按鈕",
+            enabled=True,
+            target_text="確認",
+            fuzzy=False,
+            fuzzy_threshold=0.8,
+            roi={"x": 100, "y": 200, "w": 300, "h": 100},
+            click_position="text_center",
+            click_button="left",
+            cooldown_ms=2000,
+            trigger_mode="once",
+            max_triggers=-1,
+            random_offset=3,
+        ),
+        Rule(
+            id="rule_002",
+            name="按按鈕",
+            enabled=True,
+            target_text="確認",
+            fuzzy=False,
+            fuzzy_threshold=0.8,
+            roi={"x": 0, "y": 0, "w": 0, "h": 0},
+            click_position="custom",
+            click_button="right",
+            cooldown_ms=0,
+            trigger_mode="repeat",
+            max_triggers=2,
+            random_offset=0,
+            custom_x=500,
+            custom_y=600,
+        ),
+    ]
+
+    save_rules(test_rules, json_path)
+    print(f"已寫入 {json_path}")
+
+    loaded = load_rules(json_path)
+    print(f"\n=== 載入 {len(loaded)} 條規則 ===")
+    for r in loaded:
+        print(
+            f"  [{r.id}] {r.name}  enabled={r.enabled}  target={r.target_text!r}  "
+            f"fuzzy={r.fuzzy}  roi={r.roi}  click={r.click_position}  "
+            f"mode={r.trigger_mode}  max={r.max_triggers}  "
+            f"cooldown={r.cooldown_ms}ms  offset={r.random_offset}"
+        )
+
+    fake_results = [
+        OcrResult(text="取消", x=10, y=10, w=50, h=20, confidence=0.95),
+        OcrResult(text="確認", x=100, y=200, w=50, h=20, confidence=0.98),
+        OcrResult(text="關閉視窗", x=300, y=400, w=80, h=20, confidence=0.90),
+    ]
+
+    rule_a = loaded[0]
+    print(f"\n=== check_trigger 測試 (rule: {rule_a.name}) ===")
+    for i in range(3):
+        hit, ocr = check_trigger(rule_a, fake_results)
+        if hit:
+            params = apply_trigger(rule_a)
+            print(
+                f"  第 {i + 1} 次: 觸發 → {params}  "
+                f"count={rule_a.trigger_count}  enabled={rule_a.enabled}"
+            )
+        else:
+            reason = "冷卻中" if rule_a.enabled else "已停用"
+            print(
+                f"  第 {i + 1} 次: 未觸發 ({reason})  "
+                f"count={rule_a.trigger_count}  enabled={rule_a.enabled}"
+            )
+
+    rule_b = loaded[1]
+    print(f"\n=== max_triggers 測試 (rule: {rule_b.name}, max={rule_b.max_triggers}) ===")
+    for i in range(3):
+        hit, ocr = check_trigger(rule_b, fake_results)
+        if hit:
+            params = apply_trigger(rule_b)
+            print(
+                f"  第 {i + 1} 次: 觸發 → {params}  "
+                f"count={rule_b.trigger_count}  enabled={rule_b.enabled}"
+            )
+        else:
+            reason = "已停用 (達上限)" if not rule_b.enabled else "冷卻中"
+            print(
+                f"  第 {i + 1} 次: 未觸發 ({reason})  "
+                f"count={rule_b.trigger_count}  enabled={rule_b.enabled}"
+            )
+
+    ok = save_rules(loaded, json_path)
+    print(f"\n儲存結果: {'成功' if ok else '失敗'}")
+    with open(json_path, encoding="utf-8") as f:
+        saved_content = json.load(f)
+    print("JSON 內容:")
+    print(json.dumps(saved_content, indent=2, ensure_ascii=False))
+
+    trigger_count_in_json = any("trigger_count" in r for r in saved_content["rules"])
+    print(f"\nJSON 包含 trigger_count: {trigger_count_in_json} (應為 False)")
+
+    print("\nROI 測試:")
+    print(f"  rule_001 ROI: {get_roi(rule_a)} (應非 None)")
+    print(f"  rule_002 ROI: {get_roi(rule_b)} (應為 None)")
