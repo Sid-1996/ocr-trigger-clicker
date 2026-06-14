@@ -1,8 +1,27 @@
+import ctypes
 import time
+from ctypes import wintypes
 
+import cv2
 import mss
 import numpy as np
 import pygetwindow as gw
+
+
+class _BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", wintypes.DWORD),
+        ("biWidth", wintypes.LONG),
+        ("biHeight", wintypes.LONG),
+        ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD),
+        ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD),
+        ("biXPelsPerMeter", wintypes.LONG),
+        ("biYPelsPerMeter", wintypes.LONG),
+        ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    ]
 
 
 def list_windows() -> list[str]:
@@ -48,6 +67,64 @@ def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
             return arr[:, :, :3]
     except Exception:
         return None
+
+
+def capture_window_content(title: str) -> np.ndarray | None:
+    """擷取視窗本身的內容（非螢幕畫面），不受疊層視窗遮擋。
+
+    使用 Windows PrintWindow API 直接讀取目標視窗的 client area。
+    對部分 DirectX 遊戲可能無法使用（回傳全黑影像），此時
+    呼叫端應 fallback 到 capture()。
+    """
+    matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
+    if not matches:
+        return None
+    hwnd = matches[0]._hWnd
+
+    hwnd_dc = None
+    mem_dc = None
+    hbitmap = None
+    try:
+        rect = wintypes.RECT()
+        ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect))
+        w, h = rect.right, rect.bottom
+        if w <= 0 or h <= 0:
+            return None
+
+        hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
+        mem_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
+        hbitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
+
+        ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
+        pw_ok = ctypes.windll.user32.PrintWindow(hwnd, mem_dc, 3)
+        ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
+        if not pw_ok:
+            return None
+
+        bmp_info = _BITMAPINFOHEADER()
+        bmp_info.biSize = ctypes.sizeof(_BITMAPINFOHEADER)
+        bmp_info.biWidth = w
+        bmp_info.biHeight = -h
+        bmp_info.biPlanes = 1
+        bmp_info.biBitCount = 32
+        bmp_info.biCompression = 0
+
+        buf = ctypes.create_string_buffer(w * h * 4)
+        ok = ctypes.windll.gdi32.GetDIBits(mem_dc, hbitmap, 0, h, buf, ctypes.byref(bmp_info), 0)
+        if not ok:
+            return None
+
+        img = np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
+    except Exception:
+        return None
+    finally:
+        if hbitmap:
+            ctypes.windll.gdi32.DeleteObject(hbitmap)
+        if mem_dc:
+            ctypes.windll.gdi32.DeleteDC(mem_dc)
+        if hwnd_dc:
+            ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
 
 
 if __name__ == "__main__":

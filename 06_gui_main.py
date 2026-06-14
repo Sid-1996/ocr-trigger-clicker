@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -77,8 +78,11 @@ class MainWindow(QMainWindow):
             from build import get_data_path
 
             self._rules_path = get_data_path("rules.json")
+            self._config_path = get_data_path("config.json")
         except ImportError:
-            self._rules_path = str(_here / "rules.json")
+            here = Path(__file__).parent
+            self._rules_path = str(here / "rules.json")
+            self._config_path = str(here / "config.json")
         self._ensure_rules()
 
         self._signals = WorkerSignals()
@@ -92,11 +96,38 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
 
         self._refresh_window_list()
+        self._restore_last_window()
         self._refresh_rule_list()
 
     def _ensure_rules(self):
         if not Path(self._rules_path).exists():
             save_rules([], self._rules_path)
+
+    def _load_config(self) -> dict:
+        try:
+            with open(self._config_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
+
+    def _save_config(self, data: dict):
+        try:
+            with open(self._config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
+
+    def _restore_last_window(self):
+        config = self._load_config()
+        last = config.get("last_window", "")
+        if not last:
+            return
+        idx = self._window_combo.findText(last)
+        if idx >= 0:
+            self._window_combo.setCurrentIndex(idx)
+        else:
+            self._window_combo.setPlaceholderText(f"⚠ 上次的視窗「{last}」已不存在，請重新選擇")
+            self._status_bar.showMessage(f"⚠ 上次的視窗「{last}」已不存在")
 
     def _setup_ui(self):
         central = QWidget()
@@ -272,6 +303,7 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
+        self._window_combo.currentTextChanged.connect(self._on_window_changed)
         self._btn_toggle.clicked.connect(self._toggle_start)
         self._import_btn.clicked.connect(self._import_rules)
         self._export_btn.clicked.connect(self._export_rules)
@@ -305,6 +337,12 @@ class MainWindow(QMainWindow):
             self._window_combo.setPlaceholderText("← 請選擇目標視窗")
             for w in windows:
                 self._window_combo.addItem(w)
+
+    # === Last window ===
+    def _on_window_changed(self, title: str):
+        if not title:
+            return
+        self._save_config({"last_window": title})
 
     # === Rule list ===
     def _refresh_rule_list(self):

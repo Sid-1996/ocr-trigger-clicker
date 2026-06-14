@@ -13,6 +13,7 @@ _screenshot = load_sibling("screenshot", "01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "02_ocr_engine.py")
 
 capture = _screenshot.capture
+capture_window_content = _screenshot.capture_window_content
 activate_window = _screenshot.activate_window
 recognize = _ocr.recognize
 OcrResult = _ocr.OcrResult
@@ -30,11 +31,13 @@ class OcrDebugWindow(QMainWindow):
         self._ocr_busy = False
         self._ocr_results: list = []
         self._latest_raw: np.ndarray | None = None
+        self._capture_source = ""
         self._signals = _OcrSignals()
         self._signals.frame_ready.connect(self._on_frame)
         self._signals.ocr_done.connect(self._on_ocr_done)
 
         self.setWindowTitle(f"OCR 效能診斷 — {window_title}")
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.setMinimumSize(640, 480)
         self.resize(960, 720)
 
@@ -68,7 +71,12 @@ class OcrDebugWindow(QMainWindow):
         super().closeEvent(event)
 
     def _tick(self):
-        raw = capture(self._window_title)
+        raw = capture_window_content(self._window_title)
+        src = "PrintWindow"
+        if raw is None:
+            raw = capture(self._window_title)
+            src = "mss (fallback)"
+        self._capture_source = src
 
         if raw is None:
             self._ocr_busy = False
@@ -117,15 +125,19 @@ class OcrDebugWindow(QMainWindow):
             self._image_label.setText(f"⚠ 找不到視窗「{self._window_title}」\n請確認視窗仍開啟")
             return
 
+        h, w = annotated.shape[:2]
         self._show_image(annotated)
         if not results:
-            self._status_bar.showMessage("尚未取得辨識結果…")
+            self._status_bar.showMessage(f"{self._capture_source} | {w}×{h} | 尚未取得辨識結果…")
 
     def _on_ocr_done(self, annotated: np.ndarray | None, results: list, elapsed_ms: float):
         self._ocr_results = results
         if annotated is not None:
             self._show_image(annotated)
-        status = f"{len(results)} 個文字區塊 | {elapsed_ms:.0f} ms"
+            h, w = annotated.shape[:2]
+            status = f"{self._capture_source} | {w}×{h} | {len(results)} 個文字區塊 | {elapsed_ms:.0f} ms"
+        else:
+            status = f"{len(results)} 個文字區塊 | {elapsed_ms:.0f} ms"
         self._status_bar.showMessage(status)
 
     def _show_image(self, img: np.ndarray):
