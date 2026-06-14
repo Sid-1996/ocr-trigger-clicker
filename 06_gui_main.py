@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self._signals = WorkerSignals()
         self._loop: Optional[MainLoop] = None
         self._selected_rule_id: Optional[str] = None
+        self._window_lost = False
 
         self._setup_ui()
         self._connect_signals()
@@ -263,7 +264,7 @@ class MainWindow(QMainWindow):
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
-        layout.addWidget(self._status_bar)
+        self.setStatusBar(self._status_bar)
 
     def _connect_signals(self):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
@@ -276,12 +277,18 @@ class MainWindow(QMainWindow):
         self._edit_save_btn.clicked.connect(self._save_current_rule)
         self._edit_roi_btn.clicked.connect(self._open_roi_selector)
 
+        self._edit_click_position.currentTextChanged.connect(self._on_click_position_changed)
+        self._edit_fuzzy.stateChanged.connect(self._on_fuzzy_changed)
+
         self._signals.trigger_signal.connect(self._on_trigger_from_thread)
         self._signals.error_signal.connect(self._on_error_from_thread)
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
 
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("F9"), self, self._toggle_pause)
+        QShortcut(QKeySequence("Ctrl+S"), self, self._save_current_rule)
+        QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
+        QShortcut(QKeySequence("Delete"), self, self._delete_rule)
 
     # === Window list ===
     def _refresh_window_list(self):
@@ -333,6 +340,7 @@ class MainWindow(QMainWindow):
             self._edit_stack.setCurrentIndex(0)
             return
         self._edit_stack.setCurrentIndex(1)
+        self._edit_save_btn.setEnabled(True)
         self._edit_name.setText(rule.name)
         self._edit_target.setText(rule.target_text)
         self._edit_enabled.setChecked(rule.enabled)
@@ -351,6 +359,14 @@ class MainWindow(QMainWindow):
         self._edit_fuzzy_threshold.setValue(int(rule.fuzzy_threshold * 100))
         self._edit_max_triggers.setValue(rule.max_triggers)
         self._edit_random_offset.setValue(rule.random_offset)
+
+    def _on_click_position_changed(self, pos: str):
+        is_custom = pos == "custom"
+        self._edit_custom_x.setEnabled(is_custom)
+        self._edit_custom_y.setEnabled(is_custom)
+
+    def _on_fuzzy_changed(self, state):
+        self._edit_fuzzy_threshold.setEnabled(state == 2)
 
     def _add_rule(self):
         import uuid
@@ -373,6 +389,8 @@ class MainWindow(QMainWindow):
         self._rules.append(rule)
         save_rules(self._rules, self._rules_path)
         self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
         idx = len(self._rules) - 1
         self._rule_list.setCurrentRow(idx)
 
@@ -393,6 +411,8 @@ class MainWindow(QMainWindow):
         self._rules = [r for r in self._rules if r.id != rule.id]
         save_rules(self._rules, self._rules_path)
         self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
 
     def _save_current_rule(self):
         rule = self._get_current_rule()
@@ -430,7 +450,9 @@ class MainWindow(QMainWindow):
 
     # === Start / Pause ===
     def _toggle_start(self):
-        if self._loop is not None and self._loop.is_running:
+        if self._window_lost:
+            self._stop_loop()
+        elif self._loop is not None and self._loop.is_running:
             if self._loop.is_paused:
                 self._loop.resume()
                 self._btn_toggle.setText("暫停")
@@ -440,6 +462,7 @@ class MainWindow(QMainWindow):
             self._start_loop()
 
     def _start_loop(self):
+        self._window_lost = False
         title = self._window_combo.currentText()
         if not title:
             QMessageBox.warning(self, "警告", "請先選擇目標視窗")
@@ -492,6 +515,27 @@ class MainWindow(QMainWindow):
         self._rule_list.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
+        self._import_btn.setEnabled(enabled)
+        self._export_btn.setEnabled(enabled)
+        self._refresh_btn.setEnabled(enabled)
+        if enabled:
+            self._show_rule_detail(self._get_current_rule())
+        else:
+            self._edit_save_btn.setEnabled(False)
+            self._edit_roi_btn.setEnabled(False)
+            self._edit_name.setEnabled(False)
+            self._edit_target.setEnabled(False)
+            self._edit_enabled.setEnabled(False)
+            self._edit_cooldown.setEnabled(False)
+            self._edit_trigger_mode.setEnabled(False)
+            self._edit_click_button.setEnabled(False)
+            self._edit_click_position.setEnabled(False)
+            self._edit_custom_x.setEnabled(False)
+            self._edit_custom_y.setEnabled(False)
+            self._edit_fuzzy.setEnabled(False)
+            self._edit_fuzzy_threshold.setEnabled(False)
+            self._edit_max_triggers.setEnabled(False)
+            self._edit_random_offset.setEnabled(False)
 
     # === Import / Export ===
     def _import_rules(self):
@@ -509,6 +553,9 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
 
     def _export_rules(self):
+        if not self._rules:
+            QMessageBox.information(self, "匯出規則", "目前沒有任何規則可匯出。")
+            return
         path, _ = QFileDialog.getSaveFileName(
             self, "匯出規則", str(_here / "rules_export.json"), "JSON (*.json)"
         )
@@ -524,6 +571,7 @@ class MainWindow(QMainWindow):
         self._log_widget.append_error(msg)
 
     def _on_window_lost_from_thread(self):
+        self._window_lost = True
         self._btn_toggle.setText("繼續")
         self._log_widget.append_error("⚠ 目標視窗消失，偵測已暫停")
         self._status_bar.showMessage("⚠ 目標視窗已關閉，偵測已暫停")

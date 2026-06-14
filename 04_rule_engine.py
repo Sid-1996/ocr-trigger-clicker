@@ -85,7 +85,7 @@ def load_rules(path: str) -> list[Rule]:
     try:
         with open(p, encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, KeyError):
         return []
     return [_dict_to_rule(r) for r in data.get("rules", [])]
 
