@@ -1,3 +1,4 @@
+import ctypes
 import threading
 import time
 
@@ -135,6 +136,25 @@ class OcrDebugWindow(QMainWindow):
 
         self._capture_btn.clicked.connect(self._take_snapshot)
 
+    def _exclude_windows_from_capture(self):
+        try:
+            hwnds = [int(self.winId())]
+            if self.parent():
+                hwnds.append(int(self.parent().winId()))
+            for hwnd in hwnds:
+                ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x11)
+
+            def _restore():
+                for hwnd in hwnds:
+                    try:
+                        ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0)
+                    except Exception:
+                        pass
+
+            return _restore
+        except Exception:
+            return None
+
     def _take_snapshot(self):
         self._capture_btn.setEnabled(False)
         self._capture_btn.setText("辨識中…")
@@ -145,8 +165,11 @@ class OcrDebugWindow(QMainWindow):
         raw = capture_window_content(self._window_title)
         src = "PrintWindow"
         if raw is None:
+            restore = self._exclude_windows_from_capture()
             raw = capture(self._window_title)
-            src = "mss"
+            src = "mss (excluded)" if restore else "mss"
+            if restore:
+                restore()
         self._capture_source = src
 
         if raw is None:
