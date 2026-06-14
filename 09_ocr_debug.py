@@ -26,6 +26,7 @@ from _loader import load_sibling
 _screenshot = load_sibling("screenshot", "01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "02_ocr_engine.py")
 
+activate_window = _screenshot.activate_window
 capture = _screenshot.capture
 capture_window_content = _screenshot.capture_window_content
 recognize = _ocr.recognize
@@ -140,7 +141,10 @@ class OcrDebugWindow(QMainWindow):
             if parent:
                 parent.showMinimized()
             QApplication.processEvents()
-            time.sleep(0.05)
+            time.sleep(0.03)
+
+            activate_window(self._window_title)
+            time.sleep(0.03)
 
             img = capture(self._window_title)
 
