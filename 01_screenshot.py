@@ -69,18 +69,8 @@ def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
         return None
 
 
-def capture_window_content(title: str) -> np.ndarray | None:
-    """擷取視窗本身的內容（非螢幕畫面），不受疊層視窗遮擋。
-
-    使用 Windows PrintWindow API 直接讀取目標視窗的 client area。
-    對部分 DirectX 遊戲可能無法使用（回傳全黑影像），此時
-    呼叫端應 fallback 到 capture()。
-    """
-    matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
-    if not matches:
-        return None
-    hwnd = matches[0]._hWnd
-
+def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
+    """Generic GDI capture: set up DC+bitmap, call render_fn(mem_dc, hwnd, w, h), read pixels."""
     hwnd_dc = None
     mem_dc = None
     hbitmap = None
@@ -94,11 +84,9 @@ def capture_window_content(title: str) -> np.ndarray | None:
         hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
         mem_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
         hbitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
+        ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
 
-        ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
-        pw_ok = ctypes.windll.user32.PrintWindow(hwnd, mem_dc, 3)
-        ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
-        if not pw_ok:
+        if not render_fn(hwnd, mem_dc, w, h):
             return None
 
         bmp_info = _BITMAPINFOHEADER()
@@ -125,6 +113,42 @@ def capture_window_content(title: str) -> np.ndarray | None:
             ctypes.windll.gdi32.DeleteDC(mem_dc)
         if hwnd_dc:
             ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
+
+
+def _pw_render(hwnd: int, mem_dc: int, w: int, h: int) -> bool:
+    return bool(ctypes.windll.user32.PrintWindow(hwnd, mem_dc, 3))
+
+
+def _bitblt_render(hwnd: int, mem_dc: int, w: int, h: int) -> bool:
+    hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
+    try:
+        CAPTUREBLT = 0x40000000
+        SRCCOPY = 0x00CC0020
+        return bool(
+            ctypes.windll.gdi32.BitBlt(mem_dc, 0, 0, w, h, hwnd_dc, 0, 0, SRCCOPY | CAPTUREBLT)
+        )
+    finally:
+        ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
+
+
+def capture_window_content(title: str) -> np.ndarray | None:
+    """擷取視窗本身的內容（非螢幕畫面），不受疊層視窗遮擋。
+
+    優先使用 PrintWindow API 直接讀取目標視窗的 client area。
+    若 PrintWindow 失敗（常見於 DirectX 遊戲），自動改用
+    BitBlt + CAPTUREBLT 從視窗 DC 讀取畫面。
+    兩者都失敗則回傳 None，由呼叫端處理。
+    """
+    matches = [w for w in gw.getWindowsWithTitle(title) if w.title and w.visible]
+    if not matches:
+        return None
+    hwnd = matches[0]._hWnd
+
+    img = _gdi_capture(hwnd, _pw_render)
+    if img is not None:
+        return img
+
+    return _gdi_capture(hwnd, _bitblt_render)
 
 
 if __name__ == "__main__":
