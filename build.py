@@ -67,6 +67,7 @@ def main():
         "06_gui_main.py",
         "07_gui_roi.py",
         "08_gui_log.py",
+        "09_ocr_debug.py",
         "build.py",
     ]
     for fn in py_datas:

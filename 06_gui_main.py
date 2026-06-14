@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         self._loop: Optional[MainLoop] = None
         self._selected_rule_id: Optional[str] = None
         self._window_lost = False
+        self._debug_window = None
 
         self._setup_ui()
         self._connect_signals()
@@ -113,6 +114,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
         self._btn_toggle.setToolTip("開始偵測所選視窗")
+        self._debug_btn = QPushButton("OCR 診斷")
+        self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
         self._import_btn = QPushButton("匯入規則")
         self._import_btn.setToolTip("從 JSON 檔案載入規則")
         self._export_btn = QPushButton("匯出規則")
@@ -123,6 +126,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._refresh_btn)
         toolbar.addSpacing(12)
         toolbar.addWidget(self._btn_toggle)
+        toolbar.addWidget(self._debug_btn)
         toolbar.addWidget(self._import_btn)
         toolbar.addWidget(self._export_btn)
         toolbar.addStretch()
@@ -276,6 +280,7 @@ class MainWindow(QMainWindow):
         self._rule_list.currentRowChanged.connect(self._on_rule_selected)
         self._edit_save_btn.clicked.connect(self._save_current_rule)
         self._edit_roi_btn.clicked.connect(self._open_roi_selector)
+        self._debug_btn.clicked.connect(self._open_ocr_debug)
 
         self._edit_click_position.currentTextChanged.connect(self._on_click_position_changed)
         self._edit_fuzzy.stateChanged.connect(self._on_fuzzy_changed)
@@ -462,6 +467,25 @@ class MainWindow(QMainWindow):
             )
             save_rules(self._rules, self._rules_path)
 
+    # === OCR diagnostic ===
+    def _open_ocr_debug(self):
+        if self._loop is not None and self._loop.is_running:
+            QMessageBox.warning(self, "無法開啟", "請先停止偵測循環再開啟診斷模式。")
+            return
+        if self._debug_window is not None and self._debug_window.isVisible():
+            self._debug_window.raise_()
+            self._debug_window.activateWindow()
+            return
+        title = self._window_combo.currentText()
+        if not title:
+            QMessageBox.warning(self, "警告", "請先選擇目標視窗")
+            return
+        mod = load_sibling("ocr_debug", "09_ocr_debug.py")
+        self._debug_window = mod.OcrDebugWindow(title, self)
+        self._debug_window.destroyed.connect(lambda: setattr(self, '_debug_window', None))
+        self._debug_window.start()
+        self._debug_window.show()
+
     # === Start / Pause ===
     def _toggle_start(self):
         if self._window_lost:
@@ -532,6 +556,7 @@ class MainWindow(QMainWindow):
         self._import_btn.setEnabled(enabled)
         self._export_btn.setEnabled(enabled)
         self._refresh_btn.setEnabled(enabled)
+        self._debug_btn.setEnabled(enabled)
         if enabled:
             self._show_rule_detail(self._get_current_rule())
         else:
@@ -592,6 +617,9 @@ class MainWindow(QMainWindow):
 
     # === Close ===
     def closeEvent(self, event):
+        if self._debug_window:
+            self._debug_window.close()
+            self._debug_window = None
         if self._loop:
             self._loop.stop()
         event.accept()
