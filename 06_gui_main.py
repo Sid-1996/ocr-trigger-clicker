@@ -507,12 +507,11 @@ class MainWindow(QMainWindow):
 
     # === OCR diagnostic ===
     def _open_ocr_debug(self):
+        if self._debug_window is not None and self._debug_window.isVisible():
+            self._debug_window.close()
+            return
         if self._loop is not None and self._loop.is_running:
             QMessageBox.warning(self, "無法開啟", "請先停止偵測循環再開啟診斷模式。")
-            return
-        if self._debug_window is not None and self._debug_window.isVisible():
-            self._debug_window.raise_()
-            self._debug_window.activateWindow()
             return
         title = self._window_combo.currentText()
         if not title:
@@ -520,9 +519,14 @@ class MainWindow(QMainWindow):
             return
         mod = load_sibling("ocr_debug", "09_ocr_debug.py")
         self._debug_window = mod.OcrDebugWindow(title, self)
-        self._debug_window.destroyed.connect(lambda: setattr(self, "_debug_window", None))
+        self._debug_window.destroyed.connect(self._on_debug_closed)
         self._debug_window.start()
         self._debug_window.show()
+        self._debug_btn.setText("關閉診斷")
+
+    def _on_debug_closed(self):
+        self._debug_window = None
+        self._debug_btn.setText("OCR 診斷")
 
     # === Start / Pause ===
     def _toggle_start(self):
