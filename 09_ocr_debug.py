@@ -1,19 +1,12 @@
-import ctypes
 import threading
 import time
 
 import numpy as np
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
-from PyQt6.QtGui import (
-    QColor,
-    QFont,
-    QImage,
-    QPainter,
-    QPen,
-    QPixmap,
-)
+from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -105,6 +98,7 @@ class OcrDebugWindow(QMainWindow):
         right_layout.setContentsMargins(0, 0, 0, 0)
 
         self._result_table = QTableWidget()
+        self._result_table.setFont(QFont("Consolas", 9))
         self._result_table.setColumnCount(3)
         self._result_table.setHorizontalHeaderLabels(["#", "文字", "信心度"])
         self._result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -136,22 +130,26 @@ class OcrDebugWindow(QMainWindow):
 
         self._capture_btn.clicked.connect(self._take_snapshot)
 
-    def _exclude_windows_from_capture(self):
+    def _minimize_and_capture(self):
         try:
-            hwnds = [int(self.winId())]
-            if self.parent():
-                hwnds.append(int(self.parent().winId()))
-            for hwnd in hwnds:
-                ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x11)
+            parent = self.parent() if self.parent() else None
+            self_vis = self.isVisible()
+            parent_vis = parent.isVisible() if parent else False
 
-            def _restore():
-                for hwnd in hwnds:
-                    try:
-                        ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0)
-                    except Exception:
-                        pass
+            self.showMinimized()
+            if parent:
+                parent.showMinimized()
+            QApplication.processEvents()
+            time.sleep(0.05)
 
-            return _restore
+            img = capture(self._window_title)
+
+            if parent_vis:
+                parent.showNormal()
+                parent.activateWindow()
+            if self_vis:
+                self.showNormal()
+            return img
         except Exception:
             return None
 
@@ -165,11 +163,8 @@ class OcrDebugWindow(QMainWindow):
         raw = capture_window_content(self._window_title)
         src = "PrintWindow"
         if raw is None:
-            restore = self._exclude_windows_from_capture()
-            raw = capture(self._window_title)
-            src = "mss (excluded)" if restore else "mss"
-            if restore:
-                restore()
+            raw = self._minimize_and_capture()
+            src = "mss (minimized)" if raw is not None else "mss (failed)"
         self._capture_source = src
 
         if raw is None:
@@ -201,7 +196,7 @@ class OcrDebugWindow(QMainWindow):
         h, w = self._latest_raw.shape[:2]
         self._info_label.setText(f"耗時: {elapsed_ms:.0f} ms  {len(results)} 個區塊")
         self._status_bar.showMessage(
-            f"{self._capture_source} | {w}×{h} | {len(results)} 個區塊 | {elapsed_ms:.0f} ms"
+            f"[{self._capture_source}] {w}×{h} | {len(results)} 個區塊 | {elapsed_ms:.0f} ms"
         )
 
     def _populate_table(self):
@@ -282,33 +277,34 @@ class OcrDebugWindow(QMainWindow):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        FONT = QFont("Consolas", 9)
-        painter.setFont(FONT)
+        font = QFont("Consolas", 9)
+        painter.setFont(font)
+        fm = painter.fontMetrics()
+        th = fm.height()
 
         for i, r in enumerate(self._ocr_results):
-            if r.confidence >= 0.5:
-                color = QColor(0, 220, 255)
-            else:
-                color = QColor(255, 80, 80)
-
             if i == self._selected_index:
-                painter.setPen(QPen(QColor(255, 220, 0), 3))
+                painter.setPen(QPen(QColor(255, 220, 0), 5))
+            elif r.confidence >= 0.5:
+                painter.setPen(QPen(QColor(0, 220, 255), 3))
             else:
-                painter.setPen(QPen(color, 2))
-
+                painter.setPen(QPen(QColor(255, 80, 80), 3))
             painter.drawRect(r.x, r.y, r.w, r.h)
 
-            if r.confidence >= 0.5:
-                label = f"{i + 1}  {r.text}  {r.confidence:.2f}"
-                fm = painter.fontMetrics()
-                tw = fm.horizontalAdvance(label)
-                th = fm.height()
-                label_x = r.x + r.w - tw - 6
-                if label_x < r.x:
-                    label_x = r.x
-                painter.fillRect(label_x - 3, r.y, tw + 6, th + 4, QColor(0, 0, 0, 180))
-                painter.setPen(QColor(255, 255, 255))
-                painter.drawText(label_x, r.y + th + 2, label)
+            label = f"{i + 1}  {r.text}  {r.confidence:.2f}"
+            tw = fm.horizontalAdvance(label)
+
+            label_x = r.x
+            label_y = r.y - 4
+            bg_y = label_y - th - 2
+            if bg_y < 0:
+                label_y = r.y + th + 4
+                bg_y = r.y
+
+            painter.fillRect(label_x - 2, bg_y - 2, tw + 8, th + 6, QColor(0, 0, 0, 180))
+            text_color = QColor(255, 255, 255) if r.confidence >= 0.5 else QColor(255, 180, 180)
+            painter.setPen(text_color)
+            painter.drawText(label_x + 2, label_y, label)
 
         painter.end()
         self._annotated_pixmap = pixmap
