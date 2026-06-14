@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from PyQt6.QtCore import QObject, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtWidgets import QLabel, QMainWindow, QStatusBar, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QMainWindow, QSizePolicy, QStatusBar, QVBoxLayout, QWidget
 
 from _loader import load_sibling
 
@@ -49,6 +49,8 @@ class OcrDebugWindow(QMainWindow):
         self._image_label = QLabel("正在初始化 OCR 診斷…")
         self._image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._image_label.setStyleSheet("background-color: #1e1e1e; color: #aaa; font-size: 14px;")
+        self._image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._image_label.setMinimumSize(320, 240)
         layout.addWidget(self._image_label)
 
         self._status_bar = QStatusBar()
@@ -95,8 +97,6 @@ class OcrDebugWindow(QMainWindow):
         src = "PrintWindow"
         if raw is None:
             restore = self._exclude_self_from_capture()
-            if restore:
-                time.sleep(0.05)
             raw = capture(self._window_title)
             src = "mss (excluded)" if restore else "mss (overlap possible)"
             if restore:
@@ -109,12 +109,7 @@ class OcrDebugWindow(QMainWindow):
             return
 
         self._latest_raw = raw
-
-        if self._ocr_results:
-            annotated = self._annotate(raw, self._ocr_results)
-            self._signals.frame_ready.emit(annotated, self._ocr_results)
-        else:
-            self._signals.frame_ready.emit(raw, [])
+        self._signals.frame_ready.emit(raw, [])
 
         if not self._ocr_busy:
             self._ocr_busy = True
