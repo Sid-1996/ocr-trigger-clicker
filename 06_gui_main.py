@@ -161,7 +161,7 @@ class MainWindow(QMainWindow):
         self._refresh_btn.setToolTip("重新掃描所有可見視窗")
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
-        self._btn_toggle.setToolTip("開始偵測所選視窗")
+        self._btn_toggle.setToolTip("開始偵測所選視窗（按 F9 暫停／繼續）")
         self._debug_btn = QPushButton("OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
         self._import_btn = QPushButton("匯入規則")
@@ -644,7 +644,9 @@ class MainWindow(QMainWindow):
             self._loop = self._init_worker.loop
             self._btn_toggle.setText("暫停")
             self._update_edit_enabled(False)
-            self._status_bar.showMessage(f"偵測中 — 目標: {self._window_combo.currentText()}")
+            self._status_bar.showMessage(
+                f"偵測中 — 目標: {self._window_combo.currentText()}（按 F9 暫停）"
+            )
         else:
             QMessageBox.critical(self, "初始化失敗", f"無法啟動主迴圈：\n{error_msg}")
             self._btn_toggle.setText("啟動")
@@ -665,7 +667,7 @@ class MainWindow(QMainWindow):
             self._loop.resume()
             self._btn_toggle.setText("暫停")
             self._log_widget.append_error("▶ 恢復偵測")
-            self._status_bar.showMessage("偵測中")
+            self._status_bar.showMessage("偵測中（按 F9 暫停）")
         else:
             self._loop.pause()
             self._btn_toggle.setText("繼續")
