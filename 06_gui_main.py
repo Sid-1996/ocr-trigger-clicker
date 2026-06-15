@@ -351,7 +351,7 @@ class MainWindow(QMainWindow):
             QKeySequence("F9"),
             self,
             self._toggle_pause,
-            context=Qt.ShortcutContext.ApplicationShortcutContext,
+            context=Qt.ShortcutContext.ApplicationShortcut,
         )
         QShortcut(QKeySequence("Ctrl+S"), self, self._save_current_rule)
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
