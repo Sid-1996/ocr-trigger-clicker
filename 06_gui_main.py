@@ -347,7 +347,12 @@ class MainWindow(QMainWindow):
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
 
     def _setup_shortcuts(self):
-        QShortcut(QKeySequence("F9"), self, self._toggle_pause)
+        QShortcut(
+            QKeySequence("F9"),
+            self,
+            self._toggle_pause,
+            context=Qt.ShortcutContext.ApplicationShortcutContext,
+        )
         QShortcut(QKeySequence("Ctrl+S"), self, self._save_current_rule)
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
         QShortcut(QKeySequence("Delete"), self, self._delete_rule)
