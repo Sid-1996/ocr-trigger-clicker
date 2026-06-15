@@ -61,9 +61,9 @@ loop {
                 btn := parts[4] = "right" ? "Right" : "Left"
 
                 MouseMove bx, by, 0
-                Sleep Random(50, 150)
+                Sleep Random(10, 30)
                 Click bx, by, btn, "Down"
-                Sleep Random(50, 150)
+                Sleep Random(10, 30)
                 Click bx, by, btn, "Up"
             }
         } else if SubStr(cmd, 1, 4) = "MOVE" {

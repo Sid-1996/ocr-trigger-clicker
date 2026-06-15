@@ -48,6 +48,8 @@ class MainLoop:
         self._window_hwnd = get_window_hwnd(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
 
+        self._rules_lock = threading.RLock()
+        self._window_lock = threading.RLock()
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -64,7 +66,8 @@ class MainLoop:
         _ahk.init_ahk()
 
     def _load_rules(self):
-        self._rules = load_rules(self._rules_path)
+        with self._rules_lock:
+            self._rules = load_rules(self._rules_path)
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -72,13 +75,15 @@ class MainLoop:
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         scale = self._dpi_scale if self._dpi_scale > 0 else 1.0
         return (
-            int(round(rect["x"] + x * scale)),
-            int(round(rect["y"] + y * scale)),
+            int(round((rect["x"] + x) * scale)),
+            int(round((rect["y"] + y) * scale)),
         )
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
+        with self._rules_lock:
+            rules_snapshot = list(self._rules)
         groups: dict[tuple[int, int, int, int] | None, list[Rule]] = {}
-        for rule in self._rules:
+        for rule in rules_snapshot:
             if not rule.enabled:
                 continue
             roi = get_roi(rule)
@@ -148,7 +153,9 @@ class MainLoop:
                     self._stop_event.wait(0.1)
                     continue
 
-                rect = get_window_rect(self._window_title)
+                with self._window_lock:
+                    title = self._window_title
+                rect = get_window_rect(title)
                 if rect is None:
                     if self.on_window_lost:
                         self.on_window_lost()
@@ -201,15 +208,17 @@ class MainLoop:
             return list(self._logs)[-limit:]
 
     def reload_rules(self) -> None:
-        self._load_rules()
+        with self._rules_lock:
+            self._load_rules()
 
     def set_window(self, title: str) -> bool:
-        if get_window_rect(title) is None:
-            return False
-        self._window_title = title
-        self._window_hwnd = get_window_hwnd(title)
-        self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
-        return True
+        with self._window_lock:
+            if get_window_rect(title) is None:
+                return False
+            self._window_title = title
+            self._window_hwnd = get_window_hwnd(title)
+            self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
+            return True
 
 
 if __name__ == "__main__":

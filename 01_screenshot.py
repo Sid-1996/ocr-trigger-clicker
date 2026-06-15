@@ -66,12 +66,17 @@ def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
     rect = get_window_rect(title)
     if rect is None:
         return None
-    x, y, w, h = rect["x"], rect["y"], rect["w"], rect["h"]
+    hwnd = get_window_hwnd(title)
+    scale = get_dpi_scaling_factor(hwnd)
+    x = rect["x"]
+    y = rect["y"]
+    w = rect["w"]
+    h = rect["h"]
     if roi:
-        x += roi["x"]
-        y += roi["y"]
-        w = roi["w"]
-        h = roi["h"]
+        x += int(roi["x"] * scale)
+        y += int(roi["y"] * scale)
+        w = int(roi["w"] * scale)
+        h = int(roi["h"] * scale)
     try:
         with mss.mss() as sct:
             screen = sct.monitors[0]
@@ -129,7 +134,8 @@ def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
     try:
         rect = wintypes.RECT()
         ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect))
-        w, h = rect.right, rect.bottom
+        w = rect.right
+        h = rect.bottom
         if w <= 0 or h <= 0:
             return None
 

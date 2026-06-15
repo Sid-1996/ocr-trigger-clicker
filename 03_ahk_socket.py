@@ -11,6 +11,8 @@ _ahk_process: Optional[subprocess.Popen] = None
 _lock = threading.Lock()
 _restart_lock = threading.Lock()
 _heartbeat_event = threading.Event()
+_restart_fail_count = 0
+_MAX_RESTART_ATTEMPTS = 3
 
 
 def _find_ahk() -> str:
@@ -32,7 +34,7 @@ def _find_ahk() -> str:
     return str(candidates[0])
 
 
-def _recv_line(conn: socket.socket, timeout: float = 3.0) -> str:
+def _recv_line(conn: socket.socket, timeout: float = 5.0) -> str:
     conn.settimeout(timeout)
     buf = b""
     while True:
@@ -52,58 +54,81 @@ def _recv_line(conn: socket.socket, timeout: float = 3.0) -> str:
 
 def _send_cmd(cmd: str) -> bool:
     global _conn
-    with _lock:
-        if _conn is None:
-            return False
-        try:
-            _conn.sendall((cmd + "\n").encode("utf-8"))
-            resp = _recv_line(_conn)
-            return resp == "OK"
-        except (BrokenPipeError, ConnectionError, OSError):
-            _conn = None
-            return False
+    for attempt in range(2):
+        with _lock:
+            if _conn is None:
+                return False
+            try:
+                _conn.sendall((cmd + "\n").encode("utf-8"))
+                resp = _recv_line(_conn)
+                if resp == "OK":
+                    return True
+            except (BrokenPipeError, ConnectionError, OSError):
+                _conn = None
+        if attempt == 0:
+            time.sleep(0.5)
+    return False
 
 
 def _heartbeat_loop():
+    consecutive_fail = 0
     while not _heartbeat_event.is_set():
         if not _send_cmd("PING"):
+            consecutive_fail += 1
+            if consecutive_fail >= 3:
+                _emergency_stop()
+                break
             _restart_ahk()
+        else:
+            consecutive_fail = 0
         _heartbeat_event.wait(5)
 
 
 def _restart_ahk() -> bool:
-    global _conn, _ahk_process
+    global _conn, _ahk_process, _restart_fail_count
     if not _restart_lock.acquire(blocking=False):
         return False
-    with _lock:
-        if _conn:
-            try:
-                _conn.close()
-            except OSError:
-                pass
-            _conn = None
-        if _ahk_process:
-            try:
-                _ahk_process.kill()
-            except OSError:
-                pass
-            _ahk_process = None
     try:
+        if _restart_fail_count >= _MAX_RESTART_ATTEMPTS:
+            _emergency_stop()
+            return False
+
+        with _lock:
+            if _conn:
+                try:
+                    _conn.close()
+                except OSError:
+                    pass
+                _conn = None
+            if _ahk_process:
+                try:
+                    _ahk_process.kill()
+                    _ahk_process.wait(timeout=2)
+                except OSError:
+                    pass
+                _ahk_process = None
+
         time.sleep(0.5)
-        _launch_ahk()
+
+        if not _launch_ahk():
+            _restart_fail_count += 1
+            return False
 
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
             with _lock:
                 if _conn is not None:
+                    _restart_fail_count = 0
                     return True
             time.sleep(0.2)
+
+        _restart_fail_count += 1
         return False
     finally:
         _restart_lock.release()
 
 
-def _launch_ahk():
+def _launch_ahk() -> bool:
     global _ahk_process
     ahk_path = getattr(_launch_ahk, "ahk_path", _find_ahk())
     candidates = ["autohotkey.exe", "AutoHotkey64.exe", "AutoHotkey32.exe", "AutoHotkey.exe"]
@@ -113,10 +138,27 @@ def _launch_ahk():
                 [exe, ahk_path],
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
-            return
+            return True
         except FileNotFoundError:
             continue
-    raise FileNotFoundError("找不到 AutoHotkey 執行檔")
+    print("錯誤：找不到任何 AutoHotkey 執行檔")
+    return False
+
+
+def _emergency_stop():
+    global _conn, _server, _ahk_process
+    _heartbeat_event.set()
+    with _lock:
+        if _conn:
+            _conn.close()
+            _conn = None
+        if _server:
+            _server.close()
+            _server = None
+        if _ahk_process:
+            _ahk_process.kill()
+            _ahk_process = None
+    print("AHK 通訊永久失效，停止重啟")
 
 
 def _accept_loop():
@@ -149,7 +191,8 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
     _server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     _server.bind(("127.0.0.1", port))
 
-    _launch_ahk()
+    if not _launch_ahk():
+        return False
 
     accept_thread = threading.Thread(target=_accept_loop, daemon=True)
     accept_thread.start()

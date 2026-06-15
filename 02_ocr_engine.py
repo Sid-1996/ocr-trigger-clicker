@@ -114,22 +114,24 @@ def recognize(
     max_side_len: int = _DEFAULT_MAX_SIDE_LEN,
     min_confidence: float = 0.5,
 ) -> list[OcrResult]:
-    if _engine is None:
-        init_engine()
-    if image is None or image.size == 0:
-        return []
-    img, scale = _prepare_image(image, max_side_len, preprocess)
-    ox, oy = (roi_offset["x"], roi_offset["y"]) if roi_offset else (0, 0)
-    result = _engine(img, use_cls=False)
-    results: list[OcrResult] = []
-    if result is None or result[0] is None:
+    global _engine
+    with _engine_lock:
+        if _engine is None:
+            init_engine()
+        if image is None or image.size == 0:
+            return []
+        img, scale = _prepare_image(image, max_side_len, preprocess)
+        ox, oy = (roi_offset["x"], roi_offset["y"]) if roi_offset else (0, 0)
+        result = _engine(img, use_cls=False)
+        results: list[OcrResult] = []
+        if result is None or result[0] is None:
+            return results
+        for box, text, score in result[0]:
+            if score is None or score < min_confidence:
+                continue
+            rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
+            results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
         return results
-    for box, text, score in result[0]:
-        if score is None or score < min_confidence:
-            continue
-        rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
-        results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
-    return results
 
 
 def find_text(
