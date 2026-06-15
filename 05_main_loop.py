@@ -180,7 +180,6 @@ class MainLoop:
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
-        _ahk.shutdown()
 
     def pause(self) -> None:
         self._pause_event.set()
