@@ -35,6 +35,11 @@ capture_window_content = _screenshot.capture_window_content
 recognize = _ocr.recognize
 
 
+class _NoWheelCombo(QComboBox):
+    def wheelEvent(self, e):
+        e.ignore()
+
+
 class _ImageLabel(QLabel):
     clicked = pyqtSignal(int, int)
 
@@ -95,7 +100,7 @@ class OcrDebugWindow(QMainWindow):
         self._capture_btn = QPushButton("拍一張(&C)")
         self._capture_btn.setMinimumWidth(80)
         self._capture_btn.setToolTip("擷取一次畫面並執行 OCR 辨識 (Alt+C)")
-        self._ocr_mode = QComboBox()
+        self._ocr_mode = _NoWheelCombo()
         self._ocr_mode.addItems(list(self._OCR_MODES))
         self._ocr_mode.setCurrentText("完整測試")
         self._ocr_mode.setToolTip("完整測試：保留更多細節；快速：偏向即時回饋")
@@ -462,9 +467,6 @@ class OcrDebugWindow(QMainWindow):
             self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
             return
 
-        hwnd = _screenshot.get_window_hwnd(self._window_title)
-        scale = _screenshot.get_dpi_scaling_factor(hwnd)
-
         cx = rect["x"] + int(r.x + r.w / 2)
         cy = rect["y"] + int(r.y + r.h / 2)
 
@@ -474,10 +476,10 @@ class OcrDebugWindow(QMainWindow):
 
         _ahk = load_sibling("ahk_socket", "03_ahk_socket.py")
         click_ok = _ahk.send_click(cx, cy)
+        if not click_ok:
+            _ahk.init_ahk()
+            click_ok = _ahk.send_click(cx, cy)
         time.sleep(0.1)
-
-        self.activateWindow()
-        self.raise_()
 
         from PyQt6.QtCore import QPoint
         from PyQt6.QtWidgets import QToolTip

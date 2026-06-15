@@ -31,6 +31,17 @@ from _loader import load_sibling
 
 _here = Path(__file__).parent
 
+
+class _NoWheelCombo(QComboBox):
+    def wheelEvent(self, e):
+        e.ignore()
+
+
+class _NoWheelSpin(QSpinBox):
+    def wheelEvent(self, e):
+        e.ignore()
+
+
 _ahk_mod = load_sibling("ahk_socket", "03_ahk_socket.py")
 _main_loop_mod = load_sibling("main_loop", "05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
@@ -143,7 +154,7 @@ class MainWindow(QMainWindow):
 
         # === Top toolbar ===
         toolbar = QHBoxLayout()
-        self._window_combo = QComboBox()
+        self._window_combo = _NoWheelCombo()
         self._window_combo.setMinimumWidth(250)
         self._window_combo.setPlaceholderText("← 點擊「重新整理」載入視窗")
         self._refresh_btn = QPushButton("重新整理")
@@ -240,38 +251,38 @@ class MainWindow(QMainWindow):
         self._edit_roi_label = QLabel("全視窗")
         self._edit_roi_btn = QPushButton("框選偵測區域")
         self._edit_roi_btn.setToolTip("用滑鼠拖曳選取螢幕上的偵測範圍")
-        self._edit_cooldown = QSpinBox()
+        self._edit_cooldown = _NoWheelSpin()
         self._edit_cooldown.setRange(0, 60000)
         self._edit_cooldown.setSuffix(" ms")
         self._edit_cooldown.setToolTip("觸發後冷卻時間，期間內不重複觸發")
-        self._edit_trigger_mode = QComboBox()
+        self._edit_trigger_mode = _NoWheelCombo()
         self._edit_trigger_mode.addItems(["once", "repeat"])
         self._edit_trigger_mode.setToolTip("once：觸發一次後停用 ｜ repeat：持續觸發")
-        self._edit_click_button = QComboBox()
+        self._edit_click_button = _NoWheelCombo()
         self._edit_click_button.addItems(["left", "right"])
         self._edit_click_button.setToolTip("點擊使用的滑鼠按鍵")
-        self._edit_click_position = QComboBox()
+        self._edit_click_position = _NoWheelCombo()
         self._edit_click_position.addItems(["text_center", "custom"])
         self._edit_click_position.setToolTip("text_center：點擊文字中心 ｜ custom：自訂座標")
-        self._edit_custom_x = QSpinBox()
+        self._edit_custom_x = _NoWheelSpin()
         self._edit_custom_x.setRange(0, 99999)
         self._edit_custom_x.setToolTip("自訂點擊的 X 座標（相對視窗左上角）")
-        self._edit_custom_y = QSpinBox()
+        self._edit_custom_y = _NoWheelSpin()
         self._edit_custom_y.setRange(0, 99999)
         self._edit_custom_y.setToolTip("自訂點擊的 Y 座標（相對視窗左上角）")
         self._edit_fuzzy = QCheckBox()
         self._edit_fuzzy.setToolTip("啟用模糊比對，可容許文字拼寫差異")
-        self._edit_fuzzy_threshold = QSpinBox()
+        self._edit_fuzzy_threshold = _NoWheelSpin()
         self._edit_fuzzy_threshold.setRange(1, 100)
         self._edit_fuzzy_threshold.setSuffix(" %")
         self._edit_fuzzy_threshold.setValue(80)
         self._edit_fuzzy_threshold.setToolTip("模糊比對的相似度門檻（越高越嚴格）")
-        self._edit_max_triggers = QSpinBox()
+        self._edit_max_triggers = _NoWheelSpin()
         self._edit_max_triggers.setRange(-1, 9999)
         self._edit_max_triggers.setSpecialValueText("無限")
         self._edit_max_triggers.setValue(-1)
         self._edit_max_triggers.setToolTip("此規則最多觸發次數（-1 = 無限制）")
-        self._edit_random_offset = QSpinBox()
+        self._edit_random_offset = _NoWheelSpin()
         self._edit_random_offset.setRange(0, 100)
         self._edit_random_offset.setSuffix(" px")
         self._edit_random_offset.setValue(3)

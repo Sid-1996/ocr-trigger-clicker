@@ -13,6 +13,7 @@ _ahk_process: Optional[subprocess.Popen] = None
 _lock = threading.Lock()
 _restart_lock = threading.Lock()
 _heartbeat_event = threading.Event()
+_initialized = False
 _restart_fail_count = 0
 _MAX_RESTART_ATTEMPTS = 3
 
@@ -166,19 +167,32 @@ def _launch_ahk() -> bool:
         return False
 
 
+def _close_all():
+    global _server, _conn, _ahk_process
+    if _conn:
+        try:
+            _conn.close()
+        except OSError:
+            pass
+        _conn = None
+    if _server:
+        try:
+            _server.close()
+        except OSError:
+            pass
+        _server = None
+    if _ahk_process:
+        try:
+            _ahk_process.kill()
+        except OSError:
+            pass
+        _ahk_process = None
+
+
 def _emergency_stop():
-    global _conn, _server, _ahk_process
     _heartbeat_event.set()
     with _lock:
-        if _conn:
-            _conn.close()
-            _conn = None
-        if _server:
-            _server.close()
-            _server = None
-        if _ahk_process:
-            _ahk_process.kill()
-            _ahk_process = None
+        _close_all()
     print("AHK 通訊永久失效，停止重啟")
 
 
@@ -203,7 +217,9 @@ def _accept_loop():
 
 
 def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
-    global _server
+    global _server, _initialized
+    if _initialized:
+        return True
     if ahk_path is None:
         ahk_path = _find_ahk()
     _launch_ahk.ahk_path = ahk_path
@@ -231,7 +247,9 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
     hb = threading.Thread(target=_heartbeat_loop, daemon=True)
     hb.start()
 
-    return _send_cmd("PING")
+    ok = _send_cmd("PING")
+    _initialized = ok
+    return ok
 
 
 def send_click(x: int, y: int, button: str = "left") -> bool:
@@ -245,25 +263,18 @@ def send_move(x: int, y: int) -> bool:
 def shutdown() -> None:
     global _server, _conn, _ahk_process
     _heartbeat_event.set()
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline:
+        if _restart_lock.acquire(blocking=False):
+            _restart_lock.release()
+            break
+        time.sleep(0.05)
     with _lock:
-        if _conn:
-            try:
-                _conn.close()
-            except OSError:
-                pass
-            _conn = None
-        if _server:
-            try:
-                _server.close()
-            except OSError:
-                pass
-            _server = None
-        if _ahk_process:
-            try:
-                _ahk_process.kill()
-            except OSError:
-                pass
-            _ahk_process = None
+        pass
+    _close_all()
+    import os as _os
+
+    _os._exit(0)
 
 
 if __name__ == "__main__":

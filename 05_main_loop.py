@@ -63,7 +63,6 @@ class MainLoop:
         self._rules: list[Rule] = []
         self._load_rules()
         init_engine()
-        _ahk.init_ahk()
 
     def _load_rules(self):
         with self._rules_lock:
