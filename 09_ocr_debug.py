@@ -104,6 +104,12 @@ class OcrDebugWindow(QMainWindow):
         self._close_btn.clicked.connect(self.close)
         toolbar.addWidget(self._capture_btn)
         toolbar.addWidget(self._ocr_mode)
+        self._click_test_btn = QPushButton("點擊測試(&T)")
+        self._click_test_btn.setMinimumWidth(80)
+        self._click_test_btn.setToolTip("點擊選取文字的目標位置，驗證座標是否正確")
+        self._click_test_btn.setEnabled(False)
+        self._click_test_btn.clicked.connect(self._on_click_test)
+        toolbar.addWidget(self._click_test_btn)
         toolbar.addWidget(self._close_btn)
         toolbar.addStretch()
         self._info_label = QLabel("")
@@ -180,9 +186,7 @@ class OcrDebugWindow(QMainWindow):
 
         self._add_rule_btn = QPushButton("建立為新規則(&N)")
         self._add_rule_btn.setEnabled(False)
-        self._add_rule_btn.setToolTip(
-            "將選取的文字與位置直接建立為一條新的偵測規則"
-        )
+        self._add_rule_btn.setToolTip("將選取的文字與位置直接建立為一條新的偵測規則")
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
@@ -271,6 +275,7 @@ class OcrDebugWindow(QMainWindow):
         self._selected_index = -1
         self._apply_roi_btn.setEnabled(False)
         self._add_rule_btn.setEnabled(False)
+        self._click_test_btn.setEnabled(False)
 
         raw, src = self._minimize_and_capture()
         self._capture_source = src
@@ -347,10 +352,12 @@ class OcrDebugWindow(QMainWindow):
                 self._selected_index = rows[0].row()
                 self._apply_roi_btn.setEnabled(True)
                 self._add_rule_btn.setEnabled(True)
+                self._click_test_btn.setEnabled(True)
             else:
                 self._selected_index = -1
                 self._apply_roi_btn.setEnabled(False)
                 self._add_rule_btn.setEnabled(False)
+                self._click_test_btn.setEnabled(False)
             self._rebuild_annotated()
             self._update_display()
         except Exception as e:
@@ -399,6 +406,7 @@ class OcrDebugWindow(QMainWindow):
                 self._result_table.blockSignals(False)
                 self._apply_roi_btn.setEnabled(True)
                 self._add_rule_btn.setEnabled(True)
+                self._click_test_btn.setEnabled(True)
                 try:
                     self._rebuild_annotated()
                     self._update_display()
@@ -418,11 +426,7 @@ class OcrDebugWindow(QMainWindow):
         r = self._ocr_results[self._selected_index]
 
         pad = 20
-        img_h, img_w = (
-            self._latest_raw.shape[:2]
-            if self._latest_raw is not None
-            else (9999, 9999)
-        )
+        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (9999, 9999)
         roi = {
             "x": max(0, r.x - pad),
             "y": max(0, r.y - pad),
@@ -430,18 +434,65 @@ class OcrDebugWindow(QMainWindow):
             "h": min(img_h - max(0, r.y - pad), r.h + pad * 2),
         }
 
-        self.rule_requested.emit({
-            "target_text": r.text,
-            "roi": roi,
-            "fuzzy": True,
-            "cooldown": 1.0,
-            "click_position": "text_center",
-        })
+        self.rule_requested.emit(
+            {
+                "target_text": r.text,
+                "roi": roi,
+                "fuzzy": True,
+                "cooldown": 1.0,
+                "click_position": "text_center",
+            }
+        )
 
         self._status_bar.showMessage(
             f"✓ 已建立新規則：「{r.text}」"
             f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
         )
+
+    def _on_click_test(self):
+        if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
+            return
+        r = self._ocr_results[self._selected_index]
+
+        from _loader import load_sibling
+
+        _screenshot = load_sibling("screenshot", "01_screenshot.py")
+        rect = _screenshot.get_window_rect(self._window_title)
+        if rect is None:
+            self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
+            return
+
+        hwnd = _screenshot.get_window_hwnd(self._window_title)
+        scale = _screenshot.get_dpi_scaling_factor(hwnd)
+
+        cx = rect["x"] + int(r.x + r.w / 2)
+        cy = rect["y"] + int(r.y + r.h / 2)
+
+        _screenshot.activate_window(self._window_title)
+        QApplication.processEvents()
+        time.sleep(0.15)
+
+        _ahk = load_sibling("ahk_socket", "03_ahk_socket.py")
+        click_ok = _ahk.send_click(cx, cy)
+        time.sleep(0.1)
+
+        self.activateWindow()
+        self.raise_()
+
+        from PyQt6.QtCore import QPoint
+        from PyQt6.QtWidgets import QToolTip
+
+        btn_pos = self._click_test_btn.mapToGlobal(QPoint(0, self._click_test_btn.height()))
+        status_icon = "✓" if click_ok else "✗"
+        status_text = "成功" if click_ok else "失敗"
+        QToolTip.showText(
+            btn_pos,
+            f"{status_icon} 點擊{status_text}：{r.text}  ({cx}, {cy})",
+            self._click_test_btn,
+        )
+        QTimer.singleShot(1500, QToolTip.hideText)
+
+        self._status_bar.showMessage(f"點擊測試{status_text}：「{r.text}」  螢幕座標 ({cx}, {cy})")
 
     def _rebuild_annotated(self):
         try:
@@ -555,7 +606,6 @@ class OcrDebugWindow(QMainWindow):
             )
         except Exception as e:
             print(f"[_update_crop_preview] {e}")
-
 
     def _update_display(self):
         if self._annotated_pixmap is None:

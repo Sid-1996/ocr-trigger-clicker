@@ -1,5 +1,7 @@
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -11,6 +13,7 @@ from rapidocr_onnxruntime import RapidOCR
 
 _engine: Optional[RapidOCR] = None
 _engine_lock = threading.RLock()
+_ocr_executor = ThreadPoolExecutor(max_workers=1)
 _DEFAULT_DET_LIMIT_SIDE_LEN = 960
 _DEFAULT_MAX_SIDE_LEN = 640
 
@@ -107,6 +110,16 @@ def _rescale_box(box, scale: float):
     return arr.astype(np.int32).tolist()
 
 
+def _run_engine(img, use_cls):
+    with _engine_lock:
+        if _engine is None:
+            init_engine()
+        return _engine(img, use_cls=use_cls)
+
+
+_OCR_TIMEOUT = 30
+
+
 def recognize(
     image: np.ndarray,
     roi_offset: dict | None = None,
@@ -114,24 +127,28 @@ def recognize(
     max_side_len: int = _DEFAULT_MAX_SIDE_LEN,
     min_confidence: float = 0.5,
 ) -> list[OcrResult]:
-    global _engine
-    with _engine_lock:
-        if _engine is None:
-            init_engine()
-        if image is None or image.size == 0:
-            return []
-        img, scale = _prepare_image(image, max_side_len, preprocess)
-        ox, oy = (roi_offset["x"], roi_offset["y"]) if roi_offset else (0, 0)
-        result = _engine(img, use_cls=False)
-        results: list[OcrResult] = []
-        if result is None or result[0] is None:
-            return results
-        for box, text, score in result[0]:
-            if score is None or score < min_confidence:
-                continue
-            rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
-            results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
-        return results
+    if image is None or image.size == 0:
+        return []
+    img, scale = _prepare_image(image, max_side_len, preprocess)
+    ox, oy = (roi_offset["x"], roi_offset["y"]) if roi_offset else (0, 0)
+
+    future = _ocr_executor.submit(_run_engine, img, False)
+    try:
+        result = future.result(timeout=_OCR_TIMEOUT)
+    except FutureTimeout:
+        return []
+    except Exception:
+        return []
+
+    if result is None or result[0] is None:
+        return []
+    results: list[OcrResult] = []
+    for box, text, score in result[0]:
+        if score is None or score < min_confidence:
+            continue
+        rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
+        results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
+    return results
 
 
 def find_text(

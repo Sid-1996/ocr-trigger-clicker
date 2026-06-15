@@ -1,7 +1,9 @@
+import shutil
 import socket
 import subprocess
 import threading
 import time
+import winreg
 from pathlib import Path
 from typing import Optional
 
@@ -128,21 +130,40 @@ def _restart_ahk() -> bool:
         _restart_lock.release()
 
 
+def _find_ahk_executable() -> str | None:
+    for reg_root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        try:
+            key = winreg.OpenKey(reg_root, r"SOFTWARE\AutoHotkey")
+            install_dir = winreg.QueryValueEx(key, "InstallDir")[0]
+            for exe_name in ["AutoHotkey64.exe", "AutoHotkey32.exe", "AutoHotkey.exe"]:
+                candidate = Path(install_dir) / exe_name
+                if candidate.exists():
+                    return str(candidate)
+        except (FileNotFoundError, OSError):
+            continue
+    for exe_name in ["autohotkey.exe", "AutoHotkey64.exe", "AutoHotkey32.exe", "AutoHotkey.exe"]:
+        path = shutil.which(exe_name)
+        if path:
+            return path
+    return None
+
+
 def _launch_ahk() -> bool:
     global _ahk_process
-    ahk_path = getattr(_launch_ahk, "ahk_path", _find_ahk())
-    candidates = ["autohotkey.exe", "AutoHotkey64.exe", "AutoHotkey32.exe", "AutoHotkey.exe"]
-    for exe in candidates:
-        try:
-            _ahk_process = subprocess.Popen(
-                [exe, ahk_path],
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-            return True
-        except FileNotFoundError:
-            continue
-    print("錯誤：找不到任何 AutoHotkey 執行檔")
-    return False
+    ahk_script = getattr(_launch_ahk, "ahk_path", _find_ahk())
+    exe_path = _find_ahk_executable()
+    if not exe_path:
+        print("錯誤：找不到 AutoHotkey 執行檔，請確認已安裝 AutoHotkey v2")
+        return False
+    try:
+        _ahk_process = subprocess.Popen(
+            [exe_path, ahk_script],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+        return True
+    except Exception as e:
+        print(f"啟動 AutoHotkey 失敗：{e}")
+        return False
 
 
 def _emergency_stop():

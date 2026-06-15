@@ -60,11 +60,11 @@ loop {
                 by := Integer(parts[3])
                 btn := parts[4] = "right" ? "Right" : "Left"
 
+                SendMode "Input"
                 MouseMove bx, by, 0
                 Sleep Random(10, 30)
-                Click bx, by, btn, "Down"
-                Sleep Random(10, 30)
-                Click bx, by, btn, "Up"
+                MouseClick btn, bx, by, 1, 0
+                SendMode "Event"
             }
         } else if SubStr(cmd, 1, 4) = "MOVE" {
             parts := StrSplit(cmd, ",")

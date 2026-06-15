@@ -143,9 +143,7 @@ def select_roi(parent_window=None) -> Optional[dict]:
         parent_window.showNormal()
         parent_window.raise_()
         parent_window.activateWindow()
-        parent_window.setWindowState(
-            parent_window.windowState() & ~Qt.WindowState.WindowMinimized
-        )
+        parent_window.setWindowState(parent_window.windowState() & ~Qt.WindowState.WindowMinimized)
 
     result = selector._result
     selector.deleteLater()

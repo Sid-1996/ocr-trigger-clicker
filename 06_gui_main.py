@@ -31,6 +31,7 @@ from _loader import load_sibling
 
 _here = Path(__file__).parent
 
+_ahk_mod = load_sibling("ahk_socket", "03_ahk_socket.py")
 _main_loop_mod = load_sibling("main_loop", "05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
 TriggerLog = _main_loop_mod.TriggerLog
@@ -99,6 +100,10 @@ class MainWindow(QMainWindow):
         self._refresh_window_list()
         self._restore_last_window()
         self._refresh_rule_list()
+
+        self._ahk_ready = _ahk_mod.init_ahk()
+        if not self._ahk_ready:
+            self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
 
     def _ensure_rules(self):
         if not Path(self._rules_path).exists():
@@ -591,9 +596,7 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
         idx = len(self._rules) - 1
         self._rule_list.setCurrentRow(idx)
-        self._status_bar.showMessage(
-            f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」"
-        )
+        self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
 
     # === Start / Pause ===
     def _toggle_start(self):
@@ -731,6 +734,7 @@ class MainWindow(QMainWindow):
             self._debug_window = None
         if self._loop:
             self._loop.stop()
+        _ahk_mod.shutdown()
         event.accept()
 
 

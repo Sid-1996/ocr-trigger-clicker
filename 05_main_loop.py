@@ -73,11 +73,7 @@ class MainLoop:
         return _ahk.send_click(x, y, button)
 
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
-        scale = self._dpi_scale if self._dpi_scale > 0 else 1.0
-        return (
-            int(round((rect["x"] + x) * scale)),
-            int(round((rect["y"] + y) * scale)),
-        )
+        return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
