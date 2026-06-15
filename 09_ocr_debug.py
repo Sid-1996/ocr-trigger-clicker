@@ -297,6 +297,8 @@ class OcrDebugWindow(QMainWindow):
 
     def _do_ocr(self, img: np.ndarray, request_id: int):
         try:
+            self._status_bar.showMessage("OCR 引擎載入中...")
+            QApplication.processEvents()
             t0 = time.monotonic()
             opts = self._ocr_options()
             results = recognize(img, **opts)

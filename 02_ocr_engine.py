@@ -5,13 +5,14 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 
-_engine: Optional[RapidOCR] = None
+OCR_BACKEND = "cnocr"  # 可切換為 "rapidocr" / "easyocr"
+
+_engine = None
 _engine_lock = threading.RLock()
 _ocr_executor = ThreadPoolExecutor(max_workers=1)
 _DEFAULT_DET_LIMIT_SIDE_LEN = 960
@@ -47,7 +48,9 @@ def _box_to_rect(box) -> tuple[int, int, int, int]:
 def init_engine() -> None:
     global _engine
     with _engine_lock:
-        if _engine is None:
+        if _engine is not None:
+            return
+        if OCR_BACKEND == "rapidocr":
             _engine = RapidOCR(
                 det_limit_type="max",
                 det_limit_side_len=_DEFAULT_DET_LIMIT_SIDE_LEN,
@@ -69,6 +72,14 @@ def init_engine() -> None:
                 _engine(warmup, use_cls=False)
             except Exception:
                 pass
+        elif OCR_BACKEND == "easyocr":
+            import easyocr
+
+            _engine = easyocr.Reader(["ch_tra", "en"], gpu=False)
+        elif OCR_BACKEND == "cnocr":
+            from cnocr import CnOcr
+
+            _engine = CnOcr(rec_model_name="densenet_lite_136-gru")
 
 
 def _prepare_image(
@@ -114,7 +125,20 @@ def _run_engine(img, use_cls):
     with _engine_lock:
         if _engine is None:
             init_engine()
-        return _engine(img, use_cls=use_cls)
+        if OCR_BACKEND == "rapidocr":
+            return _engine(img, use_cls=use_cls)
+        elif OCR_BACKEND == "easyocr":
+            results = _engine.readtext(img)
+            return [([r[0][0], r[0][1], r[0][2], r[0][3]], r[1], r[2]) for r in results]
+        elif OCR_BACKEND == "cnocr":
+            results = _engine.ocr(img)
+            out = []
+            for r in results:
+                box = r["position"]
+                text = r["text"]
+                conf = r["score"]
+                out.append(([box[0], box[1], box[2], box[3]], text, conf))
+            return out
 
 
 _OCR_TIMEOUT = 30
@@ -140,10 +164,14 @@ def recognize(
     except Exception:
         return []
 
-    if result is None or result[0] is None:
+    if result is None:
+        return []
+    # rapidocr 回傳 (boxes, elapse)，其他引擎直接回傳 list
+    rows = result[0] if OCR_BACKEND == "rapidocr" else result
+    if rows is None:
         return []
     results: list[OcrResult] = []
-    for box, text, score in result[0]:
+    for box, text, score in rows:
         if score is None or score < min_confidence:
             continue
         rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
