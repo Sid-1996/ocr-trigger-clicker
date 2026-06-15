@@ -86,6 +86,8 @@ class MainLoop:
             groups.setdefault(key, []).append(rule)
 
         for roi_key, rules_in_group in groups.items():
+            if self._pause_event.is_set():
+                return
             if roi_key is None:
                 roi_img = img
                 roi_offset = None
@@ -167,6 +169,9 @@ class MainLoop:
             except Exception as e:
                 if self.on_error:
                     self.on_error(str(e))
+
+            if self._pause_event.is_set():
+                continue
 
             self._stop_event.wait(self._interval)
 
