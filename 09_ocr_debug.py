@@ -7,7 +7,6 @@ from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -33,11 +32,6 @@ activate_window = _screenshot.activate_window
 capture = _screenshot.capture
 capture_window_content = _screenshot.capture_window_content
 recognize = _ocr.recognize
-
-
-class _NoWheelCombo(QComboBox):
-    def wheelEvent(self, e):
-        e.ignore()
 
 
 class _ImageLabel(QLabel):
@@ -67,8 +61,6 @@ class OcrDebugWindow(QMainWindow):
 
     _OCR_MODES = {
         "完整測試": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
-        "平衡": {"preprocess": True, "max_side_len": 960, "min_confidence": 0.35},
-        "快速": {"preprocess": True, "max_side_len": 640, "min_confidence": 0.5},
     }
 
     def __init__(self, window_title: str, parent=None):
@@ -100,15 +92,10 @@ class OcrDebugWindow(QMainWindow):
         self._capture_btn = QPushButton("拍一張(&C)")
         self._capture_btn.setMinimumWidth(80)
         self._capture_btn.setToolTip("擷取一次畫面並執行 OCR 辨識 (Alt+C)")
-        self._ocr_mode = _NoWheelCombo()
-        self._ocr_mode.addItems(list(self._OCR_MODES))
-        self._ocr_mode.setCurrentText("完整測試")
-        self._ocr_mode.setToolTip("完整測試：保留更多細節；快速：偏向即時回饋")
         self._close_btn = QPushButton("關閉")
         self._close_btn.setMinimumWidth(80)
         self._close_btn.clicked.connect(self.close)
         toolbar.addWidget(self._capture_btn)
-        toolbar.addWidget(self._ocr_mode)
         self._click_test_btn = QPushButton("點擊測試(&T)")
         self._click_test_btn.setMinimumWidth(80)
         self._click_test_btn.setToolTip("點擊選取文字的目標位置，驗證座標是否正確")
@@ -237,8 +224,7 @@ class OcrDebugWindow(QMainWindow):
             )
 
     def _ocr_options(self) -> dict:
-        mode = self._ocr_mode.currentText()
-        return self._OCR_MODES.get(mode, self._OCR_MODES["完整測試"])
+        return self._OCR_MODES["完整測試"]
 
     def _minimize_and_capture(self):
         try:

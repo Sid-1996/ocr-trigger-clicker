@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 
-OCR_BACKEND = "cnocr"  # 可切換為 "rapidocr" / "easyocr"
+OCR_BACKEND = "rapidocr"  # 可切換為 "easyocr" / "cnocr"
 
 _engine = None
 _engine_lock = threading.RLock()
@@ -166,7 +166,7 @@ def recognize(
 
     if result is None:
         return []
-    # rapidocr 回傳 (boxes, elapse)，其他引擎直接回傳 list
+    # rapidocr 回傳 (boxes, elapse)；其他引擎直接回傳 list (box, text, score)
     rows = result[0] if OCR_BACKEND == "rapidocr" else result
     if rows is None:
         return []
