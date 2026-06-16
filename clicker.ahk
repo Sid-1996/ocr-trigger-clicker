@@ -2,6 +2,17 @@
 #SingleInstance
 CoordMode "Mouse", "Screen"
 
+F12:: {
+    Send "{Click Up}"
+    Send "{LButton Up}"
+    Send "{RButton Up}"
+    Send "{MButton Up}"
+    ToolTip "緊急停止!"
+    Sleep 1000
+    ToolTip
+    ExitApp
+}
+
 ; === Winsock TCP Client ===
 WSAData := Buffer(400)
 DllCall("ws2_32\WSAStartup", "UShort", 0x0202, "Ptr", WSAData)
@@ -53,6 +64,11 @@ loop {
 
         if cmd = "PING" {
             ; no action, just respond OK
+        } else if cmd = "ESTOP" {
+            Send "{Click Up}"
+            Send "{LButton Up}"
+            Send "{RButton Up}"
+            Send "{MButton Up}"
         } else if SubStr(cmd, 1, 5) = "CLICK" {
             parts := StrSplit(cmd, ",")
             if parts.Length >= 4 {

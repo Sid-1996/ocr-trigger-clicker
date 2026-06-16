@@ -7,3 +7,5 @@ build/
 _test_*
 _diag_*
 *.exe
+.ruff_cache/
+custom_models/

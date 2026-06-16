@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import IntEnum
 from pathlib import Path
 from typing import Optional
 
@@ -29,18 +30,35 @@ COL_RULE = 1
 COL_TEXT = 2
 COL_CLICK = 3
 
+
+class LogLevel(IntEnum):
+    INFO = 0
+    WARNING = 1
+    ERROR = 2
+
+
+_LEVEL_LABELS = {
+    LogLevel.INFO: "資訊",
+    LogLevel.WARNING: "⚠ 警告",
+    LogLevel.ERROR: "✖ 錯誤",
+}
+
 _COLORS = {
     "text_fg": QColor(0, 0, 0),
     "bg_odd": QColor(245, 245, 245),
     "bg_even": QColor(255, 255, 255),
     "error_fg": QColor(200, 40, 40),
     "error_bg": QColor(255, 235, 235),
+    "warn_fg": QColor(200, 120, 0),
+    "warn_bg": QColor(255, 245, 225),
+    "info_fg": QColor(100, 100, 100),
+    "info_bg": QColor(240, 240, 240),
 }
 
 
 class _LogSignals(QObject):
     new_trigger = pyqtSignal(object)
-    new_error = pyqtSignal(str)
+    new_log = pyqtSignal(str, int)  # message, LogLevel
 
 
 class LogWidget(QWidget):
@@ -48,7 +66,7 @@ class LogWidget(QWidget):
         super().__init__(parent)
         self._signals = _LogSignals()
         self._signals.new_trigger.connect(self._insert_trigger)
-        self._signals.new_error.connect(self._insert_error)
+        self._signals.new_log.connect(self._insert_log)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -96,7 +114,13 @@ class LogWidget(QWidget):
         self._signals.new_trigger.emit(log)
 
     def append_error(self, message: str) -> None:
-        self._signals.new_error.emit(message)
+        self._signals.new_log.emit(message, LogLevel.ERROR)
+
+    def append_warning(self, message: str) -> None:
+        self._signals.new_log.emit(message, LogLevel.WARNING)
+
+    def append_info(self, message: str) -> None:
+        self._signals.new_log.emit(message, LogLevel.INFO)
 
     def clear(self) -> None:
         self._table.setRowCount(0)
@@ -140,15 +164,22 @@ class LogWidget(QWidget):
         if self._auto_scroll_cb.isChecked():
             self._table.scrollToBottom()
 
-    def _insert_error(self, message: str):
+    def _insert_log(self, message: str, level: int):
         self._empty_hint.hide()
         ts = datetime.now().strftime("%H:%M:%S")
+        if level == LogLevel.ERROR:
+            fg = _COLORS["error_fg"]
+        elif level == LogLevel.WARNING:
+            fg = _COLORS["warn_fg"]
+        else:
+            fg = _COLORS["info_fg"]
+        label = _LEVEL_LABELS.get(level, f"Level {level}")
         row = self._table.rowCount()
         self._table.insertRow(row)
-        self._table.setItem(row, COL_TIME, self._mkitem(ts, fg=_COLORS["error_fg"]))
-        self._table.setItem(row, COL_RULE, self._mkitem("⚠ 錯誤", fg=_COLORS["error_fg"]))
-        self._table.setItem(row, COL_TEXT, self._mkitem(message, fg=_COLORS["error_fg"]))
-        self._table.setItem(row, COL_CLICK, self._mkitem("—", fg=_COLORS["error_fg"]))
+        self._table.setItem(row, COL_TIME, self._mkitem(ts, fg=fg))
+        self._table.setItem(row, COL_RULE, self._mkitem(label, fg=fg))
+        self._table.setItem(row, COL_TEXT, self._mkitem(message, fg=fg))
+        self._table.setItem(row, COL_CLICK, self._mkitem("—", fg=fg))
 
         self._trim()
         if self._auto_scroll_cb.isChecked():

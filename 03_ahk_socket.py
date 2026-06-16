@@ -252,12 +252,59 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
     return ok
 
 
+def _load_screen_bounds() -> dict:
+    try:
+        from _loader import load_sibling
+        perf = load_sibling("performance_monitor", "10_performance_monitor.py")
+        return perf.get_screen_bounds()
+    except Exception:
+        SM_CXSCREEN = 0
+        SM_CYSCREEN = 1
+        import ctypes
+        user32 = ctypes.windll.user32
+        return {
+            "x": 0,
+            "y": 0,
+            "w": user32.GetSystemMetrics(SM_CXSCREEN),
+            "h": user32.GetSystemMetrics(SM_CYSCREEN),
+        }
+
+
+def _validate_coords(x: int, y: int) -> bool:
+    bounds = _load_screen_bounds()
+    if x < bounds["x"] or y < bounds["y"] or x >= bounds["x"] + bounds["w"] or y >= bounds["y"] + bounds["h"]:
+        print(f"[安全] 拒絕超出螢幕的點擊: ({x}, {y}) 螢幕={bounds}")
+        return False
+    return True
+
+
+_last_sent_coords: tuple[int, int] | None = None
+
+
 def send_click(x: int, y: int, button: str = "left") -> bool:
+    if not _validate_coords(x, y):
+        return False
+    global _last_sent_coords
+    _last_sent_coords = (x, y)
     return _send_cmd(f"CLICK,{x},{y},{button}")
 
 
 def send_move(x: int, y: int) -> bool:
     return _send_cmd(f"MOVE,{x},{y}")
+
+
+def send_emergency_stop() -> bool:
+    global _conn
+    print("[安全] 發送緊急停止指令 (ESTOP)")
+    with _lock:
+        if _conn is None:
+            return False
+        try:
+            _conn.sendall(b"ESTOP\n")
+            resp = _recv_line(_conn, timeout=1.0)
+            return resp == "OK"
+        except (BrokenPipeError, ConnectionError, OSError):
+            return False
 
 
 def shutdown() -> None:

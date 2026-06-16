@@ -1,18 +1,19 @@
 import sys
 from typing import Optional
 
-from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt
+from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import QApplication, QWidget
 
 
 class ROISelector(QWidget):
+    finished = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self._start = QPoint()
         self._end = QPoint()
         self._selecting = False
-        self._finished = False
         self._result: Optional[dict] = None
 
         geometry = QApplication.primaryScreen().virtualGeometry()
@@ -43,6 +44,16 @@ class ROISelector(QWidget):
         if w < 10 or h < 10:
             return None
         return QRect(x, y, w, h)
+
+    def _set_result_from_rect(self):
+        rect = self._get_rect()
+        if rect:
+            self._result = {
+                "x": rect.x(),
+                "y": rect.y(),
+                "w": rect.width(),
+                "h": rect.height(),
+            }
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -81,7 +92,7 @@ class ROISelector(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         dim = f"  |  尺寸: {rect.width()}×{rect.height()}" if rect else ""
         painter.drawText(
-            16, self.rect().height() - 32, f"拖拉選取偵測區域{dim}  |  Enter 確認  |  Esc 取消"
+            16, self.rect().height() - 32, f"拖拉選取偵測區域{dim}  |  放開滑鼠自動確認  |  Esc 取消"
         )
 
     def mousePressEvent(self, event):
@@ -101,26 +112,18 @@ class ROISelector(QWidget):
             self._end = event.position().toPoint()
             self._selecting = False
             self.update()
+            self._set_result_from_rect()
+            if self._result:
+                self.finished.emit()
+                self.close()
 
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            rect = self._get_rect()
-            if rect:
-                self._result = {
-                    "x": rect.x(),
-                    "y": rect.y(),
-                    "w": rect.width(),
-                    "h": rect.height(),
-                }
-                self._finished = True
-                self.close()
-        elif event.key() == Qt.Key.Key_Escape:
+        if event.key() == Qt.Key.Key_Escape:
             self._result = None
-            self._finished = True
+            self.finished.emit()
             self.close()
 
     def closeEvent(self, event):
-        self._finished = True
         super().closeEvent(event)
 
 
@@ -130,10 +133,12 @@ def select_roi(parent_window=None) -> Optional[dict]:
         QApplication.processEvents()
 
     selector = ROISelector()
-    selector.show()
-
+    selector.setFocus()
     loop = QEventLoop()
-    selector.destroyed.connect(loop.quit)
+    selector.finished.connect(loop.quit)
+    selector.show()
+    selector.activateWindow()
+    selector.raise_()
     loop.exec()
 
     if parent_window:
@@ -143,9 +148,13 @@ def select_roi(parent_window=None) -> Optional[dict]:
         parent_window.showNormal()
         parent_window.raise_()
         parent_window.activateWindow()
-        parent_window.setWindowState(parent_window.windowState() & ~Qt.WindowState.WindowMinimized)
+        parent_window.setWindowState(
+            parent_window.windowState() & ~Qt.WindowState.WindowMinimized
+        )
+        QApplication.processEvents()
 
     result = selector._result
+    selector.close()
     selector.deleteLater()
     return result
 

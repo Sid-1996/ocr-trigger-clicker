@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QMainWindow,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -52,10 +51,10 @@ class _ImageLabel(QLabel):
 
 class _OcrSignals(QObject):
     ocr_done = pyqtSignal(list, float, int)
+    ocr_status = pyqtSignal(str)
 
 
-class OcrDebugWindow(QMainWindow):
-    roi_selected = pyqtSignal(dict)
+class OcrDebugPanel(QWidget):
     rule_requested = pyqtSignal(dict)
     closed = pyqtSignal()
 
@@ -76,15 +75,9 @@ class OcrDebugWindow(QMainWindow):
         self._request_id = 0
         self._signals = _OcrSignals()
         self._signals.ocr_done.connect(self._on_ocr_done)
+        self._signals.ocr_status.connect(self._on_ocr_status)
 
-        self.setWindowTitle(f"OCR 診斷 — {window_title}")
-        self.resize(1000, 650)
-        self.setMinimumSize(800, 500)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-
-        central = QWidget()
-        self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(8)
 
@@ -92,9 +85,6 @@ class OcrDebugWindow(QMainWindow):
         self._capture_btn = QPushButton("拍一張(&C)")
         self._capture_btn.setMinimumWidth(80)
         self._capture_btn.setToolTip("擷取一次畫面並執行 OCR 辨識 (Alt+C)")
-        self._close_btn = QPushButton("關閉")
-        self._close_btn.setMinimumWidth(80)
-        self._close_btn.clicked.connect(self.close)
         toolbar.addWidget(self._capture_btn)
         self._click_test_btn = QPushButton("點擊測試(&T)")
         self._click_test_btn.setMinimumWidth(80)
@@ -102,7 +92,6 @@ class OcrDebugWindow(QMainWindow):
         self._click_test_btn.setEnabled(False)
         self._click_test_btn.clicked.connect(self._on_click_test)
         toolbar.addWidget(self._click_test_btn)
-        toolbar.addWidget(self._close_btn)
         toolbar.addStretch()
         self._info_label = QLabel("")
         toolbar.addWidget(self._info_label)
@@ -128,6 +117,7 @@ class OcrDebugWindow(QMainWindow):
         right_layout.addWidget(self._summary_label)
 
         self._result_table = QTableWidget()
+        self._result_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._result_table.setFont(QFont("Consolas", 9))
         self._result_table.setColumnCount(3)
         self._result_table.setHorizontalHeaderLabels(["#", "文字", "信心度"])
@@ -150,9 +140,8 @@ class OcrDebugWindow(QMainWindow):
 
         self._crop_label = QLabel("點選表格中的一列，這裡會顯示裁切預覽")
         self._crop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._crop_label.setMinimumHeight(180)
-        self._crop_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._crop_label.setFixedHeight(200)
+        self._crop_label.setMinimumHeight(150)
+        self._crop_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._crop_label.setStyleSheet(
             "QLabel {"
             "  background: #111;"
@@ -169,12 +158,6 @@ class OcrDebugWindow(QMainWindow):
         self._selected_detail.setMinimumHeight(110)
         self._style_card(self._selected_detail, dark=True)
         right_layout.addWidget(self._selected_detail)
-
-        self._apply_roi_btn = QPushButton("套用至目前規則 ROI(&R)")
-        self._apply_roi_btn.setEnabled(False)
-        self._apply_roi_btn.setToolTip("將選取的文字區塊座標設為目前規則的偵測範圍")
-        self._apply_roi_btn.clicked.connect(self._on_apply_roi)
-        right_layout.addWidget(self._apply_roi_btn)
 
         self._add_rule_btn = QPushButton("建立為新規則(&N)")
         self._add_rule_btn.setEnabled(False)
@@ -195,9 +178,9 @@ class OcrDebugWindow(QMainWindow):
         splitter.setSizes([580, 408])
         layout.addWidget(splitter, 1)
 
-        self._status_bar = QStatusBar()
-        self.setStatusBar(self._status_bar)
+        self._status_bar = QStatusBar(self)
         self._status_bar.showMessage("就緒")
+        layout.addWidget(self._status_bar)
 
         self._capture_btn.clicked.connect(self._take_snapshot)
 
@@ -264,7 +247,6 @@ class OcrDebugWindow(QMainWindow):
         self._capture_btn.setText("辨識中…")
         self._info_label.setText("")
         self._selected_index = -1
-        self._apply_roi_btn.setEnabled(False)
         self._add_rule_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
 
@@ -272,6 +254,7 @@ class OcrDebugWindow(QMainWindow):
         self._capture_source = src
 
         if raw is None:
+            print(f"[_take_snapshot] capture failed for '{self._window_title}'")
             self._status_bar.showMessage(f"無法擷取視窗「{self._window_title}」")
             self._capture_btn.setText("拍一張")
             self._capture_btn.setEnabled(True)
@@ -283,15 +266,21 @@ class OcrDebugWindow(QMainWindow):
 
     def _do_ocr(self, img: np.ndarray, request_id: int):
         try:
-            self._status_bar.showMessage("OCR 引擎載入中...")
-            QApplication.processEvents()
+            self._signals.ocr_status.emit("OCR 引擎載入中...")
             t0 = time.monotonic()
             opts = self._ocr_options()
             results = recognize(img, **opts)
             elapsed = (time.monotonic() - t0) * 1000
             self._signals.ocr_done.emit(results, elapsed, request_id)
+        except Exception as e:
+            print(f"[_do_ocr] {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self._ocr_busy = False
+
+    def _on_ocr_status(self, msg: str):
+        self._status_bar.showMessage(msg)
 
     def _on_ocr_done(self, results: list, elapsed_ms: float, request_id: int):
         try:
@@ -317,8 +306,10 @@ class OcrDebugWindow(QMainWindow):
             self._status_bar.showMessage(
                 f"[{self._capture_source}] {w}×{h} | {len(results)} 個區塊 | {elapsed_ms:.0f} ms"
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[_on_ocr_done] {e}")
+            import traceback
+            traceback.print_exc()
 
     def _populate_table(self):
         self._result_table.blockSignals(True)
@@ -343,28 +334,16 @@ class OcrDebugWindow(QMainWindow):
             rows = self._result_table.selectedIndexes()
             if rows:
                 self._selected_index = rows[0].row()
-                self._apply_roi_btn.setEnabled(True)
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
             else:
                 self._selected_index = -1
-                self._apply_roi_btn.setEnabled(False)
                 self._add_rule_btn.setEnabled(False)
                 self._click_test_btn.setEnabled(False)
             self._rebuild_annotated()
             self._update_display()
         except Exception as e:
             print(f"[_on_table_selection_changed] {e}")
-
-    def closeEvent(self, event):
-        self.closed.emit()
-        super().closeEvent(event)
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Escape:
-            self.close()
-        else:
-            super().keyPressEvent(event)
 
     def _on_image_clicked(self, label_x: int, label_y: int):
         if self._latest_raw is None or not self._ocr_results:
@@ -397,7 +376,6 @@ class OcrDebugWindow(QMainWindow):
                 self._result_table.blockSignals(True)
                 self._result_table.selectRow(i)
                 self._result_table.blockSignals(False)
-                self._apply_roi_btn.setEnabled(True)
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
                 try:
@@ -406,12 +384,6 @@ class OcrDebugWindow(QMainWindow):
                 except Exception:
                     pass
                 return
-
-    def _on_apply_roi(self):
-        if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
-            return
-        r = self._ocr_results[self._selected_index]
-        self.roi_selected.emit({"x": r.x, "y": r.y, "w": r.w, "h": r.h})
 
     def _on_add_rule(self):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
@@ -539,7 +511,8 @@ class OcrDebugWindow(QMainWindow):
             painter.end()
             self._annotated_pixmap = pixmap
             self._update_crop_preview()
-        except Exception:
+        except Exception as e:
+            print(f"[_rebuild_annotated] {e}")
             self._annotated_pixmap = None
             self._crop_pixmap = None
 
@@ -596,6 +569,8 @@ class OcrDebugWindow(QMainWindow):
             )
         except Exception as e:
             print(f"[_update_crop_preview] {e}")
+            import traceback
+            traceback.print_exc()
 
     def _update_display(self):
         if self._annotated_pixmap is None:

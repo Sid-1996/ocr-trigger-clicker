@@ -318,6 +318,70 @@ def step6_mainloop() -> list[tuple[bool, str]]:
     return items
 
 
+def step9_performance() -> list[tuple[bool, str]]:
+    items = []
+    try:
+        mod = _import("performance_monitor", _here / "10_performance_monitor.py")
+        items.append(_check(True, "import 成功"))
+    except Exception as e:
+        items.append(_check(False, f"import 失敗 → {e}"))
+        return items
+
+    try:
+        bounds = mod.get_screen_bounds()
+        items.append(
+            _check(
+                bounds["w"] > 0 and bounds["h"] > 0,
+                f"get_screen_bounds() → {bounds}",
+            )
+        )
+    except Exception as e:
+        items.append(_check(False, f"get_screen_bounds() 失敗 → {e}"))
+
+    try:
+        ok = mod.is_coordinate_safe(0, 0)
+        items.append(_check(ok, f"is_coordinate_safe(0,0) → {ok}"))
+        unsafe = mod.is_coordinate_safe(-1, -1)
+        items.append(_check(not unsafe, f"is_coordinate_safe(-1,-1) → {unsafe}"))
+    except Exception as e:
+        items.append(_check(False, f"is_coordinate_safe() 失敗 → {e}"))
+
+    try:
+        pm = mod.PerformanceMonitor()
+        items.append(_check(True, "PerformanceMonitor 建立成功"))
+    except Exception as e:
+        items.append(_check(False, f"PerformanceMonitor 建立失敗 → {e}"))
+        return items
+
+    try:
+        pm.record_frame(ocr_ms=50.0, loop_ms=120.0)
+        pm.record_frame(ocr_ms=60.0, loop_ms=130.0)
+        pm.record_click()
+        pm.record_click()
+        pm.record_click()
+        items.append(_check(True, "記錄方法呼叫成功"))
+    except Exception as e:
+        items.append(_check(False, f"記錄方法失敗 → {e}"))
+
+    try:
+        stats = pm.get_stats()
+        for key in ["fps", "cpu_pct", "memory_mb", "ocr_avg_ms", "loop_avg_ms", "click_rate"]:
+            items.append(_check(key in stats, f"get_stats() 包含 {key}"))
+    except Exception as e:
+        items.append(_check(False, f"get_stats() 失敗 → {e}"))
+
+    try:
+        rate_ok = pm.check_rate_limit()
+        items.append(_check(rate_ok, f"check_rate_limit() (3 clicks) → {rate_ok}"))
+    except Exception as e:
+        items.append(_check(False, f"check_rate_limit() 失敗 → {e}"))
+
+    pm.stop()
+    items.append(_check(True, "PerformanceMonitor stop() 成功"))
+
+    return items
+
+
 def step8_entrypoint() -> list[tuple[bool, str]]:
     items = []
 
@@ -387,7 +451,8 @@ _STEPS = [
     (5, "04_rule_engine.py", step5_rule),
     (6, "05_main_loop.py", step6_mainloop),
     (7, "build.py", step7_build),
-    (8, "入口點 import 驗證", step8_entrypoint),
+    (8, "10_performance_monitor.py 性能診斷", step9_performance),
+    (9, "入口點 import 驗證", step8_entrypoint),
 ]
 
 

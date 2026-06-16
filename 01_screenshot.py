@@ -41,6 +41,22 @@ def get_window_hwnd(title: str) -> int | None:
     return getattr(matches[0], "_hWnd", None)
 
 
+def get_window_client_offset(title: str) -> tuple[int, int] | None:
+    """Returns (offset_x, offset_y) from window top-left to client area top-left."""
+    try:
+        hwnd = get_window_hwnd(title)
+        if hwnd is None:
+            return None
+
+        pt = wintypes.POINT(0, 0)
+        ctypes.windll.user32.ClientToScreen(hwnd, ctypes.byref(pt))
+        window_rect = wintypes.RECT()
+        ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(window_rect))
+        return (pt.x - window_rect.left, pt.y - window_rect.top)
+    except Exception:
+        return None
+
+
 def activate_window(title: str) -> bool:
     matches = _matching_windows(title)
     if not matches:
@@ -53,13 +69,16 @@ def activate_window(title: str) -> bool:
 
 
 def get_window_rect(title: str) -> dict | None:
-    matches = _matching_windows(title)
-    if not matches:
+    try:
+        matches = _matching_windows(title)
+        if not matches:
+            return None
+        window = matches[0]
+        if window.isMinimized:
+            return None
+        return {"x": window.left, "y": window.top, "w": window.width, "h": window.height}
+    except Exception:
         return None
-    window = matches[0]
-    if window.isMinimized:
-        return None
-    return {"x": window.left, "y": window.top, "w": window.width, "h": window.height}
 
 
 def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
@@ -190,17 +209,13 @@ def _bitblt_render(hwnd: int, mem_dc: int, w: int, h: int) -> bool:
 
 
 def capture_window_content(title: str) -> np.ndarray | None:
-    """擷取視窗本身的內容（非螢幕畫面），不受疊層視窗遮擋。
-
-    優先使用 PrintWindow API 直接讀取目標視窗的 client area。
-    若 PrintWindow 失敗（常見於 DirectX 遊戲），自動改用
-    BitBlt + CAPTUREBLT 從視窗 DC 讀取畫面。
-    兩者都失敗則回傳 None，由呼叫端處理。
-    """
-    matches = _matching_windows(title)
-    if not matches:
+    try:
+        matches = _matching_windows(title)
+        if not matches:
+            return None
+        hwnd = matches[0]._hWnd
+    except Exception:
         return None
-    hwnd = matches[0]._hWnd
 
     img = _gdi_capture(hwnd, _pw_render)
     if img is not None:

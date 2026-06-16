@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
@@ -50,30 +50,46 @@ Rule = _main_loop_mod.Rule
 list_windows = _main_loop_mod.list_windows
 load_rules = _main_loop_mod.load_rules
 save_rules = _main_loop_mod.save_rules
+activate_window = _main_loop_mod.activate_window
+get_window_rect = _main_loop_mod.get_window_rect
+
+_ocr_debug_mod = load_sibling("ocr_debug", "09_ocr_debug.py")
+OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
+
+_ocr_mod = load_sibling("ocr_engine", "02_ocr_engine.py")
+_perf_mod = load_sibling("performance_monitor", "10_performance_monitor.py")
 
 
 class WorkerSignals(QObject):
     trigger_signal = pyqtSignal(object)
     error_signal = pyqtSignal(str)
+    warning_signal = pyqtSignal(str)
+    info_signal = pyqtSignal(str)
     window_lost_signal = pyqtSignal()
+    emergency_signal = pyqtSignal()
 
 
 class InitWorker(QThread):
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, rules_path: str, window_title: str, signals: WorkerSignals):
+    def __init__(self, rules_path: str, window_title: str, signals: WorkerSignals, focus_safe: bool = False, verbose: bool = True):
         super().__init__()
         self._rules_path = rules_path
         self._window_title = window_title
         self._signals = signals
+        self._focus_safe = focus_safe
+        self._verbose = verbose
         self.loop: Optional[MainLoop] = None
 
     def run(self):
         try:
-            loop = MainLoop(self._rules_path, self._window_title)
+            loop = MainLoop(self._rules_path, self._window_title, focus_safe=self._focus_safe, verbose=self._verbose)
             loop.on_trigger = lambda log: self._signals.trigger_signal.emit(log)
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
+            loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
+            loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
+            loop.on_emergency = lambda: self._signals.emergency_signal.emit()
             loop.start()
             self.loop = loop
             self.finished.emit(True, "")
@@ -102,11 +118,15 @@ class MainWindow(QMainWindow):
         self._loop: Optional[MainLoop] = None
         self._selected_rule_id: Optional[str] = None
         self._window_lost = False
-        self._debug_window = None
 
         self._setup_ui()
+        self._debug_panel = OcrDebugPanel("", self)
+        self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
+        self._debug_page_layout.addWidget(self._debug_panel, 1)
         self._connect_signals()
         self._setup_shortcuts()
+
+        _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
 
         self._refresh_window_list()
         self._restore_last_window()
@@ -137,6 +157,7 @@ class MainWindow(QMainWindow):
     def _restore_last_window(self):
         config = self._load_config()
         last = config.get("last_window", "")
+        self._focus_safe_cb.setChecked(bool(config.get("focus_safe", False)))
         if not last:
             return
         idx = self._window_combo.findText(last)
@@ -164,6 +185,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setToolTip("開始偵測所選視窗（按 F9 暫停／繼續）")
         self._debug_btn = QPushButton("OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
+        self._focus_safe_cb = QCheckBox("僅前景點擊")
+        self._focus_safe_cb.setToolTip("啟用後僅在目標視窗為前景視窗時才執行點擊，避免干擾其他操作")
         self._import_btn = QPushButton("匯入規則")
         self._import_btn.setToolTip("從 JSON 檔案載入規則")
         self._export_btn = QPushButton("匯出規則")
@@ -179,6 +202,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(sep)
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
+        toolbar.addWidget(self._focus_safe_cb)
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.VLine)
         sep2.setFrameShadow(QFrame.Shadow.Sunken)
@@ -188,8 +212,14 @@ class MainWindow(QMainWindow):
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
-        # === Middle: rule list + edit panel ===
-        mid = QHBoxLayout()
+        # === Middle: stacked pages (rules / OCR debug) ===
+        self._main_stack = QStackedWidget()
+
+        # -- Page 0: rules --
+        rules_page = QWidget()
+        rules_layout = QHBoxLayout(rules_page)
+        rules_layout.setContentsMargins(0, 0, 0, 0)
+
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -212,7 +242,7 @@ class MainWindow(QMainWindow):
         rule_btn_bar.addWidget(self._del_rule_btn)
         left_layout.addLayout(rule_btn_bar)
 
-        mid.addWidget(left_widget, 1)
+        rules_layout.addWidget(left_widget, 1)
 
         # Right: stacked edit panel (guide / form)
         self._edit_stack = QStackedWidget()
@@ -264,12 +294,14 @@ class MainWindow(QMainWindow):
         self._edit_click_position = _NoWheelCombo()
         self._edit_click_position.addItems(["text_center", "custom"])
         self._edit_click_position.setToolTip("text_center：點擊文字中心 ｜ custom：自訂座標")
-        self._edit_custom_x = _NoWheelSpin()
-        self._edit_custom_x.setRange(0, 99999)
-        self._edit_custom_x.setToolTip("自訂點擊的 X 座標（相對視窗左上角）")
-        self._edit_custom_y = _NoWheelSpin()
-        self._edit_custom_y.setRange(0, 99999)
-        self._edit_custom_y.setToolTip("自訂點擊的 Y 座標（相對視窗左上角）")
+        self._edit_coord_label = QLabel("尚未選取")
+        self._edit_pick_coord_btn = QPushButton("選取點擊座標")
+        self._edit_pick_coord_btn.clicked.connect(self._on_pick_coord)
+        self._coord_row = QWidget()
+        coord_layout = QHBoxLayout(self._coord_row)
+        coord_layout.setContentsMargins(0, 0, 0, 0)
+        coord_layout.addWidget(self._edit_coord_label)
+        coord_layout.addWidget(self._edit_pick_coord_btn)
         self._edit_fuzzy = QCheckBox()
         self._edit_fuzzy.setToolTip("啟用模糊比對，可容許文字拼寫差異")
         self._edit_fuzzy_threshold = _NoWheelSpin()
@@ -302,8 +334,7 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("觸發模式:", self._edit_trigger_mode)
         self._edit_form.addRow("滑鼠按鈕:", self._edit_click_button)
         self._edit_form.addRow("點擊位置:", self._edit_click_position)
-        self._edit_form.addRow("自訂 X:", self._edit_custom_x)
-        self._edit_form.addRow("自訂 Y:", self._edit_custom_y)
+        self._edit_form.addRow("點擊座標:", self._coord_row)
         self._edit_form.addRow("模糊比對:", self._edit_fuzzy)
         self._edit_form.addRow("模糊閾值:", self._edit_fuzzy_threshold)
         self._edit_form.addRow("最大觸發:", self._edit_max_triggers)
@@ -313,8 +344,24 @@ class MainWindow(QMainWindow):
         scroll.setWidget(self._edit_panel)
         self._edit_stack.addWidget(scroll)
         self._edit_stack.setCurrentIndex(0)
-        mid.addWidget(self._edit_stack, 2)
-        layout.addLayout(mid)
+        rules_layout.addWidget(self._edit_stack, 2)
+
+        self._main_stack.addWidget(rules_page)
+
+        # -- Page 1: OCR debug --
+        self._debug_page = QWidget()
+        debug_page_layout = QVBoxLayout(self._debug_page)
+        debug_page_layout.setContentsMargins(0, 0, 0, 0)
+        debug_top_bar = QHBoxLayout()
+        self._debug_back_btn = QPushButton("← 返回規則")
+        debug_top_bar.addWidget(self._debug_back_btn)
+        debug_top_bar.addStretch()
+        debug_page_layout.addLayout(debug_top_bar)
+        self._debug_page_layout = debug_page_layout
+
+        self._main_stack.addWidget(self._debug_page)
+        self._main_stack.setCurrentIndex(0)
+        layout.addWidget(self._main_stack)
 
         # === Bottom: log area ===
         log_mod = load_sibling("gui_log", "08_gui_log.py")
@@ -324,6 +371,12 @@ class MainWindow(QMainWindow):
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
+        self._perf_label = QLabel("FPS:-- | CPU:--% | MEM:--MB | 點擊:--/s")
+        self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
+        self._status_bar.addPermanentWidget(self._perf_label)
+        self._perf_timer = QTimer()
+        self._perf_timer.timeout.connect(self._update_perf_display)
+        self._perf_timer.start(1000)
         self.setStatusBar(self._status_bar)
 
     def _connect_signals(self):
@@ -337,20 +390,31 @@ class MainWindow(QMainWindow):
         self._rule_list.currentRowChanged.connect(self._on_rule_selected)
         self._edit_save_btn.clicked.connect(self._save_current_rule)
         self._edit_roi_btn.clicked.connect(self._open_roi_selector)
-        self._debug_btn.clicked.connect(self._open_ocr_debug)
+        self._debug_btn.clicked.connect(self._switch_to_debug)
+        self._debug_back_btn.clicked.connect(self._switch_to_rules)
+        self._focus_safe_cb.stateChanged.connect(self._on_focus_safe_changed)
 
         self._edit_click_position.currentTextChanged.connect(self._on_click_position_changed)
         self._edit_fuzzy.stateChanged.connect(self._on_fuzzy_changed)
 
         self._signals.trigger_signal.connect(self._on_trigger_from_thread)
         self._signals.error_signal.connect(self._on_error_from_thread)
+        self._signals.warning_signal.connect(self._on_warning_from_thread)
+        self._signals.info_signal.connect(self._on_info_from_thread)
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
+        self._signals.emergency_signal.connect(self._emergency_stop)
 
     def _setup_shortcuts(self):
         QShortcut(
             QKeySequence("F9"),
             self,
             self._toggle_pause,
+            context=Qt.ShortcutContext.ApplicationShortcut,
+        )
+        QShortcut(
+            QKeySequence("F12"),
+            self,
+            self._emergency_stop,
             context=Qt.ShortcutContext.ApplicationShortcut,
         )
         QShortcut(QKeySequence("Ctrl+S"), self, self._save_current_rule)
@@ -372,7 +436,37 @@ class MainWindow(QMainWindow):
     def _on_window_changed(self, title: str):
         if not title:
             return
-        self._save_config({"last_window": title})
+        config = self._load_config()
+        config["last_window"] = title
+        self._save_config(config)
+
+    def _on_focus_safe_changed(self, state):
+        enabled = state == 2
+        config = self._load_config()
+        config["focus_safe"] = enabled
+        self._save_config(config)
+        if self._loop:
+            self._loop.set_focus_safe(enabled)
+
+    def _update_perf_display(self):
+        if self._loop is None:
+            self._perf_label.setText("FPS:-- | CPU:--% | MEM:--MB | 點擊:--/s")
+            return
+        stats = self._loop.get_perf_stats()
+        fps = stats["fps"]
+        cpu = stats["cpu_pct"]
+        mem = stats["memory_mb"]
+        click_rate = stats["click_rate"]
+        text = f"FPS:{fps:.1f} | CPU:{cpu:.0f}% | MEM:{mem:.0f}MB | 點擊:{click_rate:.0f}/s"
+        if cpu > 80:
+            text += " ⚠CPU"
+            self._perf_label.setStyleSheet("color: #e67e22; font-size: 11px; padding-right: 8px;")
+        elif mem > 500:
+            text += " ⚠MEM"
+            self._perf_label.setStyleSheet("color: #e67e22; font-size: 11px; padding-right: 8px;")
+        else:
+            self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
+        self._perf_label.setText(text)
 
     # === Rule list ===
     def _refresh_rule_list(self):
@@ -422,8 +516,7 @@ class MainWindow(QMainWindow):
         self._edit_trigger_mode.setEnabled(True)
         self._edit_click_button.setEnabled(True)
         self._edit_click_position.setEnabled(True)
-        self._edit_custom_x.setEnabled(True)
-        self._edit_custom_y.setEnabled(True)
+        self._edit_pick_coord_btn.setEnabled(True)
         self._edit_fuzzy.setEnabled(True)
         self._edit_fuzzy_threshold.setEnabled(True)
         self._edit_max_triggers.setEnabled(True)
@@ -440,17 +533,14 @@ class MainWindow(QMainWindow):
         self._edit_trigger_mode.setCurrentText(rule.trigger_mode)
         self._edit_click_button.setCurrentText(rule.click_button)
         self._edit_click_position.setCurrentText(rule.click_position)
-        self._edit_custom_x.setValue(rule.custom_x)
-        self._edit_custom_y.setValue(rule.custom_y)
+        self._edit_coord_label.setText(f"X: {rule.custom_x}, Y: {rule.custom_y}")
         self._edit_fuzzy.setChecked(rule.fuzzy)
         self._edit_fuzzy_threshold.setValue(int(rule.fuzzy_threshold * 100))
         self._edit_max_triggers.setValue(rule.max_triggers)
         self._edit_random_offset.setValue(rule.random_offset)
 
     def _on_click_position_changed(self, pos: str):
-        is_custom = pos == "custom"
-        self._edit_custom_x.setEnabled(is_custom)
-        self._edit_custom_y.setEnabled(is_custom)
+        self._coord_row.setVisible(pos == "custom")
 
     def _on_fuzzy_changed(self, state):
         self._edit_fuzzy_threshold.setEnabled(state == 2)
@@ -525,8 +615,6 @@ class MainWindow(QMainWindow):
         rule.trigger_mode = self._edit_trigger_mode.currentText()
         rule.click_button = self._edit_click_button.currentText()
         rule.click_position = self._edit_click_position.currentText()
-        rule.custom_x = self._edit_custom_x.value()
-        rule.custom_y = self._edit_custom_y.value()
         rule.fuzzy = self._edit_fuzzy.isChecked()
         rule.fuzzy_threshold = self._edit_fuzzy_threshold.value() / 100.0
         rule.max_triggers = self._edit_max_triggers.value()
@@ -536,56 +624,76 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.reload_rules()
 
+    # === Click coordinate picker ===
+    def _on_pick_coord(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
+        mod = load_sibling("click_picker", "13_gui_click_picker.py")
+        result = mod.pick_click_position(parent_window=self)
+        if result is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            wr = get_window_rect(title)
+            if wr:
+                result = (result[0] - wr["x"], result[1] - wr["y"])
+        rule.custom_x, rule.custom_y = result
+        rule.click_position = "custom"
+        self._edit_click_position.setCurrentText("custom")
+        self._edit_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
+        save_rules(self._rules, self._rules_path)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(f"已選取點擊座標: X={result[0]}, Y={result[1]}")
+
     # === ROI selector ===
     def _open_roi_selector(self):
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
         mod = load_sibling("roi", "07_gui_roi.py")
         result = mod.select_roi(parent_window=self)
+        if not result:
+            return
         rule = self._get_current_rule()
-        if result and rule:
+        if rule:
+            title = self._window_combo.currentText()
+            if title:
+                wr = get_window_rect(title)
+                if wr:
+                    result["x"] -= wr["x"]
+                    result["y"] -= wr["y"]
             rule.roi = result
             self._edit_roi_label.setText(
                 f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
             )
             save_rules(self._rules, self._rules_path)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(
+            f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
+        )
 
     # === OCR diagnostic ===
-    def _open_ocr_debug(self):
-        if self._debug_window is not None and self._debug_window.isVisible():
-            self._debug_window.close()
-            return
-        if self._loop is not None and self._loop.is_running:
-            QMessageBox.warning(self, "無法開啟", "請先停止偵測循環再開啟診斷模式。")
-            return
+    def _switch_to_debug(self):
         title = self._window_combo.currentText()
         if not title:
             QMessageBox.warning(self, "警告", "請先選擇目標視窗")
             return
-        mod = load_sibling("ocr_debug", "09_ocr_debug.py")
-        self._debug_window = mod.OcrDebugWindow(title, self)
-        self._debug_window.roi_selected.connect(self._on_debug_roi_selected)
-        self._debug_window.rule_requested.connect(self._on_debug_rule_requested)
-        self._debug_window.closed.connect(self._on_debug_closed)
-        self._debug_window.show()
-        self._debug_btn.setText("關閉診斷")
-
-    def _on_debug_closed(self):
-        self._debug_window = None
-        self._debug_btn.setText("OCR 診斷")
-
-    def _on_debug_roi_selected(self, roi: dict):
-        rule = self._get_current_rule()
-        if rule is None:
-            QMessageBox.information(self, "提示", "請先在左側選取一條規則再套用 ROI。")
+        if self._loop is not None and self._loop.is_running:
+            QMessageBox.warning(self, "無法開啟", "請先停止偵測循環再開啟診斷模式。")
             return
-        rule.roi = roi
-        save_rules(self._rules, self._rules_path)
-        self._show_rule_detail(rule)
-        self._refresh_rule_list()
-        if self._loop:
-            self._loop.reload_rules()
-        self._status_bar.showMessage(
-            f"已套用 ROI 至規則「{rule.name}」: x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
-        )
+        self._debug_panel._window_title = title
+        self._main_stack.setCurrentIndex(1)
+        self._log_widget.hide()
+        self._status_bar.showMessage(f"OCR 診斷 — 目標: {title}")
+
+    def _switch_to_rules(self):
+        self._main_stack.setCurrentIndex(0)
+        self._log_widget.show()
+        self._status_bar.showMessage("就緒")
 
     def _on_debug_rule_requested(self, rule_data: dict):
         import uuid
@@ -612,6 +720,8 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
         idx = len(self._rules) - 1
         self._rule_list.setCurrentRow(idx)
+        self._main_stack.setCurrentIndex(0)
+        self._debug_btn.setText("OCR 診斷")
         self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
 
     # === Start / Pause ===
@@ -636,10 +746,12 @@ class MainWindow(QMainWindow):
         if not self._rules:
             QMessageBox.warning(self, "警告", "尚未建立任何規則！\n請先新增至少一條規則。")
             return
+        activate_window(title)
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
         self._status_bar.showMessage("正在初始化 OCR 引擎…")
-        self._init_worker = InitWorker(self._rules_path, title, self._signals)
+        focus_safe = self._focus_safe_cb.isChecked()
+        self._init_worker = InitWorker(self._rules_path, title, self._signals, focus_safe)
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
 
@@ -671,12 +783,12 @@ class MainWindow(QMainWindow):
         if self._loop.is_paused:
             self._loop.resume()
             self._btn_toggle.setText("暫停")
-            self._log_widget.append_error("▶ 恢復偵測")
+            self._log_widget.append_info("恢復偵測")
             self._status_bar.showMessage("偵測中（按 F9 暫停）")
         else:
             self._loop.pause()
             self._btn_toggle.setText("繼續")
-            self._log_widget.append_error("⏸ 暫停偵測")
+            self._log_widget.append_info("暫停偵測")
             self._status_bar.showMessage("已暫停 — 按 F9 繼續")
 
     def _update_edit_enabled(self, enabled: bool):
@@ -687,6 +799,7 @@ class MainWindow(QMainWindow):
         self._export_btn.setEnabled(enabled)
         self._refresh_btn.setEnabled(enabled)
         self._debug_btn.setEnabled(enabled)
+        self._focus_safe_cb.setEnabled(enabled)
         if enabled:
             self._show_rule_detail(self._get_current_rule())
         else:
@@ -699,8 +812,7 @@ class MainWindow(QMainWindow):
             self._edit_trigger_mode.setEnabled(False)
             self._edit_click_button.setEnabled(False)
             self._edit_click_position.setEnabled(False)
-            self._edit_custom_x.setEnabled(False)
-            self._edit_custom_y.setEnabled(False)
+            self._edit_pick_coord_btn.setEnabled(False)
             self._edit_fuzzy.setEnabled(False)
             self._edit_fuzzy_threshold.setEnabled(False)
             self._edit_max_triggers.setEnabled(False)
@@ -739,19 +851,37 @@ class MainWindow(QMainWindow):
     def _on_error_from_thread(self, msg: str):
         self._log_widget.append_error(msg)
 
+    def _on_warning_from_thread(self, msg: str):
+        self._log_widget.append_warning(msg)
+
+    def _on_info_from_thread(self, msg: str):
+        self._log_widget.append_info(msg)
+
     def _on_window_lost_from_thread(self):
         self._window_lost = True
         self._btn_toggle.setText("繼續")
-        self._log_widget.append_error("⚠ 目標視窗消失，偵測已暫停")
+        self._log_widget.append_warning("目標視窗消失，偵測已暫停")
         self._status_bar.showMessage("⚠ 目標視窗已關閉，偵測已暫停")
+
+    # === Emergency & OCR Health ===
+    def _emergency_stop(self):
+        if self._loop is None:
+            return
+        self._loop.emergency_stop()
+        self._loop = None
+        self._btn_toggle.setText("啟動")
+        self._update_edit_enabled(True)
+        self._status_bar.showMessage("🛑 緊急停止 — 按「啟動」重新開始")
+        self._log_widget.append_info("緊急停止（F12）")
+
+    def _on_ocr_health(self, msg: str):
+        self._log_widget.append_warning(f"{msg}")
 
     # === Close ===
     def closeEvent(self, event):
-        if self._debug_window:
-            self._debug_window.close()
-            self._debug_window = None
         if self._loop:
             self._loop.stop()
+        self._perf_timer.stop()
         _ahk_mod.shutdown()
         event.accept()
 
