@@ -24,8 +24,8 @@ from PyQt6.QtWidgets import (
 
 from _loader import load_sibling
 
-_screenshot = load_sibling("screenshot", "01_screenshot.py")
-_ocr = load_sibling("ocr_engine", "02_ocr_engine.py")
+_screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+_ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 
 activate_window = _screenshot.activate_window
 capture = _screenshot.capture
@@ -421,7 +421,7 @@ class OcrDebugPanel(QWidget):
 
         from _loader import load_sibling
 
-        _screenshot = load_sibling("screenshot", "01_screenshot.py")
+        _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
         rect = _screenshot.get_window_rect(self._window_title)
         if rect is None:
             self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
@@ -434,7 +434,7 @@ class OcrDebugPanel(QWidget):
         QApplication.processEvents()
         time.sleep(0.15)
 
-        _ahk = load_sibling("ahk_socket", "03_ahk_socket.py")
+        _ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
         click_ok = _ahk.send_click(cx, cy)
         if not click_ok:
             _ahk.init_ahk()

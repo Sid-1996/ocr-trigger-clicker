@@ -59,15 +59,17 @@ def main():
         datas.append((str(ahk_src), "."))
 
     py_datas = [
-        "01_screenshot.py",
-        "02_ocr_engine.py",
-        "03_ahk_socket.py",
-        "04_rule_engine.py",
-        "05_main_loop.py",
-        "06_gui_main.py",
-        "07_gui_roi.py",
-        "08_gui_log.py",
-        "09_ocr_debug.py",
+        "core/01_screenshot.py",
+        "core/02_ocr_engine.py",
+        "core/03_ahk_socket.py",
+        "core/04_rule_engine.py",
+        "core/05_main_loop.py",
+        "core/10_performance_monitor.py",
+        "gui/06_gui_main.py",
+        "gui/07_gui_roi.py",
+        "gui/08_gui_log.py",
+        "gui/09_ocr_debug.py",
+        "gui/13_gui_click_picker.py",
         "build.py",
     ]
     for fn in py_datas:
@@ -108,7 +110,7 @@ def main():
     else:
         print("未找到 icons/app.ico，略過圖示設定")
 
-    args.append(str(here / "06_gui_main.py"))
+    args.append(str(here / "gui/06_gui_main.py"))
 
     print("=== PyInstaller 打包參數 ===")
     print("入口: 06_gui_main.py")

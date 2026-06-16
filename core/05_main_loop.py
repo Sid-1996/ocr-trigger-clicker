@@ -11,11 +11,11 @@ import numpy as np
 
 from _loader import load_sibling
 
-_screenshot = load_sibling("screenshot", "01_screenshot.py")
-_ocr = load_sibling("ocr_engine", "02_ocr_engine.py")
-_ahk = load_sibling("ahk_socket", "03_ahk_socket.py")
-_rule = load_sibling("rule_engine", "04_rule_engine.py")
-_perf = load_sibling("performance_monitor", "10_performance_monitor.py")
+_screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+_ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+_ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+_rule = load_sibling("rule_engine", "core/04_rule_engine.py")
+_perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
 is_window_foreground = _perf.is_window_foreground
 get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: None)
@@ -418,7 +418,7 @@ class MainLoop:
 if __name__ == "__main__":
     from pathlib import Path
 
-    _here = Path(__file__).parent
+    _here = Path(__file__).resolve().parent.parent
     windows = list_windows()
     print("=== 所有可見視窗 ===")
     for i, w in enumerate(windows, 1):

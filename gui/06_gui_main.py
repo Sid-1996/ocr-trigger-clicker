@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
 
 from _loader import load_sibling
 
-_here = Path(__file__).parent
+_here = Path(__file__).resolve().parent.parent
 
 
 class _NoWheelCombo(QComboBox):
@@ -42,8 +42,8 @@ class _NoWheelSpin(QSpinBox):
         e.ignore()
 
 
-_ahk_mod = load_sibling("ahk_socket", "03_ahk_socket.py")
-_main_loop_mod = load_sibling("main_loop", "05_main_loop.py")
+_ahk_mod = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+_main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
 TriggerLog = _main_loop_mod.TriggerLog
 Rule = _main_loop_mod.Rule
@@ -53,11 +53,11 @@ save_rules = _main_loop_mod.save_rules
 activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
 
-_ocr_debug_mod = load_sibling("ocr_debug", "09_ocr_debug.py")
+_ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
 
-_ocr_mod = load_sibling("ocr_engine", "02_ocr_engine.py")
-_perf_mod = load_sibling("performance_monitor", "10_performance_monitor.py")
+_ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+_perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 
 
 class WorkerSignals(QObject):
@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
             self._rules_path = get_data_path("rules.json")
             self._config_path = get_data_path("config.json")
         except ImportError:
-            here = Path(__file__).parent
+            here = Path(__file__).resolve().parent.parent
             self._rules_path = str(here / "rules.json")
             self._config_path = str(here / "config.json")
         self._ensure_rules()
@@ -364,7 +364,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._main_stack)
 
         # === Bottom: log area ===
-        log_mod = load_sibling("gui_log", "08_gui_log.py")
+        log_mod = load_sibling("gui_log", "gui/08_gui_log.py")
         self._log_widget = log_mod.LogWidget()
         layout.addWidget(self._log_widget)
 
@@ -632,7 +632,7 @@ class MainWindow(QMainWindow):
         title = self._window_combo.currentText()
         if title:
             activate_window(title)
-        mod = load_sibling("click_picker", "13_gui_click_picker.py")
+        mod = load_sibling("click_picker", "gui/13_gui_click_picker.py")
         result = mod.pick_click_position(parent_window=self)
         if result is None:
             return
@@ -654,7 +654,7 @@ class MainWindow(QMainWindow):
         title = self._window_combo.currentText()
         if title:
             activate_window(title)
-        mod = load_sibling("roi", "07_gui_roi.py")
+        mod = load_sibling("roi", "gui/07_gui_roi.py")
         result = mod.select_roi(parent_window=self)
         if not result:
             return

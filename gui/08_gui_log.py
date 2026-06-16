@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 
 from _loader import load_sibling
 
-_mod = load_sibling("main_loop", "05_main_loop.py")
+_mod = load_sibling("main_loop", "core/05_main_loop.py")
 TriggerLog = _mod.TriggerLog
 
 MAX_ROWS = 500
@@ -201,7 +201,7 @@ class LogWidget(QWidget):
 
     def _on_export(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "匯出日誌", str(Path(__file__).parent / "trigger_log.txt"), "文字檔 (*.txt)"
+            self, "匯出日誌", str(Path(__file__).resolve().parent.parent / "trigger_log.txt"), "文字檔 (*.txt)"
         )
         if not path:
             return

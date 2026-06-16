@@ -7,7 +7,7 @@ from typing import Optional
 
 from _loader import load_sibling
 
-_ocr_mod = load_sibling("ocr_engine", "02_ocr_engine.py")
+_ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
 find_text = _ocr_mod.find_text
 
@@ -169,7 +169,7 @@ def get_roi(rule: Rule) -> Optional[dict]:
 
 
 if __name__ == "__main__":
-    json_path = str(Path(__file__).parent / "rules.json")
+    json_path = str(Path(__file__).resolve().parent.parent / "rules.json")
 
     test_rules = [
         Rule(

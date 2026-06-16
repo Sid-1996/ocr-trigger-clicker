@@ -93,8 +93,7 @@ def init_engine() -> None:
         if _engine is not None:
             return
         if OCR_BACKEND == "rapidocr":
-            _here = Path(__file__).parent
-            custom_dir = _here / "custom_models"
+            custom_dir = Path(__file__).resolve().parent.parent / "custom_models"
             rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
             dict_path = custom_dir / "chinese_cht_dict.txt"
             kwargs: dict = dict(

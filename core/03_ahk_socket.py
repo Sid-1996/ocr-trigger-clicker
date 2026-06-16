@@ -28,7 +28,7 @@ def _find_ahk() -> str:
     except ImportError:
         pass
     candidates = [
-        Path(__file__).parent / "clicker.ahk",
+        Path(__file__).resolve().parent.parent / "clicker.ahk",
         Path.cwd() / "clicker.ahk",
     ]
     for p in candidates:
@@ -255,7 +255,7 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
 def _load_screen_bounds() -> dict:
     try:
         from _loader import load_sibling
-        perf = load_sibling("performance_monitor", "10_performance_monitor.py")
+        perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
         return perf.get_screen_bounds()
     except Exception:
         SM_CXSCREEN = 0
