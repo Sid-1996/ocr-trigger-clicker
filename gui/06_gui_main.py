@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
 
         self._rule_list = QListWidget()
         self._rule_list.setMinimumWidth(180)
+        self._rule_list.setDragDropMode(QListWidget.InternalMove)
         left_layout.addWidget(self._rule_list)
 
         self._rule_hint = QLabel("← 點擊「新增」建立第一條規則")
@@ -488,6 +489,7 @@ class MainWindow(QMainWindow):
         self._add_rule_btn.clicked.connect(self._add_rule)
         self._del_rule_btn.clicked.connect(self._delete_rule)
         self._rule_list.currentRowChanged.connect(self._on_rule_selected)
+        self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
         self._edit_save_btn.clicked.connect(self._save_current_rule)
         self._edit_roi_btn.clicked.connect(self._open_roi_selector)
         self._debug_btn.clicked.connect(self._switch_to_debug)
@@ -710,13 +712,30 @@ class MainWindow(QMainWindow):
         return None
 
     def _on_rule_selected(self, row: int):
-        if 0 <= row < len(self._rules):
-            rule = self._rules[row]
-            self._selected_rule_id = rule.id
-            self._show_rule_detail(rule)
-        else:
-            self._selected_rule_id = None
-            self._show_rule_detail(None)
+        if 0 <= row < self._rule_list.count():
+            item = self._rule_list.item(row)
+            rule_id = item.data(Qt.ItemDataRole.UserRole)
+            rule = next((r for r in self._rules if r.id == rule_id), None)
+            if rule:
+                self._selected_rule_id = rule.id
+                self._show_rule_detail(rule)
+                return
+        self._selected_rule_id = None
+        self._show_rule_detail(None)
+
+    def _on_rules_reordered(self):
+        new_order = []
+        for i in range(self._rule_list.count()):
+            item = self._rule_list.item(i)
+            rid = item.data(Qt.ItemDataRole.UserRole)
+            for r in self._rules:
+                if r.id == rid:
+                    new_order.append(r)
+                    break
+        self._rules = new_order
+        save_task(self._current_task, self._rules)
+        if self._loop:
+            self._loop.reload_rules()
 
     def _show_rule_detail(self, rule: Optional[Rule]):
         if rule is None:
