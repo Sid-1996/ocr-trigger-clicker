@@ -40,6 +40,10 @@ class Rule:
     on_not_found_action: str = "click_nothing"
     on_not_found_custom_x: int = 0
     on_not_found_custom_y: int = 0
+    action_type: str = "click"
+    key: str = ""
+    post_delay_ms: int = 0
+    depends_on: Optional[str] = None
 
 
 _FIELD_DEFAULTS = {
@@ -63,6 +67,10 @@ _FIELD_DEFAULTS = {
     "on_not_found_action": "click_nothing",
     "on_not_found_custom_x": 0,
     "on_not_found_custom_y": 0,
+    "action_type": "click",
+    "key": "",
+    "post_delay_ms": 0,
+    "depends_on": None,
 }
 
 
@@ -117,6 +125,10 @@ def _dict_to_rule(d: dict) -> Rule:
         on_not_found_action=str(merged.get("on_not_found_action", "click_nothing")),
         on_not_found_custom_x=_as_int(merged.get("on_not_found_custom_x", 0), 0),
         on_not_found_custom_y=_as_int(merged.get("on_not_found_custom_y", 0), 0),
+        action_type=str(merged.get("action_type", "click")),
+        key=str(merged.get("key", "")),
+        post_delay_ms=max(0, _as_int(merged.get("post_delay_ms", 0), 0)),
+        depends_on=merged.get("depends_on"),
     )
 
 

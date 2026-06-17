@@ -369,6 +369,37 @@ class MainWindow(QMainWindow):
         self._edit_random_offset.setValue(3)
         self._edit_random_offset.setToolTip("點擊位置隨機偏移像素，模擬真人點擊")
 
+        # ── P0: 動作類型 / 按鍵 / 點擊後等待 / 前置規則 ──
+        self._edit_post_delay = _NoWheelSpin()
+        self._edit_post_delay.setRange(0, 30000)
+        self._edit_post_delay.setSuffix(" ms")
+        self._edit_post_delay.setValue(0)
+        self._edit_post_delay.setToolTip("點擊/按鍵後等待 N 毫秒，再進入下一輪偵測")
+        self._edit_action_type = _NoWheelCombo()
+        self._edit_action_type.addItems(["click", "key"])
+        self._edit_action_type.setToolTip("click：滑鼠點擊 ｜ key：鍵盤按鍵")
+        self._edit_key = _NoWheelCombo()
+        self._edit_key.setEditable(True)
+        for group in [
+            ["Enter", "Escape", "Space", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "PgUp", "PgDn"],
+            ["Up", "Down", "Left", "Right"],
+            [f"F{i}" for i in range(1, 13)],
+            [str(i) for i in range(10)],
+            [chr(c) for c in range(ord('a'), ord('z') + 1)],
+            ["^c", "^v", "^x", "^a", "^s", "^z", "^y", "^f", "^d", "^w", "^t", "^n", "^o", "^p", "^r"],
+            ["CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "AppsKey"],
+            ["Volume_Up", "Volume_Down", "Volume_Mute", "Media_Play_Pause", "Media_Stop", "Media_Next", "Media_Prev"],
+            ["Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadSub", "NumpadMult", "NumpadDiv", "NumpadEnter", "NumpadDel"],
+        ]:
+            self._edit_key.insertSeparator(self._edit_key.count())
+            for k in group:
+                self._edit_key.addItem(k)
+        self._edit_key.setCurrentIndex(0)
+        self._edit_key.setToolTip("選擇或輸入要模擬的按鍵名稱（支援 Shift+字母快速跳轉）")
+        self._edit_depends_on = _NoWheelCombo()
+        self._edit_depends_on.addItem("(無)")
+        self._edit_depends_on.setToolTip("此規則依賴的前置規則觸發後，才會開始偵測")
+
         # ── Phase 2: sub-target (if/if-not) ──
         self._sub_toggle_btn = QPushButton("▸ 階段二條件 (if/if-not)")
         self._sub_toggle_btn.setCheckable(True)
@@ -435,8 +466,12 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("偵測區域:", self._edit_roi_label)
         self._edit_form.addRow("", self._edit_roi_btn)
         self._edit_form.addRow("冷卻時間:", self._edit_cooldown)
+        self._edit_form.addRow("點擊後等待:", self._edit_post_delay)
         self._edit_form.addRow("觸發模式:", self._edit_trigger_mode)
+        self._edit_form.addRow("動作類型:", self._edit_action_type)
+        self._edit_form.addRow("按鍵:", self._edit_key)
         self._edit_form.addRow("滑鼠按鈕:", self._edit_click_button)
+        self._edit_form.addRow("前置規則:", self._edit_depends_on)
         self._edit_form.addRow("點擊位置:", self._edit_click_position)
         self._edit_form.addRow("點擊座標:", self._coord_row)
         self._edit_form.addRow("模糊比對:", self._edit_fuzzy)
@@ -506,6 +541,7 @@ class MainWindow(QMainWindow):
         self._edit_on_found_action.currentTextChanged.connect(self._on_sub_found_action_changed)
         self._edit_on_not_found_action.currentTextChanged.connect(self._on_sub_not_found_action_changed)
         self._edit_sub_roi_btn.clicked.connect(self._on_pick_sub_roi)
+        self._edit_action_type.currentTextChanged.connect(self._on_action_type_changed)
 
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
         self._task_new_btn.clicked.connect(self._on_task_new)
@@ -778,6 +814,11 @@ class MainWindow(QMainWindow):
         self._edit_fuzzy_threshold.setValue(int(rule.fuzzy_threshold * 100))
         self._edit_max_triggers.setValue(rule.max_triggers)
         self._edit_random_offset.setValue(rule.random_offset)
+        self._edit_post_delay.setValue(rule.post_delay_ms)
+        self._edit_action_type.setCurrentText(rule.action_type)
+        self._edit_key.setCurrentText(rule.key)
+        self._populate_depends_on(rule)
+        self._update_action_visibility()
 
         self._edit_sub_target.setText(rule.sub_target_text)
         has_sub_roi = any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
@@ -812,7 +853,41 @@ class MainWindow(QMainWindow):
         self._on_not_found_coord_row.setVisible(action == "click_custom")
 
     def _on_click_position_changed(self, pos: str):
-        self._coord_row.setVisible(pos == "custom")
+        is_key = self._edit_action_type.currentText() == "key"
+        self._coord_row.setVisible(not is_key and pos == "custom")
+
+    def _update_action_visibility(self):
+        is_key = self._edit_action_type.currentText() == "key"
+        self._edit_key.setVisible(is_key)
+        self._edit_form.labelForField(self._edit_key).setVisible(is_key)
+        self._edit_click_button.setVisible(not is_key)
+        self._edit_form.labelForField(self._edit_click_button).setVisible(not is_key)
+        self._edit_click_position.setVisible(not is_key)
+        self._edit_form.labelForField(self._edit_click_position).setVisible(not is_key)
+        is_custom = self._edit_click_position.currentText() == "custom"
+        self._coord_row.setVisible(not is_key and is_custom)
+        self._edit_form.labelForField(self._coord_row).setVisible(not is_key)
+        self._edit_random_offset.setVisible(not is_key)
+        self._edit_form.labelForField(self._edit_random_offset).setVisible(not is_key)
+
+    def _on_action_type_changed(self, atype: str):
+        self._update_action_visibility()
+
+    def _populate_depends_on(self, rule: Rule):
+        current = self._edit_depends_on.currentText()
+        self._edit_depends_on.blockSignals(True)
+        self._edit_depends_on.clear()
+        self._edit_depends_on.addItem("(無)", None)
+        for r in self._rules:
+            if r.id == rule.id:
+                continue
+            self._edit_depends_on.addItem(r.name, r.id)
+        idx = self._edit_depends_on.findData(rule.depends_on)
+        if idx >= 0:
+            self._edit_depends_on.setCurrentIndex(idx)
+        else:
+            self._edit_depends_on.setCurrentIndex(0)
+        self._edit_depends_on.blockSignals(False)
 
     def _on_fuzzy_changed(self, state):
         self._edit_fuzzy_threshold.setEnabled(state == 2)
@@ -898,6 +973,11 @@ class MainWindow(QMainWindow):
         rule.on_found_action = self._edit_on_found_action.currentText()
         rule.on_not_found_action = self._edit_on_not_found_action.currentText()
         rule.sub_not_found_retries = self._edit_sub_not_found_retries.value()
+        rule.post_delay_ms = self._edit_post_delay.value()
+        rule.action_type = self._edit_action_type.currentText()
+        rule.key = self._edit_key.currentText()
+        dep_id = self._edit_depends_on.currentData()
+        rule.depends_on = dep_id if dep_id else None
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:

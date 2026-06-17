@@ -113,6 +113,9 @@ class MainLoop:
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
 
+    def _send_key(self, key: str) -> bool:
+        return _ahk.send_key(key)
+
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
 
@@ -140,19 +143,24 @@ class MainLoop:
 
         params = apply_trigger(rule)
 
-        if rule.click_position == "text_center":
-            off = rule.random_offset
-            dx = random.randint(-off, off) if off else 0
-            dy = random.randint(-off, off) if off else 0
-            cx = matched.center_x + dx
-            cy = matched.center_y + dy
+        sx = sy = 0
+        if rule.action_type == "key":
+            ok = self._send_key(rule.key)
+            if ok:
+                self._perf.record_click()
         else:
-            cx, cy = params["x"], params["y"]
-
-        sx, sy = self._to_screen_coords(rect, cx, cy)
-        ok = self._send_click(sx, sy, params["button"])
-        if ok:
-            self._perf.record_click()
+            if rule.click_position == "text_center":
+                off = rule.random_offset
+                dx = random.randint(-off, off) if off else 0
+                dy = random.randint(-off, off) if off else 0
+                cx = matched.center_x + dx
+                cy = matched.center_y + dy
+            else:
+                cx, cy = params["x"], params["y"]
+            sx, sy = self._to_screen_coords(rect, cx, cy)
+            ok = self._send_click(sx, sy, params["button"])
+            if ok:
+                self._perf.record_click()
 
         log = TriggerLog(
             timestamp=time.time(),
@@ -167,6 +175,11 @@ class MainLoop:
 
         if self.on_trigger:
             self.on_trigger(log)
+
+        if rule.post_delay_ms > 0:
+            if self._verbose:
+                self._log(f"規則「{rule.name}」點擊後等待 {rule.post_delay_ms}ms")
+            time.sleep(rule.post_delay_ms / 1000.0)
 
         with self._rules_lock:
             save_rules(self._rules, self._rules_path)
@@ -257,6 +270,11 @@ class MainLoop:
         if self.on_trigger:
             self.on_trigger(log)
 
+        if rule.post_delay_ms > 0:
+            if self._verbose:
+                self._log(f"規則「{rule.name}」點擊後等待 {rule.post_delay_ms}ms")
+            time.sleep(rule.post_delay_ms / 1000.0)
+
         with self._rules_lock:
             save_rules(self._rules, self._rules_path)
 
@@ -313,6 +331,11 @@ class MainLoop:
         if self.on_trigger:
             self.on_trigger(log)
 
+        if rule.post_delay_ms > 0:
+            if self._verbose:
+                self._log(f"規則「{rule.name}」點擊後等待 {rule.post_delay_ms}ms")
+            time.sleep(rule.post_delay_ms / 1000.0)
+
         with self._rules_lock:
             save_rules(self._rules, self._rules_path)
 
@@ -365,6 +388,13 @@ class MainLoop:
                     self._log(f"規則「{rule.name}」→ once 模式，已觸發 ({rule.trigger_count} 次)，跳過")
                     self._once_skip_announced.add(rule.id)
                 continue
+
+            if rule.depends_on:
+                dep = next((r for r in rules_snapshot if r.id == rule.depends_on), None)
+                if dep is None or dep.trigger_count < 1:
+                    if self._verbose:
+                        self._log(f"規則「{rule.name}」依賴「{rule.depends_on}」尚未觸發，跳過")
+                    continue
 
             if self._verbose:
                 self._log(f"處理規則「{rule.name}」目標「{rule.target_text}」")

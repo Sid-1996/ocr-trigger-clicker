@@ -111,6 +111,14 @@ loop {
             if parts.Length >= 3 {
                 MouseMove Integer(parts[2]), Integer(parts[3]), 0
             }
+        } else if SubStr(cmd, 1, 3) = "KEY" {
+            key := Trim(SubStr(cmd, 5))
+            if key != "" {
+                if RegExMatch(key, "[\^!+#]")
+                    SendInput key
+                else
+                    SendInput "{" key "}"
+            }
         }
 
         response := "OK`n"

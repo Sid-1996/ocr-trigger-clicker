@@ -294,6 +294,10 @@ def send_move(x: int, y: int) -> bool:
     return _send_cmd(f"MOVE,{x},{y}")
 
 
+def send_key(key: str) -> bool:
+    return _send_cmd(f"KEY,{key}")
+
+
 def send_emergency_stop() -> bool:
     global _conn
     print("[安全] 發送緊急停止指令 (ESTOP)")
