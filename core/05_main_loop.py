@@ -375,6 +375,11 @@ class MainLoop:
                         self._log(f"規則「{rule.name}」OCR 無結果")
                     continue
 
+                if rule.trigger_mode == "once" and rule.trigger_count > 0:
+                    if self._verbose:
+                        self._log(f"規則「{rule.name}」→ once 模式，已觸發 ({rule.trigger_count} 次)，跳過")
+                    continue
+
                 hit, matched = check_trigger(rule, rule_results)
                 if not hit or matched is None:
                     if self._verbose:
