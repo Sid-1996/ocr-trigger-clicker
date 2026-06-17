@@ -43,7 +43,23 @@ class _NoWheelCombo(QComboBox):
 
 
 class _KeyCombo(_NoWheelCombo):
-    pass
+    def keyPressEvent(self, event):
+        text = event.text()
+        if text and len(text) == 1 and text.isprintable() and event.modifiers() in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier):
+            key = text.lower()
+            count = self.count()
+            if count == 0:
+                return
+            start = self.currentIndex() + 1
+            for i in range(count):
+                idx = (start + i) % count
+                item = self.itemText(idx)
+                if item and item.lower().startswith(key):
+                    self.setCurrentIndex(idx)
+                    if not self.view().isVisible():
+                        self.showPopup()
+                    return
+        super().keyPressEvent(event)
 
 
 class _NoWheelSpin(QSpinBox):
