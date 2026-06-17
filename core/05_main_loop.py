@@ -356,6 +356,7 @@ class MainLoop:
             return list(self._logs)[-limit:]
 
     def reload_rules(self) -> None:
+        self._rule_auto_disabled.clear()
         with self._rules_lock:
             self._load_rules()
 
