@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -140,6 +141,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._debug_panel = OcrDebugPanel("", self)
         self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
+        self._debug_panel.sub_target_requested.connect(self._on_debug_sub_target_requested)
         self._debug_page_layout.addWidget(self._debug_panel, 1)
         self._connect_signals()
         self._setup_shortcuts()
@@ -365,6 +367,57 @@ class MainWindow(QMainWindow):
         self._edit_random_offset.setValue(3)
         self._edit_random_offset.setToolTip("點擊位置隨機偏移像素，模擬真人點擊")
 
+        # ── Phase 2: sub-target (if/if-not) ──
+        self._sub_toggle_btn = QPushButton("▸ 階段二條件 (if/if-not)")
+        self._sub_toggle_btn.setCheckable(True)
+        self._sub_toggle_btn.setChecked(False)
+        self._sub_toggle_btn.clicked.connect(self._toggle_sub_section)
+        self._sub_panel = QWidget()
+        self._sub_panel.setVisible(False)
+        self._sub_form = QFormLayout(self._sub_panel)
+        self._sub_form.setContentsMargins(0, 0, 0, 0)
+
+        self._edit_sub_target = QLineEdit()
+        self._edit_sub_target.setToolTip("階段二目標文字：若主目標命中，則進一步檢查此文字")
+        self._edit_sub_roi_label = QLabel("與主目標相同")
+        self._edit_sub_roi_btn = QPushButton("框選子目標區域")
+        self._edit_sub_roi_btn.setToolTip("子目標獨立的偵測區域（留空 = 與主目標相同）")
+        self._edit_sub_not_found_retries = _NoWheelSpin()
+        self._edit_sub_not_found_retries.setRange(1, 99)
+        self._edit_sub_not_found_retries.setValue(3)
+        self._edit_sub_not_found_retries.setToolTip("連續未找到子目標的容錯次數，達到後才執行未找到動作")
+        self._edit_on_found_action = _NoWheelCombo()
+        self._edit_on_found_action.addItems(["click_sub_center", "click_custom"])
+        self._edit_on_found_action.setToolTip("click_sub_center：點擊子目標文字中心 ｜ click_custom：自訂座標")
+        self._edit_on_found_custom_label = QLabel("尚未選取")
+        self._edit_on_found_pick_btn = QPushButton("選取點擊座標")
+        self._edit_on_found_pick_btn.clicked.connect(self._on_pick_sub_found_coord)
+        self._on_found_coord_row = QWidget()
+        of_layout = QHBoxLayout(self._on_found_coord_row)
+        of_layout.setContentsMargins(0, 0, 0, 0)
+        of_layout.addWidget(self._edit_on_found_custom_label)
+        of_layout.addWidget(self._edit_on_found_pick_btn)
+        self._edit_on_not_found_action = _NoWheelCombo()
+        self._edit_on_not_found_action.addItems(["click_nothing", "click_custom"])
+        self._edit_on_not_found_action.setToolTip("click_nothing：不執行任何動作 ｜ click_custom：自訂座標點擊")
+        self._edit_on_not_found_custom_label = QLabel("尚未選取")
+        self._edit_on_not_found_pick_btn = QPushButton("選取點擊座標")
+        self._edit_on_not_found_pick_btn.clicked.connect(self._on_pick_sub_not_found_coord)
+        self._on_not_found_coord_row = QWidget()
+        onf_layout = QHBoxLayout(self._on_not_found_coord_row)
+        onf_layout.setContentsMargins(0, 0, 0, 0)
+        onf_layout.addWidget(self._edit_on_not_found_custom_label)
+        onf_layout.addWidget(self._edit_on_not_found_pick_btn)
+
+        self._sub_form.addRow("子目標文字:", self._edit_sub_target)
+        self._sub_form.addRow("子目標區域:", self._edit_sub_roi_label)
+        self._sub_form.addRow("", self._edit_sub_roi_btn)
+        self._sub_form.addRow("容錯次數:", self._edit_sub_not_found_retries)
+        self._sub_form.addRow("找到時動作:", self._edit_on_found_action)
+        self._sub_form.addRow("", self._on_found_coord_row)
+        self._sub_form.addRow("未找到時動作:", self._edit_on_not_found_action)
+        self._sub_form.addRow("", self._on_not_found_coord_row)
+
         self._edit_save_btn = QPushButton("儲存規則")
         self._edit_save_btn.setEnabled(False)
         self._edit_save_btn.setToolTip("儲存目前編輯的規則")
@@ -384,6 +437,8 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("模糊閾值:", self._edit_fuzzy_threshold)
         self._edit_form.addRow("最大觸發:", self._edit_max_triggers)
         self._edit_form.addRow("隨機抖動:", self._edit_random_offset)
+        self._edit_form.addRow(self._sub_toggle_btn)
+        self._edit_form.addRow(self._sub_panel)
         self._edit_form.addRow(self._edit_save_btn)
 
         scroll.setWidget(self._edit_panel)
@@ -439,6 +494,9 @@ class MainWindow(QMainWindow):
 
         self._edit_click_position.currentTextChanged.connect(self._on_click_position_changed)
         self._edit_fuzzy.stateChanged.connect(self._on_fuzzy_changed)
+        self._edit_on_found_action.currentTextChanged.connect(self._on_sub_found_action_changed)
+        self._edit_on_not_found_action.currentTextChanged.connect(self._on_sub_not_found_action_changed)
+        self._edit_sub_roi_btn.clicked.connect(self._on_pick_sub_roi)
 
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
         self._task_new_btn.clicked.connect(self._on_task_new)
@@ -695,6 +753,38 @@ class MainWindow(QMainWindow):
         self._edit_max_triggers.setValue(rule.max_triggers)
         self._edit_random_offset.setValue(rule.random_offset)
 
+        self._edit_sub_target.setText(rule.sub_target_text)
+        has_sub_roi = any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
+        self._edit_sub_roi_label.setText(
+            f"x={rule.sub_roi['x']} y={rule.sub_roi['y']} w={rule.sub_roi['w']} h={rule.sub_roi['h']}"
+            if has_sub_roi
+            else "與主目標相同"
+        )
+        self._edit_on_found_action.setCurrentText(rule.on_found_action)
+        self._edit_on_found_custom_label.setText(f"X: {rule.on_found_custom_x}, Y: {rule.on_found_custom_y}")
+        self._edit_on_not_found_action.setCurrentText(rule.on_not_found_action)
+        self._edit_on_not_found_custom_label.setText(f"X: {rule.on_not_found_custom_x}, Y: {rule.on_not_found_custom_y}")
+        self._edit_sub_not_found_retries.setValue(rule.sub_not_found_retries)
+        self._update_sub_visibility()
+
+    def _update_sub_visibility(self):
+        self._sub_panel.setVisible(self._sub_toggle_btn.isChecked())
+        self._on_found_coord_row.setVisible(self._edit_on_found_action.currentText() == "click_custom")
+        self._on_not_found_coord_row.setVisible(self._edit_on_not_found_action.currentText() == "click_custom")
+
+    def _toggle_sub_section(self):
+        self._update_sub_visibility()
+        self._sub_toggle_btn.setText(
+            "▾ 階段二條件 (if/if-not)" if self._sub_toggle_btn.isChecked()
+            else "▸ 階段二條件 (if/if-not)"
+        )
+
+    def _on_sub_found_action_changed(self, action: str):
+        self._on_found_coord_row.setVisible(action == "click_custom")
+
+    def _on_sub_not_found_action_changed(self, action: str):
+        self._on_not_found_coord_row.setVisible(action == "click_custom")
+
     def _on_click_position_changed(self, pos: str):
         self._coord_row.setVisible(pos == "custom")
 
@@ -778,6 +868,10 @@ class MainWindow(QMainWindow):
         rule.fuzzy_threshold = self._edit_fuzzy_threshold.value() / 100.0
         rule.max_triggers = self._edit_max_triggers.value()
         rule.random_offset = self._edit_random_offset.value()
+        rule.sub_target_text = self._edit_sub_target.text().strip()
+        rule.on_found_action = self._edit_on_found_action.currentText()
+        rule.on_not_found_action = self._edit_on_not_found_action.currentText()
+        rule.sub_not_found_retries = self._edit_sub_not_found_retries.value()
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
@@ -810,6 +904,92 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(f"已選取點擊座標: X={result[0]}, Y={result[1]}")
+
+    def _on_pick_sub_found_coord(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
+        mod = load_sibling("click_picker", "gui/13_gui_click_picker.py")
+        result = mod.pick_click_position(parent_window=self)
+        if result is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            screen = QApplication.primaryScreen()
+            ratio = screen.devicePixelRatio()
+            result = (int(result[0] * ratio), int(result[1] * ratio))
+            wr = get_window_rect(title)
+            if wr:
+                result = (result[0] - wr["x"], result[1] - wr["y"])
+        rule.on_found_custom_x, rule.on_found_custom_y = result
+        rule.on_found_action = "click_custom"
+        self._edit_on_found_action.setCurrentText("click_custom")
+        self._edit_on_found_custom_label.setText(f"X: {result[0]}, Y: {result[1]}")
+        save_task(self._current_task, self._rules)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(f"已選取子目標點擊座標: X={result[0]}, Y={result[1]}")
+
+    def _on_pick_sub_not_found_coord(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
+        mod = load_sibling("click_picker", "gui/13_gui_click_picker.py")
+        result = mod.pick_click_position(parent_window=self)
+        if result is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            screen = QApplication.primaryScreen()
+            ratio = screen.devicePixelRatio()
+            result = (int(result[0] * ratio), int(result[1] * ratio))
+            wr = get_window_rect(title)
+            if wr:
+                result = (result[0] - wr["x"], result[1] - wr["y"])
+        rule.on_not_found_custom_x, rule.on_not_found_custom_y = result
+        rule.on_not_found_action = "click_custom"
+        self._edit_on_not_found_action.setCurrentText("click_custom")
+        self._edit_on_not_found_custom_label.setText(f"X: {result[0]}, Y: {result[1]}")
+        save_task(self._current_task, self._rules)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(f"已選取子目標未找到座標: X={result[0]}, Y={result[1]}")
+
+    def _on_pick_sub_roi(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
+        mod = load_sibling("roi", "gui/07_gui_roi.py")
+        result = mod.select_roi(parent_window=self)
+        if not result:
+            return
+        if rule:
+            title = self._window_combo.currentText()
+            if title:
+                screen = QApplication.primaryScreen()
+                ratio = screen.devicePixelRatio()
+                result["x"] = int(result["x"] * ratio)
+                result["y"] = int(result["y"] * ratio)
+                wr = get_window_rect(title)
+                if wr:
+                    result["x"] -= wr["x"]
+                    result["y"] -= wr["y"]
+            rule.sub_roi = result
+            self._edit_sub_roi_label.setText(
+                f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
+            )
+            save_task(self._current_task, self._rules)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(
+            f"已選取子目標偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
+        )
 
     # === ROI selector ===
     def _open_roi_selector(self):
@@ -889,6 +1069,28 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
+
+    def _on_debug_sub_target_requested(self, data: dict):
+        rule = self._get_current_rule()
+        if rule is None:
+            QMessageBox.warning(self, "無效操作", "請先在規則列表中選取一個規則，再設定子目標。")
+            return
+        rule.sub_target_text = str(data.get("target_text", "")).strip()
+        if not rule.sub_target_text:
+            return
+        roi = data.get("roi")
+        if roi:
+            rule.sub_roi = roi
+        save_task(self._current_task, self._rules)
+        self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
+        self._main_stack.setCurrentIndex(0)
+        self._debug_btn.setText("OCR 診斷")
+        self._sub_toggle_btn.setChecked(True)
+        self._sub_toggle_btn.setText("▾ 階段二條件 (if/if-not)")
+        self._show_rule_detail(rule)
+        self._status_bar.showMessage(f"已在當前規則設定子目標：「{rule.sub_target_text}」")
 
     # === Start / Pause ===
     def _toggle_start(self):

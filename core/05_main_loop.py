@@ -35,6 +35,7 @@ capture_window_content = getattr(_screenshot, "capture_window_content", lambda t
 activate_window = _screenshot.activate_window
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
+find_text = _ocr.find_text
 init_engine = _ocr.init_engine
 Rule = _rule.Rule
 load_rules = _rule.load_rules
@@ -79,6 +80,7 @@ class MainLoop:
 
         self._rule_trigger_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
         self._rule_auto_disabled: set[str] = set()
+        self._sub_not_found_count: dict[str, int] = defaultdict(int)
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -112,6 +114,206 @@ class MainLoop:
 
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
+
+    def _execute_trigger(self, rule: Rule, matched: OcrResult, rect: dict) -> None:
+        if self.check_runaway_rule(rule.id):
+            self._rule_auto_disabled.add(rule.id)
+            rule.enabled = False
+            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
+            if self.on_warning:
+                self.on_warning(msg)
+            return
+
+        if self._focus_safe:
+            with self._window_lock:
+                hwnd = self._tracking_hwnd
+            if hwnd is not None and not is_window_foreground(hwnd):
+                if self._verbose:
+                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
+                return
+
+        if not self._perf.check_rate_limit():
+            if self._verbose:
+                self._log("全域速率限制生效，跳過此次點擊")
+            return
+
+        params = apply_trigger(rule)
+
+        if rule.click_position == "text_center":
+            off = rule.random_offset
+            dx = random.randint(-off, off) if off else 0
+            dy = random.randint(-off, off) if off else 0
+            cx = matched.center_x + dx
+            cy = matched.center_y + dy
+        else:
+            cx, cy = params["x"], params["y"]
+
+        sx, sy = self._to_screen_coords(rect, cx, cy)
+        ok = self._send_click(sx, sy, params["button"])
+        if ok:
+            self._perf.record_click()
+
+        log = TriggerLog(
+            timestamp=time.time(),
+            rule_id=rule.id,
+            rule_name=rule.name,
+            matched_text=matched.text,
+            click_x=sx,
+            click_y=sy,
+        )
+        with self._logs_lock:
+            self._logs.append(log)
+
+        if self.on_trigger:
+            self.on_trigger(log)
+
+        with self._rules_lock:
+            save_rules(self._rules, self._rules_path)
+
+    def _handle_sub_target(self, rule: Rule, img: np.ndarray, rect: dict, primary_matched: OcrResult) -> None:
+        roi = rule.sub_roi if any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")) else None
+        if roi:
+            h, w = img.shape[:2]
+            x1 = max(0, roi["x"])
+            y1 = max(0, roi["y"])
+            x2 = min(w, roi["x"] + roi["w"])
+            y2 = min(h, roi["y"] + roi["h"])
+            if x2 <= x1 or y2 <= y1:
+                return
+            sub_img = img[y1:y2, x1:x2]
+            sub_results = recognize(sub_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            for r in sub_results:
+                r.x += x1
+                r.y += y1
+                r.center_x = r.x + r.w // 2
+                r.center_y = r.y + r.h // 2
+        else:
+            sub_results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+
+        if sub_results:
+            sub_matches = find_text(sub_results, rule.sub_target_text, rule.fuzzy, rule.fuzzy_threshold)
+            if sub_matches:
+                self._sub_not_found_count[rule.id] = 0
+                if self._verbose:
+                    self._log(f"子目標「{rule.sub_target_text}」命中「{sub_matches[0].text}」!")
+                self._do_sub_found(rule, sub_matches[0], rect)
+                return
+
+        self._sub_not_found_count[rule.id] += 1
+        if self._sub_not_found_count[rule.id] >= rule.sub_not_found_retries:
+            self._sub_not_found_count[rule.id] = 0
+            if self._verbose:
+                self._log(f"子目標「{rule.sub_target_text}」連續 {rule.sub_not_found_retries} 次未找到，執行 not_found 動作")
+            self._do_sub_not_found(rule, primary_matched, rect)
+
+    def _do_sub_found(self, rule: Rule, matched: OcrResult, rect: dict) -> None:
+        if self.check_runaway_rule(rule.id):
+            self._rule_auto_disabled.add(rule.id)
+            rule.enabled = False
+            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
+            if self.on_warning:
+                self.on_warning(msg)
+            return
+
+        if self._focus_safe:
+            with self._window_lock:
+                hwnd = self._tracking_hwnd
+            if hwnd is not None and not is_window_foreground(hwnd):
+                if self._verbose:
+                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
+                return
+
+        if not self._perf.check_rate_limit():
+            if self._verbose:
+                self._log("全域速率限制生效，跳過此次點擊")
+            return
+
+        params = apply_trigger(rule)
+
+        if rule.on_found_action == "click_sub_center":
+            cx, cy = matched.center_x, matched.center_y
+        elif rule.on_found_action == "click_custom":
+            cx, cy = rule.on_found_custom_x, rule.on_found_custom_y
+        else:
+            cx, cy = matched.center_x, matched.center_y
+
+        sx, sy = self._to_screen_coords(rect, cx, cy)
+        ok = self._send_click(sx, sy, rule.click_button)
+        if ok:
+            self._perf.record_click()
+
+        log = TriggerLog(
+            timestamp=time.time(),
+            rule_id=rule.id,
+            rule_name=rule.name,
+            matched_text=matched.text,
+            click_x=sx,
+            click_y=sy,
+        )
+        with self._logs_lock:
+            self._logs.append(log)
+
+        if self.on_trigger:
+            self.on_trigger(log)
+
+        with self._rules_lock:
+            save_rules(self._rules, self._rules_path)
+
+    def _do_sub_not_found(self, rule: Rule, primary_matched: OcrResult, rect: dict) -> None:
+        if rule.on_not_found_action == "click_nothing":
+            if self._verbose:
+                self._log(f"規則「{rule.name}」not_found 動作設為「略過」")
+            return
+
+        if self.check_runaway_rule(rule.id):
+            self._rule_auto_disabled.add(rule.id)
+            rule.enabled = False
+            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
+            if self.on_warning:
+                self.on_warning(msg)
+            return
+
+        if self._focus_safe:
+            with self._window_lock:
+                hwnd = self._tracking_hwnd
+            if hwnd is not None and not is_window_foreground(hwnd):
+                if self._verbose:
+                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
+                return
+
+        if not self._perf.check_rate_limit():
+            if self._verbose:
+                self._log("全域速率限制生效，跳過此次點擊")
+            return
+
+        params = apply_trigger(rule)
+
+        if rule.on_not_found_action == "click_custom":
+            cx, cy = rule.on_not_found_custom_x, rule.on_not_found_custom_y
+        else:
+            cx, cy = params["x"], params["y"]
+
+        sx, sy = self._to_screen_coords(rect, cx, cy)
+        ok = self._send_click(sx, sy, rule.click_button)
+        if ok:
+            self._perf.record_click()
+
+        log = TriggerLog(
+            timestamp=time.time(),
+            rule_id=rule.id,
+            rule_name=rule.name,
+            matched_text=primary_matched.text,
+            click_x=sx,
+            click_y=sy,
+        )
+        with self._logs_lock:
+            self._logs.append(log)
+
+        if self.on_trigger:
+            self.on_trigger(log)
+
+        with self._rules_lock:
+            save_rules(self._rules, self._rules_path)
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
@@ -181,59 +383,11 @@ class MainLoop:
 
                 if self._verbose:
                     self._log(f"規則「{rule.name}」命中「{matched.text}」!")
-                if self.check_runaway_rule(rule.id):
-                    self._rule_auto_disabled.add(rule.id)
-                    rule.enabled = False
-                    msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
-                    if self.on_warning:
-                        self.on_warning(msg)
-                    continue
 
-                if self._focus_safe:
-                    with self._window_lock:
-                        hwnd = self._tracking_hwnd
-                    if hwnd is not None and not is_window_foreground(hwnd):
-                        if self._verbose:
-                            self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
-                        continue
-
-                if not self._perf.check_rate_limit():
-                    if self._verbose:
-                        self._log("全域速率限制生效，跳過此次點擊")
-                    continue
-
-                params = apply_trigger(rule)
-
-                if rule.click_position == "text_center":
-                    off = rule.random_offset
-                    dx = random.randint(-off, off) if off else 0
-                    dy = random.randint(-off, off) if off else 0
-                    cx = matched.center_x + dx
-                    cy = matched.center_y + dy
+                if rule.sub_target_text:
+                    self._handle_sub_target(rule, img, rect, matched)
                 else:
-                    cx, cy = params["x"], params["y"]
-
-                sx, sy = self._to_screen_coords(rect, cx, cy)
-                ok = self._send_click(sx, sy, params["button"])
-                if ok:
-                    self._perf.record_click()
-
-                log = TriggerLog(
-                    timestamp=time.time(),
-                    rule_id=rule.id,
-                    rule_name=rule.name,
-                    matched_text=matched.text,
-                    click_x=sx,
-                    click_y=sy,
-                )
-                with self._logs_lock:
-                    self._logs.append(log)
-
-                if self.on_trigger:
-                    self.on_trigger(log)
-
-                with self._rules_lock:
-                    save_rules(self._rules, self._rules_path)
+                    self._execute_trigger(rule, matched, rect)
             except Exception as e:
                 if self._verbose:
                     self._log(f"規則「{rule.name}」處理異常: {e}")

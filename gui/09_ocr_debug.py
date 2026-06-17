@@ -56,6 +56,7 @@ class _OcrSignals(QObject):
 
 class OcrDebugPanel(QWidget):
     rule_requested = pyqtSignal(dict)
+    sub_target_requested = pyqtSignal(dict)
     closed = pyqtSignal()
 
     _OCR_MODES = {
@@ -165,6 +166,12 @@ class OcrDebugPanel(QWidget):
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
+        self._set_sub_target_btn = QPushButton("設為子目標(&U)")
+        self._set_sub_target_btn.setEnabled(False)
+        self._set_sub_target_btn.setToolTip("將選取的文字設為目前規則的階段二子目標")
+        self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
+        right_layout.addWidget(self._set_sub_target_btn)
+
         right_scroll = QScrollArea()
         right_scroll.setWidgetResizable(True)
         right_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -249,6 +256,7 @@ class OcrDebugPanel(QWidget):
         self._selected_index = -1
         self._add_rule_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
+        self._set_sub_target_btn.setEnabled(False)
 
         raw, src = self._minimize_and_capture()
         self._capture_source = src
@@ -336,10 +344,12 @@ class OcrDebugPanel(QWidget):
                 self._selected_index = rows[0].row()
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
+                self._set_sub_target_btn.setEnabled(True)
             else:
                 self._selected_index = -1
                 self._add_rule_btn.setEnabled(False)
                 self._click_test_btn.setEnabled(False)
+                self._set_sub_target_btn.setEnabled(False)
             self._rebuild_annotated()
             self._update_display()
         except Exception as e:
@@ -378,6 +388,7 @@ class OcrDebugPanel(QWidget):
                 self._result_table.blockSignals(False)
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
+                self._set_sub_target_btn.setEnabled(True)
                 try:
                     self._rebuild_annotated()
                     self._update_display()
@@ -411,6 +422,32 @@ class OcrDebugPanel(QWidget):
 
         self._status_bar.showMessage(
             f"✓ 已建立新規則：「{r.text}」"
+            f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
+        )
+
+    def _on_set_sub_target(self):
+        if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
+            return
+        r = self._ocr_results[self._selected_index]
+
+        pad = 20
+        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (9999, 9999)
+        roi = {
+            "x": max(0, r.x - pad),
+            "y": max(0, r.y - pad),
+            "w": min(img_w - max(0, r.x - pad), r.w + pad * 2),
+            "h": min(img_h - max(0, r.y - pad), r.h + pad * 2),
+        }
+
+        self.sub_target_requested.emit(
+            {
+                "target_text": r.text,
+                "roi": roi,
+            }
+        )
+
+        self._status_bar.showMessage(
+            f"✓ 已設為子目標：「{r.text}」"
             f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
         )
 
@@ -594,6 +631,7 @@ class OcrDebugPanel(QWidget):
         self._info_label.setText("")
         self._add_rule_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
+        self._set_sub_target_btn.setEnabled(False)
         self._image_label.setText("切換視窗 — 請重新拍一張")
         self._image_label.setPixmap(QPixmap())
         self._crop_label.setText("")
