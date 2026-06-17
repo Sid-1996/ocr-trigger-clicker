@@ -93,9 +93,9 @@ class LogWidget(QWidget):
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(COL_TIME, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_RULE, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_TEXT, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(COL_CLICK, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_RULE, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_TEXT, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(COL_CLICK, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(COL_TIME, 100)
         self._table.setColumnWidth(COL_RULE, 150)
         self._table.setColumnWidth(COL_TEXT, 150)
