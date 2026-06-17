@@ -125,6 +125,32 @@ class MainLoop:
         if not has_any_rules:
             return
 
+        ocr_cache: dict[str | None, list] = {}
+
+        def _run_ocr(roi_key, roi_dict):
+            if roi_key in ocr_cache:
+                return ocr_cache[roi_key]
+            if roi_dict:
+                h, w = img.shape[:2]
+                x1 = max(0, roi_dict["x"])
+                y1 = max(0, roi_dict["y"])
+                x2 = min(w, roi_dict["x"] + roi_dict["w"])
+                y2 = min(h, roi_dict["y"] + roi_dict["h"])
+                if x2 <= x1 or y2 <= y1:
+                    ocr_cache[roi_key] = None
+                    return None
+                roi_img = img[y1:y2, x1:x2]
+                results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+                for r in results:
+                    r.x += x1
+                    r.y += y1
+                    r.center_x = r.x + r.w // 2
+                    r.center_y = r.y + r.h // 2
+            else:
+                results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            ocr_cache[roi_key] = results
+            return results
+
         for rule in rules_snapshot:
             if not rule.enabled:
                 continue
@@ -136,30 +162,12 @@ class MainLoop:
 
             try:
                 roi = get_roi(rule)
-                if roi:
-                    h, w = img.shape[:2]
-                    x1 = max(0, roi["x"])
-                    y1 = max(0, roi["y"])
-                    x2 = min(w, roi["x"] + roi["w"])
-                    y2 = min(h, roi["y"] + roi["h"])
-                    if x2 <= x1 or y2 <= y1:
-                        if self._verbose:
-                            self._log(f"規則「{rule.name}」ROI 超出畫面，跳過")
-                        continue
-                    roi_img = img[y1:y2, x1:x2]
-                    rule_results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-                    for r in rule_results:
-                        r.x += x1
-                        r.y += y1
-                        r.center_x = r.x + r.w // 2
-                        r.center_y = r.y + r.h // 2
+                roi_key = (roi["x"], roi["y"], roi["w"], roi["h"]) if roi else None
+                rule_results = _run_ocr(roi_key, roi)
+                if rule_results is None:
                     if self._verbose:
-                        self._log(f"ROI OCR 找到 {len(rule_results)} 個文字區塊: {[r.text for r in rule_results[:5]]}")
-                else:
-                    rule_results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
-                    if self._verbose:
-                        self._log(f"全視窗 OCR 找到 {len(rule_results)} 個文字區塊: {[r.text for r in rule_results[:5]]}")
-
+                        self._log(f"規則「{rule.name}」ROI 超出畫面，跳過")
+                    continue
                 if not rule_results:
                     if self._verbose:
                         self._log(f"規則「{rule.name}」OCR 無結果")
