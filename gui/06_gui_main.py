@@ -407,7 +407,6 @@ class MainWindow(QMainWindow):
             [chr(c) for c in range(ord('a'), ord('z') + 1)],
             ["^c", "^v", "^x", "^a", "^s", "^z", "^y", "^f", "^d", "^w", "^t", "^n", "^o", "^p", "^r"],
             ["CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "AppsKey"],
-            ["Volume_Up", "Volume_Down", "Volume_Mute", "Media_Play_Pause", "Media_Stop", "Media_Next", "Media_Prev"],
             ["Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadSub", "NumpadMult", "NumpadDiv", "NumpadEnter", "NumpadDel"],
         ]:
             self._edit_key.insertSeparator(self._edit_key.count())
