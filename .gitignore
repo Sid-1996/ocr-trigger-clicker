@@ -9,3 +9,5 @@ _diag_*
 *.exe
 .ruff_cache/
 custom_models/
+tasks/
+*任務*.json
