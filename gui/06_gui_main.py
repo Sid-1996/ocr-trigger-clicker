@@ -5,6 +5,7 @@ from typing import Optional
 from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -274,7 +275,7 @@ class MainWindow(QMainWindow):
 
         self._rule_list = QListWidget()
         self._rule_list.setMinimumWidth(180)
-        self._rule_list.setDragDropMode(QListWidget.InternalMove)
+        self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         left_layout.addWidget(self._rule_list)
 
         self._rule_hint = QLabel("← 點擊「新增」建立第一條規則")
