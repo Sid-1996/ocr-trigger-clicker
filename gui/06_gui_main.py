@@ -466,6 +466,8 @@ class MainWindow(QMainWindow):
         # === Bottom: log area ===
         log_mod = load_sibling("gui_log", "gui/08_gui_log.py")
         self._log_widget = log_mod.LogWidget()
+        self._log_widget.setMaximumHeight(130)
+        self._log_widget.setMinimumHeight(80)
         layout.addWidget(self._log_widget)
 
         # === Status bar ===

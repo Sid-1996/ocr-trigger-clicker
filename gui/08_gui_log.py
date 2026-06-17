@@ -89,7 +89,7 @@ class LogWidget(QWidget):
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
-        self._table.setMaximumHeight(200)
+        self._table.setMaximumHeight(80)
 
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(COL_TIME, QHeaderView.ResizeMode.Fixed)
