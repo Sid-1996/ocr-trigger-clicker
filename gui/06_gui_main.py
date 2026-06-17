@@ -42,6 +42,25 @@ class _NoWheelCombo(QComboBox):
         e.ignore()
 
 
+class _KeyCombo(_NoWheelCombo):
+    def keyPressEvent(self, event):
+        text = event.text()
+        mods = event.modifiers()
+        if text and len(text) == 1 and text.isprintable() and mods == Qt.KeyboardModifier.NoModifier:
+            key = text.lower()
+            count = self.count()
+            start = self.currentIndex() + 1
+            for i in range(count * 2):
+                idx = (start + i) % count
+                item = self.itemText(idx)
+                if not item.strip():
+                    continue
+                if item.lower().startswith(key):
+                    self.setCurrentIndex(idx)
+                    return
+        super().keyPressEvent(event)
+
+
 class _NoWheelSpin(QSpinBox):
     def wheelEvent(self, e):
         e.ignore()
@@ -378,7 +397,7 @@ class MainWindow(QMainWindow):
         self._edit_action_type = _NoWheelCombo()
         self._edit_action_type.addItems(["click", "key"])
         self._edit_action_type.setToolTip("click：滑鼠點擊 ｜ key：鍵盤按鍵")
-        self._edit_key = _NoWheelCombo()
+        self._edit_key = _KeyCombo()
         self._edit_key.setEditable(True)
         for group in [
             ["Enter", "Escape", "Space", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "PgUp", "PgDn"],
