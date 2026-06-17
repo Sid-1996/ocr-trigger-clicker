@@ -319,9 +319,6 @@ def shutdown() -> None:
     with _lock:
         pass
     _close_all()
-    import os as _os
-
-    _os._exit(0)
 
 
 if __name__ == "__main__":
