@@ -81,7 +81,8 @@ def _heartbeat_loop():
             if consecutive_fail >= 3:
                 _emergency_stop()
                 break
-            _restart_ahk()
+            if not _restart_ahk():
+                consecutive_fail += 1
         else:
             consecutive_fail = 0
         _heartbeat_event.wait(5)

@@ -40,12 +40,36 @@ while true {
     Sleep 1000
 }
 
+; 設定接收超時 5 秒，recv 逾時時可檢查心跳
+HEARTBEAT_TIMEOUT_MS := 30000
+timeout_opt := 5000  ; SO_RCVTIMEO = 0x1006
+DllCall("ws2_32\setsockopt", "Ptr", s, "Int", 1, "Int", 0x1006, "Int*", timeout_opt, "Int", 4)
+last_cmd_time := A_TickCount
+WSAETIMEDOUT := 10060
+
 loop {
     buf := Buffer(4096)
     bytes := DllCall("ws2_32\recv", "Ptr", s, "Ptr", buf, "Int", 4095, "Int", 0, "Int")
-    if bytes <= 0
+    if bytes < 0
+    {
+        err := DllCall("ws2_32\WSAGetLastError")
+        if err = WSAETIMEDOUT
+        {
+            if A_TickCount - last_cmd_time > HEARTBEAT_TIMEOUT_MS
+            {
+                ToolTip "心跳逾時，自動退出"
+                Sleep 2000
+                ToolTip
+                ExitApp
+            }
+            continue
+        }
+        break
+    }
+    if bytes = 0
         break
 
+    last_cmd_time := A_TickCount
     cmd_buffer .= StrGet(buf, bytes, "UTF-8")
 
     while InStr(cmd_buffer, "`n") {
