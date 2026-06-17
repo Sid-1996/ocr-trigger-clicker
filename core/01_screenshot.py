@@ -81,33 +81,22 @@ def get_window_rect(title: str) -> dict | None:
         return None
 
 
-def capture(title: str, roi: dict | None = None) -> np.ndarray | None:
+def capture(title: str) -> np.ndarray | None:
     rect = get_window_rect(title)
     if rect is None:
         return None
-    hwnd = get_window_hwnd(title)
-    scale = get_dpi_scaling_factor(hwnd)
-    x = rect["x"]
-    y = rect["y"]
-    w = rect["w"]
-    h = rect["h"]
-    if roi:
-        x += int(roi["x"] * scale)
-        y += int(roi["y"] * scale)
-        w = int(roi["w"] * scale)
-        h = int(roi["h"] * scale)
     try:
         with mss.mss() as sct:
-            screen = sct.monitors[0]
-            left = int(screen["left"])
-            top = int(screen["top"])
-            right = left + int(screen["width"])
-            bottom = top + int(screen["height"])
+            left = int(rect["x"])
+            top = int(rect["y"])
+            right = left + int(rect["w"])
+            bottom = top + int(rect["h"])
 
-            x1 = max(int(x), left)
-            y1 = max(int(y), top)
-            x2 = min(int(x + w), right)
-            y2 = min(int(y + h), bottom)
+            monitor = sct.monitors[0]
+            x1 = max(left, int(monitor["left"]))
+            y1 = max(top, int(monitor["top"]))
+            x2 = min(right, int(monitor["left"]) + int(monitor["width"]))
+            y2 = min(bottom, int(monitor["top"]) + int(monitor["height"]))
             if x2 <= x1 or y2 <= y1:
                 return None
 
