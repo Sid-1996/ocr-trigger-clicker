@@ -33,7 +33,6 @@ class Rule:
     last_trigger_time: float = 0.0
 
 
-_RUNTIME_FIELDS = {"trigger_count", "last_trigger_time"}
 
 _FIELD_DEFAULTS = {
     "fuzzy": False,
@@ -96,10 +95,7 @@ def _dict_to_rule(d: dict) -> Rule:
 
 
 def _rule_to_dict(r: Rule) -> dict:
-    d = asdict(r)
-    for key in _RUNTIME_FIELDS:
-        d.pop(key, None)
-    return d
+    return asdict(r)
 
 
 def load_rules(path: str) -> list[Rule]:

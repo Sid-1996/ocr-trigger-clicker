@@ -223,6 +223,9 @@ class MainLoop:
 
                 if self.on_trigger:
                     self.on_trigger(log)
+
+                with self._rules_lock:
+                    save_rules(self._rules, self._rules_path)
             except Exception as e:
                 if self._verbose:
                     self._log(f"規則「{rule.name}」處理異常: {e}")
