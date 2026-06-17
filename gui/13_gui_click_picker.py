@@ -1,7 +1,7 @@
 import sys
 from typing import Optional
 
-from PyQt6.QtCore import QEventLoop, Qt, pyqtSignal
+from PyQt6.QtCore import QEventLoop, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -13,8 +13,10 @@ class ClickPicker(QWidget):
         super().__init__()
         self._result: Optional[tuple[int, int]] = None
 
-        geometry = QApplication.primaryScreen().virtualGeometry()
-        self.setGeometry(geometry)
+        all_geometry = QRect()
+        for screen in QApplication.screens():
+            all_geometry = all_geometry.united(screen.geometry())
+        self.setGeometry(all_geometry)
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint

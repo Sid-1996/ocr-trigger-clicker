@@ -2,7 +2,7 @@ import sys
 from typing import Optional
 
 from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
+from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
 
@@ -15,9 +15,12 @@ class ROISelector(QWidget):
         self._end = QPoint()
         self._selecting = False
         self._result: Optional[dict] = None
+        self._bg_pixmaps: list[tuple[QPixmap, QRect]] = []
 
-        geometry = QApplication.primaryScreen().virtualGeometry()
-        self.setGeometry(geometry)
+        all_geometry = QRect()
+        for screen in QApplication.screens():
+            all_geometry = all_geometry.united(screen.geometry())
+        self.setGeometry(all_geometry)
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -29,10 +32,10 @@ class ROISelector(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        screen = QApplication.primaryScreen()
-        self._bg_pixmap = screen.grabWindow(
-            0, geometry.x(), geometry.y(), geometry.width(), geometry.height()
-        )
+        for screen in QApplication.screens():
+            geom = screen.geometry()
+            pixmap = screen.grabWindow(0, 0, 0, geom.width(), geom.height())
+            self._bg_pixmaps.append((pixmap, geom))
 
     def _get_rect(self) -> Optional[QRect]:
         if not self._selecting and self._start == self._end:
@@ -57,7 +60,8 @@ class ROISelector(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.drawPixmap(0, 0, self._bg_pixmap)
+        for pixmap, geom in self._bg_pixmaps:
+            painter.drawPixmap(geom.topLeft(), pixmap)
 
         overlay = QColor(0, 0, 0, 120)
         painter.fillRect(self.rect(), overlay)
@@ -65,7 +69,11 @@ class ROISelector(QWidget):
         rect = self._get_rect()
         if rect:
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            painter.drawPixmap(rect, self._bg_pixmap, rect)
+            for pixmap, geom in self._bg_pixmaps:
+                src_rect = rect.intersected(geom)
+                if src_rect.isValid():
+                    dst_rect = src_rect.translated(-geom.topLeft())
+                    painter.drawPixmap(src_rect, pixmap, dst_rect)
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
 
             pen = QPen(Qt.GlobalColor.white, 2)

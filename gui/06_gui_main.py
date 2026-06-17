@@ -794,6 +794,9 @@ class MainWindow(QMainWindow):
             return
         title = self._window_combo.currentText()
         if title:
+            screen = QApplication.primaryScreen()
+            ratio = screen.devicePixelRatio()
+            result = (int(result[0] * ratio), int(result[1] * ratio))
             wr = get_window_rect(title)
             if wr:
                 result = (result[0] - wr["x"], result[1] - wr["y"])
@@ -818,6 +821,10 @@ class MainWindow(QMainWindow):
         if rule:
             title = self._window_combo.currentText()
             if title:
+                screen = QApplication.primaryScreen()
+                ratio = screen.devicePixelRatio()
+                result["x"] = int(result["x"] * ratio)
+                result["y"] = int(result["y"] * ratio)
                 wr = get_window_rect(title)
                 if wr:
                     result["x"] -= wr["x"]
