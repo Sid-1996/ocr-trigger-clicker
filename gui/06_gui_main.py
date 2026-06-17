@@ -405,13 +405,21 @@ class MainWindow(QMainWindow):
             [f"F{i}" for i in range(1, 13)],
             [str(i) for i in range(10)],
             [chr(c) for c in range(ord('a'), ord('z') + 1)],
-            ["^c", "^v", "^x", "^a", "^s", "^z", "^y", "^f", "^d", "^w", "^t", "^n", "^o", "^p", "^r"],
+            {t: v for t, v in zip(
+                ["Ctrl+C", "Ctrl+V", "Ctrl+X", "Ctrl+A", "Ctrl+S", "Ctrl+Z", "Ctrl+Y",
+                 "Ctrl+F", "Ctrl+D", "Ctrl+W", "Ctrl+T", "Ctrl+N", "Ctrl+O", "Ctrl+P", "Ctrl+R"],
+                ["^c", "^v", "^x", "^a", "^s", "^z", "^y", "^f", "^d", "^w", "^t", "^n", "^o", "^p", "^r"],
+            )}.items(),
             ["CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "AppsKey"],
             ["Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8", "Numpad9", "NumpadAdd", "NumpadSub", "NumpadMult", "NumpadDiv", "NumpadEnter", "NumpadDel"],
         ]:
             self._edit_key.insertSeparator(self._edit_key.count())
-            for k in group:
-                self._edit_key.addItem(k)
+            for item in group:
+                if isinstance(item, tuple):
+                    text, data = item
+                else:
+                    text = data = item
+                self._edit_key.addItem(text, data)
         self._edit_key.setCurrentIndex(0)
         self._edit_key.setToolTip("選擇或輸入要模擬的按鍵名稱（支援 Shift+字母快速跳轉）")
         self._edit_depends_on = _NoWheelCombo()
@@ -834,7 +842,8 @@ class MainWindow(QMainWindow):
         self._edit_random_offset.setValue(rule.random_offset)
         self._edit_post_delay.setValue(rule.post_delay_ms)
         self._edit_action_type.setCurrentText(rule.action_type)
-        self._edit_key.setCurrentText(rule.key)
+        idx = self._edit_key.findData(rule.key)
+        self._edit_key.setCurrentIndex(idx if idx >= 0 else 0)
         self._populate_depends_on(rule)
         self._update_action_visibility()
 
@@ -993,7 +1002,7 @@ class MainWindow(QMainWindow):
         rule.sub_not_found_retries = self._edit_sub_not_found_retries.value()
         rule.post_delay_ms = self._edit_post_delay.value()
         rule.action_type = self._edit_action_type.currentText()
-        rule.key = self._edit_key.currentText()
+        rule.key = self._edit_key.currentData() or self._edit_key.currentText()
         dep_id = self._edit_depends_on.currentData()
         rule.depends_on = dep_id if dep_id else None
         save_task(self._current_task, self._rules)
