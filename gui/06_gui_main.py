@@ -63,6 +63,7 @@ class _KeyCombo(_NoWheelCombo):
                         continue
                     if item.lower().startswith(key):
                         self.setCurrentIndex(idx)
+                        self.showPopup()
                         return True
         return super().eventFilter(obj, event)
 
