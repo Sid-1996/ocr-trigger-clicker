@@ -242,12 +242,10 @@ def recognize(
         return []
 
     if result is None:
-        _incr_ocr_failure()
         return []
     # rapidocr 回傳 (boxes, elapse)；其他引擎直接回傳 list (box, text, score)
     rows = result[0] if OCR_BACKEND == "rapidocr" else result
     if rows is None:
-        _incr_ocr_failure()
         return []
     _reset_ocr_failures()
     results: list[OcrResult] = []
