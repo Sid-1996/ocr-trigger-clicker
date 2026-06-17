@@ -7,11 +7,6 @@ import mss
 import numpy as np
 import pygetwindow as gw
 
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
-    pass
-
 
 class _BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [

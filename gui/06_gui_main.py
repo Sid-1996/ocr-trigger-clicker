@@ -281,7 +281,7 @@ class MainWindow(QMainWindow):
         rule_btn_bar = QHBoxLayout()
         self._add_rule_btn = QPushButton("新增")
         self._add_rule_btn.setToolTip("新增一條空白規則")
-        self._del_rule_btn = QPushButton("刪除")
+        self._del_rule_btn = QPushButton("刪除 (Del)")
         self._del_rule_btn.setToolTip("刪除目前選取的規則")
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
