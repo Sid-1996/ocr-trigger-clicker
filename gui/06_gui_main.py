@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -43,22 +43,28 @@ class _NoWheelCombo(QComboBox):
 
 
 class _KeyCombo(_NoWheelCombo):
-    def keyPressEvent(self, event):
-        text = event.text()
-        mods = event.modifiers()
-        if text and len(text) == 1 and text.isprintable() and mods == Qt.KeyboardModifier.NoModifier:
-            key = text.lower()
-            count = self.count()
-            start = self.currentIndex() + 1
-            for i in range(count * 2):
-                idx = (start + i) % count
-                item = self.itemText(idx)
-                if not item.strip():
-                    continue
-                if item.lower().startswith(key):
-                    self.setCurrentIndex(idx)
-                    return
-        super().keyPressEvent(event)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setEditable(True)
+        self.lineEdit().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj == self.lineEdit() and event.type() == QEvent.Type.KeyPress:
+            text = event.text()
+            mods = event.modifiers()
+            if text and len(text) == 1 and text.isprintable() and mods in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier):
+                key = text.lower()
+                count = self.count()
+                start = self.currentIndex() + 1
+                for i in range(count * 2):
+                    idx = (start + i) % count
+                    item = self.itemText(idx)
+                    if not item.strip():
+                        continue
+                    if item.lower().startswith(key):
+                        self.setCurrentIndex(idx)
+                        return True
+        return super().eventFilter(obj, event)
 
 
 class _NoWheelSpin(QSpinBox):
@@ -398,7 +404,6 @@ class MainWindow(QMainWindow):
         self._edit_action_type.addItems(["click", "key"])
         self._edit_action_type.setToolTip("click：滑鼠點擊 ｜ key：鍵盤按鍵")
         self._edit_key = _KeyCombo()
-        self._edit_key.setEditable(True)
         for group in [
             ["Enter", "Escape", "Space", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "PgUp", "PgDn"],
             ["Up", "Down", "Left", "Right"],
