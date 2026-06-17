@@ -1,7 +1,7 @@
 import json
 import random
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -31,7 +31,15 @@ class Rule:
     custom_y: int = 0
     trigger_count: int = 0
     last_trigger_time: float = 0.0
-
+    sub_target_text: str = ""
+    sub_roi: dict = field(default_factory=lambda: {"x": 0, "y": 0, "w": 0, "h": 0})
+    sub_not_found_retries: int = 3
+    on_found_action: str = "click_sub_center"
+    on_found_custom_x: int = 0
+    on_found_custom_y: int = 0
+    on_not_found_action: str = "click_nothing"
+    on_not_found_custom_x: int = 0
+    on_not_found_custom_y: int = 0
 
 
 _FIELD_DEFAULTS = {
@@ -46,6 +54,15 @@ _FIELD_DEFAULTS = {
     "random_offset": 3,
     "custom_x": 0,
     "custom_y": 0,
+    "sub_target_text": "",
+    "sub_roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+    "sub_not_found_retries": 3,
+    "on_found_action": "click_sub_center",
+    "on_found_custom_x": 0,
+    "on_found_custom_y": 0,
+    "on_not_found_action": "click_nothing",
+    "on_not_found_custom_x": 0,
+    "on_not_found_custom_y": 0,
 }
 
 
@@ -91,6 +108,15 @@ def _dict_to_rule(d: dict) -> Rule:
         random_offset=max(0, _as_int(merged.get("random_offset", 3), 3)),
         custom_x=_as_int(merged.get("custom_x", 0), 0),
         custom_y=_as_int(merged.get("custom_y", 0), 0),
+        sub_target_text=str(merged.get("sub_target_text", "")),
+        sub_roi=_sanitize_roi(merged.get("sub_roi")),
+        sub_not_found_retries=max(1, _as_int(merged.get("sub_not_found_retries", 3), 3)),
+        on_found_action=str(merged.get("on_found_action", "click_sub_center")),
+        on_found_custom_x=_as_int(merged.get("on_found_custom_x", 0), 0),
+        on_found_custom_y=_as_int(merged.get("on_found_custom_y", 0), 0),
+        on_not_found_action=str(merged.get("on_not_found_action", "click_nothing")),
+        on_not_found_custom_x=_as_int(merged.get("on_not_found_custom_x", 0), 0),
+        on_not_found_custom_y=_as_int(merged.get("on_not_found_custom_y", 0), 0),
     )
 
 
