@@ -585,6 +585,21 @@ class OcrDebugPanel(QWidget):
         )
         self._image_label.setPixmap(scaled)
 
+    def clear_results(self):
+        self._ocr_results = []
+        self._latest_raw = None
+        self._annotated_pixmap = None
+        self._crop_pixmap = None
+        self._selected_index = -1
+        self._info_label.setText("")
+        self._add_rule_btn.setEnabled(False)
+        self._click_test_btn.setEnabled(False)
+        self._image_label.setText("切換視窗 — 請重新拍一張")
+        self._image_label.setPixmap(QPixmap())
+        self._crop_label.setText("")
+        self._crop_label.setPixmap(QPixmap())
+        self._selected_detail.setText("選取區塊：尚未選取")
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._update_display()

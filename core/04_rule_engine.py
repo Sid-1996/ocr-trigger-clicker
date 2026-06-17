@@ -168,6 +168,107 @@ def get_roi(rule: Rule) -> Optional[dict]:
     return dict(rule.roi)
 
 
+# ── Task management ──
+
+def _tasks_base() -> Path:
+    try:
+        from build import get_data_path
+        raw = get_data_path("_")
+        return Path(raw).parent
+    except ImportError:
+        return Path(__file__).resolve().parent.parent
+
+
+def get_tasks_dir() -> Path:
+    tasks_dir = _tasks_base() / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    return tasks_dir
+
+
+def list_tasks() -> list[str]:
+    names = []
+    for f in sorted(get_tasks_dir().glob("*.json")):
+        if f.stem:
+            names.append(f.stem)
+    return names
+
+
+def load_task(name: str) -> list[Rule]:
+    return load_rules(str(get_tasks_dir() / f"{name}.json"))
+
+
+def save_task(name: str, rules: list[Rule]) -> bool:
+    return save_rules(rules, str(get_tasks_dir() / f"{name}.json"))
+
+
+def delete_task(name: str) -> bool:
+    try:
+        (get_tasks_dir() / f"{name}.json").unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def rename_task(old_name: str, new_name: str) -> bool:
+    old_p = get_tasks_dir() / f"{old_name}.json"
+    new_p = get_tasks_dir() / f"{new_name}.json"
+    if new_p.exists():
+        return False
+    try:
+        old_p.rename(new_p)
+        return True
+    except OSError:
+        return False
+
+
+def export_task(name: str, dest_path: str) -> bool:
+    src = get_tasks_dir() / f"{name}.json"
+    if not src.exists():
+        return False
+    try:
+        import shutil
+        shutil.copy2(str(src), dest_path)
+        return True
+    except OSError:
+        return False
+
+
+def import_task(src_path: str) -> Optional[str]:
+    src = Path(src_path)
+    if not src.exists():
+        return None
+    try:
+        data = json.loads(src.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or "rules" not in data:
+            return None
+    except (json.JSONDecodeError, OSError):
+        return None
+    name = src.stem
+    dest = get_tasks_dir() / f"{name}.json"
+    suffix = 1
+    while dest.exists():
+        dest = get_tasks_dir() / f"{name}_{suffix}.json"
+        suffix += 1
+    try:
+        dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        return dest.stem
+    except OSError:
+        return None
+
+
+def migrate_old_rules():
+    if any(get_tasks_dir().iterdir()):
+        return
+    try:
+        from build import get_data_path
+        old_path = Path(get_data_path("rules.json"))
+    except ImportError:
+        old_path = _tasks_base() / "rules.json"
+    if old_path.exists():
+        rules = load_rules(str(old_path))
+        save_task("預設任務", rules)
+
+
 if __name__ == "__main__":
     json_path = str(Path(__file__).resolve().parent.parent / "rules.json")
 

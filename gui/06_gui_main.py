@@ -27,6 +27,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from _loader import load_sibling
 
 _here = Path(__file__).resolve().parent.parent
@@ -53,11 +56,27 @@ save_rules = _main_loop_mod.save_rules
 activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
 
+_rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
+list_tasks = _rule_mod.list_tasks
+load_task = _rule_mod.load_task
+save_task = _rule_mod.save_task
+delete_task = _rule_mod.delete_task
+rename_task = _rule_mod.rename_task
+export_task = _rule_mod.export_task
+import_task = _rule_mod.import_task
+migrate_old_rules = _rule_mod.migrate_old_rules
+
 _ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
+
+# ── Helpers ──
+
+def _tasks_dir() -> str:
+    mod = load_sibling("rule_engine", "core/04_rule_engine.py")
+    return str(mod.get_tasks_dir())
 
 
 class WorkerSignals(QObject):
@@ -105,19 +124,18 @@ class MainWindow(QMainWindow):
 
         try:
             from build import get_data_path
-
-            self._rules_path = get_data_path("rules.json")
             self._config_path = get_data_path("config.json")
         except ImportError:
             here = Path(__file__).resolve().parent.parent
-            self._rules_path = str(here / "rules.json")
             self._config_path = str(here / "config.json")
-        self._ensure_rules()
+
+        migrate_old_rules()
 
         self._signals = WorkerSignals()
         self._loop: Optional[MainLoop] = None
         self._selected_rule_id: Optional[str] = None
         self._window_lost = False
+        self._current_task: str = ""
 
         self._setup_ui()
         self._debug_panel = OcrDebugPanel("", self)
@@ -129,16 +147,12 @@ class MainWindow(QMainWindow):
         _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
 
         self._refresh_window_list()
-        self._restore_last_window()
-        self._refresh_rule_list()
+        self._restore_last_state()
+        self._refresh_task_list()
 
         self._ahk_ready = _ahk_mod.init_ahk()
         if not self._ahk_ready:
             self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
-
-    def _ensure_rules(self):
-        if not Path(self._rules_path).exists():
-            save_rules([], self._rules_path)
 
     def _load_config(self) -> dict:
         try:
@@ -154,18 +168,22 @@ class MainWindow(QMainWindow):
         except OSError:
             pass
 
-    def _restore_last_window(self):
+    def _restore_last_state(self):
         config = self._load_config()
-        last = config.get("last_window", "")
         self._focus_safe_cb.setChecked(bool(config.get("focus_safe", False)))
-        if not last:
-            return
-        idx = self._window_combo.findText(last)
-        if idx >= 0:
-            self._window_combo.setCurrentIndex(idx)
-        else:
-            self._window_combo.setPlaceholderText(f"⚠ 上次的視窗「{last}」已不存在，請重新選擇")
-            self._status_bar.showMessage(f"⚠ 上次的視窗「{last}」已不存在")
+        last_win = config.get("last_window", "")
+        if last_win:
+            idx = self._window_combo.findText(last_win)
+            if idx >= 0:
+                self._window_combo.setCurrentIndex(idx)
+            else:
+                self._window_combo.setPlaceholderText(f"⚠ 上次的視窗「{last_win}」已不存在，請重新選擇")
+                self._status_bar.showMessage(f"⚠ 上次的視窗「{last_win}」已不存在")
+        last_task = config.get("last_task", "")
+        if last_task:
+            idx = self._task_combo.findText(last_task)
+            if idx >= 0:
+                self._task_combo.setCurrentIndex(idx)
 
     def _setup_ui(self):
         central = QWidget()
@@ -175,40 +193,67 @@ class MainWindow(QMainWindow):
 
         # === Top toolbar ===
         toolbar = QHBoxLayout()
+
+        # -- Window section --
         self._window_combo = _NoWheelCombo()
         self._window_combo.setMinimumWidth(250)
         self._window_combo.setPlaceholderText("← 點擊「重新整理」載入視窗")
         self._refresh_btn = QPushButton("重新整理")
         self._refresh_btn.setToolTip("重新掃描所有可見視窗")
-        self._btn_toggle = QPushButton("啟動")
-        self._btn_toggle.setMinimumWidth(80)
-        self._btn_toggle.setToolTip("開始偵測所選視窗（按 F9 暫停／繼續）")
-        self._debug_btn = QPushButton("OCR 診斷")
-        self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
-        self._focus_safe_cb = QCheckBox("僅前景點擊")
-        self._focus_safe_cb.setToolTip("啟用後僅在目標視窗為前景視窗時才執行點擊，避免干擾其他操作")
-        self._import_btn = QPushButton("匯入規則")
-        self._import_btn.setToolTip("從 JSON 檔案載入規則")
-        self._export_btn = QPushButton("匯出規則")
-        self._export_btn.setToolTip("將規則備份為 JSON 檔案")
-
-        toolbar.addWidget(QLabel("目標視窗:"))
+        toolbar.addWidget(QLabel("視窗:"))
         toolbar.addWidget(self._window_combo)
         toolbar.addWidget(self._refresh_btn)
-        toolbar.addSpacing(12)
+
+        toolbar.addSpacing(8)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
         sep.setFrameShadow(QFrame.Shadow.Sunken)
         toolbar.addWidget(sep)
-        toolbar.addWidget(self._btn_toggle)
-        toolbar.addWidget(self._debug_btn)
-        toolbar.addWidget(self._focus_safe_cb)
+        toolbar.addSpacing(8)
+
+        # -- Task section --
+        self._task_combo = _NoWheelCombo()
+        self._task_combo.setMinimumWidth(160)
+        self._task_combo.setToolTip("切換任務 — 每個任務包含一組獨立的規則")
+        self._task_new_btn = QPushButton("＋")
+        self._task_new_btn.setFixedWidth(28)
+        self._task_new_btn.setToolTip("建立新任務")
+        self._task_save_btn = QPushButton("💾")
+        self._task_save_btn.setFixedWidth(28)
+        self._task_save_btn.setToolTip("覆蓋儲存目前規則到當前任務")
+        self._task_del_btn = QPushButton("🗑")
+        self._task_del_btn.setFixedWidth(28)
+        self._task_del_btn.setToolTip("刪除當前任務")
+        self._task_import_btn = QPushButton("📥匯入任務")
+        self._task_import_btn.setToolTip("從 .json 檔案匯入任務")
+        self._task_export_btn = QPushButton("📤匯出任務")
+        self._task_export_btn.setToolTip("將目前任務匯出為 .json 檔案")
+        toolbar.addWidget(QLabel("任務:"))
+        toolbar.addWidget(self._task_combo)
+        toolbar.addWidget(self._task_new_btn)
+        toolbar.addWidget(self._task_save_btn)
+        toolbar.addWidget(self._task_del_btn)
+        toolbar.addWidget(self._task_import_btn)
+        toolbar.addWidget(self._task_export_btn)
+
+        toolbar.addSpacing(8)
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.VLine)
         sep2.setFrameShadow(QFrame.Shadow.Sunken)
         toolbar.addWidget(sep2)
-        toolbar.addWidget(self._import_btn)
-        toolbar.addWidget(self._export_btn)
+        toolbar.addSpacing(8)
+
+        # -- Action section --
+        self._btn_toggle = QPushButton("啟動")
+        self._btn_toggle.setMinimumWidth(80)
+        self._btn_toggle.setToolTip("開始偵測所選視窗（按 F9 暫停／繼續）")
+        self._debug_btn = QPushButton("🔍OCR 診斷")
+        self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
+        self._focus_safe_cb = QCheckBox("僅前景點擊")
+        self._focus_safe_cb.setToolTip("啟用後僅在目標視窗為前景視窗時才執行點擊，避免干擾其他操作")
+        toolbar.addWidget(self._btn_toggle)
+        toolbar.addWidget(self._debug_btn)
+        toolbar.addWidget(self._focus_safe_cb)
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
@@ -383,8 +428,6 @@ class MainWindow(QMainWindow):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
         self._window_combo.currentTextChanged.connect(self._on_window_changed)
         self._btn_toggle.clicked.connect(self._toggle_start)
-        self._import_btn.clicked.connect(self._import_rules)
-        self._export_btn.clicked.connect(self._export_rules)
         self._add_rule_btn.clicked.connect(self._add_rule)
         self._del_rule_btn.clicked.connect(self._delete_rule)
         self._rule_list.currentRowChanged.connect(self._on_rule_selected)
@@ -396,6 +439,13 @@ class MainWindow(QMainWindow):
 
         self._edit_click_position.currentTextChanged.connect(self._on_click_position_changed)
         self._edit_fuzzy.stateChanged.connect(self._on_fuzzy_changed)
+
+        self._task_combo.currentTextChanged.connect(self._on_task_changed)
+        self._task_new_btn.clicked.connect(self._on_task_new)
+        self._task_save_btn.clicked.connect(self._on_task_save)
+        self._task_del_btn.clicked.connect(self._on_task_delete)
+        self._task_import_btn.clicked.connect(self._on_task_import)
+        self._task_export_btn.clicked.connect(self._on_task_export)
 
         self._signals.trigger_signal.connect(self._on_trigger_from_thread)
         self._signals.error_signal.connect(self._on_error_from_thread)
@@ -439,6 +489,9 @@ class MainWindow(QMainWindow):
         config = self._load_config()
         config["last_window"] = title
         self._save_config(config)
+        if hasattr(self, "_debug_panel") and self._debug_panel is not None:
+            self._debug_panel._window_title = title
+            self._debug_panel.clear_results()
 
     def _on_focus_safe_changed(self, state):
         enabled = state == 2
@@ -468,9 +521,112 @@ class MainWindow(QMainWindow):
             self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._perf_label.setText(text)
 
+    # === Task list ===
+    def _refresh_task_list(self):
+        self._task_combo.blockSignals(True)
+        self._task_combo.clear()
+        for t in list_tasks():
+            self._task_combo.addItem(t)
+        self._task_combo.blockSignals(False)
+        last = self._load_config().get("last_task", "")
+        if last:
+            idx = self._task_combo.findText(last)
+            if idx >= 0:
+                self._task_combo.setCurrentIndex(idx)
+        if self._task_combo.count() == 0:
+            self._on_task_new()
+        self._on_task_changed(self._task_combo.currentText())
+
+    def _on_task_changed(self, name: str):
+        if not name:
+            self._rules = []
+            self._current_task = ""
+            self._refresh_rule_list()
+            return
+        self._current_task = name
+        self._rules = load_task(name)
+        config = self._load_config()
+        config["last_task"] = name
+        self._save_config(config)
+        self._refresh_rule_list()
+        if hasattr(self, "_debug_panel") and self._debug_panel is not None:
+            self._debug_panel.clear_results()
+        self._status_bar.showMessage(f"任務「{name}」— {len(self._rules)} 條規則")
+
+    def _on_task_new(self):
+        from PyQt6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "新任務", "請輸入任務名稱：", text="")
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+        existing = list_tasks()
+        if name in existing:
+            QMessageBox.warning(self, "任務已存在", f"任務「{name}」已經存在。")
+            return
+        save_task(name, [])
+        self._refresh_task_list()
+        idx = self._task_combo.findText(name)
+        if idx >= 0:
+            self._task_combo.setCurrentIndex(idx)
+        self._status_bar.showMessage(f"已建立任務「{name}」")
+
+    def _on_task_save(self):
+        if not self._current_task:
+            return
+        save_task(self._current_task, self._rules)
+        if self._loop:
+            self._loop.reload_rules()
+        self._status_bar.showMessage(f"任務「{self._current_task}」已儲存")
+
+    def _on_task_delete(self):
+        if not self._current_task:
+            return
+        tasks = list_tasks()
+        if len(tasks) <= 1:
+            QMessageBox.warning(self, "無法刪除", "至少需要保留一個任務。")
+            return
+        if (
+            QMessageBox.question(
+                self,
+                "刪除任務",
+                f"確定刪除任務「{self._current_task}」及其所有規則？\n此操作無法復原。",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        delete_task(self._current_task)
+        self._refresh_task_list()
+
+    def _on_task_import(self):
+        path, _ = QFileDialog.getOpenFileName(self, "匯入任務", str(_here), "JSON (*.json)")
+        if not path:
+            return
+        imported_name = import_task(path)
+        if imported_name is None:
+            QMessageBox.warning(self, "匯入失敗", "檔案格式無效，請確認是包含 rules 陣列的 JSON。")
+            return
+        self._refresh_task_list()
+        idx = self._task_combo.findText(imported_name)
+        if idx >= 0:
+            self._task_combo.setCurrentIndex(idx)
+        self._status_bar.showMessage(f"已匯入任務「{imported_name}」")
+
+    def _on_task_export(self):
+        if not self._current_task:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "匯出任務", str(_here / f"{self._current_task}.json"), "JSON (*.json)"
+        )
+        if not path:
+            return
+        if export_task(self._current_task, path):
+            self._status_bar.showMessage(f"任務「{self._current_task}」已匯出")
+        else:
+            QMessageBox.warning(self, "匯出失敗", "無法寫入目標檔案")
+
     # === Rule list ===
     def _refresh_rule_list(self):
-        self._rules = load_rules(self._rules_path)
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
         for r in self._rules:
@@ -567,7 +723,7 @@ class MainWindow(QMainWindow):
             random_offset=3,
         )
         self._rules.append(rule)
-        save_rules(self._rules, self._rules_path)
+        save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
@@ -592,7 +748,7 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
-        save_rules(self._rules, self._rules_path)
+        save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
@@ -619,7 +775,7 @@ class MainWindow(QMainWindow):
         rule.fuzzy_threshold = self._edit_fuzzy_threshold.value() / 100.0
         rule.max_triggers = self._edit_max_triggers.value()
         rule.random_offset = self._edit_random_offset.value()
-        save_rules(self._rules, self._rules_path)
+        save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
@@ -645,7 +801,7 @@ class MainWindow(QMainWindow):
         rule.click_position = "custom"
         self._edit_click_position.setCurrentText("custom")
         self._edit_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
-        save_rules(self._rules, self._rules_path)
+        save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(f"已選取點擊座標: X={result[0]}, Y={result[1]}")
 
@@ -670,7 +826,7 @@ class MainWindow(QMainWindow):
             self._edit_roi_label.setText(
                 f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
             )
-            save_rules(self._rules, self._rules_path)
+            save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(
             f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
@@ -714,7 +870,7 @@ class MainWindow(QMainWindow):
             random_offset=3,
         )
         self._rules.append(rule)
-        save_rules(self._rules, self._rules_path)
+        save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
@@ -751,7 +907,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setText("初始化中...")
         self._status_bar.showMessage("正在初始化 OCR 引擎…")
         focus_safe = self._focus_safe_cb.isChecked()
-        self._init_worker = InitWorker(self._rules_path, title, self._signals, focus_safe)
+        task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
+        self._init_worker = InitWorker(str(task_path), title, self._signals, focus_safe)
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
 
@@ -795,11 +952,14 @@ class MainWindow(QMainWindow):
         self._rule_list.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
-        self._import_btn.setEnabled(enabled)
-        self._export_btn.setEnabled(enabled)
         self._refresh_btn.setEnabled(enabled)
         self._debug_btn.setEnabled(enabled)
         self._focus_safe_cb.setEnabled(enabled)
+        self._task_new_btn.setEnabled(enabled)
+        self._task_save_btn.setEnabled(enabled)
+        self._task_del_btn.setEnabled(enabled)
+        self._task_import_btn.setEnabled(enabled)
+        self._task_export_btn.setEnabled(enabled)
         if enabled:
             self._show_rule_detail(self._get_current_rule())
         else:
@@ -817,32 +977,6 @@ class MainWindow(QMainWindow):
             self._edit_fuzzy_threshold.setEnabled(False)
             self._edit_max_triggers.setEnabled(False)
             self._edit_random_offset.setEnabled(False)
-
-    # === Import / Export ===
-    def _import_rules(self):
-        path, _ = QFileDialog.getOpenFileName(self, "匯入規則", str(_here), "JSON (*.json)")
-        if not path:
-            return
-        imported = load_rules(path)
-        if not imported:
-            QMessageBox.warning(self, "匯入失敗", "檔案中沒有有效規則")
-            return
-        self._rules = imported
-        save_rules(self._rules, self._rules_path)
-        self._refresh_rule_list()
-        if self._loop:
-            self._loop.reload_rules()
-
-    def _export_rules(self):
-        if not self._rules:
-            QMessageBox.information(self, "匯出規則", "目前沒有任何規則可匯出。")
-            return
-        path, _ = QFileDialog.getSaveFileName(
-            self, "匯出規則", str(_here / "rules_export.json"), "JSON (*.json)"
-        )
-        if not path:
-            return
-        save_rules(self._rules, path)
 
     # === Thread-safe callbacks ===
     def _on_trigger_from_thread(self, log: TriggerLog):
