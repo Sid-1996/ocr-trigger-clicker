@@ -7,6 +7,11 @@ import mss
 import numpy as np
 import pygetwindow as gw
 
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
 
 class _BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [
@@ -114,10 +119,6 @@ def get_dpi_scaling_factor(hwnd: int | None) -> float:
     try:
         from ctypes import byref, c_int, windll
 
-        try:
-            windll.shcore.SetProcessDpiAwareness(1)
-        except Exception:
-            pass
         dpi_x = c_int()
         dpi_y = c_int()
         if hasattr(windll.user32, "GetDpiForWindow"):
