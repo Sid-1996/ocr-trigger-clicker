@@ -419,6 +419,10 @@ class MainWindow(QMainWindow):
         self._sub_form.addRow("", self._on_found_coord_row)
         self._sub_form.addRow("未找到時動作:", self._edit_on_not_found_action)
         self._sub_form.addRow("", self._on_not_found_coord_row)
+        self._clear_sub_btn = QPushButton("清除子目標")
+        self._clear_sub_btn.setToolTip("移除目前規則的階段二子目標設定")
+        self._clear_sub_btn.clicked.connect(self._on_clear_sub_target)
+        self._sub_form.addRow(self._clear_sub_btn)
 
         self._edit_save_btn = QPushButton("儲存規則")
         self._edit_save_btn.setEnabled(False)
@@ -1012,6 +1016,27 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(
             f"已選取子目標偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
+
+    def _on_clear_sub_target(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.sub_target_text = ""
+        rule.sub_roi = {"x": 0, "y": 0, "w": 0, "h": 0}
+        rule.sub_not_found_retries = 3
+        rule.on_found_action = "click_sub_center"
+        rule.on_found_custom_x = 0
+        rule.on_found_custom_y = 0
+        rule.on_not_found_action = "click_nothing"
+        rule.on_not_found_custom_x = 0
+        rule.on_not_found_custom_y = 0
+        save_task(self._current_task, self._rules)
+        if self._loop:
+            self._loop.reload_rules()
+        self._sub_toggle_btn.setChecked(False)
+        self._sub_toggle_btn.setText("▸ 階段二條件 (if/if-not)")
+        self._show_rule_detail(rule)
+        self._status_bar.showMessage(f"已清除規則「{rule.name}」的子目標設定")
 
     # === ROI selector ===
     def _open_roi_selector(self):
