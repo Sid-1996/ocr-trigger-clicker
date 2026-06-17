@@ -81,6 +81,7 @@ class MainLoop:
         self._rule_trigger_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
         self._rule_auto_disabled: set[str] = set()
         self._sub_not_found_count: dict[str, int] = defaultdict(int)
+        self._once_skip_announced: set[str] = set()
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -360,8 +361,9 @@ class MainLoop:
                 continue
 
             if rule.trigger_mode == "once" and rule.trigger_count > 0:
-                if self._verbose:
+                if self._verbose and rule.id not in self._once_skip_announced:
                     self._log(f"規則「{rule.name}」→ once 模式，已觸發 ({rule.trigger_count} 次)，跳過")
+                    self._once_skip_announced.add(rule.id)
                 continue
 
             if self._verbose:
@@ -531,6 +533,7 @@ class MainLoop:
 
     def reload_rules(self) -> None:
         self._rule_auto_disabled.clear()
+        self._once_skip_announced.clear()
         with self._rules_lock:
             self._load_rules()
 
