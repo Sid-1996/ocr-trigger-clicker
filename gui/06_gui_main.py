@@ -764,6 +764,9 @@ class MainWindow(QMainWindow):
         if not target:
             QMessageBox.warning(self, "無效規則", "目標文字不可為空白")
             return
+        if self._edit_click_position.currentText() == "custom" and rule.custom_x == 0 and rule.custom_y == 0:
+            QMessageBox.warning(self, "無效規則", "點擊位置為「自訂座標」，但尚未選取有效座標。\n請點擊「選取點擊座標」設定位置。")
+            return
         rule.name = self._edit_name.text()
         rule.target_text = target
         rule.enabled = self._edit_enabled.isChecked()

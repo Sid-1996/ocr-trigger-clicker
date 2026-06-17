@@ -252,7 +252,14 @@ class MainLoop:
                     if self.on_window_lost:
                         self.on_window_lost()
                     self._pause_event.set()
-                    self._stop_event.wait(1.0)
+                    while not self._stop_event.is_set():
+                        self._stop_event.wait(5.0)
+                        rect = get_window_rect(title)
+                        if rect is not None:
+                            self._pause_event.clear()
+                            if self._verbose:
+                                self._log("視窗已重新出現，恢復偵測")
+                            break
                     self._perf.record_frame()
                     continue
 
