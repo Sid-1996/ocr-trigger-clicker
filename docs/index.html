@@ -15,7 +15,10 @@
   li { margin: 6px 0; }
   .badge { display: inline-block; background: #1f6feb; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: .8em; }
   hr { border: none; border-top: 1px solid #30363d; margin: 32px 0; }
-  img.screenshot { max-width: 100%; border: 1px solid #30363d; border-radius: 6px; margin: 8px 0; }
+  img.screenshot { max-width: 100%; border: 1px solid #30363d; border-radius: 6px; margin: 8px 0; cursor: zoom-in; }
+  #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.85); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
+  #lightbox img { max-width: 90%; max-height: 90%; border-radius: 4px; box-shadow: 0 0 30px rgba(0,0,0,.5); }
+  #lightbox.show { display: flex; }
 </style>
 </head>
 <body>
@@ -74,5 +77,12 @@
 
 <hr>
 <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a></p>
+
+<div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大"></div>
+<script>
+document.querySelectorAll('.screenshot').forEach(function(img) {
+  img.onclick = function() { var lb = document.getElementById('lightbox'); lb.querySelector('img').src = this.src; lb.classList.add('show'); }
+});
+</script>
 </body>
 </html>
