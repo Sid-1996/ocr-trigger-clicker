@@ -870,34 +870,41 @@ class MainWindow(QMainWindow):
         self._rule_list.clear()
 
         existing_ids = {r.id for r in self._rules}
-        child_map: dict[str, list[Rule]] = {}
-        assigned = set()
+        rule_map = {r.id: r for r in self._rules}
+
+        child_map: dict[str, list[str]] = {}
+        assigned: set[str] = set()
         for r in self._rules:
-            for dep_id in r.depends_on:
-                if dep_id in existing_ids and dep_id != r.id:
-                    child_map.setdefault(dep_id, []).append(r)
-                    assigned.add(r.id)
-                    break
-        top_rules = [r for r in self._rules if r.id not in assigned]
+            first_dep = next(
+                (dep_id for dep_id in r.depends_on
+                 if dep_id in existing_ids and dep_id != r.id),
+                None
+            )
+            if first_dep:
+                child_map.setdefault(first_dep, []).append(r.id)
+                assigned.add(r.id)
+        top_ids = [r.id for r in self._rules if r.id not in assigned]
 
         selected_item = None
 
-        for r in top_rules:
-            item = QTreeWidgetItem()
-            text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
-            item.setText(0, text)
-            item.setData(0, Qt.ItemDataRole.UserRole, r.id)
+        def _build(parent_id: str | None) -> list[QTreeWidgetItem]:
+            items = []
+            for rid in (top_ids if parent_id is None else child_map.get(parent_id, [])):
+                r = rule_map[rid]
+                item = QTreeWidgetItem()
+                text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
+                item.setText(0, text)
+                item.setData(0, Qt.ItemDataRole.UserRole, r.id)
+                for child_item in _build(rid):
+                    item.addChild(child_item)
+                items.append(item)
+                if r.id == self._selected_rule_id:
+                    nonlocal selected_item
+                    selected_item = item
+            return items
+
+        for item in _build(None):
             self._rule_list.addTopLevelItem(item)
-            if r.id == self._selected_rule_id:
-                selected_item = item
-            for child in child_map.get(r.id, []):
-                child_item = QTreeWidgetItem()
-                child_text = f"[{'✓' if child.enabled else '✗'}] {child.name}"
-                child_item.setText(0, child_text)
-                child_item.setData(0, Qt.ItemDataRole.UserRole, child.id)
-                item.addChild(child_item)
-                if child.id == self._selected_rule_id:
-                    selected_item = child_item
 
         self._rule_list.expandAll()
         self._rule_list.blockSignals(False)
@@ -939,11 +946,13 @@ class MainWindow(QMainWindow):
             if item.text(0) != base + suffix:
                 item.setText(0, base + suffix)
 
-        for i in range(self._rule_list.topLevelItemCount()):
-            item = self._rule_list.topLevelItem(i)
+        def _walk(item):
             _set_text(item)
             for j in range(item.childCount()):
-                _set_text(item.child(j))
+                _walk(item.child(j))
+
+        for i in range(self._rule_list.topLevelItemCount()):
+            _walk(self._rule_list.topLevelItem(i))
 
     def _has_cycle(self, rule_id: str, proposed_deps: list[str]) -> bool:
         adj: dict[str, list[str]] = {}
@@ -994,20 +1003,17 @@ class MainWindow(QMainWindow):
 
     def _on_rules_reordered(self):
         new_order = []
-        for i in range(self._rule_list.topLevelItemCount()):
-            item = self._rule_list.topLevelItem(i)
+
+        def _walk(item):
             rid = item.data(0, Qt.ItemDataRole.UserRole)
-            for r in self._rules:
-                if r.id == rid:
-                    new_order.append(r)
-                    break
+            rule = next((r for r in self._rules if r.id == rid), None)
+            if rule:
+                new_order.append(rule)
             for j in range(item.childCount()):
-                child = item.child(j)
-                cid = child.data(0, Qt.ItemDataRole.UserRole)
-                for r in self._rules:
-                    if r.id == cid:
-                        new_order.append(r)
-                        break
+                _walk(item.child(j))
+
+        for i in range(self._rule_list.topLevelItemCount()):
+            _walk(self._rule_list.topLevelItem(i))
         self._rules = new_order
         save_task(self._current_task, self._rules)
         if self._loop:
@@ -1206,16 +1212,26 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
+        dependents = [r for r in self._rules if rule.id in r.depends_on]
+        msg = f"確定刪除規則「{rule.name}」？"
+        if dependents:
+            names = "、".join(f"「{r.name}」" for r in dependents)
+            msg = (
+                f"規則「{rule.name}」是下列規則的前置條件：\n{names}\n\n"
+                f"刪除後將一併清除這些規則的前置條件。\n確定要刪除？"
+            )
         if (
             QMessageBox.question(
                 self,
                 "刪除規則",
-                f"確定刪除規則「{rule.name}」？",
+                msg,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             != QMessageBox.StandardButton.Yes
         ):
             return
+        for r in self._rules:
+            r.depends_on = [d for d in r.depends_on if d != rule.id]
         self._rules = [r for r in self._rules if r.id != rule.id]
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
