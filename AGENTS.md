@@ -1,5 +1,12 @@
 # 專案筆記
 
+## Shell / Git 指令規範
+
+- Windows 環境，執行任何 shell 指令前先設定編碼：`chcp 65001`
+- git log 必須在 `chcp 65001` 後執行，才能正確顯示中文 commit 訊息
+- 禁止使用分頁器：全局已設 `core.pager=cat`，不需額外加 `--no-pager`
+- 標準 git log 格式：`git log --oneline -5`
+
 ## 座標系統
 
 所有 ROI / 點擊座標統一儲存為**視窗相對座標**（window-relative）。
