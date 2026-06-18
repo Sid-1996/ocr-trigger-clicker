@@ -42,6 +42,12 @@ from _loader import load_sibling
 
 _here = _base
 
+from _version import __author__, __github__, __version__  # noqa: E402
+
+
+def _parse_version(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in v.strip().split("."))
+
 
 class _NoWheelCombo(QComboBox):
     def wheelEvent(self, e):
@@ -174,7 +180,7 @@ class InitWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OCR Trigger Clicker")
+        self.setWindowTitle(f"OCR Trigger Clicker v{__version__}")
         self.resize(900, 650)
 
         try:
@@ -336,6 +342,10 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._debug_btn)
         toolbar.addWidget(self._focus_safe_cb)
         toolbar.addStretch()
+        self._about_btn = QPushButton("關於")
+        self._about_btn.setToolTip(f"OCR Trigger Clicker v{__version__} — 作者: {__author__}")
+        self._about_btn.clicked.connect(self._show_about)
+        toolbar.addWidget(self._about_btn)
         layout.addLayout(toolbar)
 
         # === Middle: stacked pages (rules / OCR debug) ===
@@ -701,6 +711,7 @@ class MainWindow(QMainWindow):
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._update_rule_status)
         self.setStatusBar(self._status_bar)
+        QTimer.singleShot(3000, self._check_version)
 
     def _connect_signals(self):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
@@ -1772,6 +1783,40 @@ class MainWindow(QMainWindow):
 
     def _on_ocr_health(self, msg: str):
         self._log_widget.append_warning(f"{msg}")
+
+    # === About & Version ===
+    def _show_about(self):
+        QMessageBox.about(
+            self,
+            "關於 OCR Trigger Clicker",
+            f"<h3>OCR Trigger Clicker v{__version__}</h3>"
+            f"<p>作者: {__author__}</p>"
+            f"<p>專案: <a href='{__github__}'>{__github__}</a></p>"
+            f"<hr><p><b>Beta 版本</b> — 可能有未預期的問題</p>",
+        )
+
+    def _check_version(self):
+        import urllib.request
+
+        url = f"{__github__}/raw/master/latest_version.txt"
+        try:
+            resp = urllib.request.urlopen(url, timeout=5)
+            latest = resp.read().decode("utf-8").strip()
+            current_parts = _parse_version(__version__)
+            latest_parts = _parse_version(latest)
+            if latest_parts > current_parts:
+                btn = QMessageBox.question(
+                    self,
+                    "發現新版本",
+                    f"新版本 v{latest} 已發布（目前 v{__version__}）\n是否前往 GitHub 下載？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if btn == QMessageBox.StandardButton.Yes:
+                    import webbrowser
+
+                    webbrowser.open(__github__ + "/releases")
+        except Exception:
+            pass  # 網路錯誤不影響啟動
 
     # === Close ===
     def closeEvent(self, event):
