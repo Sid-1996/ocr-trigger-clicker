@@ -390,13 +390,16 @@ class MainWindow(QMainWindow):
         self._edit_cooldown.setSuffix(" ms")
         self._edit_cooldown.setToolTip("觸發後冷卻時間，期間內不重複觸發")
         self._edit_trigger_mode = _NoWheelCombo()
-        self._edit_trigger_mode.addItems(["once", "repeat"])
+        self._edit_trigger_mode.addItem("觸發一次", "once")
+        self._edit_trigger_mode.addItem("重複觸發", "repeat")
         self._edit_trigger_mode.setToolTip("once：觸發一次後停用 ｜ repeat：持續觸發")
         self._edit_click_button = _NoWheelCombo()
-        self._edit_click_button.addItems(["left", "right"])
+        self._edit_click_button.addItem("左鍵", "left")
+        self._edit_click_button.addItem("右鍵", "right")
         self._edit_click_button.setToolTip("點擊使用的滑鼠按鍵")
         self._edit_click_position = _NoWheelCombo()
-        self._edit_click_position.addItems(["text_center", "custom"])
+        self._edit_click_position.addItem("文字中心", "text_center")
+        self._edit_click_position.addItem("自訂座標", "custom")
         self._edit_click_position.setToolTip("text_center：點擊文字中心 ｜ custom：自訂座標")
         self._edit_coord_label = QLabel("尚未選取")
         self._edit_pick_coord_btn = QPushButton("選取點擊座標")
@@ -425,14 +428,15 @@ class MainWindow(QMainWindow):
         self._edit_random_offset.setValue(3)
         self._edit_random_offset.setToolTip("點擊位置隨機偏移像素，模擬真人點擊")
 
-        # ── P0: 動作類型 / 按鍵 / 點擊後等待 / 前置規則 ──
+        # ── P0: 動作類型 / 按鍵 / 點擊後等待 / 等待規則 ──
         self._edit_post_delay = _NoWheelSpin()
         self._edit_post_delay.setRange(0, 30000)
         self._edit_post_delay.setSuffix(" ms")
         self._edit_post_delay.setValue(0)
         self._edit_post_delay.setToolTip("點擊/按鍵後等待 N 毫秒，再進入下一輪偵測")
         self._edit_action_type = _NoWheelCombo()
-        self._edit_action_type.addItems(["click", "key"])
+        self._edit_action_type.addItem("滑鼠點擊", "click")
+        self._edit_action_type.addItem("鍵盤按鍵", "key")
         self._edit_action_type.setToolTip("click：滑鼠點擊 ｜ key：鍵盤按鍵")
         self._edit_key = _KeyCombo()
         for group in [
@@ -522,10 +526,12 @@ class MainWindow(QMainWindow):
         self._edit_key.setCurrentIndex(0)
         self._edit_key.setToolTip("選擇或輸入要模擬的按鍵名稱（支援 Shift+字母快速跳轉）")
         self._edit_depends_on = QListWidget()
-        self._edit_depends_on.setToolTip("勾選此規則依賴的前置規則（全部觸發後才會開始偵測）")
+        self._edit_depends_on.setToolTip(
+            "進階設定：本規則需等待哪些規則先完成觸發？勾選的規則都觸發過後，本規則才會開始偵測。"
+        )
         self._edit_depends_on.setMaximumHeight(180)
         self._edit_depends_on.setAlternatingRowColors(True)
-        self._edit_depends_on_label = QLabel("勾選需全部觸發後才執行本規則的前置規則：")
+        self._edit_depends_on_label = QLabel("勾選需全部觸發後才執行本規則的等待規則：")
         self._edit_depends_on_label.setStyleSheet("color: #888; font-size: 11px;")
         self._edit_depends_on_container = QWidget()
         dep_layout = QVBoxLayout(self._edit_depends_on_container)
@@ -535,7 +541,7 @@ class MainWindow(QMainWindow):
         dep_layout.addWidget(self._edit_depends_on)
 
         # ── Phase 2: sub-target (if/if-not) ──
-        self._sub_toggle_btn = QPushButton("▸ 階段二條件 (if/if-not)")
+        self._sub_toggle_btn = QPushButton("▸ 進階條件 (二次確認)")
         self._sub_toggle_btn.setCheckable(True)
         self._sub_toggle_btn.setChecked(False)
         self._sub_toggle_btn.clicked.connect(self._toggle_sub_section)
@@ -545,20 +551,21 @@ class MainWindow(QMainWindow):
         self._sub_form.setContentsMargins(0, 0, 0, 0)
 
         self._edit_sub_target = QLineEdit()
-        self._edit_sub_target.setToolTip("階段二目標文字：若主目標命中，則進一步檢查此文字")
+        self._edit_sub_target.setToolTip("進階確認文字：若主目標命中，則進一步檢查此文字是否也存在")
         self._edit_sub_roi_label = QLabel("與主目標相同")
-        self._edit_sub_roi_btn = QPushButton("框選子目標區域")
-        self._edit_sub_roi_btn.setToolTip("子目標獨立的偵測區域（留空 = 與主目標相同）")
+        self._edit_sub_roi_btn = QPushButton("框選確認區域")
+        self._edit_sub_roi_btn.setToolTip("確認條件獨立的偵測區域（留空 = 與主目標相同）")
         self._edit_sub_not_found_retries = _NoWheelSpin()
         self._edit_sub_not_found_retries.setRange(1, 99)
         self._edit_sub_not_found_retries.setValue(3)
         self._edit_sub_not_found_retries.setToolTip(
-            "連續未找到子目標的容錯次數，達到後才執行未找到動作"
+            "確認文字連續未找到的重試次數，達到後才執行未找到動作"
         )
         self._edit_on_found_action = _NoWheelCombo()
-        self._edit_on_found_action.addItems(["click_sub_center", "click_custom"])
+        self._edit_on_found_action.addItem("點擊文字中心", "click_sub_center")
+        self._edit_on_found_action.addItem("自訂座標", "click_custom")
         self._edit_on_found_action.setToolTip(
-            "click_sub_center：點擊子目標文字中心 ｜ click_custom：自訂座標"
+            "點擊文字中心：點擊確認文字中心 ｜ 自訂座標：自訂座標"
         )
         self._edit_on_found_custom_label = QLabel("尚未選取")
         self._edit_on_found_pick_btn = QPushButton("選取點擊座標")
@@ -570,13 +577,16 @@ class MainWindow(QMainWindow):
         of_layout.addWidget(self._edit_on_found_custom_label)
         of_layout.addWidget(self._edit_on_found_pick_btn)
         self._edit_on_not_found_action = _NoWheelCombo()
-        self._edit_on_not_found_action.addItems(["click_nothing", "click_custom"])
+        self._edit_on_not_found_action.addItem("不動作", "click_nothing")
+        self._edit_on_not_found_action.addItem("自訂座標", "click_custom")
         self._edit_on_not_found_action.setToolTip(
             "click_nothing：不執行任何動作 ｜ click_custom：自訂座標點擊"
         )
         self._edit_on_not_found_custom_label = QLabel("尚未選取")
         self._edit_on_not_found_pick_btn = QPushButton("選取點擊座標")
-        self._edit_on_not_found_pick_btn.setToolTip("在目標視窗上點擊以選取「未找到時」的自訂點擊座標")
+        self._edit_on_not_found_pick_btn.setToolTip(
+            "在目標視窗上點擊以選取「未找到時」的自訂點擊座標"
+        )
         self._edit_on_not_found_pick_btn.clicked.connect(self._on_pick_sub_not_found_coord)
         self._on_not_found_coord_row = QWidget()
         onf_layout = QHBoxLayout(self._on_not_found_coord_row)
@@ -584,16 +594,16 @@ class MainWindow(QMainWindow):
         onf_layout.addWidget(self._edit_on_not_found_custom_label)
         onf_layout.addWidget(self._edit_on_not_found_pick_btn)
 
-        self._sub_form.addRow("子目標文字:", self._edit_sub_target)
-        self._sub_form.addRow("子目標區域:", self._edit_sub_roi_label)
+        self._sub_form.addRow("確認文字:", self._edit_sub_target)
+        self._sub_form.addRow("確認區域:", self._edit_sub_roi_label)
         self._sub_form.addRow("", self._edit_sub_roi_btn)
-        self._sub_form.addRow("容錯次數:", self._edit_sub_not_found_retries)
+        self._sub_form.addRow("重試次數:", self._edit_sub_not_found_retries)
         self._sub_form.addRow("找到時動作:", self._edit_on_found_action)
         self._sub_form.addRow("", self._on_found_coord_row)
         self._sub_form.addRow("未找到時動作:", self._edit_on_not_found_action)
         self._sub_form.addRow("", self._on_not_found_coord_row)
-        self._clear_sub_btn = QPushButton("清除子目標")
-        self._clear_sub_btn.setToolTip("移除目前規則的階段二子目標設定")
+        self._clear_sub_btn = QPushButton("清除進階條件")
+        self._clear_sub_btn.setToolTip("移除目前規則的進階條件設定")
         self._clear_sub_btn.clicked.connect(self._on_clear_sub_target)
         self._sub_form.addRow(self._clear_sub_btn)
 
@@ -613,7 +623,7 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("動作類型:", self._edit_action_type)
         self._edit_form.addRow("按鍵:", self._edit_key)
         self._edit_form.addRow("滑鼠按鈕:", self._edit_click_button)
-        self._edit_form.addRow("前置規則:", self._edit_depends_on_container)
+        self._edit_form.addRow("等待規則:", self._edit_depends_on_container)
         self._edit_form.addRow("點擊位置:", self._edit_click_position)
         self._edit_form.addRow("點擊座標:", self._coord_row)
         self._edit_form.addRow("模糊比對:", self._edit_fuzzy)
@@ -681,14 +691,14 @@ class MainWindow(QMainWindow):
         self._debug_back_btn.clicked.connect(self._switch_to_rules)
         self._focus_safe_cb.stateChanged.connect(self._on_focus_safe_changed)
 
-        self._edit_click_position.currentTextChanged.connect(self._on_click_position_changed)
+        self._edit_click_position.currentIndexChanged.connect(self._on_click_position_changed)
         self._edit_fuzzy.stateChanged.connect(self._on_fuzzy_changed)
-        self._edit_on_found_action.currentTextChanged.connect(self._on_sub_found_action_changed)
-        self._edit_on_not_found_action.currentTextChanged.connect(
+        self._edit_on_found_action.currentIndexChanged.connect(self._on_sub_found_action_changed)
+        self._edit_on_not_found_action.currentIndexChanged.connect(
             self._on_sub_not_found_action_changed
         )
         self._edit_sub_roi_btn.clicked.connect(self._on_pick_sub_roi)
-        self._edit_action_type.currentTextChanged.connect(self._on_action_type_changed)
+        self._edit_action_type.currentIndexChanged.connect(self._on_action_type_changed)
 
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
         self._task_new_btn.clicked.connect(self._on_task_new)
@@ -888,9 +898,8 @@ class MainWindow(QMainWindow):
         assigned: set[str] = set()
         for r in self._rules:
             first_dep = next(
-                (dep_id for dep_id in r.depends_on
-                 if dep_id in existing_ids and dep_id != r.id),
-                None
+                (dep_id for dep_id in r.depends_on if dep_id in existing_ids and dep_id != r.id),
+                None,
             )
             if first_dep:
                 child_map.setdefault(first_dep, []).append(r.id)
@@ -901,7 +910,7 @@ class MainWindow(QMainWindow):
 
         def _build(parent_id: str | None) -> list[QTreeWidgetItem]:
             items = []
-            for rid in (top_ids if parent_id is None else child_map.get(parent_id, [])):
+            for rid in top_ids if parent_id is None else child_map.get(parent_id, []):
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
                 text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
@@ -931,7 +940,7 @@ class MainWindow(QMainWindow):
             self._show_rule_detail(None)
 
     def _update_rule_status(self):
-        if getattr(self, '_updating_status', False):
+        if getattr(self, "_updating_status", False):
             return
         if not self._loop or not self._loop.is_running:
             self._refresh_rule_list()
@@ -947,7 +956,9 @@ class MainWindow(QMainWindow):
                 return
             suffix = ""
             if not st["enabled"]:
-                if st["auto_disabled"] or (st["max_triggers"] > 0 and st["trigger_count"] >= st["max_triggers"]):
+                if st["auto_disabled"] or (
+                    st["max_triggers"] > 0 and st["trigger_count"] >= st["max_triggers"]
+                ):
                     suffix = " ❌"
             elif st["trigger_count"] > 0:
                 elapsed_ms = (now - st["last_trigger_time"]) * 1000
@@ -1065,16 +1076,24 @@ class MainWindow(QMainWindow):
             else "全視窗"
         )
         self._edit_cooldown.setValue(rule.cooldown_ms)
-        self._edit_trigger_mode.setCurrentText(rule.trigger_mode)
-        self._edit_click_button.setCurrentText(rule.click_button)
-        self._edit_click_position.setCurrentText(rule.click_position)
+        self._edit_trigger_mode.setCurrentIndex(
+            max(0, self._edit_trigger_mode.findData(rule.trigger_mode))
+        )
+        self._edit_click_button.setCurrentIndex(
+            max(0, self._edit_click_button.findData(rule.click_button))
+        )
+        self._edit_click_position.setCurrentIndex(
+            max(0, self._edit_click_position.findData(rule.click_position))
+        )
         self._edit_coord_label.setText(f"X: {rule.custom_x}, Y: {rule.custom_y}")
         self._edit_fuzzy.setChecked(rule.fuzzy)
         self._edit_fuzzy_threshold.setValue(int(rule.fuzzy_threshold * 100))
         self._edit_max_triggers.setValue(rule.max_triggers)
         self._edit_random_offset.setValue(rule.random_offset)
         self._edit_post_delay.setValue(rule.post_delay_ms)
-        self._edit_action_type.setCurrentText(rule.action_type)
+        self._edit_action_type.setCurrentIndex(
+            max(0, self._edit_action_type.findData(rule.action_type))
+        )
         idx = self._edit_key.findData(rule.key)
         self._edit_key.setCurrentIndex(idx if idx >= 0 else 0)
         self._populate_depends_on(rule)
@@ -1087,11 +1106,15 @@ class MainWindow(QMainWindow):
             if has_sub_roi
             else "與主目標相同"
         )
-        self._edit_on_found_action.setCurrentText(rule.on_found_action)
+        self._edit_on_found_action.setCurrentIndex(
+            max(0, self._edit_on_found_action.findData(rule.on_found_action))
+        )
         self._edit_on_found_custom_label.setText(
             f"X: {rule.on_found_custom_x}, Y: {rule.on_found_custom_y}"
         )
-        self._edit_on_not_found_action.setCurrentText(rule.on_not_found_action)
+        self._edit_on_not_found_action.setCurrentIndex(
+            max(0, self._edit_on_not_found_action.findData(rule.on_not_found_action))
+        )
         self._edit_on_not_found_custom_label.setText(
             f"X: {rule.on_not_found_custom_x}, Y: {rule.on_not_found_custom_y}"
         )
@@ -1101,39 +1124,43 @@ class MainWindow(QMainWindow):
     def _update_sub_visibility(self):
         self._sub_panel.setVisible(self._sub_toggle_btn.isChecked())
         self._on_found_coord_row.setVisible(
-            self._edit_on_found_action.currentText() == "click_custom"
+            self._edit_on_found_action.currentData() == "click_custom"
         )
         self._on_not_found_coord_row.setVisible(
-            self._edit_on_not_found_action.currentText() == "click_custom"
+            self._edit_on_not_found_action.currentData() == "click_custom"
         )
 
     def _toggle_sub_section(self):
         self._update_sub_visibility()
         self._sub_toggle_btn.setText(
-            "▾ 階段二條件 (if/if-not)"
-            if self._sub_toggle_btn.isChecked()
-            else "▸ 階段二條件 (if/if-not)"
+            "▾ 進階條件 (二次確認)" if self._sub_toggle_btn.isChecked() else "▸ 進階條件 (二次確認)"
         )
 
-    def _on_sub_found_action_changed(self, action: str):
-        self._on_found_coord_row.setVisible(action == "click_custom")
+    def _on_sub_found_action_changed(self, index: int):
+        self._on_found_coord_row.setVisible(
+            self._edit_on_found_action.currentData() == "click_custom"
+        )
 
-    def _on_sub_not_found_action_changed(self, action: str):
-        self._on_not_found_coord_row.setVisible(action == "click_custom")
+    def _on_sub_not_found_action_changed(self, index: int):
+        self._on_not_found_coord_row.setVisible(
+            self._edit_on_not_found_action.currentData() == "click_custom"
+        )
 
-    def _on_click_position_changed(self, pos: str):
-        is_key = self._edit_action_type.currentText() == "key"
-        self._coord_row.setVisible(not is_key and pos == "custom")
+    def _on_click_position_changed(self, index: int):
+        is_key = self._edit_action_type.currentData() == "key"
+        self._coord_row.setVisible(
+            not is_key and self._edit_click_position.currentData() == "custom"
+        )
 
     def _update_action_visibility(self):
-        is_key = self._edit_action_type.currentText() == "key"
+        is_key = self._edit_action_type.currentData() == "key"
         self._edit_key.setVisible(is_key)
         self._edit_form.labelForField(self._edit_key).setVisible(is_key)
         self._edit_click_button.setVisible(not is_key)
         self._edit_form.labelForField(self._edit_click_button).setVisible(not is_key)
         self._edit_click_position.setVisible(not is_key)
         self._edit_form.labelForField(self._edit_click_position).setVisible(not is_key)
-        is_custom = self._edit_click_position.currentText() == "custom"
+        is_custom = self._edit_click_position.currentData() == "custom"
         self._coord_row.setVisible(not is_key and is_custom)
         self._edit_form.labelForField(self._coord_row).setVisible(not is_key)
         self._edit_random_offset.setVisible(not is_key)
@@ -1175,7 +1202,9 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(r.name)
             item.setData(Qt.ItemDataRole.UserRole, r.id)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Checked if r.id in dep_set else Qt.CheckState.Unchecked)
+            item.setCheckState(
+                Qt.CheckState.Checked if r.id in dep_set else Qt.CheckState.Unchecked
+            )
             self._edit_depends_on.addItem(item)
         self._edit_depends_on.blockSignals(False)
 
@@ -1186,7 +1215,7 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
-        rule.enabled = (state == 2)
+        rule.enabled = state == 2
         save_task(self._current_task, self._rules)
         item = self._rule_list.currentItem()
         if item:
@@ -1268,7 +1297,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "無效規則", "目標文字不可為空白")
             return
         if (
-            self._edit_click_position.currentText() == "custom"
+            self._edit_click_position.currentData() == "custom"
             and rule.custom_x == 0
             and rule.custom_y == 0
         ):
@@ -1282,19 +1311,19 @@ class MainWindow(QMainWindow):
         rule.target_text = target
         rule.enabled = self._edit_enabled.isChecked()
         rule.cooldown_ms = self._edit_cooldown.value()
-        rule.trigger_mode = self._edit_trigger_mode.currentText()
-        rule.click_button = self._edit_click_button.currentText()
-        rule.click_position = self._edit_click_position.currentText()
+        rule.trigger_mode = self._edit_trigger_mode.currentData()
+        rule.click_button = self._edit_click_button.currentData()
+        rule.click_position = self._edit_click_position.currentData()
         rule.fuzzy = self._edit_fuzzy.isChecked()
         rule.fuzzy_threshold = self._edit_fuzzy_threshold.value() / 100.0
         rule.max_triggers = self._edit_max_triggers.value()
         rule.random_offset = self._edit_random_offset.value()
         rule.sub_target_text = self._edit_sub_target.text().strip()
-        rule.on_found_action = self._edit_on_found_action.currentText()
-        rule.on_not_found_action = self._edit_on_not_found_action.currentText()
+        rule.on_found_action = self._edit_on_found_action.currentData()
+        rule.on_not_found_action = self._edit_on_not_found_action.currentData()
         rule.sub_not_found_retries = self._edit_sub_not_found_retries.value()
         rule.post_delay_ms = self._edit_post_delay.value()
-        rule.action_type = self._edit_action_type.currentText()
+        rule.action_type = self._edit_action_type.currentData()
         rule.key = self._edit_key.currentData() or self._edit_key.currentText()
         rule.depends_on = [
             self._edit_depends_on.item(i).data(Qt.ItemDataRole.UserRole)
@@ -1302,7 +1331,11 @@ class MainWindow(QMainWindow):
             if self._edit_depends_on.item(i).checkState() == Qt.CheckState.Checked
         ]
         if self._has_cycle(rule.id, rule.depends_on):
-            QMessageBox.warning(self, "循環依賴", "偵測到循環依賴！\n規則 A 依賴規則 B、規則 B 又依賴規則 A，將導致兩者永遠無法觸發。\n請取消勾選其中一項後再儲存。")
+            QMessageBox.warning(
+                self,
+                "循環依賴",
+                "偵測到循環依賴！\n規則 A 依賴規則 B、規則 B 又依賴規則 A，將導致兩者永遠無法觸發。\n請取消勾選其中一項後再儲存。",
+            )
             return
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
@@ -1331,7 +1364,9 @@ class MainWindow(QMainWindow):
                 result = (result[0] - wr["x"], result[1] - wr["y"])
         rule.custom_x, rule.custom_y = result
         rule.click_position = "custom"
-        self._edit_click_position.setCurrentText("custom")
+        self._edit_click_position.setCurrentIndex(
+            max(0, self._edit_click_position.findData("custom"))
+        )
         self._edit_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
         save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
@@ -1358,11 +1393,13 @@ class MainWindow(QMainWindow):
                 result = (result[0] - wr["x"], result[1] - wr["y"])
         rule.on_found_custom_x, rule.on_found_custom_y = result
         rule.on_found_action = "click_custom"
-        self._edit_on_found_action.setCurrentText("click_custom")
+        self._edit_on_found_action.setCurrentIndex(
+            max(0, self._edit_on_found_action.findData("click_custom"))
+        )
         self._edit_on_found_custom_label.setText(f"X: {result[0]}, Y: {result[1]}")
         save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
-        self._status_bar.showMessage(f"已選取子目標點擊座標: X={result[0]}, Y={result[1]}")
+        self._status_bar.showMessage(f"已選取確認觸發點擊座標: X={result[0]}, Y={result[1]}")
 
     def _on_pick_sub_not_found_coord(self):
         rule = self._get_current_rule()
@@ -1385,11 +1422,13 @@ class MainWindow(QMainWindow):
                 result = (result[0] - wr["x"], result[1] - wr["y"])
         rule.on_not_found_custom_x, rule.on_not_found_custom_y = result
         rule.on_not_found_action = "click_custom"
-        self._edit_on_not_found_action.setCurrentText("click_custom")
+        self._edit_on_not_found_action.setCurrentIndex(
+            max(0, self._edit_on_not_found_action.findData("click_custom"))
+        )
         self._edit_on_not_found_custom_label.setText(f"X: {result[0]}, Y: {result[1]}")
         save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
-        self._status_bar.showMessage(f"已選取子目標未找到座標: X={result[0]}, Y={result[1]}")
+        self._status_bar.showMessage(f"已選取確認未找到點擊座標: X={result[0]}, Y={result[1]}")
 
     def _on_pick_sub_roi(self):
         rule = self._get_current_rule()
@@ -1420,7 +1459,7 @@ class MainWindow(QMainWindow):
             save_task(self._current_task, self._rules)
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(
-            f"已選取子目標偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
+            f"已選取確認偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
 
     def _on_clear_sub_target(self):
@@ -1440,9 +1479,9 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.reload_rules()
         self._sub_toggle_btn.setChecked(False)
-        self._sub_toggle_btn.setText("▸ 階段二條件 (if/if-not)")
+        self._sub_toggle_btn.setText("▸ 進階條件 (二次確認)")
         self._show_rule_detail(rule)
-        self._status_bar.showMessage(f"已清除規則「{rule.name}」的子目標設定")
+        self._status_bar.showMessage(f"已清除規則「{rule.name}」的進階條件設定")
 
     # === ROI selector ===
     def _open_roi_selector(self):
@@ -1525,7 +1564,7 @@ class MainWindow(QMainWindow):
     def _on_debug_sub_target_requested(self, data: dict):
         rule = self._get_current_rule()
         if rule is None:
-            QMessageBox.warning(self, "無效操作", "請先在規則列表中選取一個規則，再設定子目標。")
+            QMessageBox.warning(self, "無效操作", "請先在規則列表中選取一個規則，再設定進階條件。")
             return
         rule.sub_target_text = str(data.get("target_text", "")).strip()
         if not rule.sub_target_text:
@@ -1540,9 +1579,9 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._sub_toggle_btn.setChecked(True)
-        self._sub_toggle_btn.setText("▾ 階段二條件 (if/if-not)")
+        self._sub_toggle_btn.setText("▾ 進階條件 (二次確認)")
         self._show_rule_detail(rule)
-        self._status_bar.showMessage(f"已在當前規則設定子目標：「{rule.sub_target_text}」")
+        self._status_bar.showMessage(f"已在當前規則設定進階條件：「{rule.sub_target_text}」")
 
     # === Start / Pause ===
     def _toggle_start(self):

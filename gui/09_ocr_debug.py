@@ -166,9 +166,9 @@ class OcrDebugPanel(QWidget):
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
-        self._set_sub_target_btn = QPushButton("設為子目標(&U)")
+        self._set_sub_target_btn = QPushButton("設為進階條件(&U)")
         self._set_sub_target_btn.setEnabled(False)
-        self._set_sub_target_btn.setToolTip("將選取的文字設為目前規則的階段二子目標")
+        self._set_sub_target_btn.setToolTip("將選取的文字設為目前規則的進階條件確認文字")
         self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
         right_layout.addWidget(self._set_sub_target_btn)
 
@@ -283,6 +283,7 @@ class OcrDebugPanel(QWidget):
         except Exception as e:
             print(f"[_do_ocr] {e}")
             import traceback
+
             traceback.print_exc()
         finally:
             self._ocr_busy = False
@@ -317,6 +318,7 @@ class OcrDebugPanel(QWidget):
         except Exception as e:
             print(f"[_on_ocr_done] {e}")
             import traceback
+
             traceback.print_exc()
 
     def _populate_table(self):
@@ -447,7 +449,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已設為子目標：「{r.text}」"
+            f"✓ 已設為進階條件：「{r.text}」"
             f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
         )
 
@@ -607,6 +609,7 @@ class OcrDebugPanel(QWidget):
         except Exception as e:
             print(f"[_update_crop_preview] {e}")
             import traceback
+
             traceback.print_exc()
 
     def _update_display(self):
