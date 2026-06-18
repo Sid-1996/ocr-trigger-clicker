@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OCR Trigger Clicker — 工具介紹</title>
+<meta property="og:image" content="https://sid-1996.github.io/ocr-trigger-clicker/images/ocr-trigger-clicker.png">
 <style>
   body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #1a1a1a; }
   h1 { border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
@@ -13,6 +14,7 @@
   li { margin: 6px 0; }
   .badge { display: inline-block; background: #0969da; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: .8em; }
   hr { border: none; border-top: 1px solid #e0e0e0; margin: 32px 0; }
+  img.screenshot { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; margin: 8px 0; }
 </style>
 </head>
 <body>
@@ -21,6 +23,8 @@
 <p><span class="badge">v0.0.0 Beta</span> <span class="badge" style="background:#6e7681;">綠色免安裝</span></p>
 
 <p>一套 Windows 上的 OCR 自動化工具：偵測螢幕特定文字後，自動執行滑鼠點擊或鍵盤操作。適合遊戲輔助、重複性表單操作、即時監控觸發等場景。</p>
+
+<img class="screenshot" src="images/gui.png" alt="工具主介面">
 
 <h2>核心功能</h2>
 <ul>
@@ -33,6 +37,8 @@
   <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字與位置，幫助快速設定 ROI</li>
   <li><strong>僅前景點擊</strong> — 安全模式，只在目標視窗位於前景時才執行點擊</li>
 </ul>
+
+<img class="screenshot" src="images/zh_ocr.png" alt="OCR 診斷功能">
 
 <h2>適用場景</h2>
 <ul>
@@ -63,7 +69,6 @@
   <li>文字比對為「純文字擷取比對」，非影像比對（不支援圖示、圖形辨識）</li>
   <li>每次截圖間隔受 FPS 限制，預設每秒約 10 次</li>
   <li>ROI 越小、文字越清晰，辨識速度越快</li>
-  <li>目前無專用圖示，使用 PyInstaller 預設圖示</li>
 </ul>
 
 <hr>
