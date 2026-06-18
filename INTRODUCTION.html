@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR Trigger Clicker — 工具介紹</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #1a1a1a; }
+  h1 { border-bottom: 2px solid #e0e0e0; padding-bottom: 8px; }
+  h2 { margin-top: 32px; color: #333; }
+  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: .9em; }
+  ul { padding-left: 20px; }
+  li { margin: 6px 0; }
+  .badge { display: inline-block; background: #0969da; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: .8em; }
+  hr { border: none; border-top: 1px solid #e0e0e0; margin: 32px 0; }
+</style>
+</head>
+<body>
+
+<h1>OCR Trigger Clicker</h1>
+<p><span class="badge">v0.0.0 Beta</span> <span class="badge" style="background:#6e7681;">綠色免安裝</span></p>
+
+<p>一套 Windows 上的 OCR 自動化工具：偵測螢幕特定文字後，自動執行滑鼠點擊或鍵盤操作。適合遊戲輔助、重複性表單操作、即時監控觸發等場景。</p>
+
+<h2>核心功能</h2>
+<ul>
+  <li><strong>OCR 文字辨識</strong> — 基於 RapidOCR 引擎，支援繁體／簡體中文，可指定 ROI 區域精確比對</li>
+  <li><strong>多重觸發條件</strong> — 支援「完全相符」、「開頭相符」、「結尾相符」、「包含」、「不包含」、「正則表達式」六種比對模式</li>
+  <li><strong>點擊／鍵盤操作</strong> — 透過 AutoHotkey v2 執行滑鼠點擊（左／中／右鍵、雙擊）與鍵盤輸入，點擊座標可手動選取</li>
+  <li><strong>進階條件（二次確認）</strong> — 第一組文字符合後，等候第二組文字出現才觸發，避免誤判</li>
+  <li><strong>等待規則</strong> — 觸發前可設定等待某文字出現或消失，支援倒數超時</li>
+  <li><strong>多任務管理</strong> — 不同場景可建立獨立任務，任務之間規則完全隔離</li>
+  <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字與位置，幫助快速設定 ROI</li>
+  <li><strong>僅前景點擊</strong> — 安全模式，只在目標視窗位於前景時才執行點擊</li>
+</ul>
+
+<h2>適用場景</h2>
+<ul>
+  <li>表單或 ERP 系統中反覆填寫相同欄位</li>
+  <li>遊戲中根據畫面文字自動執行操作</li>
+  <li>監控畫面中的告警訊息並自動回應</li>
+  <li>批次處理需要等待特定狀態的任務</li>
+</ul>
+
+<h2>系統需求</h2>
+<ul>
+  <li>Windows 10 / 11（64 位元）</li>
+  <li>不需要 Python、不需要額外執行環境</li>
+  <li>首次啟動會自動下載 AutoHotkey v2（約 3MB，可選擇不下載）</li>
+  <li>支援 DirectX 12 的 GPU（選擇性，可加速 OCR）</li>
+</ul>
+
+<h2>使用流程</h2>
+<ol>
+  <li>選擇目標視窗</li>
+  <li>框選 OCR 偵測區域（ROI）</li>
+  <li>設定比對文字與觸發動作</li>
+  <li>按「啟動」開始自動偵測</li>
+</ol>
+
+<h2>注意事項</h2>
+<ul>
+  <li>文字比對為「純文字擷取比對」，非影像比對（不支援圖示、圖形辨識）</li>
+  <li>每次截圖間隔受 FPS 限制，預設每秒約 10 次</li>
+  <li>ROI 越小、文字越清晰，辨識速度越快</li>
+  <li>目前無專用圖示，使用 PyInstaller 預設圖示</li>
+</ul>
+
+<hr>
+<p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a></p>
+</body>
+</html>
