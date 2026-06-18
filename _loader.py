@@ -3,7 +3,10 @@ import sys
 import threading
 from pathlib import Path
 
-_here = Path(__file__).parent
+if hasattr(sys, "_MEIPASS"):
+    _here = Path(sys._MEIPASS)
+else:
+    _here = Path(__file__).parent
 _cache: dict[str, object] = {}
 _lock = threading.RLock()
 

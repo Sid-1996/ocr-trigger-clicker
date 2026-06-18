@@ -1,3 +1,4 @@
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -93,7 +94,10 @@ def init_engine() -> None:
         if _engine is not None:
             return
         if OCR_BACKEND == "rapidocr":
-            custom_dir = Path(__file__).resolve().parent.parent / "custom_models"
+            if hasattr(sys, "_MEIPASS"):
+                custom_dir = Path(sys._MEIPASS) / "custom_models"
+            else:
+                custom_dir = Path(__file__).resolve().parent.parent / "custom_models"
             rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
             dict_path = custom_dir / "chinese_cht_dict.txt"
             kwargs: dict = dict(

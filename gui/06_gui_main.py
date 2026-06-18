@@ -32,11 +32,15 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+if hasattr(sys, "_MEIPASS"):
+    _base = Path(sys._MEIPASS)
+else:
+    _base = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_base))
 
 from _loader import load_sibling
 
-_here = Path(__file__).resolve().parent.parent
+_here = _base
 
 
 class _NoWheelCombo(QComboBox):

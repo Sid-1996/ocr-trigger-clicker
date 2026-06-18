@@ -59,6 +59,13 @@ def main():
     if ahk_src.exists():
         datas.append((str(ahk_src), "."))
 
+    custom_dir = here / "custom_models"
+    if custom_dir.exists():
+        for f in custom_dir.iterdir():
+            if f.is_file():
+                datas.append((str(f), "custom_models"))
+        print(f"找到 {len(list(custom_dir.iterdir()))} 個自訂模型檔")
+
     # 核心模組 ─ 保留 core/ gui/ 目錄結構
     py_datas = [
         ("core/01_screenshot.py", "core"),
@@ -73,6 +80,7 @@ def main():
         ("gui/09_ocr_debug.py", "gui"),
         ("gui/13_gui_click_picker.py", "gui"),
         ("build.py", "."),
+        ("_loader.py", "."),
     ]
     for rel, dest in py_datas:
         f = here / rel
