@@ -1118,12 +1118,35 @@ class MainWindow(QMainWindow):
     def _on_action_type_changed(self, atype: str):
         self._update_action_visibility()
 
+    def _get_excluded_deps(self, rule_id: str) -> set[str]:
+        adj = {r.id: list(r.depends_on) for r in self._rules}
+
+        def _reachable(start: str) -> set[str]:
+            visited: set[str] = set()
+            stack = [start]
+            while stack:
+                node = stack.pop()
+                if node in visited:
+                    continue
+                visited.add(node)
+                for dep in adj.get(node, []):
+                    if dep in adj and dep not in visited:
+                        stack.append(dep)
+            return visited
+
+        excluded = {rule_id}
+        for r in self._rules:
+            if r.id != rule_id and rule_id in _reachable(r.id):
+                excluded.add(r.id)
+        return excluded
+
     def _populate_depends_on(self, rule: Rule):
         self._edit_depends_on.blockSignals(True)
         self._edit_depends_on.clear()
         dep_set = set(rule.depends_on)
+        excluded = self._get_excluded_deps(rule.id)
         for r in self._rules:
-            if r.id == rule.id:
+            if r.id in excluded:
                 continue
             item = QListWidgetItem(r.name)
             item.setData(Qt.ItemDataRole.UserRole, r.id)
