@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +17,8 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -517,9 +520,9 @@ class MainWindow(QMainWindow):
                 self._edit_key.addItem(text, data)
         self._edit_key.setCurrentIndex(0)
         self._edit_key.setToolTip("選擇或輸入要模擬的按鍵名稱（支援 Shift+字母快速跳轉）")
-        self._edit_depends_on = _NoWheelCombo()
-        self._edit_depends_on.addItem("(無)")
-        self._edit_depends_on.setToolTip("此規則依賴的前置規則觸發後，才會開始偵測")
+        self._edit_depends_on = QListWidget()
+        self._edit_depends_on.setToolTip("勾選此規則依賴的前置規則（全部觸發後才會開始偵測）")
+        self._edit_depends_on.setMaximumHeight(120)
 
         # ── Phase 2: sub-target (if/if-not) ──
         self._sub_toggle_btn = QPushButton("▸ 階段二條件 (if/if-not)")
@@ -647,6 +650,8 @@ class MainWindow(QMainWindow):
         self._perf_timer = QTimer()
         self._perf_timer.timeout.connect(self._update_perf_display)
         self._perf_timer.start(1000)
+        self._status_timer = QTimer()
+        self._status_timer.timeout.connect(self._update_rule_status)
         self.setStatusBar(self._status_bar)
 
     def _connect_signals(self):
@@ -866,12 +871,14 @@ class MainWindow(QMainWindow):
 
         existing_ids = {r.id for r in self._rules}
         child_map: dict[str, list[Rule]] = {}
-        top_rules = []
+        assigned = set()
         for r in self._rules:
-            if r.depends_on and r.depends_on in existing_ids and r.depends_on != r.id:
-                child_map.setdefault(r.depends_on, []).append(r)
-            else:
-                top_rules.append(r)
+            for dep_id in r.depends_on:
+                if dep_id in existing_ids and dep_id != r.id:
+                    child_map.setdefault(dep_id, []).append(r)
+                    assigned.add(r.id)
+                    break
+        top_rules = [r for r in self._rules if r.id not in assigned]
 
         selected_item = None
 
@@ -903,6 +910,40 @@ class MainWindow(QMainWindow):
         else:
             self._selected_rule_id = None
             self._show_rule_detail(None)
+
+    def _update_rule_status(self):
+        if not self._loop or not self._loop.is_running:
+            self._refresh_rule_list()
+            return
+        statuses = self._loop.get_rules_status()
+        status_map = {s["id"]: s for s in statuses}
+        now = time.monotonic()
+
+        def _set_text(item):
+            sid = item.data(0, Qt.ItemDataRole.UserRole)
+            st = status_map.get(sid)
+            if st is None:
+                return
+            suffix = ""
+            if not st["enabled"]:
+                if st["auto_disabled"] or (st["max_triggers"] > 0 and st["trigger_count"] >= st["max_triggers"]):
+                    suffix = " ❌"
+            elif st["trigger_count"] > 0:
+                elapsed_ms = (now - st["last_trigger_time"]) * 1000
+                if elapsed_ms < st["cooldown_ms"]:
+                    suffix = " ⏳"
+                elif elapsed_ms < 2000:
+                    suffix = " ✅"
+            enabled = st["enabled"]
+            base = f"[{'✓' if enabled else '✗'}] {st['name']}"
+            if item.text(0) != base + suffix:
+                item.setText(0, base + suffix)
+
+        for i in range(self._rule_list.topLevelItemCount()):
+            item = self._rule_list.topLevelItem(i)
+            _set_text(item)
+            for j in range(item.childCount()):
+                _set_text(item.child(j))
 
     def _get_current_rule(self) -> Optional[Rule]:
         for r in self._rules:
@@ -1048,19 +1089,17 @@ class MainWindow(QMainWindow):
         self._update_action_visibility()
 
     def _populate_depends_on(self, rule: Rule):
-        current = self._edit_depends_on.currentText()
         self._edit_depends_on.blockSignals(True)
         self._edit_depends_on.clear()
-        self._edit_depends_on.addItem("(無)", None)
+        dep_set = set(rule.depends_on)
         for r in self._rules:
             if r.id == rule.id:
                 continue
-            self._edit_depends_on.addItem(r.name, r.id)
-        idx = self._edit_depends_on.findData(rule.depends_on)
-        if idx >= 0:
-            self._edit_depends_on.setCurrentIndex(idx)
-        else:
-            self._edit_depends_on.setCurrentIndex(0)
+            item = QListWidgetItem(r.name)
+            item.setData(Qt.ItemDataRole.UserRole, r.id)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if r.id in dep_set else Qt.CheckState.Unchecked)
+            self._edit_depends_on.addItem(item)
         self._edit_depends_on.blockSignals(False)
 
     def _on_fuzzy_changed(self, state):
@@ -1170,8 +1209,11 @@ class MainWindow(QMainWindow):
         rule.post_delay_ms = self._edit_post_delay.value()
         rule.action_type = self._edit_action_type.currentText()
         rule.key = self._edit_key.currentData() or self._edit_key.currentText()
-        dep_id = self._edit_depends_on.currentData()
-        rule.depends_on = dep_id if dep_id else None
+        rule.depends_on = [
+            self._edit_depends_on.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self._edit_depends_on.count())
+            if self._edit_depends_on.item(i).checkState() == Qt.CheckState.Checked
+        ]
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
@@ -1453,18 +1495,21 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(
                 f"偵測中 — 目標: {self._window_combo.currentText()}（按 F9 暫停）"
             )
+            self._status_timer.start(1000)
         else:
             QMessageBox.critical(self, "初始化失敗", f"無法啟動主迴圈：\n{error_msg}")
             self._btn_toggle.setText("啟動")
             self._status_bar.showMessage(f"初始化失敗 — {error_msg}")
 
     def _stop_loop(self):
+        self._status_timer.stop()
         if self._loop:
             self._loop.stop()
             self._loop = None
         self._btn_toggle.setText("啟動")
         self._update_edit_enabled(True)
         self._status_bar.showMessage("已停止")
+        self._update_rule_status()
 
     def _toggle_pause(self):
         if self._loop is None or not self._loop.is_running:
@@ -1531,6 +1576,7 @@ class MainWindow(QMainWindow):
 
     # === Emergency & OCR Health ===
     def _emergency_stop(self):
+        self._status_timer.stop()
         if self._loop is None:
             return
         self._loop.emergency_stop()
@@ -1539,6 +1585,7 @@ class MainWindow(QMainWindow):
         self._update_edit_enabled(True)
         self._status_bar.showMessage("🛑 緊急停止 — 按「啟動」重新開始")
         self._log_widget.append_info("緊急停止（F12）")
+        self._update_rule_status()
 
     def _on_ocr_health(self, msg: str):
         self._log_widget.append_warning(f"{msg}")

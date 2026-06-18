@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import cv2
-
 import numpy as np
 
 from _loader import load_sibling
@@ -82,6 +81,8 @@ class MainLoop:
         self._rule_auto_disabled: set[str] = set()
         self._sub_not_found_count: dict[str, int] = defaultdict(int)
         self._once_skip_announced: set[str] = set()
+        self._rules_dirty: bool = False
+        self._save_period_counter: int = 0
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -182,7 +183,7 @@ class MainLoop:
             time.sleep(rule.post_delay_ms / 1000.0)
 
         with self._rules_lock:
-            save_rules(self._rules, self._rules_path)
+            self._rules_dirty = True
 
     def _handle_sub_target(self, rule: Rule, img: np.ndarray, rect: dict, primary_matched: OcrResult) -> None:
         roi = rule.sub_roi if any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")) else None
@@ -242,7 +243,7 @@ class MainLoop:
                 self._log("全域速率限制生效，跳過此次點擊")
             return
 
-        params = apply_trigger(rule)
+        apply_trigger(rule)
 
         if rule.on_found_action == "click_sub_center":
             cx, cy = matched.center_x, matched.center_y
@@ -276,7 +277,7 @@ class MainLoop:
             time.sleep(rule.post_delay_ms / 1000.0)
 
         with self._rules_lock:
-            save_rules(self._rules, self._rules_path)
+            self._rules_dirty = True
 
     def _do_sub_not_found(self, rule: Rule, primary_matched: OcrResult, rect: dict) -> None:
         if rule.on_not_found_action == "click_nothing":
@@ -337,7 +338,7 @@ class MainLoop:
             time.sleep(rule.post_delay_ms / 1000.0)
 
         with self._rules_lock:
-            save_rules(self._rules, self._rules_path)
+            self._rules_dirty = True
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
@@ -390,10 +391,11 @@ class MainLoop:
                 continue
 
             if rule.depends_on:
-                dep = next((r for r in rules_snapshot if r.id == rule.depends_on), None)
-                if dep is None or dep.trigger_count < 1:
+                dep_ids = set(rule.depends_on)
+                deps = [r for r in rules_snapshot if r.id in dep_ids]
+                if len(deps) != len(dep_ids) or not all(r.trigger_count >= 1 for r in deps):
                     if self._verbose:
-                        self._log(f"規則「{rule.name}」依賴「{rule.depends_on}」尚未觸發，跳過")
+                        self._log(f"規則「{rule.name}」依賴尚未全部觸發 ({rule.depends_on})，跳過")
                     continue
 
             if self._verbose:
@@ -513,6 +515,14 @@ class MainLoop:
                 loop_elapsed = (time.monotonic() - loop_start) * 1000
                 self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
 
+                self._save_period_counter += 1
+                if self._save_period_counter >= 20:
+                    self._save_period_counter = 0
+                    with self._rules_lock:
+                        if self._rules_dirty:
+                            save_rules(self._rules, self._rules_path)
+                            self._rules_dirty = False
+
                 if loop_elapsed > 2000 and self.on_warning:
                     self.on_warning(
                         f"慢循環: {loop_elapsed:.0f}ms "
@@ -536,6 +546,10 @@ class MainLoop:
         self._thread.start()
 
     def stop(self) -> None:
+        with self._rules_lock:
+            if self._rules_dirty:
+                save_rules(self._rules, self._rules_path)
+                self._rules_dirty = False
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
@@ -613,6 +627,26 @@ class MainLoop:
 
     def get_perf_stats(self) -> dict:
         return self._perf.get_stats()
+
+    @property
+    def auto_disabled_rules(self) -> set[str]:
+        return self._rule_auto_disabled
+
+    def get_rules_status(self) -> list[dict]:
+        with self._rules_lock:
+            return [
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "enabled": r.enabled,
+                    "trigger_count": r.trigger_count,
+                    "last_trigger_time": r.last_trigger_time,
+                    "cooldown_ms": r.cooldown_ms,
+                    "max_triggers": r.max_triggers,
+                    "auto_disabled": r.id in self._rule_auto_disabled,
+                }
+                for r in self._rules
+            ]
 
     def check_runaway_rule(self, rule_id: str) -> bool:
         now = time.monotonic()

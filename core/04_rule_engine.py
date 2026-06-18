@@ -43,7 +43,7 @@ class Rule:
     action_type: str = "click"
     key: str = ""
     post_delay_ms: int = 0
-    depends_on: Optional[str] = None
+    depends_on: list[str] = field(default_factory=list)
 
 
 _FIELD_DEFAULTS = {
@@ -70,7 +70,7 @@ _FIELD_DEFAULTS = {
     "action_type": "click",
     "key": "",
     "post_delay_ms": 0,
-    "depends_on": None,
+    "depends_on": [],
 }
 
 
@@ -96,6 +96,14 @@ def _sanitize_roi(roi: dict | None) -> dict:
         "w": max(0, _as_int(roi.get("w", 0))),
         "h": max(0, _as_int(roi.get("h", 0))),
     }
+
+
+def _parse_depends_on(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(v) for v in value if v]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
 
 
 def _dict_to_rule(d: dict) -> Rule:
@@ -128,7 +136,7 @@ def _dict_to_rule(d: dict) -> Rule:
         action_type=str(merged.get("action_type", "click")),
         key=str(merged.get("key", "")),
         post_delay_ms=max(0, _as_int(merged.get("post_delay_ms", 0), 0)),
-        depends_on=merged.get("depends_on"),
+        depends_on=_parse_depends_on(merged.get("depends_on")),
     )
 
 
