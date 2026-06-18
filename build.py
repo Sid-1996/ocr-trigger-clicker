@@ -47,11 +47,12 @@ def main():
     rap_path = Path(rapidocr_onnxruntime.__file__).parent
 
     datas = []
+    pkg_dir = rap_path.name  # "rapidocr_onnxruntime"
     for pattern in ["*.onnx", "*.yaml", "*.json", "*.txt"]:
         for f in rap_path.rglob(pattern):
             if f.is_file():
                 rel = f.relative_to(rap_path)
-                datas.append((str(f), str(rel.parent)))
+                datas.append((str(f), str(pkg_dir / rel.parent)))
     print(f"找到 {len(datas)} 個模型/資源檔")
 
     ahk_src = here / "clicker.ahk"
