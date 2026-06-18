@@ -185,49 +185,53 @@ class MainWindow(QMainWindow):
             here = Path(__file__).resolve().parent.parent
             self._config_path = str(here / "config.json")
 
-        migrate_old_rules()
+        try:
+            migrate_old_rules()
 
-        self._signals = WorkerSignals()
-        self._loop: Optional[MainLoop] = None
-        self._selected_rule_id: Optional[str] = None
-        self._window_lost = False
-        self._current_task: str = ""
+            self._signals = WorkerSignals()
+            self._loop: Optional[MainLoop] = None
+            self._selected_rule_id: Optional[str] = None
+            self._window_lost = False
+            self._current_task: str = ""
 
-        self._setup_ui()
-        self._debug_panel = OcrDebugPanel("", self)
-        self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
-        self._debug_panel.sub_target_requested.connect(self._on_debug_sub_target_requested)
-        self._debug_page_layout.addWidget(self._debug_panel, 1)
-        self._connect_signals()
-        self._setup_shortcuts()
+            self._setup_ui()
+            self._debug_panel = OcrDebugPanel("", self)
+            self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
+            self._debug_panel.sub_target_requested.connect(self._on_debug_sub_target_requested)
+            self._debug_page_layout.addWidget(self._debug_panel, 1)
+            self._connect_signals()
+            self._setup_shortcuts()
 
-        _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
+            _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
 
-        self._refresh_window_list()
-        self._restore_last_state()
-        self._refresh_task_list()
+            self._refresh_window_list()
+            self._restore_last_state()
+            self._refresh_task_list()
 
-        if not _ahk_mod.is_ahk_available():
-            reply = QMessageBox.question(
-                self,
-                "安裝 AutoHotkey",
-                "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
-                "是否自動下載並安裝？（約 3MB，不需管理員權限）",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
-                QApplication.processEvents()
-                if _ahk_mod.download_ahk():
-                    self._status_bar.showMessage("AutoHotkey 下載完成")
-                else:
-                    self._status_bar.showMessage(
-                        "⚠ AutoHotkey 下載失敗，請手動安裝至 https://autohotkey.com"
-                    )
+            if not _ahk_mod.is_ahk_available():
+                reply = QMessageBox.question(
+                    self,
+                    "安裝 AutoHotkey",
+                    "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
+                    "是否自動下載並安裝？（約 3MB，不需管理員權限）",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
+                    QApplication.processEvents()
+                    if _ahk_mod.download_ahk():
+                        self._status_bar.showMessage("AutoHotkey 下載完成")
+                    else:
+                        self._status_bar.showMessage(
+                            "⚠ AutoHotkey 下載失敗，請手動安裝至 https://autohotkey.com"
+                        )
 
-        self._ahk_ready = _ahk_mod.init_ahk()
-        if not self._ahk_ready:
-            self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
+            self._ahk_ready = _ahk_mod.init_ahk()
+            if not self._ahk_ready:
+                self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
+        except Exception as e:
+            QMessageBox.critical(self, "啟動失敗", f"初始化過程中發生錯誤：\n{e}")
+            raise
 
     def _load_config(self) -> dict:
         try:

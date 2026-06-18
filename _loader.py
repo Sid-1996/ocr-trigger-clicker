@@ -24,6 +24,8 @@ def load_sibling(name: str, filename: str) -> object:
 
         path = str(_here / filename)
         spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None:
+            raise ImportError(f"找不到模組檔案: {filename}（路徑: {path}）")
         mod = importlib.util.module_from_spec(spec)
         sys.modules[name] = mod
         spec.loader.exec_module(mod)
