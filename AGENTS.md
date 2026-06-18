@@ -1,5 +1,18 @@
 # 專案筆記
 
+## 工作完成規範
+
+每次完成任何程式碼修改後，**必須主動執行以下步驟，不得等待使用者提醒**：
+
+1. `chcp 65001 > nul`
+2. `git add -A`
+3. `git commit -m "類型: 簡短說明"`
+4. `git push origin master`
+
+commit 訊息格式：`feat` / `fix` / `refactor` / `docs` / `chore` + 冒號 + 中文說明。
+
+---
+
 ## Shell / Git 指令規範
 
 - Windows 環境，執行任何 shell 指令前先設定編碼：`chcp 65001`
