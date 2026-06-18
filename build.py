@@ -40,7 +40,7 @@ def main():
         print("   1. 啟動虛擬環境（如有）：venv\\Scripts\\activate")
         print("   2. 安裝依賴：pip install rapidocr-onnxruntime")
         print("   3. 或直接在專案目錄執行：")
-        print(f'      cd "{os.path.dirname(__file__)}"')
+        print(f'      cd "{__file__}"')
         print(f'      "{sys.executable}" build.py')
         sys.exit(1)
 
@@ -58,24 +58,25 @@ def main():
     if ahk_src.exists():
         datas.append((str(ahk_src), "."))
 
+    # 核心模組 ─ 保留 core/ gui/ 目錄結構
     py_datas = [
-        "core/01_screenshot.py",
-        "core/02_ocr_engine.py",
-        "core/03_ahk_socket.py",
-        "core/04_rule_engine.py",
-        "core/05_main_loop.py",
-        "core/10_performance_monitor.py",
-        "gui/06_gui_main.py",
-        "gui/07_gui_roi.py",
-        "gui/08_gui_log.py",
-        "gui/09_ocr_debug.py",
-        "gui/13_gui_click_picker.py",
-        "build.py",
+        ("core/01_screenshot.py", "core"),
+        ("core/02_ocr_engine.py", "core"),
+        ("core/03_ahk_socket.py", "core"),
+        ("core/04_rule_engine.py", "core"),
+        ("core/05_main_loop.py", "core"),
+        ("core/10_performance_monitor.py", "core"),
+        ("gui/06_gui_main.py", "gui"),
+        ("gui/07_gui_roi.py", "gui"),
+        ("gui/08_gui_log.py", "gui"),
+        ("gui/09_ocr_debug.py", "gui"),
+        ("gui/13_gui_click_picker.py", "gui"),
+        ("build.py", "."),
     ]
-    for fn in py_datas:
-        f = here / fn
+    for rel, dest in py_datas:
+        f = here / rel
         if f.exists():
-            datas.append((str(f), "."))
+            datas.append((str(f), dest))
 
     hidden = [
         "rapidocr_onnxruntime",
@@ -91,6 +92,29 @@ def main():
         "tqdm",
     ]
 
+    exclude = [
+        "torch",
+        "torchvision",
+        "torchaudio",
+        "pandas",
+        "scipy",
+        "matplotlib",
+        "sympy",
+        "sentry_sdk",
+        "fsspec",
+        "pydantic",
+        "rich",
+        "urllib3",
+        "cryptography",
+        "pygments",
+        "chardet",
+        "openpyxl",
+        "jinja2",
+        "anyio",
+        "httpcore",
+        "httpx",
+    ]
+
     args = [
         "--onefile",
         "--windowed",
@@ -98,9 +122,12 @@ def main():
         "--distpath=" + str(here / "dist"),
         "--workpath=" + str(here / "build"),
         "--specpath=" + str(here),
+        "--noconfirm",
     ]
     for h in hidden:
         args.append(f"--hidden-import={h}")
+    for e in exclude:
+        args.append(f"--exclude-module={e}")
     for src, dst in datas:
         args.append(f"--add-data={src}{os.pathsep}{dst}")
 
@@ -117,6 +144,7 @@ def main():
     print("輸出: dist\\ocr-trigger-clicker.exe")
     print(f"資料檔案: {len(datas)} 項")
     print(f"隱藏 import: {len(hidden)} 項")
+    print(f"排除模組: {len(exclude)} 項")
     print()
 
     PyInstaller.__main__.run(args)
@@ -141,4 +169,3 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-    input("\n按 Enter 鍵結束...")

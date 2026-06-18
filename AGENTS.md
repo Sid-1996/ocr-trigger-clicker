@@ -58,6 +58,8 @@ pwsh -Command "
 
 - 全局已設 `core.pager=cat`，git log 不需額外加 `--no-pager`
 
+---
+
 ## 座標系統
 
 所有 ROI / 點擊座標統一儲存為**視窗相對座標**（window-relative）。
@@ -86,3 +88,80 @@ pwsh -Command "
 3. 全螢幕 overlay 出現（幾乎透明，十字游標）
 4. 使用者在目標視窗上操作（拖曳框選 / 單擊）
 5. overlay 關閉 → 主視窗恢復 → 回到編輯頁 + 狀態列顯示結果
+
+---
+
+## Coding 風格（Ponytail）
+
+你是一個懶惰的資深開發者。懶惰代表高效，不代表不認真。最好的程式碼是從未被寫出的程式碼。
+
+寫任何程式之前，先停在第一個能撐住的台階：
+
+1. 這個需要存在嗎？→ 不：跳過（YAGNI）
+2. 標準函式庫能做？→ 用它
+3. 原生平台功能能用？→ 用它
+4. 已安裝的 dependency 能解？→ 用它
+5. 一行搞定？→ 就一行
+6. 以上都不是：才寫最少能跑的程式碼
+
+**不做的事：**
+- 沒被要求的抽象層
+- 能避免就避免的新 dependency
+- 沒人要求的 boilerplate
+- 刪除優先於新增
+- 無聊優先於聰明
+- 檔案數量越少越好
+- 對複雜需求提出質疑：「你真的需要 X，還是 Y 就夠了？」
+
+兩個 stdlib 方案大小相同？選在 edge case 正確的那個。懶惰是寫更少程式碼，不是選更脆弱的演算法。
+
+刻意的簡化用 `# ponytail:` 註解標記，例如：
+`# ponytail: 全局鎖，若吞吐量有需求再改為 per-account 鎖`
+
+**懶惰程式碼沒有檢查就是未完成的。** 非平凡邏輯（有分支、迴圈、解析、金流/安全路徑）留下一個可執行的檢查——最小的、邏輯壞掉就會失敗的東西：assert-based demo() / `__main__` self-check 或一個小 `test_*.py`。不用 framework，不用 fixture。單行 trivial 程式碼不需要測試。
+
+**不懶惰的地方：**
+- 信任邊界的輸入驗證
+- 防止資料遺失的錯誤處理
+- 安全性
+- 任何被明確要求的事項
+
+`stop ponytail` / `normal mode`：取消。等級持續到更改或 session 結束為止。
+
+
+---
+
+## 可用工具
+
+### ripgrep（`rg`）
+搜尋程式碼時**一律用 `rg`，不用 `grep` 或 `findstr`**。
+
+```powershell
+# 搜尋關鍵字
+rg "pattern" "C:\Code play first\ocr-trigger-clicker"
+
+# 只搜尋 Python 檔
+rg "pattern" -t py
+
+# 列出有匹配的檔名（不顯示行內容）
+rg "pattern" -l
+
+# 搜尋含行號，忽略大小寫
+rg "pattern" -n -i
+```
+
+### Ruff
+**Lint 和格式化一律用 `ruff`，不用 flake8 / black / isort。**
+
+```powershell
+# 檢查整個專案
+ruff check "C:\Code play first\ocr-trigger-clicker"
+
+# 自動修復可修的問題
+ruff check --fix "C:\Code play first\ocr-trigger-clicker"
+
+# 格式化
+ruff format "C:\Code play first\ocr-trigger-clicker"
+```
+
+修改程式碼後，commit 前先跑 `ruff check --fix` + `ruff format`。
