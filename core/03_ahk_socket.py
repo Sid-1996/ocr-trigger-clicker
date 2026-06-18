@@ -3,7 +3,9 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.request
 import winreg
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +18,19 @@ _heartbeat_event = threading.Event()
 _initialized = False
 _restart_fail_count = 0
 _MAX_RESTART_ATTEMPTS = 3
+
+_AHK_DOWNLOAD_URL = (
+    "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip"
+)
+
+
+def _ahk_data_dir() -> Path:
+    try:
+        from build import get_data_path
+
+        return Path(get_data_path("ahk"))
+    except ImportError:
+        return Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "ahk"
 
 
 def _find_ahk() -> str:
@@ -147,6 +162,11 @@ def _find_ahk_executable() -> str | None:
         path = shutil.which(exe_name)
         if path:
             return path
+    # 最後檢查 data dir 是否已下載過
+    for exe_name in ["AutoHotkey64.exe", "AutoHotkey32.exe", "AutoHotkey.exe"]:
+        candidate = _ahk_data_dir() / exe_name
+        if candidate.exists():
+            return str(candidate)
     return None
 
 
@@ -165,6 +185,36 @@ def _launch_ahk() -> bool:
         return True
     except Exception as e:
         print(f"啟動 AutoHotkey 失敗：{e}")
+        return False
+
+
+def is_ahk_available() -> bool:
+    return _find_ahk_executable() is not None
+
+
+def download_ahk() -> bool:
+    dest_dir = _ahk_data_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    exe_path = dest_dir / "AutoHotkey64.exe"
+    if exe_path.exists():
+        return True
+    zip_path = dest_dir / "ahk_download.zip"
+    try:
+        print("正在下載 AutoHotkey v2 ...")
+        urllib.request.urlretrieve(_AHK_DOWNLOAD_URL, zip_path)
+        print("下載完成，正在解壓縮...")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(dest_dir)
+        zip_path.unlink()
+        if exe_path.exists():
+            print(f"AutoHotkey 已安裝至 {dest_dir}")
+            return True
+        print("解壓縮後找不到 AutoHotkey64.exe")
+        return False
+    except Exception as e:
+        print(f"下載 AutoHotkey 失敗：{e}")
+        if zip_path.exists():
+            zip_path.unlink()
         return False
 
 
@@ -256,12 +306,14 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
 def _load_screen_bounds() -> dict:
     try:
         from _loader import load_sibling
+
         perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
         return perf.get_screen_bounds()
     except Exception:
         SM_CXSCREEN = 0
         SM_CYSCREEN = 1
         import ctypes
+
         user32 = ctypes.windll.user32
         return {
             "x": 0,
@@ -273,7 +325,12 @@ def _load_screen_bounds() -> dict:
 
 def _validate_coords(x: int, y: int) -> bool:
     bounds = _load_screen_bounds()
-    if x < bounds["x"] or y < bounds["y"] or x >= bounds["x"] + bounds["w"] or y >= bounds["y"] + bounds["h"]:
+    if (
+        x < bounds["x"]
+        or y < bounds["y"]
+        or x >= bounds["x"] + bounds["w"]
+        or y >= bounds["y"] + bounds["h"]
+    ):
         print(f"[安全] 拒絕超出螢幕的點擊: ({x}, {y}) 螢幕={bounds}")
         return False
     return True

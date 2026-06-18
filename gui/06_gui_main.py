@@ -207,6 +207,24 @@ class MainWindow(QMainWindow):
         self._restore_last_state()
         self._refresh_task_list()
 
+        if not _ahk_mod.is_ahk_available():
+            reply = QMessageBox.question(
+                self,
+                "安裝 AutoHotkey",
+                "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
+                "是否自動下載並安裝？（約 3MB，不需管理員權限）",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
+                QApplication.processEvents()
+                if _ahk_mod.download_ahk():
+                    self._status_bar.showMessage("AutoHotkey 下載完成")
+                else:
+                    self._status_bar.showMessage(
+                        "⚠ AutoHotkey 下載失敗，請手動安裝至 https://autohotkey.com"
+                    )
+
         self._ahk_ready = _ahk_mod.init_ahk()
         if not self._ahk_ready:
             self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
