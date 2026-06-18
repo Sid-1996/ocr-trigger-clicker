@@ -400,6 +400,7 @@ class MainWindow(QMainWindow):
         self._edit_click_position.setToolTip("text_center：點擊文字中心 ｜ custom：自訂座標")
         self._edit_coord_label = QLabel("尚未選取")
         self._edit_pick_coord_btn = QPushButton("選取點擊座標")
+        self._edit_pick_coord_btn.setToolTip("在目標視窗上點擊以選取自訂點擊座標")
         self._edit_pick_coord_btn.clicked.connect(self._on_pick_coord)
         self._coord_row = QWidget()
         coord_layout = QHBoxLayout(self._coord_row)
@@ -522,7 +523,16 @@ class MainWindow(QMainWindow):
         self._edit_key.setToolTip("選擇或輸入要模擬的按鍵名稱（支援 Shift+字母快速跳轉）")
         self._edit_depends_on = QListWidget()
         self._edit_depends_on.setToolTip("勾選此規則依賴的前置規則（全部觸發後才會開始偵測）")
-        self._edit_depends_on.setMaximumHeight(120)
+        self._edit_depends_on.setMaximumHeight(180)
+        self._edit_depends_on.setAlternatingRowColors(True)
+        self._edit_depends_on_label = QLabel("勾選需全部觸發後才執行本規則的前置規則：")
+        self._edit_depends_on_label.setStyleSheet("color: #888; font-size: 11px;")
+        self._edit_depends_on_container = QWidget()
+        dep_layout = QVBoxLayout(self._edit_depends_on_container)
+        dep_layout.setContentsMargins(0, 0, 0, 0)
+        dep_layout.setSpacing(2)
+        dep_layout.addWidget(self._edit_depends_on_label)
+        dep_layout.addWidget(self._edit_depends_on)
 
         # ── Phase 2: sub-target (if/if-not) ──
         self._sub_toggle_btn = QPushButton("▸ 階段二條件 (if/if-not)")
@@ -552,6 +562,7 @@ class MainWindow(QMainWindow):
         )
         self._edit_on_found_custom_label = QLabel("尚未選取")
         self._edit_on_found_pick_btn = QPushButton("選取點擊座標")
+        self._edit_on_found_pick_btn.setToolTip("在目標視窗上點擊以選取「找到時」的自訂點擊座標")
         self._edit_on_found_pick_btn.clicked.connect(self._on_pick_sub_found_coord)
         self._on_found_coord_row = QWidget()
         of_layout = QHBoxLayout(self._on_found_coord_row)
@@ -565,6 +576,7 @@ class MainWindow(QMainWindow):
         )
         self._edit_on_not_found_custom_label = QLabel("尚未選取")
         self._edit_on_not_found_pick_btn = QPushButton("選取點擊座標")
+        self._edit_on_not_found_pick_btn.setToolTip("在目標視窗上點擊以選取「未找到時」的自訂點擊座標")
         self._edit_on_not_found_pick_btn.clicked.connect(self._on_pick_sub_not_found_coord)
         self._on_not_found_coord_row = QWidget()
         onf_layout = QHBoxLayout(self._on_not_found_coord_row)
@@ -601,7 +613,7 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("動作類型:", self._edit_action_type)
         self._edit_form.addRow("按鍵:", self._edit_key)
         self._edit_form.addRow("滑鼠按鈕:", self._edit_click_button)
-        self._edit_form.addRow("前置規則:", self._edit_depends_on)
+        self._edit_form.addRow("前置規則:", self._edit_depends_on_container)
         self._edit_form.addRow("點擊位置:", self._edit_click_position)
         self._edit_form.addRow("點擊座標:", self._coord_row)
         self._edit_form.addRow("模糊比對:", self._edit_fuzzy)
@@ -919,6 +931,8 @@ class MainWindow(QMainWindow):
             self._show_rule_detail(None)
 
     def _update_rule_status(self):
+        if getattr(self, '_updating_status', False):
+            return
         if not self._loop or not self._loop.is_running:
             self._refresh_rule_list()
             return
@@ -951,8 +965,12 @@ class MainWindow(QMainWindow):
             for j in range(item.childCount()):
                 _walk(item.child(j))
 
-        for i in range(self._rule_list.topLevelItemCount()):
-            _walk(self._rule_list.topLevelItem(i))
+        self._updating_status = True
+        try:
+            for i in range(self._rule_list.topLevelItemCount()):
+                _walk(self._rule_list.topLevelItem(i))
+        finally:
+            self._updating_status = False
 
     def _has_cycle(self, rule_id: str, proposed_deps: list[str]) -> bool:
         adj: dict[str, list[str]] = {}
@@ -1614,11 +1632,14 @@ class MainWindow(QMainWindow):
         else:
             self._edit_save_btn.setEnabled(False)
             self._edit_roi_btn.setEnabled(False)
+            self._edit_roi_label.setEnabled(False)
             self._edit_name.setEnabled(False)
             self._edit_target.setEnabled(False)
             self._edit_enabled.setEnabled(False)
             self._edit_cooldown.setEnabled(False)
             self._edit_trigger_mode.setEnabled(False)
+            self._edit_action_type.setEnabled(False)
+            self._edit_key.setEnabled(False)
             self._edit_click_button.setEnabled(False)
             self._edit_click_position.setEnabled(False)
             self._edit_pick_coord_btn.setEnabled(False)
@@ -1626,6 +1647,17 @@ class MainWindow(QMainWindow):
             self._edit_fuzzy_threshold.setEnabled(False)
             self._edit_max_triggers.setEnabled(False)
             self._edit_random_offset.setEnabled(False)
+            self._edit_post_delay.setEnabled(False)
+            self._edit_depends_on_container.setEnabled(False)
+            self._sub_toggle_btn.setEnabled(False)
+            self._edit_sub_target.setEnabled(False)
+            self._edit_sub_roi_btn.setEnabled(False)
+            self._edit_sub_not_found_retries.setEnabled(False)
+            self._edit_on_found_action.setEnabled(False)
+            self._edit_on_found_pick_btn.setEnabled(False)
+            self._edit_on_not_found_action.setEnabled(False)
+            self._edit_on_not_found_pick_btn.setEnabled(False)
+            self._clear_sub_btn.setEnabled(False)
 
     # === Thread-safe callbacks ===
     def _on_trigger_from_thread(self, log: TriggerLog):
@@ -1664,6 +1696,7 @@ class MainWindow(QMainWindow):
 
     # === Close ===
     def closeEvent(self, event):
+        self._status_timer.stop()
         if self._loop:
             self._loop.stop()
         self._perf_timer.stop()
