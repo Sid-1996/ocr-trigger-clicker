@@ -945,6 +945,36 @@ class MainWindow(QMainWindow):
             for j in range(item.childCount()):
                 _set_text(item.child(j))
 
+    def _has_cycle(self, rule_id: str, proposed_deps: list[str]) -> bool:
+        adj: dict[str, list[str]] = {}
+        for r in self._rules:
+            if r.id == rule_id:
+                adj[rule_id] = proposed_deps
+            else:
+                adj[r.id] = list(r.depends_on)
+
+        visited: set[str] = set()
+        stack: set[str] = set()
+
+        def dfs(node: str) -> bool:
+            if node in stack:
+                return True
+            if node in visited:
+                return False
+            visited.add(node)
+            stack.add(node)
+            for dep in adj.get(node, []):
+                if dep in adj:
+                    if dfs(dep):
+                        return True
+            stack.remove(node)
+            return False
+
+        for node in adj:
+            if dfs(node):
+                return True
+        return False
+
     def _get_current_rule(self) -> Optional[Rule]:
         for r in self._rules:
             if r.id == self._selected_rule_id:
@@ -1214,6 +1244,9 @@ class MainWindow(QMainWindow):
             for i in range(self._edit_depends_on.count())
             if self._edit_depends_on.item(i).checkState() == Qt.CheckState.Checked
         ]
+        if self._has_cycle(rule.id, rule.depends_on):
+            QMessageBox.warning(self, "循環依賴", "偵測到循環依賴！\n規則 A 依賴規則 B、規則 B 又依賴規則 A，將導致兩者永遠無法觸發。\n請取消勾選其中一項後再儲存。")
+            return
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         if self._loop:
