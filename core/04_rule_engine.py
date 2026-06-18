@@ -133,7 +133,10 @@ def _dict_to_rule(d: dict) -> Rule:
 
 
 def _rule_to_dict(r: Rule) -> dict:
-    return asdict(r)
+    d = asdict(r)
+    d.pop("trigger_count", None)
+    d.pop("last_trigger_time", None)
+    return d
 
 
 def load_rules(path: str) -> list[Rule]:

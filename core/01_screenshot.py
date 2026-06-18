@@ -86,17 +86,30 @@ def capture(title: str) -> np.ndarray | None:
     if rect is None:
         return None
     try:
-        with mss.mss() as sct:
-            left = int(rect["x"])
-            top = int(rect["y"])
-            right = left + int(rect["w"])
-            bottom = top + int(rect["h"])
+        hwnd = get_window_hwnd(title)
+        scale = get_dpi_scaling_factor(hwnd)
 
-            monitor = sct.monitors[0]
-            x1 = max(left, int(monitor["left"]))
-            y1 = max(top, int(monitor["top"]))
-            x2 = min(right, int(monitor["left"]) + int(monitor["width"]))
-            y2 = min(bottom, int(monitor["top"]) + int(monitor["height"]))
+        with mss.mss() as sct:
+            left = int(rect["x"] * scale)
+            top = int(rect["y"] * scale)
+            right = int((rect["x"] + rect["w"]) * scale)
+            bottom = int((rect["y"] + rect["h"]) * scale)
+
+            # 多螢幕支援：找出涵蓋此視窗的螢幕（跳過 monitors[0] 全局虛擬螢幕）
+            best_monitor = None
+            for m in sct.monitors[1:]:
+                mx1, my1 = m["left"], m["top"]
+                mx2, my2 = mx1 + m["width"], my1 + m["height"]
+                if left < mx2 and right > mx1 and top < my2 and bottom > my1:
+                    best_monitor = m
+                    break
+            if best_monitor is None:
+                best_monitor = sct.monitors[0]
+
+            x1 = max(left, best_monitor["left"])
+            y1 = max(top, best_monitor["top"])
+            x2 = min(right, best_monitor["left"] + best_monitor["width"])
+            y2 = min(bottom, best_monitor["top"] + best_monitor["height"])
             if x2 <= x1 or y2 <= y1:
                 return None
 
