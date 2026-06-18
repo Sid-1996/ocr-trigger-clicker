@@ -3,85 +3,218 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OCR Trigger Clicker — 工具介紹</title>
+<title>OCR Trigger Clicker — 螢幕文字偵測自動點擊工具 | 繁體中文 OCR 自動化</title>
+<meta name="description" content="OCR Trigger Clicker 是一套 Windows 綠色免安裝工具，透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作。支援繁體中文、多重觸發條件、二次確認，適合遊戲輔助、表單自動化、監控告警回應。">
+<meta name="keywords" content="OCR,文字辨識,自動點擊,螢幕偵測,繁體中文,Windows工具,綠色軟體,RapidOCR,自動化,按鍵精靈,遊戲輔助">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://sid-1996.github.io/ocr-trigger-clicker/">
+<meta property="og:type" content="software">
+<meta property="og:title" content="OCR Trigger Clicker — 螢幕文字偵測自動點擊工具">
+<meta property="og:description" content="綠色免安裝 Windows 工具，用 OCR 偵測螢幕文字後自動點擊／鍵盤操作。支援繁體中文、ROI 區域設定、多重條件比對。">
+<meta property="og:url" content="https://sid-1996.github.io/ocr-trigger-clicker/">
 <meta property="og:image" content="https://sid-1996.github.io/ocr-trigger-clicker/images/ocr-trigger-clicker.png">
+<meta property="og:locale" content="zh_TW">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OCR Trigger Clicker — 螢幕文字偵測自動點擊工具">
+<meta name="twitter:description" content="綠色免安裝 Windows 工具，用 OCR 偵測螢幕文字後自動點擊／鍵盤操作。">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "OCR Trigger Clicker",
+  "operatingSystem": "Windows 10/11 64-bit",
+  "applicationCategory": "UtilityApplication",
+  "description": "透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作的 Windows 綠色工具。",
+  "author": { "@type": "Person", "name": "Sid" },
+  "softwareVersion": "0.0.0",
+  "license": "https://github.com/Sid-1996/ocr-trigger-clicker/blob/master/LICENSE",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" }
+}
+</script>
 <style>
-  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; line-height: 1.7; color: #c9d1d9; background: #0d1117; }
-  h1 { border-bottom: 2px solid #30363d; padding-bottom: 8px; color: #e6edf3; }
-  h2 { margin-top: 32px; color: #e6edf3; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 800px; margin: 0 auto; padding: 0 20px 60px; line-height: 1.8; color: #c9d1d9; background: #0d1117; }
+  h1 { border-bottom: 2px solid #30363d; padding-bottom: 10px; color: #e6edf3; font-size: 1.8em; }
+  h2 { margin-top: 40px; color: #e6edf3; border-left: 4px solid #1f6feb; padding-left: 12px; }
+  h3 { margin-top: 28px; color: #e6edf3; }
   a { color: #58a6ff; }
+  a:hover { text-decoration: underline; }
   code { background: #161b22; padding: 2px 6px; border-radius: 3px; font-size: .9em; color: #c9d1d9; }
-  ul { padding-left: 20px; }
-  li { margin: 6px 0; }
-  .badge { display: inline-block; background: #1f6feb; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: .8em; }
-  hr { border: none; border-top: 1px solid #30363d; margin: 32px 0; }
-  img.screenshot { max-width: 100%; border: 1px solid #30363d; border-radius: 6px; margin: 8px 0; cursor: zoom-in; }
-  #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.85); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
-  #lightbox img { max-width: 90%; max-height: 90%; border-radius: 4px; box-shadow: 0 0 30px rgba(0,0,0,.5); }
+  ul, ol { padding-left: 22px; }
+  li { margin: 8px 0; }
+  .badge { display: inline-block; background: #1f6feb; color: #fff; padding: 3px 12px; border-radius: 12px; font-size: .8em; margin-right: 4px; }
+  .badge.gray { background: #6e7681; }
+  .badge.green { background: #238636; }
+  hr { border: none; border-top: 1px solid #30363d; margin: 40px 0; }
+  img.screenshot { max-width: 100%; border: 1px solid #30363d; border-radius: 8px; margin: 16px 0; cursor: zoom-in; }
+  .cta { text-align: center; margin: 32px 0; padding: 24px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
+  .cta a { display: inline-block; background: #238636; color: #fff; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-size: 1.1em; font-weight: 600; }
+  .cta a:hover { background: #2ea043; }
+  .cta .sub { margin-top: 8px; font-size: .85em; color: #8b949e; }
+  .faq q { font-style: italic; color: #8b949e; display: block; margin: 4px 0 12px 16px; border-left: 2px solid #30363d; padding-left: 12px; }
+  #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.88); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
+  #lightbox img { max-width: 92%; max-height: 92%; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,.6); }
   #lightbox.show { display: flex; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #30363d; font-size: .85em; color: #8b949e; text-align: center; }
 </style>
 </head>
 <body>
 
-<h1>OCR Trigger Clicker</h1>
-<p><span class="badge">v0.0.0 Beta</span> <span class="badge" style="background:#6e7681;">綠色免安裝</span></p>
+<header>
+  <h1>OCR Trigger Clicker</h1>
+  <p>
+    <span class="badge">v0.0.0 Beta</span>
+    <span class="badge gray">綠色免安裝</span>
+    <span class="badge green">繁體中文 OCR</span>
+  </p>
+  <p>一套 Windows 上的 OCR 自動化工具：偵測螢幕特定文字後，自動執行滑鼠點擊或鍵盤操作。適合遊戲輔助、重複性表單操作、即時監控觸發等場景。</p>
+</header>
 
-<p>一套 Windows 上的 OCR 自動化工具：偵測螢幕特定文字後，自動執行滑鼠點擊或鍵盤操作。適合遊戲輔助、重複性表單操作、即時監控觸發等場景。</p>
+<nav>
+  <h2>目錄</h2>
+  <ul>
+    <li><a href="#features">核心功能</a></li>
+    <li><a href="#screenshots">介面截圖</a></li>
+    <li><a href="#guide">使用指引</a></li>
+    <li><a href="#scenarios">適用場景</a></li>
+    <li><a href="#faq">常見問題</a></li>
+    <li><a href="#requirements">系統需求</a></li>
+    <li><a href="#download">下載</a></li>
+  </ul>
+</nav>
 
-<img class="screenshot" src="images/gui.png" alt="工具主介面">
-
-<h2>核心功能</h2>
-<ul>
-  <li><strong>OCR 文字辨識</strong> — 基於 RapidOCR 引擎，支援繁體／簡體中文，可指定 ROI 區域精確比對</li>
-  <li><strong>多重觸發條件</strong> — 支援「完全相符」、「開頭相符」、「結尾相符」、「包含」、「不包含」、「正則表達式」六種比對模式</li>
-  <li><strong>點擊／鍵盤操作</strong> — 透過 AutoHotkey v2 執行滑鼠點擊（左／中／右鍵、雙擊）與鍵盤輸入，點擊座標可手動選取</li>
-  <li><strong>進階條件（二次確認）</strong> — 第一組文字符合後，等候第二組文字出現才觸發，避免誤判</li>
-  <li><strong>等待規則</strong> — 觸發前可設定等待某文字出現或消失，支援倒數超時</li>
-  <li><strong>多任務管理</strong> — 不同場景可建立獨立任務，任務之間規則完全隔離</li>
-  <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字與位置，幫助快速設定 ROI</li>
-  <li><strong>僅前景點擊</strong> — 安全模式，只在目標視窗位於前景時才執行點擊</li>
-</ul>
-
-<img class="screenshot" src="images/zh_ocr.png" alt="OCR 診斷功能">
-
-<h2>適用場景</h2>
-<ul>
-  <li>表單或 ERP 系統中反覆填寫相同欄位</li>
-  <li>遊戲中根據畫面文字自動執行操作</li>
-  <li>監控畫面中的告警訊息並自動回應</li>
-  <li>批次處理需要等待特定狀態的任務</li>
-</ul>
-
-<h2>系統需求</h2>
-<ul>
-  <li>Windows 10 / 11（64 位元）</li>
-  <li>不需要 Python、不需要額外執行環境</li>
-  <li>首次啟動會自動下載 AutoHotkey v2（約 3MB，可選擇不下載）</li>
-  <li>支援 DirectX 12 的 GPU（選擇性，可加速 OCR）</li>
-</ul>
-
-<h2>使用流程</h2>
-<ol>
-  <li>選擇目標視窗</li>
-  <li>框選 OCR 偵測區域（ROI）</li>
-  <li>設定比對文字與觸發動作</li>
-  <li>按「啟動」開始自動偵測</li>
-</ol>
-
-<h2>注意事項</h2>
-<ul>
-  <li>文字比對為「純文字擷取比對」，非影像比對（不支援圖示、圖形辨識）</li>
-  <li>每次截圖間隔受 FPS 限制，預設每秒約 10 次</li>
-  <li>ROI 越小、文字越清晰，辨識速度越快</li>
-</ul>
+<div class="cta">
+  <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">前往 GitHub 下載</a>
+  <div class="sub">v0.0.0 Beta — Windows 10/11 64-bit — 單執行檔，免安裝</div>
+</div>
 
 <hr>
-<p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a></p>
 
-<div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大"></div>
+<main>
+<section id="features">
+  <h2>核心功能</h2>
+  <ul>
+    <li><strong>OCR 文字辨識</strong> — 基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI（感興趣區域）精確比對，避免全螢幕干擾。</li>
+    <li><strong>六種比對模式</strong> — 完全相符、開頭相符、結尾相符、包含、不包含、正則表達式，涵蓋絕大多數觸發邏輯需求。</li>
+    <li><strong>滑鼠點擊與鍵盤操作</strong> — 透過 AutoHotkey v2 執行左鍵／中鍵／右鍵／雙擊，以及鍵盤文字輸入。點擊座標可手動選取或相對位移。</li>
+    <li><strong>進階條件（二次確認）</strong> — 第一組文字符合後，等候第二組文字出現才觸發，避免 UI 過渡狀態造成誤判。</li>
+    <li><strong>等待規則</strong> — 觸發動作前可設定等待某文字出現或消失，支援倒數超時與超時處理。</li>
+    <li><strong>多任務管理</strong> — 不同場景（不同遊戲、不同表單）可建立獨立任務，規則完全隔離，快速切換。</li>
+    <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字及其位置與信心度，大幅降低 ROI 設定難度。</li>
+    <li><strong>僅前景點擊</strong> — 安全模式，只在目標視窗位於前景時才執行點擊，避免干擾其他操作。</li>
+    <li><strong>規則匯入／匯出</strong> — 任務可匯出為 JSON 檔，分享給他人或備份。</li>
+  </ul>
+</section>
+
+<section id="screenshots">
+  <h2>介面截圖</h2>
+  <figure>
+    <img class="screenshot" src="images/gui.png" alt="OCR Trigger Clicker 工具主介面 — 視窗選取、任務管理、規則列表與編輯區" loading="lazy">
+    <figcaption style="font-size:.85em;color:#8b949e;">主介面：視窗選擇、任務管理、規則編輯</figcaption>
+  </figure>
+  <figure>
+    <img class="screenshot" src="images/zh_ocr.png" alt="OCR 即時診斷功能 — 顯示視窗內所有可辨識文字、位置與信心度" loading="lazy">
+    <figcaption style="font-size:.85em;color:#8b949e;">OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
+  </figure>
+</section>
+
+<hr>
+
+<section id="guide">
+  <h2>使用指引</h2>
+
+  <h3>快速入門</h3>
+  <ol>
+    <li>從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
+    <li>在工具列選取目標視窗（例如遊戲、ERP 系統、瀏覽器），按下「重新整理」掃描可見視窗。</li>
+    <li>點擊「＋新增規則」開始設定觸發條件。</li>
+    <li>設定規則名稱、選擇比對模式、輸入要偵測的文字。</li>
+    <li>框選 ROI（偵測區域）：點擊「框選區域」按鈕，在目標視窗上拖曳選取範圍。</li>
+    <li>設定觸發動作為滑鼠點擊或鍵盤輸入，必要時選取點擊座標。</li>
+    <li>按下工具列的「啟動」開始自動偵測。</li>
+  </ol>
+
+  <h3>進階技巧</h3>
+  <ul>
+    <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快，建議只框選包含目標文字的最小範圍。</li>
+    <li><strong>使用二次確認</strong>：若目標文字在 UI 動畫過程中短暫出現又消失，可設定第二組確認文字再觸發。</li>
+    <li><strong>任務分割</strong>：不同遊戲角色或不同表單頁面建議拆成不同任務，方便管理與除錯。</li>
+    <li><strong>OCR 診斷模式</strong>：按下「OCR 診斷」可即時看到視窗中所有文字，幫助確認 ROI 位置是否正確。</li>
+    <li><strong>等待規則</strong>：若點擊後會跳出新視窗或對話框，使用「等待文字出現」確保畫面準備好再進行下一步。</li>
+  </ul>
+</section>
+
+<section id="scenarios">
+  <h2>適用場景</h2>
+  <ul>
+    <li><strong>表單自動填寫</strong> — ERP、CRM 等 Web 系統中反覆填寫相同欄位，等待特定提示文字後自動點擊下一步。</li>
+    <li><strong>遊戲日常任務</strong> — 根據畫面中的 NPC 對話或系統訊息自動執行重複操作，如 farming、釣魚、採集。</li>
+    <li><strong>即時監控告警</strong> — 監控畫面中的錯誤訊息或告警文字，自動觸發截圖、點擊確認或執行復原腳本。</li>
+    <li><strong>批次處理</strong> — 需要等待特定狀態文字出現才能進行的批次工作，如轉檔、匯出、壓縮。</li>
+    <li><strong>QA 自動化測試</strong> — 根據 UI 文字判斷頁面狀態並執行對應操作，輔助手動測試流程。</li>
+  </ul>
+</section>
+
+<section id="faq">
+  <h2>常見問題</h2>
+
+  <h3>需要安裝 Python 或任何環境嗎？</h3>
+  <p>不需要。下載 ZIP 解壓縮後直接執行 <code>ocr-trigger-clicker.exe</code> 即可。</p>
+
+  <h3>為什麼需要 AutoHotkey？</h3>
+  <p>本工具使用 AutoHotkey v2 執行滑鼠點擊與鍵盤操作。首次啟動時會詢問是否自動下載（約 3MB），若選擇不下載則僅 OCR 偵測功能可用。</p>
+
+  <h3>支援哪些語言的文字辨識？</h3>
+  <p>預設使用 RapidOCR 通用模型，辨識效果以繁體中文與簡體中文最佳。可透過 <code>custom_models/</code> 自訂模型。</p>
+
+  <h3>OCR 辨識速度如何？</h3>
+  <p>一般情況下每秒可處理 5–15 次，取決於 ROI 大小與 CPU/GPU 效能。支援 DirectML GPU 加速（需 DirectX 12 顯卡）。</p>
+
+  <h3>可以辨識圖示或圖片嗎？</h3>
+  <p>不行。本工具為純文字 OCR，不支援圖形比對。若需要圖形辨識，建議搭配其他工具使用。</p>
+
+  <h3>多個規則可以同時執行嗎？</h3>
+  <p>可以。同一個任務下的所有規則會依序比對，只要符合條件的規則都會觸發其對應動作。</p>
+
+  <h3>規則設定檔存在哪裡？</h3>
+  <p>設定檔與任務資料儲存在 <code>%APPDATA%\ocr-trigger-clicker\</code>，解除安裝或刪除 exe 後設定仍會保留。</p>
+</section>
+
+<section id="requirements">
+  <h2>系統需求</h2>
+  <ul>
+    <li>Windows 10 / 11（64 位元）</li>
+    <li>不需要 Python、Node.js 或其他執行環境</li>
+    <li>首次啟動會自動下載 AutoHotkey v2（約 3MB，可選擇不下載）</li>
+    <li>支援 DirectX 12 的 GPU（選擇性，可加速 OCR 辨識）</li>
+  </ul>
+</section>
+
+<section id="download">
+  <h2>下載</h2>
+  <p>目前版本：<strong>v0.0.0 Beta</strong></p>
+  <ul>
+    <li>下載：<a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.0" rel="noopener noreferrer">GitHub Releases — v0.0.0</a></li>
+    <li>原始碼：<a href="https://github.com/Sid-1996/ocr-trigger-clicker" rel="noopener noreferrer">github.com/Sid-1996/ocr-trigger-clicker</a></li>
+  </ul>
+</section>
+</main>
+
+<hr>
+
+<footer>
+  <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 MIT 授權釋出</p>
+  <p style="margin-top:4px;">發現問題？請到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues">Issues</a> 回報</p>
+</footer>
+
+<div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大檢視"></div>
 <script>
 document.querySelectorAll('.screenshot').forEach(function(img) {
-  img.onclick = function() { var lb = document.getElementById('lightbox'); lb.querySelector('img').src = this.src; lb.classList.add('show'); }
+  img.onclick = function() {
+    var lb = document.getElementById('lightbox');
+    lb.querySelector('img').src = this.src;
+    lb.classList.add('show');
+  };
 });
 </script>
 </body>
