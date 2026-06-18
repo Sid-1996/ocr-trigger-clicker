@@ -165,3 +165,28 @@ ruff format "C:\Code play first\ocr-trigger-clicker"
 ```
 
 修改程式碼後，commit 前先跑 `ruff check --fix` + `ruff format`。
+
+---
+
+## 版本管理與發行流程
+
+### 版本資訊
+- `_version.py` — 單一事實來源（`__version__` / `__author__` / `__github__`）
+- `latest_version.txt` — 給客戶端版本檢查用（純文字，一行版本號）
+
+### 發版指令
+
+```powershell
+.\release.ps1 -Version "0.1.0" -Notes "更新說明"
+```
+
+此腳本自動完成：
+1. 更新 `_version.py` + `latest_version.txt`
+2. commit + push
+3. `python build.py` 打包
+4. 壓 ZIP
+5. git tag + push
+6. `gh release create` 上傳至 GitHub Releases
+7. 輸出 release 網址
+
+若 `-Notes` 省略則不寫 release note，可在 GitHub 上手動補充。
