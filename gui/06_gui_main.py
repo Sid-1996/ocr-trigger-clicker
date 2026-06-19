@@ -41,6 +41,7 @@ sys.path.insert(0, str(_base))
 from _loader import load_sibling
 
 _here = _base
+_GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
 
 from _version import __author__, __github__, __version__  # noqa: E402
 
@@ -346,6 +347,10 @@ class MainWindow(QMainWindow):
         self._about_btn.setToolTip(f"OCR Trigger Clicker v{__version__} — 作者: {__author__}")
         self._about_btn.clicked.connect(self._show_about)
         toolbar.addWidget(self._about_btn)
+        self._guide_btn = QPushButton("新手教學")
+        self._guide_btn.setToolTip("開啟 GitHub Pages 的互動式使用指引")
+        self._guide_btn.clicked.connect(self._open_guide)
+        toolbar.addWidget(self._guide_btn)
         layout.addLayout(toolbar)
 
         # === Middle: stacked pages (rules / OCR debug) ===
@@ -1792,8 +1797,14 @@ class MainWindow(QMainWindow):
             f"<h3>OCR Trigger Clicker v{__version__}</h3>"
             f"<p>作者: {__author__}</p>"
             f"<p>專案: <a href='{__github__}'>{__github__}</a></p>"
+            f"<p>新手教學: <a href='{_GUIDE_URL}'>{_GUIDE_URL}</a></p>"
             f"<hr><p><b>Beta 版本</b> — 可能有未預期的問題</p>",
         )
+
+    def _open_guide(self):
+        import webbrowser
+
+        webbrowser.open(_GUIDE_URL)
 
     def _check_version(self):
         import urllib.request

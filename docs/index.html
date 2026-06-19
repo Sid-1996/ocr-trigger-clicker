@@ -51,6 +51,20 @@
   .cta a { display: inline-block; background: #238636; color: #fff; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-size: 1.1em; font-weight: 600; }
   .cta a:hover { background: #2ea043; }
   .cta .sub { margin-top: 8px; font-size: .85em; color: #8b949e; }
+  .start-flow { margin: 24px 0 8px; padding: 20px; background: linear-gradient(180deg, #161b22 0%, #0f141a 100%); border: 1px solid #30363d; border-radius: 12px; }
+  .start-flow h2 { margin-top: 0; }
+  .path-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  .path-card { appearance: none; border: 1px solid #30363d; background: #0d1117; color: #e6edf3; border-radius: 10px; padding: 16px; text-align: left; cursor: pointer; min-height: 120px; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+  .path-card:hover { transform: translateY(-2px); border-color: #58a6ff; background: #111827; }
+  .path-card.active { border-color: #2ea043; box-shadow: 0 0 0 1px rgba(46,160,67,.25) inset; }
+  .path-card .tag { display: inline-block; font-size: .78em; color: #8b949e; margin-bottom: 8px; }
+  .path-card strong { display: block; margin-bottom: 6px; font-size: 1.02em; }
+  .path-card span { display: block; color: #c9d1d9; font-size: .92em; line-height: 1.6; }
+  .path-hint { margin-top: 12px; color: #8b949e; font-size: .92em; }
+  @media (max-width: 720px) {
+    .path-grid { grid-template-columns: 1fr; }
+    .start-flow { padding: 16px; }
+  }
   .faq q { font-style: italic; color: #8b949e; display: block; margin: 4px 0 12px 16px; border-left: 2px solid #30363d; padding-left: 12px; }
   #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.88); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
   #lightbox img { max-width: 92%; max-height: 92%; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,.6); }
@@ -87,6 +101,29 @@
   <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">前往 GitHub 下載</a>
   <div class="sub">v0.0.0 Beta — Windows 10/11 64-bit — 單執行檔，免安裝</div>
 </div>
+
+<section class="start-flow" id="start">
+  <h2>先選你現在要做什麼</h2>
+  <p>這不是一份要從頭讀完的文件。先點一個情境，直接跳到你需要的段落。</p>
+  <div class="path-grid">
+    <button class="path-card" type="button" data-target="guide">
+      <span class="tag">第一次使用</span>
+      <strong>我要先跑起來</strong>
+      <span>看最短流程：下載、開啟、選視窗、加規則、啟動。</span>
+    </button>
+    <button class="path-card" type="button" data-target="features">
+      <span class="tag">還沒設定好</span>
+      <strong>我要看功能長什麼樣</strong>
+      <span>先理解 ROI、OCR 診斷、二次確認與任務管理。</span>
+    </button>
+    <button class="path-card" type="button" data-target="faq">
+      <span class="tag">卡住了</span>
+      <strong>我遇到問題了</strong>
+      <span>先看常見問題，通常能快速判斷是權限、AHK 還是設定檔。</span>
+    </button>
+  </div>
+  <p class="path-hint" id="path-hint">提示：第一次使用通常先看「我要先跑起來」，再去 OCR 診斷調 ROI。</p>
+</section>
 
 <hr>
 
@@ -209,6 +246,34 @@
 
 <div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大檢視"></div>
 <script>
+const sections = {
+  guide: document.getElementById('guide'),
+  features: document.getElementById('features'),
+  faq: document.getElementById('faq'),
+};
+const hint = document.getElementById('path-hint');
+document.querySelectorAll('.path-card').forEach(function(card) {
+  card.onclick = function() {
+    const target = this.getAttribute('data-target');
+    const section = sections[target];
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.querySelectorAll('.path-card').forEach(function(node) {
+        node.classList.toggle('active', node === card);
+      });
+      if (hint) {
+        if (target === 'guide') {
+          hint.textContent = '先完成快速入門，再回來看 OCR 診斷和進階技巧。';
+        } else if (target === 'features') {
+          hint.textContent = '先理解功能，再決定要不要用 ROI、二次確認和任務拆分。';
+        } else if (target === 'faq') {
+          hint.textContent = '如果有問題，先看常見問題；通常權限與 AutoHotkey 最常見。';
+        }
+      }
+    }
+  };
+});
+
 document.querySelectorAll('.screenshot').forEach(function(img) {
   img.onclick = function() {
     var lb = document.getElementById('lightbox');
