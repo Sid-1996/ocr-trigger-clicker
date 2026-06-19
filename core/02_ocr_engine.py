@@ -32,8 +32,7 @@ def get_ocr_failure_count() -> int:
         return _OCR_FAILURE_COUNT
 
 def reset_ocr_failures():
-    with _OCR_FAILURE_LOCK:
-        _OCR_FAILURE_COUNT = 0
+    _reset_ocr_failures()
 
 def set_ocr_health_callback(cb: Optional[Callable[[str], None]]):
     global _OCR_HEALTH_CALLBACK
