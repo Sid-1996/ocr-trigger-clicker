@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
             self._refresh_window_list()
             self._restore_last_state()
             self._refresh_task_list()
+            self._maybe_show_startup_guide()
 
             if not _ahk_mod.is_ahk_available():
                 reply = QMessageBox.question(
@@ -253,6 +254,31 @@ class MainWindow(QMainWindow):
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except OSError:
             pass
+
+    def _maybe_show_startup_guide(self):
+        config = self._load_config()
+        if config.get("hide_startup_guide", False):
+            return
+
+        box = QMessageBox(self)
+        box.setWindowTitle("新手導覽")
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText("要先看一次新手教學嗎？")
+        box.setInformativeText(
+            "教學頁會帶你完成第一次使用：選視窗、建立規則、看 OCR 診斷、再啟動。\n"
+            "你也可以之後從「新手教學」按鈕打開。"
+        )
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.button(QMessageBox.StandardButton.Yes).setText("打開教學")
+        box.button(QMessageBox.StandardButton.No).setText("先略過")
+        checkbox = QCheckBox("不再顯示此提示")
+        box.setCheckBox(checkbox)
+        result = box.exec()
+        if checkbox.isChecked():
+            config["hide_startup_guide"] = True
+            self._save_config(config)
+        if result == QMessageBox.StandardButton.Yes:
+            self._open_guide()
 
     def _restore_last_state(self):
         config = self._load_config()
