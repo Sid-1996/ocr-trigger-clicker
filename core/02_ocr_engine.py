@@ -6,7 +6,6 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
-
 from typing import Callable, Optional
 
 import cv2
@@ -141,7 +140,9 @@ def init_engine() -> None:
             try:
                 _engine(warmup, use_cls=False)
             except Exception:
-                import traceback; traceback.print_exc()
+                import traceback
+
+                traceback.print_exc()
         elif OCR_BACKEND == "easyocr":
             import easyocr
 
@@ -198,9 +199,9 @@ def _run_engine(img, use_cls):
         if OCR_BACKEND == "rapidocr":
             result = _engine(img, use_cls=use_cls)
             if result and len(result) == 2 and result[1]:
-                det_ms = result[1][0] * 1000
-                cls_ms = result[1][1] * 1000
-                rec_ms = result[1][2] * 1000
+                timings = result[1]
+                det_ms = timings[0] * 1000
+                rec_ms = timings[2] * 1000
                 print(f"[OCR] {det_ms:.0f}ms(檢測) + {rec_ms:.0f}ms(辨識)")
             return result
         elif OCR_BACKEND == "easyocr":

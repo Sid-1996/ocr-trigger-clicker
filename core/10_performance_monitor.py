@@ -70,7 +70,8 @@ _SM_CYVIRTUALSCREEN = 79
 _GetCurrentProcess = _kernel32.GetCurrentProcess
 _GetCurrentProcess.restype = wintypes.HANDLE
 
-_ft_to_int = lambda ft: (ft.dwHighDateTime << 32) + ft.dwLowDateTime
+def _ft_to_int(ft) -> int:
+    return (ft.dwHighDateTime << 32) + ft.dwLowDateTime
 
 
 def _filetime_now() -> int:
