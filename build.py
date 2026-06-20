@@ -76,7 +76,6 @@ def main():
         ("core/10_performance_monitor.py", "core"),
         ("gui/06_gui_main.py", "gui"),
         ("gui/07_gui_roi.py", "gui"),
-        ("gui/08_gui_log.py", "gui"),
         ("gui/09_ocr_debug.py", "gui"),
         ("gui/13_gui_click_picker.py", "gui"),
         ("build.py", "."),

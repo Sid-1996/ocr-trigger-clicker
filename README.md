@@ -145,7 +145,6 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | `05_main_loop.py` | 主循環：截圖 → 變動偵測 → OCR → 比對 → 點擊 |
 | `06_gui_main.py` | PyQt6 主視窗（含多任務管理） |
 | `07_gui_roi.py` | 全螢幕 ROI 框選覆蓋層 |
-| `08_gui_log.py` | 觸發日誌表格 |
 | `09_ocr_debug.py` | OCR 診斷面板 |
 | `10_performance_monitor.py` | CPU／記憶體／FPS 監控 |
 | `13_gui_click_picker.py` | 全螢幕點擊座標選取覆蓋層 |

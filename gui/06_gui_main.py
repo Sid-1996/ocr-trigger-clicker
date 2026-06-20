@@ -109,7 +109,7 @@ class _RuleTreeWidget(QTreeWidget):
 _ahk_mod = load_sibling("ahk_socket", "core/03_ahk_socket.py")
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
-TriggerLog = _main_loop_mod.TriggerLog
+
 Rule = _main_loop_mod.Rule
 list_windows = _main_loop_mod.list_windows
 load_rules = _main_loop_mod.load_rules
@@ -223,7 +223,7 @@ class MainWindow(QMainWindow):
             self._connect_signals()
             self._setup_shortcuts()
 
-            _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
+            _ocr_mod.set_ocr_health_callback(None)
 
             self._refresh_window_list()
             self._restore_last_state()
@@ -894,13 +894,6 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         layout.addWidget(self._main_stack)
 
-        # === Bottom: log area ===
-        log_mod = load_sibling("gui_log", "gui/08_gui_log.py")
-        self._log_widget = log_mod.LogWidget()
-        self._log_widget.setMaximumHeight(130)
-        self._log_widget.setMinimumHeight(80)
-        layout.addWidget(self._log_widget)
-
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
@@ -961,10 +954,6 @@ class MainWindow(QMainWindow):
         self._edit_roi_a_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_a"))
         self._edit_roi_b_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_b"))
 
-        self._signals.trigger_signal.connect(self._on_trigger_from_thread)
-        self._signals.error_signal.connect(self._on_error_from_thread)
-        self._signals.warning_signal.connect(self._on_warning_from_thread)
-        self._signals.info_signal.connect(self._on_info_from_thread)
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
 
@@ -2149,12 +2138,10 @@ class MainWindow(QMainWindow):
             return
         self._debug_panel._window_title = title
         self._main_stack.setCurrentIndex(1)
-        self._log_widget.hide()
         self._status_bar.showMessage(f"OCR 診斷 — 目標: {title}")
 
     def _switch_to_rules(self):
         self._main_stack.setCurrentIndex(0)
-        self._log_widget.show()
         self._status_bar.showMessage("就緒")
 
     def _on_debug_rule_requested(self, rule_data: dict):
@@ -2270,12 +2257,10 @@ class MainWindow(QMainWindow):
         if self._loop.is_paused:
             self._loop.resume()
             self._btn_toggle.setText("暫停")
-            self._log_widget.append_info("恢復偵測")
             self._status_bar.showMessage("偵測中（按 F9 暫停）")
         else:
             self._loop.pause()
             self._btn_toggle.setText("繼續")
-            self._log_widget.append_info("暫停偵測")
             self._status_bar.showMessage("已暫停 — 按 F9 繼續")
 
     def _update_edit_enabled(self, enabled: bool):
@@ -2346,22 +2331,9 @@ class MainWindow(QMainWindow):
             self._edit_on_all_fail.setEnabled(False)
 
     # === Thread-safe callbacks ===
-    def _on_trigger_from_thread(self, log: TriggerLog):
-        self._log_widget.append_trigger(log)
-
-    def _on_error_from_thread(self, msg: str):
-        self._log_widget.append_error(msg)
-
-    def _on_warning_from_thread(self, msg: str):
-        self._log_widget.append_warning(msg)
-
-    def _on_info_from_thread(self, msg: str):
-        self._log_widget.append_info(msg)
-
     def _on_window_lost_from_thread(self):
         self._window_lost = True
         self._btn_toggle.setText("繼續")
-        self._log_widget.append_warning("目標視窗消失，偵測已暫停")
         self._status_bar.showMessage("⚠ 目標視窗已關閉，偵測已暫停")
 
     # === Emergency & OCR Health ===
@@ -2374,11 +2346,7 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setText("啟動")
         self._update_edit_enabled(True)
         self._status_bar.showMessage("🛑 緊急停止 — 按「啟動」重新開始")
-        self._log_widget.append_info("緊急停止（F12）")
         self._update_rule_status()
-
-    def _on_ocr_health(self, msg: str):
-        self._log_widget.append_warning(f"{msg}")
 
     # === About & Version ===
     def _show_about(self):

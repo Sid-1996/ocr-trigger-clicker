@@ -120,6 +120,6 @@ roi_count=1 時 → roi_b 所有欄位忽略，GUI 隱藏
 
 ## 不需修改的檔案
 
-`core/01_screenshot.py`、`core/02_ocr_engine.py`、`core/03_ahk_bridge.py`、`gui/07_gui_roi.py`、`gui/08_gui_log.py`、`gui/09_ocr_debug.py`、`gui/13_gui_click_picker.py`
+`core/01_screenshot.py`、`core/02_ocr_engine.py`、`core/03_ahk_bridge.py`、`gui/07_gui_roi.py`、`gui/09_ocr_debug.py`、`gui/13_gui_click_picker.py`
 
 `on_all_fail` 的失敗序列完全由現有觸發規則串接實現，無需新機制。

@@ -4,6 +4,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 import cv2
@@ -110,12 +111,19 @@ class MainLoop:
         self._perf.start()
 
         self._rules: list[Rule] = []
+        self._log_dir = Path(__file__).resolve().parent.parent / "logs"
+        self._log_dir.mkdir(exist_ok=True)
+        self._log_file = open(
+            self._log_dir / f"{time.strftime('%Y-%m-%d')}.log", "a", encoding="utf-8"
+        )
         self._load_rules()
         init_engine()
 
     def _log(self, msg: str):
         if self._verbose:
             print(f"[主循環] {msg}")
+        self._log_file.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+        self._log_file.flush()
 
     def _load_rules(self):
         with self._rules_lock:
@@ -594,6 +602,8 @@ class MainLoop:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
         self._perf.stop()
+        if self._log_file:
+            self._log_file.close()
 
     def pause(self) -> None:
         self._pause_event.set()
