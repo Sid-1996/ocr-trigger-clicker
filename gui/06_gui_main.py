@@ -507,7 +507,7 @@ class MainWindow(QMainWindow):
         self._edit_action_type.setToolTip("click：滑鼠點擊 ｜ key：鍵盤按鍵")
         self._edit_key = _KeyCombo()
         for group in [
-            [str(i) for i in range(10)],
+            [(f"數字鍵 {i}", str(i)) for i in range(10)],
             [
                 "Enter",
                 "Escape",
