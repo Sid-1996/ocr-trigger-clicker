@@ -56,6 +56,20 @@ class _NoWheelCombo(QComboBox):
 
 
 class _KeyCombo(_NoWheelCombo):
+    # ponytail: shifted number symbols → digit for combo search
+    _SHIFT2DIGIT = {
+        "!": "1",
+        "@": "2",
+        "#": "3",
+        "$": "4",
+        "%": "5",
+        "^": "6",
+        "&": "7",
+        "*": "8",
+        "(": "9",
+        ")": "0",
+    }
+
     def keyPressEvent(self, event):
         text = event.text()
         if (
@@ -66,9 +80,7 @@ class _KeyCombo(_NoWheelCombo):
             in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier)
         ):
             key = text.lower()
-            # ponytail: map shifted number symbols to digits for combo search
-            _SHIFT_DIGIT_MAP = str.maketrans("!@#$%^&*()", "1234567890")
-            key = key.translate(_SHIFT_DIGIT_MAP)
+            key = self._SHIFT2DIGIT.get(key, key)
             count = self.count()
             if count == 0:
                 return
