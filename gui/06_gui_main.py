@@ -1,5 +1,7 @@
 import json
+import re
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -92,6 +94,10 @@ class _NoWheelDoubleSpin(QDoubleSpinBox):
         e.ignore()
 
 
+class _OcrTestSignals(QObject):
+    done = pyqtSignal(str, str)
+
+
 class _RuleTreeWidget(QTreeWidget):
     def dropEvent(self, event):
         if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
@@ -110,6 +116,8 @@ load_rules = _main_loop_mod.load_rules
 save_rules = _main_loop_mod.save_rules
 activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
+capture = _main_loop_mod.capture
+recognize = _main_loop_mod.recognize
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -561,6 +569,12 @@ class MainWindow(QMainWindow):
         self._edit_roi_a_value_pick.addItem("最後一個數字", "last")
         self._edit_roi_a_value_pick.setToolTip("從 OCR 文字中取第幾個數字來比較")
 
+        self._edit_roi_a_test_btn = QPushButton("測試辨識")
+        self._edit_roi_a_test_btn.setToolTip("對 ROI-A 區域執行一次截圖 + OCR，查看數值辨識結果")
+        self._edit_roi_a_test_result = QLabel("")
+        self._edit_roi_a_test_result.setStyleSheet("color: #888; font-size: 11px;")
+        self._edit_roi_a_test_result.hide()
+
         self._edit_roi_b_label = QLabel("全視窗")
         self._edit_roi_b_btn = QPushButton("框選 ROI-B")
         self._edit_roi_b_btn.setToolTip("第二個擷取區域（roi_count=2 時啟用）")
@@ -580,6 +594,12 @@ class MainWindow(QMainWindow):
         self._edit_roi_b_value_pick.addItem("第一個數字", "first")
         self._edit_roi_b_value_pick.addItem("最後一個數字", "last")
         self._edit_roi_b_value_pick.setToolTip("從 OCR 文字中取第幾個數字來比較")
+
+        self._edit_roi_b_test_btn = QPushButton("測試辨識")
+        self._edit_roi_b_test_btn.setToolTip("對 ROI-B 區域執行一次截圖 + OCR，查看數值辨識結果")
+        self._edit_roi_b_test_result = QLabel("")
+        self._edit_roi_b_test_result.setStyleSheet("color: #888; font-size: 11px;")
+        self._edit_roi_b_test_result.hide()
 
         self._edit_confirm_action_type = _NoWheelCombo()
         self._edit_confirm_action_type.addItem("鍵盤按鍵", "key")
@@ -823,12 +843,24 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("", self._edit_roi_a_btn)
         self._edit_form.addRow("ROI-A 比較:", self._edit_roi_a_compare)
         self._edit_form.addRow("ROI-A 門檻:", self._edit_roi_a_threshold)
-        self._edit_form.addRow("ROI-A 取數字:", self._edit_roi_a_value_pick)
+        self._edit_roi_a_pick_row = QWidget()
+        a_pick_layout = QHBoxLayout(self._edit_roi_a_pick_row)
+        a_pick_layout.setContentsMargins(0, 0, 0, 0)
+        a_pick_layout.addWidget(self._edit_roi_a_value_pick)
+        a_pick_layout.addWidget(self._edit_roi_a_test_btn)
+        self._edit_form.addRow("ROI-A 取數字:", self._edit_roi_a_pick_row)
+        self._edit_form.addRow("", self._edit_roi_a_test_result)
         self._edit_form.addRow("ROI-B 區域:", self._edit_roi_b_label)
         self._edit_form.addRow("", self._edit_roi_b_btn)
         self._edit_form.addRow("ROI-B 比較:", self._edit_roi_b_compare)
         self._edit_form.addRow("ROI-B 門檻:", self._edit_roi_b_threshold)
-        self._edit_form.addRow("ROI-B 取數字:", self._edit_roi_b_value_pick)
+        self._edit_roi_b_pick_row = QWidget()
+        b_pick_layout = QHBoxLayout(self._edit_roi_b_pick_row)
+        b_pick_layout.setContentsMargins(0, 0, 0, 0)
+        b_pick_layout.addWidget(self._edit_roi_b_value_pick)
+        b_pick_layout.addWidget(self._edit_roi_b_test_btn)
+        self._edit_form.addRow("ROI-B 取數字:", self._edit_roi_b_pick_row)
+        self._edit_form.addRow("", self._edit_roi_b_test_result)
         self._edit_form.addRow("確認動作:", self._edit_confirm_action_type)
         self._edit_form.addRow("確認按鍵:", self._edit_confirm_key)
         self._edit_form.addRow("確認座標:", self._edit_confirm_coord_label)
@@ -922,6 +954,11 @@ class MainWindow(QMainWindow):
         self._edit_roi_a_btn.clicked.connect(self._on_pick_roi_a)
         self._edit_roi_b_btn.clicked.connect(self._on_pick_roi_b)
         self._edit_confirm_pick_btn.clicked.connect(self._on_pick_confirm_coord)
+
+        self._ocr_test_signals = _OcrTestSignals()
+        self._ocr_test_signals.done.connect(self._on_ocr_test_done)
+        self._edit_roi_a_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_a"))
+        self._edit_roi_b_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_b"))
 
         self._signals.trigger_signal.connect(self._on_trigger_from_thread)
         self._signals.error_signal.connect(self._on_error_from_thread)
@@ -1315,6 +1352,10 @@ class MainWindow(QMainWindow):
         self._edit_on_not_found_action.setEnabled(True)
         self._edit_on_not_found_pick_btn.setEnabled(True)
         self._clear_sub_btn.setEnabled(True)
+        self._edit_roi_a_pick_row.setEnabled(True)
+        self._edit_roi_b_pick_row.setEnabled(True)
+        self._edit_roi_a_test_result.hide()
+        self._edit_roi_b_test_result.hide()
         self._edit_name.setText(rule.name)
         self._edit_target.setText(rule.target_text)
         self._edit_enabled.setChecked(rule.enabled)
@@ -1491,12 +1532,14 @@ class MainWindow(QMainWindow):
         "roi_a_btn",
         "roi_a_compare",
         "roi_a_threshold",
-        "roi_a_value_pick",
+        "roi_a_pick_row",
+        "roi_a_test_result",
         "roi_b_label",
         "roi_b_btn",
         "roi_b_compare",
         "roi_b_threshold",
-        "roi_b_value_pick",
+        "roi_b_pick_row",
+        "roi_b_test_result",
         "confirm_action_type",
         "confirm_key",
         "confirm_coord_label",
@@ -1538,7 +1581,8 @@ class MainWindow(QMainWindow):
             "roi_b_btn",
             "roi_b_compare",
             "roi_b_threshold",
-            "roi_b_value_pick",
+            "roi_b_pick_row",
+            "roi_b_test_result",
         ]:
             self._toggle_field_visibility(fn, show)
 
@@ -1987,6 +2031,71 @@ class MainWindow(QMainWindow):
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(f"已選取確認點擊座標: X={result[0]}, Y={result[1]}")
 
+    # === ROI test-ocr helpers ===
+    def _run_ocr_test(self, roi_key: str):
+        title = self._window_combo.currentText()
+        if not title:
+            self._status_bar.showMessage("請先選擇目標視窗")
+            return
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        roi = getattr(rule, roi_key, {"x": 0, "y": 0, "w": 0, "h": 0})
+        btn = self._edit_roi_a_test_btn if roi_key == "roi_a" else self._edit_roi_b_test_btn
+        label = self._edit_roi_a_test_result if roi_key == "roi_a" else self._edit_roi_b_test_result
+        btn.setEnabled(False)
+        label.setText("辨識中...")
+        label.show()
+
+        def worker():
+            try:
+                img = capture(title)
+                if img is None:
+                    self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                    return
+                h, w = img.shape[:2]
+                if roi["w"] > 0 and roi["h"] > 0:
+                    x0, y0 = max(0, roi["x"]), max(0, roi["y"])
+                    x1, y1 = min(w, roi["x"] + roi["w"]), min(h, roi["y"] + roi["h"])
+                    if y1 <= y0 or x1 <= x0:
+                        self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                        return
+                    cropped = img[y0:y1, x0:x1]
+                else:
+                    cropped = img
+                results = recognize(cropped)
+                if not results:
+                    self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                    return
+                full_text = "  ".join(r.text for r in results)
+                nums = []
+                for r in results:
+                    nums.extend(float(m) for m in re.findall(r"-?\d+(?:\.\d+)?", r.text))
+                if not nums:
+                    self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                    return
+
+                def _fmt_num(v: float) -> str:
+                    return f"{v:.0f}" if v == int(v) else f"{v}"
+
+                first = nums[0]
+                last = nums[-1]
+                self._ocr_test_signals.done.emit(
+                    roi_key,
+                    f"辨識結果：{full_text}　　第一個數字 → {_fmt_num(first)}　　最後一個數字 → {_fmt_num(last)}",
+                )
+            except Exception:
+                self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_ocr_test_done(self, roi_key: str, result_text: str):
+        btn = self._edit_roi_a_test_btn if roi_key == "roi_a" else self._edit_roi_b_test_btn
+        label = self._edit_roi_a_test_result if roi_key == "roi_a" else self._edit_roi_b_test_result
+        btn.setEnabled(True)
+        label.setText(result_text)
+        label.setVisible(True)
+
     # === OCR diagnostic ===
     def _switch_to_debug(self):
         title = self._window_combo.currentText()
@@ -2180,12 +2289,14 @@ class MainWindow(QMainWindow):
             self._edit_roi_a_btn.setEnabled(False)
             self._edit_roi_a_compare.setEnabled(False)
             self._edit_roi_a_threshold.setEnabled(False)
-            self._edit_roi_a_value_pick.setEnabled(False)
+            self._edit_roi_a_pick_row.setEnabled(False)
+            self._edit_roi_a_test_result.setEnabled(False)
             self._edit_roi_b_label.setEnabled(False)
             self._edit_roi_b_btn.setEnabled(False)
             self._edit_roi_b_compare.setEnabled(False)
             self._edit_roi_b_threshold.setEnabled(False)
-            self._edit_roi_b_value_pick.setEnabled(False)
+            self._edit_roi_b_pick_row.setEnabled(False)
+            self._edit_roi_b_test_result.setEnabled(False)
             self._edit_confirm_action_type.setEnabled(False)
             self._edit_confirm_key.setEnabled(False)
             self._edit_confirm_coord_label.setEnabled(False)
