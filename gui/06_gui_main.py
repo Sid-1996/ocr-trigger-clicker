@@ -72,11 +72,17 @@ class _KeyCombo(_NoWheelCombo):
 
     def keyPressEvent(self, event):
         text = event.text()
+        # ponytail: mask out NumLock/Keypad so number keys still work
+        _IGNORE = (
+            Qt.KeyboardModifier.KeypadModifier
+            | Qt.KeyboardModifier.GroupSwitchModifier
+        )
+        relevant_mods = event.modifiers() & ~_IGNORE
         if (
             text
             and len(text) == 1
             and text.isprintable()
-            and event.modifiers()
+            and relevant_mods
             in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier)
         ):
             key = text.lower()
