@@ -914,6 +914,7 @@ class MainWindow(QMainWindow):
         self._status_timer.timeout.connect(self._update_rule_status)
         self.setStatusBar(self._status_bar)
         QTimer.singleShot(3000, self._check_version)
+        self._test_was_maximized = False
 
     def _connect_signals(self):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
@@ -2067,32 +2068,40 @@ class MainWindow(QMainWindow):
         label.setText("辨識中...")
         label.show()
 
+        # Bring target window to foreground for reliable capture
+        if title:
+            self._test_was_maximized = self.isMaximized()
+            activate_window(title)
+            time.sleep(0.15)
+
         def worker():
             try:
                 img = capture(title)
                 if img is None:
-                    self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                    self._ocr_test_signals.done.emit(roi_key, f"截圖失敗：無法擷取視窗「{title}」")
                     return
                 h, w = img.shape[:2]
                 if roi["w"] > 0 and roi["h"] > 0:
                     x0, y0 = max(0, roi["x"]), max(0, roi["y"])
                     x1, y1 = min(w, roi["x"] + roi["w"]), min(h, roi["y"] + roi["h"])
                     if y1 <= y0 or x1 <= x0:
-                        self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                        self._ocr_test_signals.done.emit(roi_key, "裁切區域無效")
                         return
                     cropped = img[y0:y1, x0:x1]
                 else:
                     cropped = img
                 results = recognize(cropped)
                 if not results:
-                    self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                    self._ocr_test_signals.done.emit(roi_key, "OCR 無結果")
                     return
                 full_text = "  ".join(r.text for r in results)
                 nums = []
                 for r in results:
                     nums.extend(float(m) for m in re.findall(r"-?\d+(?:\.\d+)?", r.text))
                 if not nums:
-                    self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                    self._ocr_test_signals.done.emit(
+                        roi_key, f"無數字：{full_text}　　（取數字解析不到數值）"
+                    )
                     return
 
                 def _fmt_num(v: float) -> str:
@@ -2105,7 +2114,10 @@ class MainWindow(QMainWindow):
                     f"辨識結果：{full_text}　　第一個數字 → {_fmt_num(first)}　　最後一個數字 → {_fmt_num(last)}",
                 )
             except Exception:
-                self._ocr_test_signals.done.emit(roi_key, "（無法辨識）")
+                import traceback
+
+                traceback.print_exc()
+                self._ocr_test_signals.done.emit(roi_key, "辨識異常（請查看終端機）")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -2115,6 +2127,10 @@ class MainWindow(QMainWindow):
         btn.setEnabled(True)
         label.setText(result_text)
         label.setVisible(True)
+        if self._test_was_maximized:
+            self.showMaximized()
+        self.activateWindow()
+        self.raise_()
 
     # === OCR diagnostic ===
     def _switch_to_debug(self):
