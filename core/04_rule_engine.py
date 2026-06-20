@@ -215,9 +215,11 @@ def get_roi(rule: Rule) -> Optional[dict]:
 
 # ── Task management ──
 
+
 def _tasks_base() -> Path:
     try:
         from build import get_data_path
+
         raw = get_data_path("_")
         return Path(raw).parent
     except ImportError:
@@ -272,6 +274,7 @@ def export_task(name: str, dest_path: str) -> bool:
         return False
     try:
         import shutil
+
         shutil.copy2(str(src), dest_path)
         return True
     except OSError:
@@ -306,6 +309,7 @@ def migrate_old_rules():
         return
     try:
         from build import get_data_path
+
         old_path = Path(get_data_path("rules.json"))
     except ImportError:
         old_path = _tasks_base() / "rules.json"

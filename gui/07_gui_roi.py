@@ -100,7 +100,9 @@ class ROISelector(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         dim = f"  |  尺寸: {rect.width()}×{rect.height()}" if rect else ""
         painter.drawText(
-            16, self.rect().height() - 32, f"拖拉選取偵測區域{dim}  |  放開滑鼠自動確認  |  Esc 取消"
+            16,
+            self.rect().height() - 32,
+            f"拖拉選取偵測區域{dim}  |  放開滑鼠自動確認  |  Esc 取消",
         )
 
     def mousePressEvent(self, event):
@@ -156,9 +158,7 @@ def select_roi(parent_window=None) -> Optional[dict]:
         parent_window.showNormal()
         parent_window.raise_()
         parent_window.activateWindow()
-        parent_window.setWindowState(
-            parent_window.windowState() & ~Qt.WindowState.WindowMinimized
-        )
+        parent_window.setWindowState(parent_window.windowState() & ~Qt.WindowState.WindowMinimized)
         QApplication.processEvents()
 
     result = selector._result

@@ -55,7 +55,14 @@ class TriggerLog:
 
 
 class MainLoop:
-    def __init__(self, rules_path: str, window_title: str, interval_ms: int = 500, focus_safe: bool = False, verbose: bool = True):
+    def __init__(
+        self,
+        rules_path: str,
+        window_title: str,
+        interval_ms: int = 500,
+        focus_safe: bool = False,
+        verbose: bool = True,
+    ):
         self._rules_path = rules_path
         self._window_title = window_title
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
@@ -185,8 +192,12 @@ class MainLoop:
         with self._rules_lock:
             self._rules_dirty = True
 
-    def _handle_sub_target(self, rule: Rule, img: np.ndarray, rect: dict, primary_matched: OcrResult) -> None:
-        roi = rule.sub_roi if any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")) else None
+    def _handle_sub_target(
+        self, rule: Rule, img: np.ndarray, rect: dict, primary_matched: OcrResult
+    ) -> None:
+        roi = (
+            rule.sub_roi if any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")) else None
+        )
         if roi:
             h, w = img.shape[:2]
             x1 = max(0, roi["x"])
@@ -206,7 +217,9 @@ class MainLoop:
             sub_results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
 
         if sub_results:
-            sub_matches = find_text(sub_results, rule.sub_target_text, rule.fuzzy, rule.fuzzy_threshold)
+            sub_matches = find_text(
+                sub_results, rule.sub_target_text, rule.fuzzy, rule.fuzzy_threshold
+            )
             if sub_matches:
                 self._sub_not_found_count[rule.id] = 0
                 if self._verbose:
@@ -218,7 +231,9 @@ class MainLoop:
         if self._sub_not_found_count[rule.id] >= rule.sub_not_found_retries:
             self._sub_not_found_count[rule.id] = 0
             if self._verbose:
-                self._log(f"子目標「{rule.sub_target_text}」連續 {rule.sub_not_found_retries} 次未找到，執行 not_found 動作")
+                self._log(
+                    f"子目標「{rule.sub_target_text}」連續 {rule.sub_not_found_retries} 次未找到，執行 not_found 動作"
+                )
             self._do_sub_not_found(rule, primary_matched, rect)
 
     def _do_sub_found(self, rule: Rule, matched: OcrResult, rect: dict) -> None:
@@ -386,7 +401,9 @@ class MainLoop:
 
             if rule.trigger_mode == "once" and rule.trigger_count > 0:
                 if self._verbose and rule.id not in self._once_skip_announced:
-                    self._log(f"規則「{rule.name}」→ once 模式，已觸發 ({rule.trigger_count} 次)，跳過")
+                    self._log(
+                        f"規則「{rule.name}」→ once 模式，已觸發 ({rule.trigger_count} 次)，跳過"
+                    )
                     self._once_skip_announced.add(rule.id)
                 continue
 
@@ -417,7 +434,9 @@ class MainLoop:
                 hit, matched = check_trigger(rule, rule_results)
                 if not hit or matched is None:
                     if self._verbose:
-                        self._log(f"規則「{rule.name}」比對「{rule.target_text}」→ 不符合 (共{len(rule_results)}個文字)")
+                        self._log(
+                            f"規則「{rule.name}」比對「{rule.target_text}」→ 不符合 (共{len(rule_results)}個文字)"
+                        )
                     continue
 
                 if self._verbose:
@@ -476,7 +495,7 @@ class MainLoop:
                             co = _screenshot.get_window_client_offset(title)
                             if co and co[0] + w <= rect["w"] and co[1] + h <= rect["h"]:
                                 full = np.zeros((rect["h"], rect["w"], 3), dtype=np.uint8)
-                                full[co[1]:co[1]+h, co[0]:co[0]+w] = img
+                                full[co[1] : co[1] + h, co[0] : co[0] + w] = img
                                 img = full
                                 if self._verbose:
                                     self._log(f"填補視窗邊框至 {rect['w']}x{rect['h']}")
@@ -505,7 +524,9 @@ class MainLoop:
                     self._frame_diff_ratio = 1.0
 
                 if self._verbose and iteration % 1 == 0:
-                    self._log(f"視窗位置=({rect['x']},{rect['y']}) 尺寸=({rect['w']}×{rect['h']}) img={img.shape}")
+                    self._log(
+                        f"視窗位置=({rect['x']},{rect['y']}) 尺寸=({rect['w']}×{rect['h']}) img={img.shape}"
+                    )
 
                 t2 = time.monotonic()
                 self._process_rules(img, rect)
@@ -526,7 +547,7 @@ class MainLoop:
                 if loop_elapsed > 2000 and self.on_warning:
                     self.on_warning(
                         f"慢循環: {loop_elapsed:.0f}ms "
-                        f"(截圖={(t1-t0)*1000:.0f}ms "
+                        f"(截圖={(t1 - t0) * 1000:.0f}ms "
                         f"OCR={ocr_ms:.0f}ms)"
                     )
 

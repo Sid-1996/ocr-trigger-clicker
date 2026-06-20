@@ -70,6 +70,7 @@ _SM_CYVIRTUALSCREEN = 79
 _GetCurrentProcess = _kernel32.GetCurrentProcess
 _GetCurrentProcess.restype = wintypes.HANDLE
 
+
 def _ft_to_int(ft) -> int:
     return (ft.dwHighDateTime << 32) + ft.dwLowDateTime
 
@@ -106,7 +107,10 @@ def get_screen_bounds() -> dict:
 
 def is_coordinate_safe(x: int, y: int) -> bool:
     bounds = get_screen_bounds()
-    return bounds["x"] <= x < bounds["x"] + bounds["w"] and bounds["y"] <= y < bounds["y"] + bounds["h"]
+    return (
+        bounds["x"] <= x < bounds["x"] + bounds["w"]
+        and bounds["y"] <= y < bounds["y"] + bounds["h"]
+    )
 
 
 def is_window_foreground(hwnd: int) -> bool:

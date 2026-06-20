@@ -38,9 +38,7 @@ class ClickPicker(QWidget):
         font.setPointSize(16)
         painter.setFont(font)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawText(
-            16, 36, "請在目標位置點擊  |  Esc 取消"
-        )
+        painter.drawText(16, 36, "請在目標位置點擊  |  Esc 取消")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -80,9 +78,7 @@ def pick_click_position(parent_window=None) -> Optional[tuple[int, int]]:
         parent_window.showNormal()
         parent_window.raise_()
         parent_window.activateWindow()
-        parent_window.setWindowState(
-            parent_window.windowState() & ~Qt.WindowState.WindowMinimized
-        )
+        parent_window.setWindowState(parent_window.windowState() & ~Qt.WindowState.WindowMinimized)
         QApplication.processEvents()
 
     result = picker._result

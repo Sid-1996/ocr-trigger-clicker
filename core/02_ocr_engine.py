@@ -26,16 +26,20 @@ _OCR_FAILURE_LOCK = threading.Lock()
 _OCR_MAX_FAILURES = 5
 _OCR_HEALTH_CALLBACK: Optional[Callable[[str], None]] = None
 
+
 def get_ocr_failure_count() -> int:
     with _OCR_FAILURE_LOCK:
         return _OCR_FAILURE_COUNT
 
+
 def reset_ocr_failures():
     _reset_ocr_failures()
+
 
 def set_ocr_health_callback(cb: Optional[Callable[[str], None]]):
     global _OCR_HEALTH_CALLBACK
     _OCR_HEALTH_CALLBACK = cb
+
 
 def _incr_ocr_failure():
     global _engine, _OCR_FAILURE_COUNT
@@ -53,6 +57,7 @@ def _incr_ocr_failure():
                 cb(msg)
             return True
     return False
+
 
 def _reset_ocr_failures():
     global _OCR_FAILURE_COUNT
@@ -120,10 +125,14 @@ def init_engine() -> None:
             # 會根據 max_wh_ratio 動態計算 padding 寬度，導致寬度 >320 時模型 crash。
             # 這裡 monkey-patch 把 width 限制在 rec_image_shape[2]（320）以內。
             _orig_resize = type(_engine.text_rec).resize_norm_img
+
             def _patched_resize(self, img, max_wh_ratio):
                 max_wh_ratio = min(max_wh_ratio, self.rec_image_shape[2] / self.rec_image_shape[1])
                 return _orig_resize(self, img, max_wh_ratio)
-            _engine.text_rec.resize_norm_img = _patched_resize.__get__(_engine.text_rec, type(_engine.text_rec))
+
+            _engine.text_rec.resize_norm_img = _patched_resize.__get__(
+                _engine.text_rec, type(_engine.text_rec)
+            )
 
             # 預先跑一次極小測試圖，避免第一次正式 OCR 才做模型 warm-up。
             warmup = np.full((96, 256, 3), 255, dtype=np.uint8)

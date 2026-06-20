@@ -66,6 +66,9 @@ class _KeyCombo(_NoWheelCombo):
             in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier)
         ):
             key = text.lower()
+            # ponytail: map shifted number symbols to digits for combo search
+            _SHIFT_DIGIT_MAP = str.maketrans("!@#$%^&*()", "1234567890")
+            key = key.translate(_SHIFT_DIGIT_MAP)
             count = self.count()
             if count == 0:
                 return
@@ -332,9 +335,9 @@ class MainWindow(QMainWindow):
         self._task_new_btn = QPushButton("＋")
         self._task_new_btn.setFixedWidth(28)
         self._task_new_btn.setToolTip("建立新任務")
-        self._task_save_btn = QPushButton("💾")
-        self._task_save_btn.setFixedWidth(28)
-        self._task_save_btn.setToolTip("覆蓋儲存目前規則到當前任務")
+        self._task_rename_btn = QPushButton("✏️")
+        self._task_rename_btn.setFixedWidth(28)
+        self._task_rename_btn.setToolTip("重新命名當前任務")
         self._task_del_btn = QPushButton("🗑")
         self._task_del_btn.setFixedWidth(28)
         self._task_del_btn.setToolTip("刪除當前任務")
@@ -345,7 +348,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(QLabel("任務:"))
         toolbar.addWidget(self._task_combo)
         toolbar.addWidget(self._task_new_btn)
-        toolbar.addWidget(self._task_save_btn)
+        toolbar.addWidget(self._task_rename_btn)
         toolbar.addWidget(self._task_del_btn)
         toolbar.addWidget(self._task_import_btn)
         toolbar.addWidget(self._task_export_btn)
@@ -770,7 +773,7 @@ class MainWindow(QMainWindow):
 
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
         self._task_new_btn.clicked.connect(self._on_task_new)
-        self._task_save_btn.clicked.connect(self._on_task_save)
+        self._task_rename_btn.clicked.connect(self._on_task_rename)
         self._task_del_btn.clicked.connect(self._on_task_delete)
         self._task_import_btn.clicked.connect(self._on_task_import)
         self._task_export_btn.clicked.connect(self._on_task_export)
@@ -899,13 +902,31 @@ class MainWindow(QMainWindow):
             self._task_combo.setCurrentIndex(idx)
         self._status_bar.showMessage(f"已建立任務「{name}」")
 
-    def _on_task_save(self):
+    def _on_task_rename(self):
         if not self._current_task:
             return
+        from PyQt6.QtWidgets import QInputDialog
+
+        old_name = self._current_task
+        name, ok = QInputDialog.getText(self, "重新命名任務", "請輸入新任務名稱：", text=old_name)
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+        if name == old_name:
+            return
+        existing = list_tasks()
+        if name in existing:
+            QMessageBox.warning(self, "任務已存在", f"任務「{name}」已經存在。")
+            return
         save_task(self._current_task, self._rules)
-        if self._loop:
-            self._loop.reload_rules()
-        self._status_bar.showMessage(f"任務「{self._current_task}」已儲存")
+        if not rename_task(old_name, name):
+            QMessageBox.warning(self, "重新命名失敗", "無法重新命名任務。")
+            return
+        self._refresh_task_list()
+        idx = self._task_combo.findText(name)
+        if idx >= 0:
+            self._task_combo.setCurrentIndex(idx)
+        self._status_bar.showMessage(f"任務「{old_name}」已重新命名為「{name}」")
 
     def _on_task_delete(self):
         if not self._current_task:

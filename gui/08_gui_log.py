@@ -201,7 +201,10 @@ class LogWidget(QWidget):
 
     def _on_export(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "匯出日誌", str(Path(__file__).resolve().parent.parent / "trigger_log.txt"), "文字檔 (*.txt)"
+            self,
+            "匯出日誌",
+            str(Path(__file__).resolve().parent.parent / "trigger_log.txt"),
+            "文字檔 (*.txt)",
         )
         if not path:
             return
