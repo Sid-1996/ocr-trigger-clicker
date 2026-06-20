@@ -1185,7 +1185,8 @@ class MainWindow(QMainWindow):
             for rid in top_ids if parent_id is None else child_map.get(parent_id, []):
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
-                text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
+                suffix = " [C]" if getattr(r, "rule_type", "trigger") == "compare" else ""
+                text = f"[{'✓' if r.enabled else '✗'}] {r.name}{suffix}"
                 item.setText(0, text)
                 item.setData(0, Qt.ItemDataRole.UserRole, r.id)
                 for child_item in _build(rid):
@@ -1239,7 +1240,11 @@ class MainWindow(QMainWindow):
                 elif elapsed_ms < 2000:
                     suffix = " ✅"
             enabled = st["enabled"]
-            base = f"[{'✓' if enabled else '✗'}] {st['name']}"
+            rule = next((r for r in self._rules if r.id == sid), None)
+            c_suffix = (
+                " [C]" if (rule and getattr(rule, "rule_type", "trigger") == "compare") else ""
+            )
+            base = f"[{'✓' if enabled else '✗'}] {st['name']}{c_suffix}"
             if item.text(0) != base + suffix:
                 item.setText(0, base + suffix)
 
@@ -1677,7 +1682,8 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         item = self._rule_list.currentItem()
         if item:
-            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}"
+            c_suffix = " [C]" if getattr(rule, "rule_type", "trigger") == "compare" else ""
+            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}"
             item.setText(0, text)
         if self._loop:
             self._loop.reload_rules()
