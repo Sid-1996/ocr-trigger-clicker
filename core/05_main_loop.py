@@ -113,6 +113,9 @@ class MainLoop:
         self._rules: list[Rule] = []
         self._log_dir = Path(__file__).resolve().parent.parent / "logs"
         self._log_dir.mkdir(exist_ok=True)
+        for f in self._log_dir.glob("*.log"):
+            if time.time() - f.stat().st_mtime > 7 * 86400:
+                f.unlink()
         self._log_file = open(
             self._log_dir / f"{time.strftime('%Y-%m-%d')}.log", "a", encoding="utf-8"
         )
