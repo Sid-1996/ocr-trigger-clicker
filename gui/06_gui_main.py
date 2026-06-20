@@ -56,37 +56,16 @@ class _NoWheelCombo(QComboBox):
 
 
 class _KeyCombo(_NoWheelCombo):
-    # ponytail: shifted number symbols → digit for combo search
-    _SHIFT2DIGIT = {
-        "!": "1",
-        "@": "2",
-        "#": "3",
-        "$": "4",
-        "%": "5",
-        "^": "6",
-        "&": "7",
-        "*": "8",
-        "(": "9",
-        ")": "0",
-    }
-
     def keyPressEvent(self, event):
         text = event.text()
-        # ponytail: mask out NumLock/Keypad so number keys still work
-        _IGNORE = (
-            Qt.KeyboardModifier.KeypadModifier
-            | Qt.KeyboardModifier.GroupSwitchModifier
-        )
-        relevant_mods = event.modifiers() & ~_IGNORE
         if (
             text
             and len(text) == 1
             and text.isprintable()
-            and relevant_mods
+            and event.modifiers()
             in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier)
         ):
             key = text.lower()
-            key = self._SHIFT2DIGIT.get(key, key)
             count = self.count()
             if count == 0:
                 return
@@ -528,6 +507,7 @@ class MainWindow(QMainWindow):
         self._edit_action_type.setToolTip("click：滑鼠點擊 ｜ key：鍵盤按鍵")
         self._edit_key = _KeyCombo()
         for group in [
+            [str(i) for i in range(10)],
             [
                 "Enter",
                 "Escape",
@@ -543,7 +523,6 @@ class MainWindow(QMainWindow):
             ],
             ["Up", "Down", "Left", "Right"],
             [f"F{i}" for i in range(1, 13)],
-            [str(i) for i in range(10)],
             [chr(c) for c in range(ord("a"), ord("z") + 1)],
             {
                 t: v
