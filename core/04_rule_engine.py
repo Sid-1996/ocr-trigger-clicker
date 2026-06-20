@@ -45,6 +45,26 @@ class Rule:
     post_delay_ms: int = 0
     depends_on: list[str] = field(default_factory=list)
 
+    # Compare rule fields
+    rule_type: str = "trigger"
+    retry_key: str = ""
+    confirm_action_type: str = "key"
+    confirm_key: str = ""
+    confirm_x: int = 0
+    confirm_y: int = 0
+    max_rounds: int = 5
+    round_wait_ms: int = 3000
+    roi_count: int = 1
+    roi_a: dict = field(default_factory=lambda: {"x": 0, "y": 0, "w": 0, "h": 0})
+    roi_a_compare: str = "higher_better"
+    roi_a_threshold: float = 0.0
+    roi_a_value_pick: str = "first"
+    roi_b: dict = field(default_factory=lambda: {"x": 0, "y": 0, "w": 0, "h": 0})
+    roi_b_compare: str = "lower_better"
+    roi_b_threshold: float = 50.0
+    roi_b_value_pick: str = "first"
+    on_all_fail: str = ""
+
 
 _FIELD_DEFAULTS = {
     "fuzzy": False,
@@ -71,6 +91,24 @@ _FIELD_DEFAULTS = {
     "key": "",
     "post_delay_ms": 0,
     "depends_on": [],
+    "rule_type": "trigger",
+    "retry_key": "",
+    "confirm_action_type": "key",
+    "confirm_key": "",
+    "confirm_x": 0,
+    "confirm_y": 0,
+    "max_rounds": 5,
+    "round_wait_ms": 3000,
+    "roi_count": 1,
+    "roi_a": {"x": 0, "y": 0, "w": 0, "h": 0},
+    "roi_a_compare": "higher_better",
+    "roi_a_threshold": 0.0,
+    "roi_a_value_pick": "first",
+    "roi_b": {"x": 0, "y": 0, "w": 0, "h": 0},
+    "roi_b_compare": "lower_better",
+    "roi_b_threshold": 50.0,
+    "roi_b_value_pick": "first",
+    "on_all_fail": "",
 }
 
 
@@ -137,6 +175,24 @@ def _dict_to_rule(d: dict) -> Rule:
         key=str(merged.get("key", "")),
         post_delay_ms=max(0, _as_int(merged.get("post_delay_ms", 0), 0)),
         depends_on=_parse_depends_on(merged.get("depends_on")),
+        rule_type=str(merged.get("rule_type", "trigger")),
+        retry_key=str(merged.get("retry_key", "")),
+        confirm_action_type=str(merged.get("confirm_action_type", "key")),
+        confirm_key=str(merged.get("confirm_key", "")),
+        confirm_x=_as_int(merged.get("confirm_x", 0), 0),
+        confirm_y=_as_int(merged.get("confirm_y", 0), 0),
+        max_rounds=max(1, _as_int(merged.get("max_rounds", 5), 5)),
+        round_wait_ms=max(100, _as_int(merged.get("round_wait_ms", 3000), 3000)),
+        roi_count=max(1, min(2, _as_int(merged.get("roi_count", 1), 1))),
+        roi_a=_sanitize_roi(merged.get("roi_a")),
+        roi_a_compare=str(merged.get("roi_a_compare", "higher_better")),
+        roi_a_threshold=_as_float(merged.get("roi_a_threshold", 0.0), 0.0),
+        roi_a_value_pick=str(merged.get("roi_a_value_pick", "first")),
+        roi_b=_sanitize_roi(merged.get("roi_b")),
+        roi_b_compare=str(merged.get("roi_b_compare", "lower_better")),
+        roi_b_threshold=_as_float(merged.get("roi_b_threshold", 50.0), 50.0),
+        roi_b_value_pick=str(merged.get("roi_b_value_pick", "first")),
+        on_all_fail=str(merged.get("on_all_fail", "")),
     )
 
 

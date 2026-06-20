@@ -1,4 +1,5 @@
 import random
+import re
 import threading
 import time
 from collections import defaultdict, deque
@@ -88,6 +89,8 @@ class MainLoop:
         self._rule_auto_disabled: set[str] = set()
         self._sub_not_found_count: dict[str, int] = defaultdict(int)
         self._once_skip_announced: set[str] = set()
+        self._compare_running: set[str] = set()
+        self._pending_forced_triggers: set[str] = set()
         self._rules_dirty: bool = False
         self._save_period_counter: int = 0
 
@@ -399,6 +402,18 @@ class MainLoop:
             if rule.id in self._rule_auto_disabled:
                 continue
 
+            if rule.id in self._pending_forced_triggers:
+                self._pending_forced_triggers.discard(rule.id)
+                if rule.action_type != "key" and rule.click_position == "text_center":
+                    if self._verbose:
+                        self._log(f"強制觸發規則「{rule.name}」跳過 (text_center 不支援)")
+                    continue
+                if self._verbose:
+                    self._log(f"強制觸發規則「{rule.name}」")
+                dummy = OcrResult(text="", x=0, y=0, w=0, h=0, confidence=0.0)
+                self._execute_trigger(rule, dummy, rect)
+                continue
+
             if rule.trigger_mode == "once" and rule.trigger_count > 0:
                 if self._verbose and rule.id not in self._once_skip_announced:
                     self._log(
@@ -414,6 +429,10 @@ class MainLoop:
                     if self._verbose:
                         self._log(f"規則「{rule.name}」依賴尚未全部觸發 ({rule.depends_on})，跳過")
                     continue
+
+            if rule.rule_type == "compare":
+                self._run_compare_rule(rule)
+                continue
 
             if self._verbose:
                 self._log(f"處理規則「{rule.name}」目標「{rule.target_text}」")
@@ -679,6 +698,174 @@ class MainLoop:
         if len(history) > _RUNAWAY_THRESHOLD:
             return True
         return False
+
+    # ── Compare rule ──
+
+    def _run_compare_rule(self, rule: Rule) -> None:
+        if rule.id in self._compare_running:
+            return
+        self._compare_running.add(rule.id)
+        with self._window_lock:
+            title = self._window_title
+        t = threading.Thread(
+            target=self._compare_worker,
+            args=(rule, title),
+            daemon=True,
+        )
+        t.start()
+
+    def _compare_worker(self, rule: Rule, title: str) -> None:
+        try:
+            round_results = []
+            for round_idx in range(rule.max_rounds):
+                roi_a_val = self._poll_roi_value(
+                    rule.roi_a, rule.roi_a_value_pick, rule.round_wait_ms, title
+                )
+                roi_b_val = None
+                if rule.roi_count == 2:
+                    roi_b_val = self._poll_roi_value(
+                        rule.roi_b, rule.roi_b_value_pick, rule.round_wait_ms, title
+                    )
+                if roi_a_val is not None:
+                    rd = {"round": round_idx, "roi_a": roi_a_val, "roi_b": roi_b_val}
+                    round_results.append(rd)
+                    a_ok = self._check_threshold(
+                        roi_a_val, rule.roi_a_threshold, rule.roi_a_compare
+                    )
+                    b_ok = (rule.roi_count == 1) or (
+                        roi_b_val is not None
+                        and self._check_threshold(
+                            roi_b_val, rule.roi_b_threshold, rule.roi_b_compare
+                        )
+                    )
+                    if a_ok and b_ok:
+                        self._execute_confirm_action(rule, title, rule.post_delay_ms)
+                        return
+                if round_idx < rule.max_rounds - 1:
+                    if rule.retry_key:
+                        _ahk.send_key(rule.retry_key)
+                    time.sleep(0.3)
+
+            self._finish_compare(rule, round_results, title)
+        finally:
+            self._compare_running.discard(rule.id)
+
+    def _finish_compare(self, rule: Rule, round_results: list[dict], title: str) -> None:
+        if not round_results:
+            if rule.on_all_fail:
+                with self._rules_lock:
+                    self._pending_forced_triggers.add(rule.on_all_fail)
+                msg = f"比較規則「{rule.name}」所有輪次無效 → 強制觸發「{rule.on_all_fail}」"
+                if self.on_warning:
+                    self.on_warning(msg)
+                elif self._verbose:
+                    self._log(msg)
+            return
+
+        full = [r for r in round_results if self._is_round_full_ok(r, rule)]
+        partial = [
+            r
+            for r in round_results
+            if not self._is_round_full_ok(r, rule)
+            and self._check_threshold(r["roi_a"], rule.roi_a_threshold, rule.roi_a_compare)
+        ]
+
+        best = None
+        if full:
+            best = self._pick_best_round(full, "roi_a", rule.roi_a_compare)
+        elif partial:
+            best = self._pick_best_round(partial, "roi_a", rule.roi_a_compare)
+
+        if best is not None:
+            self._execute_confirm_action(rule, title, rule.post_delay_ms)
+        elif rule.on_all_fail:
+            with self._rules_lock:
+                self._pending_forced_triggers.add(rule.on_all_fail)
+            msg = f"比較規則「{rule.name}」無達標輪次 → 強制觸發「{rule.on_all_fail}」"
+            if self.on_warning:
+                self.on_warning(msg)
+            elif self._verbose:
+                self._log(msg)
+
+    def _is_round_full_ok(self, rd: dict, rule: Rule) -> bool:
+        a_ok = self._check_threshold(rd["roi_a"], rule.roi_a_threshold, rule.roi_a_compare)
+        if not a_ok:
+            return False
+        if rule.roi_count == 2:
+            return rd.get("roi_b") is not None and self._check_threshold(
+                rd["roi_b"], rule.roi_b_threshold, rule.roi_b_compare
+            )
+        return True
+
+    def _poll_roi_value(self, roi: dict, pick: str, timeout_ms: int, title: str) -> float | None:
+        deadline = time.monotonic() + timeout_ms / 1000.0
+        while time.monotonic() < deadline:
+            img = self._capture_window(title)
+            if img is not None:
+                roi_img = self._crop_roi(img, roi)
+                if roi_img is not None:
+                    results = recognize(
+                        roi_img, preprocess=False, max_side_len=0, min_confidence=0.25
+                    )
+                    for r in results:
+                        val = self._extract_number(r.text, pick)
+                        if val is not None:
+                            return val
+            time.sleep(0.2)
+        return None
+
+    def _capture_window(self, title: str) -> np.ndarray | None:
+        img = capture(title)
+        if img is None:
+            img = capture_window_content(title)
+        return img
+
+    def _crop_roi(self, img: np.ndarray, roi: dict) -> np.ndarray | None:
+        h, w = img.shape[:2]
+        x1 = max(0, roi["x"])
+        y1 = max(0, roi["y"])
+        x2 = min(w, roi["x"] + roi["w"])
+        y2 = min(h, roi["y"] + roi["h"])
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return img[y1:y2, x1:x2]
+
+    def _extract_number(self, text: str, pick: str) -> float | None:
+        nums = re.findall(r"\d+(?:\.\d+)?", text)
+        if not nums:
+            return None
+        idx = 0 if pick == "first" else -1
+        return float(nums[idx])
+
+    def _check_threshold(self, value: float, threshold: float, direction: str) -> bool:
+        if direction == "higher_better":
+            return value >= threshold
+        return value <= threshold
+
+    def _pick_best_round(self, rounds: list[dict], val_key: str, direction: str) -> dict:
+        if direction == "higher_better":
+            best_val = max(r[val_key] for r in rounds)
+        else:
+            best_val = min(r[val_key] for r in rounds)
+        candidates = [r for r in rounds if r[val_key] == best_val]
+        return min(candidates, key=lambda r: r["round"])
+
+    def _execute_confirm_action(self, rule: Rule, title: str, post_delay_ms: int = 0) -> None:
+        rect = get_window_rect(title)
+        if rect is None:
+            msg = f"比較規則「{rule.name}」確認動作失敗：找不到視窗"
+            if self.on_warning:
+                self.on_warning(msg)
+            return
+        if rule.confirm_action_type == "key" and rule.confirm_key:
+            _ahk.send_key(rule.confirm_key)
+        elif rule.confirm_action_type == "click":
+            sx, sy = self._to_screen_coords(rect, rule.confirm_x, rule.confirm_y)
+            _ahk.send_click(sx, sy, rule.click_button)
+        if post_delay_ms > 0:
+            time.sleep(post_delay_ms / 1000.0)
+        if self._verbose:
+            self._log(f"比較規則「{rule.name}」確認動作完成")
 
 
 if __name__ == "__main__":

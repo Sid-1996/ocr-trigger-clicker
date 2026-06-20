@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -82,6 +83,11 @@ class _KeyCombo(_NoWheelCombo):
 
 
 class _NoWheelSpin(QSpinBox):
+    def wheelEvent(self, e):
+        e.ignore()
+
+
+class _NoWheelDoubleSpin(QDoubleSpinBox):
     def wheelEvent(self, e):
         e.ignore()
 
@@ -495,6 +501,114 @@ class MainWindow(QMainWindow):
         self._edit_random_offset.setValue(3)
         self._edit_random_offset.setToolTip("點擊位置隨機偏移像素，模擬真人點擊")
 
+        # ── Compare rule fields (hidden by default) ──
+        self._edit_rule_type = _NoWheelCombo()
+        self._edit_rule_type.addItem("觸發規則", "trigger")
+        self._edit_rule_type.addItem("比較規則", "compare")
+        self._edit_rule_type.setToolTip(
+            "觸發規則：OCR 比對到文字即動作 ｜ 比較規則：多輪收集數值，選最佳後動作"
+        )
+
+        self._edit_retry_key = _KeyCombo()
+        for group in [
+            [(f"數字鍵 {i}", str(i)) for i in range(10)],
+            ["Enter", "Escape", "Space", "Tab", "F5"],
+            [chr(c) for c in range(ord("a"), ord("z") + 1)],
+        ]:
+            self._edit_retry_key.insertSeparator(self._edit_retry_key.count())
+            for item in group:
+                if isinstance(item, tuple):
+                    text, data = item
+                else:
+                    text = data = item
+                self._edit_retry_key.addItem(text, data)
+        self._edit_retry_key.setCurrentIndex(0)
+        self._edit_retry_key.setToolTip("每輪換下一組數值時按的鍵（留空 = 不按鍵直接下一輪）")
+
+        self._edit_compare_max_rounds = _NoWheelSpin()
+        self._edit_compare_max_rounds.setRange(1, 99)
+        self._edit_compare_max_rounds.setValue(5)
+        self._edit_compare_max_rounds.setToolTip("最多嘗試幾輪數值收集")
+
+        self._edit_round_wait_ms = _NoWheelSpin()
+        self._edit_round_wait_ms.setRange(100, 30000)
+        self._edit_round_wait_ms.setValue(3000)
+        self._edit_round_wait_ms.setSuffix(" ms")
+        self._edit_round_wait_ms.setToolTip("每輪輪詢 OCR 的超時上限（毫秒）")
+
+        self._edit_roi_count = _NoWheelCombo()
+        self._edit_roi_count.addItem("1 個區域", 1)
+        self._edit_roi_count.addItem("2 個區域", 2)
+        self._edit_roi_count.setToolTip("比較規則使用的 ROI 數量（2 區域模式可同時監看兩個數值）")
+
+        self._edit_roi_a_label = QLabel("全視窗")
+        self._edit_roi_a_btn = QPushButton("框選 ROI-A")
+        self._edit_roi_a_btn.setToolTip("第一個擷取區域")
+
+        self._edit_roi_a_compare = _NoWheelCombo()
+        self._edit_roi_a_compare.addItem("越高越好", "higher_better")
+        self._edit_roi_a_compare.addItem("越低越好", "lower_better")
+        self._edit_roi_a_compare.setToolTip("ROI-A 數值的比較方向")
+
+        self._edit_roi_a_threshold = _NoWheelDoubleSpin()
+        self._edit_roi_a_threshold.setRange(-999999.0, 999999.0)
+        self._edit_roi_a_threshold.setDecimals(2)
+        self._edit_roi_a_threshold.setValue(0.0)
+        self._edit_roi_a_threshold.setToolTip("ROI-A 的達標門檻數值")
+
+        self._edit_roi_a_value_pick = _NoWheelCombo()
+        self._edit_roi_a_value_pick.addItem("第一個數字", "first")
+        self._edit_roi_a_value_pick.addItem("最後一個數字", "last")
+        self._edit_roi_a_value_pick.setToolTip("從 OCR 文字中取第幾個數字來比較")
+
+        self._edit_roi_b_label = QLabel("全視窗")
+        self._edit_roi_b_btn = QPushButton("框選 ROI-B")
+        self._edit_roi_b_btn.setToolTip("第二個擷取區域（roi_count=2 時啟用）")
+
+        self._edit_roi_b_compare = _NoWheelCombo()
+        self._edit_roi_b_compare.addItem("越高越好", "higher_better")
+        self._edit_roi_b_compare.addItem("越低越好", "lower_better")
+        self._edit_roi_b_compare.setToolTip("ROI-B 數值的比較方向")
+
+        self._edit_roi_b_threshold = _NoWheelDoubleSpin()
+        self._edit_roi_b_threshold.setRange(-999999.0, 999999.0)
+        self._edit_roi_b_threshold.setDecimals(2)
+        self._edit_roi_b_threshold.setValue(50.0)
+        self._edit_roi_b_threshold.setToolTip("ROI-B 的達標門檻數值")
+
+        self._edit_roi_b_value_pick = _NoWheelCombo()
+        self._edit_roi_b_value_pick.addItem("第一個數字", "first")
+        self._edit_roi_b_value_pick.addItem("最後一個數字", "last")
+        self._edit_roi_b_value_pick.setToolTip("從 OCR 文字中取第幾個數字來比較")
+
+        self._edit_confirm_action_type = _NoWheelCombo()
+        self._edit_confirm_action_type.addItem("鍵盤按鍵", "key")
+        self._edit_confirm_action_type.addItem("滑鼠點擊", "click")
+        self._edit_confirm_action_type.setToolTip("達標時執行確認動作的類型")
+
+        self._edit_confirm_key = _KeyCombo()
+        for group in [
+            [(f"數字鍵 {i}", str(i)) for i in range(10)],
+            ["Enter", "Escape", "Space", "Tab", "F5"],
+            [chr(c) for c in range(ord("a"), ord("z") + 1)],
+        ]:
+            self._edit_confirm_key.insertSeparator(self._edit_confirm_key.count())
+            for item in group:
+                if isinstance(item, tuple):
+                    text, data = item
+                else:
+                    text = data = item
+                self._edit_confirm_key.addItem(text, data)
+        self._edit_confirm_key.setCurrentIndex(0)
+        self._edit_confirm_key.setToolTip("確認動作的按鍵名稱")
+
+        self._edit_confirm_coord_label = QLabel("尚未選取")
+        self._edit_confirm_pick_btn = QPushButton("選取確認座標")
+        self._edit_confirm_pick_btn.setToolTip("選取確認動作的點擊座標")
+
+        self._edit_on_all_fail = _NoWheelCombo()
+        self._edit_on_all_fail.setToolTip("全輪失敗時強制觸發的規則 ID（選取觸發規則）")
+
         # ── P0: 動作類型 / 按鍵 / 點擊後等待 / 等待規則 ──
         self._edit_post_delay = _NoWheelSpin()
         self._edit_post_delay.setRange(0, 30000)
@@ -699,7 +813,32 @@ class MainWindow(QMainWindow):
         self._edit_form.addRow("隨機抖動:", self._edit_random_offset)
         self._edit_form.addRow(self._sub_toggle_btn)
         self._edit_form.addRow(self._sub_panel)
+
+        # ── Compare form rows (hidden by default) ──
+        self._edit_form.addRow("重試按鍵:", self._edit_retry_key)
+        self._edit_form.addRow("最大輪次:", self._edit_compare_max_rounds)
+        self._edit_form.addRow("輪詢超時:", self._edit_round_wait_ms)
+        self._edit_form.addRow("ROI 數量:", self._edit_roi_count)
+        self._edit_form.addRow("ROI-A 區域:", self._edit_roi_a_label)
+        self._edit_form.addRow("", self._edit_roi_a_btn)
+        self._edit_form.addRow("ROI-A 比較:", self._edit_roi_a_compare)
+        self._edit_form.addRow("ROI-A 門檻:", self._edit_roi_a_threshold)
+        self._edit_form.addRow("ROI-A 取數字:", self._edit_roi_a_value_pick)
+        self._edit_form.addRow("ROI-B 區域:", self._edit_roi_b_label)
+        self._edit_form.addRow("", self._edit_roi_b_btn)
+        self._edit_form.addRow("ROI-B 比較:", self._edit_roi_b_compare)
+        self._edit_form.addRow("ROI-B 門檻:", self._edit_roi_b_threshold)
+        self._edit_form.addRow("ROI-B 取數字:", self._edit_roi_b_value_pick)
+        self._edit_form.addRow("確認動作:", self._edit_confirm_action_type)
+        self._edit_form.addRow("確認按鍵:", self._edit_confirm_key)
+        self._edit_form.addRow("確認座標:", self._edit_confirm_coord_label)
+        self._edit_form.addRow("", self._edit_confirm_pick_btn)
+        self._edit_form.addRow("全輪失敗:", self._edit_on_all_fail)
+
         self._edit_form.addRow(self._edit_save_btn)
+
+        # Insert rule_type as first row
+        self._edit_form.insertRow(0, "類型:", self._edit_rule_type)
 
         scroll.setWidget(self._edit_panel)
         self._edit_stack.addWidget(scroll)
@@ -774,6 +913,15 @@ class MainWindow(QMainWindow):
         self._task_del_btn.clicked.connect(self._on_task_delete)
         self._task_import_btn.clicked.connect(self._on_task_import)
         self._task_export_btn.clicked.connect(self._on_task_export)
+
+        self._edit_rule_type.currentIndexChanged.connect(self._update_rule_type_visibility)
+        self._edit_roi_count.currentIndexChanged.connect(self._update_roi_b_visibility)
+        self._edit_confirm_action_type.currentIndexChanged.connect(
+            self._update_confirm_action_visibility
+        )
+        self._edit_roi_a_btn.clicked.connect(self._on_pick_roi_a)
+        self._edit_roi_b_btn.clicked.connect(self._on_pick_roi_b)
+        self._edit_confirm_pick_btn.clicked.connect(self._on_pick_confirm_coord)
 
         self._signals.trigger_signal.connect(self._on_trigger_from_thread)
         self._signals.error_signal.connect(self._on_error_from_thread)
@@ -1219,6 +1367,51 @@ class MainWindow(QMainWindow):
             f"X: {rule.on_not_found_custom_x}, Y: {rule.on_not_found_custom_y}"
         )
         self._edit_sub_not_found_retries.setValue(rule.sub_not_found_retries)
+
+        # ── Compare rule fields ──
+        rt_idx = self._edit_rule_type.findData(rule.rule_type)
+        self._edit_rule_type.setCurrentIndex(max(0, rt_idx))
+        rk_idx = self._edit_retry_key.findData(rule.retry_key)
+        self._edit_retry_key.setCurrentIndex(rk_idx if rk_idx >= 0 else 0)
+        self._edit_compare_max_rounds.setValue(rule.max_rounds)
+        self._edit_round_wait_ms.setValue(rule.round_wait_ms)
+        rc_idx = self._edit_roi_count.findData(rule.roi_count)
+        self._edit_roi_count.setCurrentIndex(max(0, rc_idx))
+        has_roi_a = any(rule.roi_a.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
+        self._edit_roi_a_label.setText(
+            f"x={rule.roi_a['x']} y={rule.roi_a['y']} w={rule.roi_a['w']} h={rule.roi_a['h']}"
+            if has_roi_a
+            else "全視窗"
+        )
+        self._edit_roi_a_compare.setCurrentIndex(
+            max(0, self._edit_roi_a_compare.findData(rule.roi_a_compare))
+        )
+        self._edit_roi_a_threshold.setValue(rule.roi_a_threshold)
+        self._edit_roi_a_value_pick.setCurrentIndex(
+            max(0, self._edit_roi_a_value_pick.findData(rule.roi_a_value_pick))
+        )
+        has_roi_b = any(rule.roi_b.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
+        self._edit_roi_b_label.setText(
+            f"x={rule.roi_b['x']} y={rule.roi_b['y']} w={rule.roi_b['w']} h={rule.roi_b['h']}"
+            if has_roi_b
+            else "全視窗"
+        )
+        self._edit_roi_b_compare.setCurrentIndex(
+            max(0, self._edit_roi_b_compare.findData(rule.roi_b_compare))
+        )
+        self._edit_roi_b_threshold.setValue(rule.roi_b_threshold)
+        self._edit_roi_b_value_pick.setCurrentIndex(
+            max(0, self._edit_roi_b_value_pick.findData(rule.roi_b_value_pick))
+        )
+        self._edit_confirm_action_type.setCurrentIndex(
+            max(0, self._edit_confirm_action_type.findData(rule.confirm_action_type))
+        )
+        ck_idx = self._edit_confirm_key.findData(rule.confirm_key)
+        self._edit_confirm_key.setCurrentIndex(ck_idx if ck_idx >= 0 else 0)
+        self._edit_confirm_coord_label.setText(f"X: {rule.confirm_x}, Y: {rule.confirm_y}")
+        fail_idx = self._edit_on_all_fail.findData(rule.on_all_fail)
+        self._edit_on_all_fail.setCurrentIndex(fail_idx if fail_idx >= 0 else 0)
+        self._update_rule_type_visibility()
         self._update_sub_visibility()
 
     def _update_sub_visibility(self):
@@ -1268,6 +1461,106 @@ class MainWindow(QMainWindow):
 
     def _on_action_type_changed(self, atype: str):
         self._update_action_visibility()
+
+    # ── Rule type switching ──
+
+    _TRIGGER_FIELDS = [
+        "target",
+        "roi_label",
+        "roi_btn",
+        "cooldown",
+        "trigger_mode",
+        "action_type",
+        "key",
+        "click_button",
+        "click_position",
+        "coord_row",
+        "fuzzy",
+        "fuzzy_threshold",
+        "max_triggers",
+        "random_offset",
+        "sub_toggle_btn",
+        "sub_panel",
+    ]
+    _COMPARE_FIELDS = [
+        "retry_key",
+        "compare_max_rounds",
+        "round_wait_ms",
+        "roi_count",
+        "roi_a_label",
+        "roi_a_btn",
+        "roi_a_compare",
+        "roi_a_threshold",
+        "roi_a_value_pick",
+        "roi_b_label",
+        "roi_b_btn",
+        "roi_b_compare",
+        "roi_b_threshold",
+        "roi_b_value_pick",
+        "confirm_action_type",
+        "confirm_key",
+        "confirm_coord_label",
+        "confirm_pick_btn",
+        "on_all_fail",
+    ]
+
+    def _toggle_field_visibility(self, field_name: str, visible: bool):
+        widget = getattr(self, f"_edit_{field_name}", None)
+        if widget is None:
+            widget = getattr(self, f"_{field_name}", None)
+        if widget is None:
+            return
+        widget.setVisible(visible)
+        label = self._edit_form.labelForField(widget)
+        if label:
+            label.setVisible(visible)
+
+    def _update_rule_type_visibility(self):
+        is_compare = self._edit_rule_type.currentData() == "compare"
+        for fn in self._TRIGGER_FIELDS:
+            self._toggle_field_visibility(fn, not is_compare)
+        for fn in self._COMPARE_FIELDS:
+            self._toggle_field_visibility(fn, is_compare)
+        self._update_roi_b_visibility()
+        self._update_confirm_action_visibility()
+        if is_compare:
+            self._populate_on_all_fail_combo()
+            self._sub_toggle_btn.setChecked(False)
+            self._sub_panel.setVisible(False)
+
+    def _update_roi_b_visibility(self):
+        show = (
+            self._edit_rule_type.currentData() == "compare"
+            and self._edit_roi_count.currentData() == 2
+        )
+        for fn in [
+            "roi_b_label",
+            "roi_b_btn",
+            "roi_b_compare",
+            "roi_b_threshold",
+            "roi_b_value_pick",
+        ]:
+            self._toggle_field_visibility(fn, show)
+
+    def _update_confirm_action_visibility(self):
+        is_compare = self._edit_rule_type.currentData() == "compare"
+        is_key = self._edit_confirm_action_type.currentData() == "key"
+        self._toggle_field_visibility("confirm_key", is_compare and is_key)
+        self._toggle_field_visibility("confirm_coord_label", is_compare and not is_key)
+        self._toggle_field_visibility("confirm_pick_btn", is_compare and not is_key)
+
+    def _populate_on_all_fail_combo(self):
+        self._edit_on_all_fail.blockSignals(True)
+        current = self._edit_on_all_fail.currentData()
+        self._edit_on_all_fail.clear()
+        self._edit_on_all_fail.addItem("無", "")
+        for r in self._rules:
+            if r.id != self._selected_rule_id and getattr(r, "rule_type", "trigger") == "trigger":
+                self._edit_on_all_fail.addItem(r.name, r.id)
+        idx = self._edit_on_all_fail.findData(current)
+        if idx >= 0:
+            self._edit_on_all_fail.setCurrentIndex(idx)
+        self._edit_on_all_fail.blockSignals(False)
 
     def _get_excluded_deps(self, rule_id: str) -> set[str]:
         adj = {r.id: list(r.depends_on) for r in self._rules}
@@ -1425,6 +1718,22 @@ class MainWindow(QMainWindow):
         rule.post_delay_ms = self._edit_post_delay.value()
         rule.action_type = self._edit_action_type.currentData()
         rule.key = self._edit_key.currentData() or self._edit_key.currentText()
+        rule.rule_type = self._edit_rule_type.currentData()
+        rule.retry_key = self._edit_retry_key.currentData() or self._edit_retry_key.currentText()
+        rule.max_rounds = self._edit_compare_max_rounds.value()
+        rule.round_wait_ms = self._edit_round_wait_ms.value()
+        rule.roi_count = self._edit_roi_count.currentData()
+        rule.roi_a_compare = self._edit_roi_a_compare.currentData()
+        rule.roi_a_threshold = self._edit_roi_a_threshold.value()
+        rule.roi_a_value_pick = self._edit_roi_a_value_pick.currentData()
+        rule.roi_b_compare = self._edit_roi_b_compare.currentData()
+        rule.roi_b_threshold = self._edit_roi_b_threshold.value()
+        rule.roi_b_value_pick = self._edit_roi_b_value_pick.currentData()
+        rule.confirm_action_type = self._edit_confirm_action_type.currentData()
+        rule.confirm_key = (
+            self._edit_confirm_key.currentData() or self._edit_confirm_key.currentText()
+        )
+        rule.on_all_fail = self._edit_on_all_fail.currentData() or ""
         rule.depends_on = [
             self._edit_depends_on.item(i).data(Qt.ItemDataRole.UserRole)
             for i in range(self._edit_depends_on.count())
@@ -1614,6 +1923,70 @@ class MainWindow(QMainWindow):
             f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
 
+    # === Compare rule pickers ===
+
+    def _pick_roi_common(self, roi_attr: str, label_widget, status_prefix: str):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
+        mod = load_sibling("roi", "gui/07_gui_roi.py")
+        result = mod.select_roi(parent_window=self)
+        if not result:
+            return
+        if title:
+            screen = QApplication.primaryScreen()
+            ratio = screen.devicePixelRatio()
+            result["x"] = int(result["x"] * ratio)
+            result["y"] = int(result["y"] * ratio)
+            wr = get_window_rect(title)
+            if wr:
+                result["x"] -= wr["x"]
+                result["y"] -= wr["y"]
+        setattr(rule, roi_attr, result)
+        label_widget.setText(f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}")
+        save_task(self._current_task, self._rules)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(
+            f"{status_prefix}: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
+        )
+
+    def _on_pick_roi_a(self):
+        self._pick_roi_common("roi_a", self._edit_roi_a_label, "已選取 ROI-A")
+
+    def _on_pick_roi_b(self):
+        self._pick_roi_common("roi_b", self._edit_roi_b_label, "已選取 ROI-B")
+
+    def _on_pick_confirm_coord(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
+        mod = load_sibling("click_picker", "gui/13_gui_click_picker.py")
+        result = mod.pick_click_position(parent_window=self)
+        if result is None:
+            return
+        if title:
+            screen = QApplication.primaryScreen()
+            ratio = screen.devicePixelRatio()
+            result = (int(result[0] * ratio), int(result[1] * ratio))
+            wr = get_window_rect(title)
+            if wr:
+                result = (result[0] - wr["x"], result[1] - wr["y"])
+        rule.confirm_x, rule.confirm_y = result
+        rule.confirm_action_type = "click"
+        self._edit_confirm_action_type.setCurrentIndex(
+            max(0, self._edit_confirm_action_type.findData("click"))
+        )
+        self._edit_confirm_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
+        save_task(self._current_task, self._rules)
+        self._edit_stack.setCurrentIndex(1)
+        self._status_bar.showMessage(f"已選取確認點擊座標: X={result[0]}, Y={result[1]}")
+
     # === OCR diagnostic ===
     def _switch_to_debug(self):
         title = self._window_combo.currentText()
@@ -1762,7 +2135,6 @@ class MainWindow(QMainWindow):
         self._debug_btn.setEnabled(enabled)
         self._focus_safe_cb.setEnabled(enabled)
         self._task_new_btn.setEnabled(enabled)
-        self._task_save_btn.setEnabled(enabled)
         self._task_del_btn.setEnabled(enabled)
         self._task_import_btn.setEnabled(enabled)
         self._task_export_btn.setEnabled(enabled)
@@ -1797,6 +2169,28 @@ class MainWindow(QMainWindow):
             self._edit_on_not_found_action.setEnabled(False)
             self._edit_on_not_found_pick_btn.setEnabled(False)
             self._clear_sub_btn.setEnabled(False)
+
+            # Compare rule fields
+            self._edit_rule_type.setEnabled(False)
+            self._edit_retry_key.setEnabled(False)
+            self._edit_compare_max_rounds.setEnabled(False)
+            self._edit_round_wait_ms.setEnabled(False)
+            self._edit_roi_count.setEnabled(False)
+            self._edit_roi_a_label.setEnabled(False)
+            self._edit_roi_a_btn.setEnabled(False)
+            self._edit_roi_a_compare.setEnabled(False)
+            self._edit_roi_a_threshold.setEnabled(False)
+            self._edit_roi_a_value_pick.setEnabled(False)
+            self._edit_roi_b_label.setEnabled(False)
+            self._edit_roi_b_btn.setEnabled(False)
+            self._edit_roi_b_compare.setEnabled(False)
+            self._edit_roi_b_threshold.setEnabled(False)
+            self._edit_roi_b_value_pick.setEnabled(False)
+            self._edit_confirm_action_type.setEnabled(False)
+            self._edit_confirm_key.setEnabled(False)
+            self._edit_confirm_coord_label.setEnabled(False)
+            self._edit_confirm_pick_btn.setEnabled(False)
+            self._edit_on_all_fail.setEnabled(False)
 
     # === Thread-safe callbacks ===
     def _on_trigger_from_thread(self, log: TriggerLog):
