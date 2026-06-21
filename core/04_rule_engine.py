@@ -1,15 +1,47 @@
 import json
 import random
+import sys
 import time
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-from _loader import load_sibling
+# Ensure project root is on sys.path for _loader
+_here = Path(__file__).resolve().parent.parent
+if str(_here) not in sys.path:
+    sys.path.insert(0, str(_here))
+
+from _loader import load_sibling  # noqa: E402
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
 find_text = _ocr_mod.find_text
+
+
+# ── New dataclasses ──
+
+
+@dataclass
+class Step:
+    type: str
+    params: dict
+
+
+@dataclass
+class Metric:
+    roi: dict
+    pick: str
+    direction: str
+    threshold: float
+    timeout_ms: int
+
+
+@dataclass
+class Round:
+    trigger_action: dict
+    metrics: list[Metric]
+    result_action: dict
 
 
 @dataclass
@@ -17,99 +49,44 @@ class Rule:
     id: str
     name: str
     enabled: bool
-    target_text: str
-    fuzzy: bool
-    fuzzy_threshold: float
-    roi: dict
-    click_position: str
-    click_button: str
-    cooldown_ms: int
-    trigger_mode: str
-    max_triggers: int
-    random_offset: int
-    custom_x: int = 0
-    custom_y: int = 0
+    steps: list[Step]
+
+    # runtime only (not persisted)
     trigger_count: int = 0
     last_trigger_time: float = 0.0
-    sub_target_text: str = ""
-    sub_roi: dict = field(default_factory=lambda: {"x": 0, "y": 0, "w": 0, "h": 0})
-    sub_not_found_retries: int = 3
-    on_found_action: str = "click_sub_center"
-    on_found_custom_x: int = 0
-    on_found_custom_y: int = 0
-    on_not_found_action: str = "click_nothing"
-    on_not_found_custom_x: int = 0
-    on_not_found_custom_y: int = 0
-    action_type: str = "click"
-    key: str = ""
-    post_delay_ms: int = 0
-    depends_on: list[str] = field(default_factory=list)
-
-    # Compare rule fields
-    rule_type: str = "trigger"
-    retry_key: str = ""
-    confirm_action_type: str = "key"
-    confirm_key: str = ""
-    confirm_x: int = 0
-    confirm_y: int = 0
-    max_rounds: int = 5
-    round_wait_ms: int = 3000
-    roi_count: int = 1
-    roi_a: dict = field(default_factory=lambda: {"x": 0, "y": 0, "w": 0, "h": 0})
-    roi_a_compare: str = "higher_better"
-    roi_a_threshold: float = 0.0
-    roi_a_value_pick: str = "first"
-    roi_b: dict = field(default_factory=lambda: {"x": 0, "y": 0, "w": 0, "h": 0})
-    roi_b_compare: str = "lower_better"
-    roi_b_threshold: float = 50.0
-    roi_b_value_pick: str = "first"
-    on_all_fail: str = ""
 
 
-_FIELD_DEFAULTS = {
-    "fuzzy": False,
-    "fuzzy_threshold": 0.8,
-    "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-    "click_position": "text_center",
-    "click_button": "left",
-    "cooldown_ms": 2000,
-    "trigger_mode": "once",
-    "max_triggers": -1,
-    "random_offset": 3,
-    "custom_x": 0,
-    "custom_y": 0,
-    "sub_target_text": "",
-    "sub_roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-    "sub_not_found_retries": 3,
-    "on_found_action": "click_sub_center",
-    "on_found_custom_x": 0,
-    "on_found_custom_y": 0,
-    "on_not_found_action": "click_nothing",
-    "on_not_found_custom_x": 0,
-    "on_not_found_custom_y": 0,
-    "action_type": "click",
-    "key": "",
-    "post_delay_ms": 0,
-    "depends_on": [],
-    "rule_type": "trigger",
-    "retry_key": "",
-    "confirm_action_type": "key",
-    "confirm_key": "",
-    "confirm_x": 0,
-    "confirm_y": 0,
-    "max_rounds": 5,
-    "round_wait_ms": 3000,
-    "roi_count": 1,
-    "roi_a": {"x": 0, "y": 0, "w": 0, "h": 0},
-    "roi_a_compare": "higher_better",
-    "roi_a_threshold": 0.0,
-    "roi_a_value_pick": "first",
-    "roi_b": {"x": 0, "y": 0, "w": 0, "h": 0},
-    "roi_b_compare": "lower_better",
-    "roi_b_threshold": 50.0,
-    "roi_b_value_pick": "first",
-    "on_all_fail": "",
+_STEP_DEFAULTS = {
+    "detect": {
+        "text": "",
+        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+        "fuzzy": False,
+        "fuzzy_threshold": 0.8,
+        "cooldown_ms": 2000,
+        "trigger_mode": "once",
+        "max_triggers": -1,
+    },
+    "click": {
+        "target": "text_center",
+        "x": 0,
+        "y": 0,
+        "button": "left",
+        "random_offset": 3,
+    },
+    "key": {"key": ""},
+    "wait": {"ms": 1000},
+    "wait_rule": {"rule_id": ""},
+    "collect_rounds": {
+        "rounds": [],
+        "primary_metric_index": 0,
+        "confirm_action": {"type": "key", "key": ""},
+        "on_all_fail": {"type": "jump", "rule_id": ""},
+    },
+    "jump": {"rule_id": ""},
 }
+
+
+# ── Helpers ──
 
 
 def _as_int(value, default: int = 0) -> int:
@@ -144,55 +121,158 @@ def _parse_depends_on(value: object) -> list[str]:
     return []
 
 
+# ── Migration helpers ──
+
+
+def _build_detect_params(old: dict) -> dict:
+    return {
+        "text": str(old.get("target_text", "")).strip(),
+        "roi": _sanitize_roi(old.get("roi")),
+        "fuzzy": bool(old.get("fuzzy", False)),
+        "fuzzy_threshold": max(0.0, min(1.0, _as_float(old.get("fuzzy_threshold", 0.8), 0.8))),
+        "cooldown_ms": max(0, _as_int(old.get("cooldown_ms", 2000), 2000)),
+        "trigger_mode": str(old.get("trigger_mode", "once")),
+        "max_triggers": _as_int(old.get("max_triggers", -1), -1),
+    }
+
+
+def _build_confirm_action(old: dict) -> dict:
+    if str(old.get("confirm_action_type", "key")) == "click":
+        return {
+            "type": "click",
+            "x": _as_int(old.get("confirm_x", 0), 0),
+            "y": _as_int(old.get("confirm_y", 0), 0),
+            "button": str(old.get("click_button", "left")),
+        }
+    return {"type": "key", "key": str(old.get("confirm_key", ""))}
+
+
+def _migrate_v1_to_v2(old: dict) -> dict:
+    """Convert old-format rule dict to new-format dict with steps."""
+    steps: list[dict] = []
+
+    # Correction 3: depends_on is list[str], each gets a wait_rule step
+    for dep_id in _parse_depends_on(old.get("depends_on")):
+        steps.append({"type": "wait_rule", "params": {"rule_id": dep_id}})
+
+    if str(old.get("rule_type", "trigger")) == "compare":
+        # Compare rule
+        if str(old.get("target_text", "")).strip():
+            steps.append({"type": "detect", "params": _build_detect_params(old)})
+
+        metrics: list[dict] = []
+        roi_a = _sanitize_roi(old.get("roi_a"))
+        round_wait = max(100, _as_int(old.get("round_wait_ms", 3000), 3000))
+        metrics.append(
+            {
+                "roi": roi_a,
+                "pick": str(old.get("roi_a_value_pick", "first")),
+                "direction": str(old.get("roi_a_compare", "higher_better")),
+                "threshold": _as_float(old.get("roi_a_threshold", 0.0), 0.0),
+                "timeout_ms": round_wait,
+            }
+        )
+        if max(1, min(2, _as_int(old.get("roi_count", 1), 1))) >= 2:
+            roi_b = _sanitize_roi(old.get("roi_b"))
+            metrics.append(
+                {
+                    "roi": roi_b,
+                    "pick": str(old.get("roi_b_value_pick", "first")),
+                    "direction": str(old.get("roi_b_compare", "lower_better")),
+                    "threshold": _as_float(old.get("roi_b_threshold", 50.0), 50.0),
+                    "timeout_ms": round_wait,
+                }
+            )
+
+        max_rounds = max(1, _as_int(old.get("max_rounds", 5), 5))
+        retry_key = str(old.get("retry_key", ""))
+        confirm_action = _build_confirm_action(old)
+        rounds = [
+            {
+                "trigger_action": {"type": "key", "key": retry_key},
+                "metrics": deepcopy(metrics),
+                "result_action": deepcopy(confirm_action),
+            }
+            for _ in range(max_rounds)
+        ]
+
+        on_all_fail_str = str(old.get("on_all_fail", "")).strip()
+        # Correction 2: always {"type": "jump", "rule_id": on_all_fail}
+        steps.append(
+            {
+                "type": "collect_rounds",
+                "params": {
+                    "rounds": rounds,
+                    "primary_metric_index": 1 if len(metrics) >= 2 else 0,
+                    "confirm_action": confirm_action,
+                    "on_all_fail": (
+                        {"type": "jump", "rule_id": on_all_fail_str}
+                        if on_all_fail_str
+                        else {"type": "jump", "rule_id": ""}
+                    ),
+                },
+            }
+        )
+    else:
+        # Trigger rule
+        steps.append({"type": "detect", "params": _build_detect_params(old)})
+
+        # Correction 1: sub_target_text → additional detect step
+        sub_text = str(old.get("sub_target_text", "")).strip()
+        if sub_text:
+            sub_roi = _sanitize_roi(old.get("sub_roi"))
+            if all(sub_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+                sub_roi = _sanitize_roi(old.get("roi"))
+            sub_params = _build_detect_params(old)
+            sub_params["text"] = sub_text
+            sub_params["roi"] = sub_roi
+            steps.append({"type": "detect", "params": sub_params})
+
+        # Action step
+        if str(old.get("action_type", "click")) == "key" and str(old.get("key", "")):
+            steps.append({"type": "key", "params": {"key": str(old.get("key", ""))}})
+        else:
+            steps.append(
+                {
+                    "type": "click",
+                    "params": {
+                        "target": str(old.get("click_position", "text_center")),
+                        "x": _as_int(old.get("custom_x", 0), 0),
+                        "y": _as_int(old.get("custom_y", 0), 0),
+                        "button": str(old.get("click_button", "left")),
+                        "random_offset": max(0, _as_int(old.get("random_offset", 3), 3)),
+                    },
+                }
+            )
+
+        # Post-delay wait
+        post_delay = max(0, _as_int(old.get("post_delay_ms", 0), 0))
+        if post_delay > 0:
+            steps.append({"type": "wait", "params": {"ms": post_delay}})
+
+    return {
+        "id": str(old.get("id", "")),
+        "name": str(old.get("name", "")),
+        "enabled": bool(old.get("enabled", True)),
+        "steps": steps,
+    }
+
+
+# ── Serialization ──
+
+
 def _dict_to_rule(d: dict) -> Rule:
-    merged = {**_FIELD_DEFAULTS, **(d if isinstance(d, dict) else {})}
+    if "steps" not in d:
+        d = _migrate_v1_to_v2(d)
+    steps = [
+        Step(type=str(s.get("type", "")), params=dict(s.get("params", {})))
+        for s in d.get("steps", [])
+    ]
     return Rule(
-        id=str(merged.get("id", "")),
-        name=str(merged.get("name", "")),
-        enabled=bool(merged.get("enabled", True)),
-        target_text=str(merged.get("target_text", "")).strip(),
-        fuzzy=bool(merged.get("fuzzy", False)),
-        fuzzy_threshold=max(0.0, min(1.0, _as_float(merged.get("fuzzy_threshold", 0.8), 0.8))),
-        roi=_sanitize_roi(merged.get("roi")),
-        click_position=str(merged.get("click_position", "text_center")),
-        click_button=str(merged.get("click_button", "left")),
-        cooldown_ms=max(0, _as_int(merged.get("cooldown_ms", 2000), 2000)),
-        trigger_mode=str(merged.get("trigger_mode", "once")),
-        max_triggers=_as_int(merged.get("max_triggers", -1), -1),
-        random_offset=max(0, _as_int(merged.get("random_offset", 3), 3)),
-        custom_x=_as_int(merged.get("custom_x", 0), 0),
-        custom_y=_as_int(merged.get("custom_y", 0), 0),
-        sub_target_text=str(merged.get("sub_target_text", "")),
-        sub_roi=_sanitize_roi(merged.get("sub_roi")),
-        sub_not_found_retries=max(1, _as_int(merged.get("sub_not_found_retries", 3), 3)),
-        on_found_action=str(merged.get("on_found_action", "click_sub_center")),
-        on_found_custom_x=_as_int(merged.get("on_found_custom_x", 0), 0),
-        on_found_custom_y=_as_int(merged.get("on_found_custom_y", 0), 0),
-        on_not_found_action=str(merged.get("on_not_found_action", "click_nothing")),
-        on_not_found_custom_x=_as_int(merged.get("on_not_found_custom_x", 0), 0),
-        on_not_found_custom_y=_as_int(merged.get("on_not_found_custom_y", 0), 0),
-        action_type=str(merged.get("action_type", "click")),
-        key=str(merged.get("key", "")),
-        post_delay_ms=max(0, _as_int(merged.get("post_delay_ms", 0), 0)),
-        depends_on=_parse_depends_on(merged.get("depends_on")),
-        rule_type=str(merged.get("rule_type", "trigger")),
-        retry_key=str(merged.get("retry_key", "")),
-        confirm_action_type=str(merged.get("confirm_action_type", "key")),
-        confirm_key=str(merged.get("confirm_key", "")),
-        confirm_x=_as_int(merged.get("confirm_x", 0), 0),
-        confirm_y=_as_int(merged.get("confirm_y", 0), 0),
-        max_rounds=max(1, _as_int(merged.get("max_rounds", 5), 5)),
-        round_wait_ms=max(100, _as_int(merged.get("round_wait_ms", 3000), 3000)),
-        roi_count=max(1, min(2, _as_int(merged.get("roi_count", 1), 1))),
-        roi_a=_sanitize_roi(merged.get("roi_a")),
-        roi_a_compare=str(merged.get("roi_a_compare", "higher_better")),
-        roi_a_threshold=_as_float(merged.get("roi_a_threshold", 0.0), 0.0),
-        roi_a_value_pick=str(merged.get("roi_a_value_pick", "first")),
-        roi_b=_sanitize_roi(merged.get("roi_b")),
-        roi_b_compare=str(merged.get("roi_b_compare", "lower_better")),
-        roi_b_threshold=_as_float(merged.get("roi_b_threshold", 50.0), 50.0),
-        roi_b_value_pick=str(merged.get("roi_b_value_pick", "first")),
-        on_all_fail=str(merged.get("on_all_fail", "")),
+        id=str(d.get("id", "")),
+        name=str(d.get("name", "")),
+        enabled=bool(d.get("enabled", True)),
+        steps=steps,
     )
 
 
@@ -229,44 +309,6 @@ def save_rules(rules: list[Rule], path: str) -> bool:
         return True
     except OSError:
         return False
-
-
-def check_trigger(
-    rule: Rule,
-    ocr_results: list[OcrResult],
-) -> tuple[bool, Optional[OcrResult]]:
-    if not rule.enabled:
-        return False, None
-    if not rule.target_text.strip():
-        return False, None
-    elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
-    if elapsed_ms < rule.cooldown_ms:
-        return False, None
-    if rule.trigger_mode == "once" and rule.trigger_count > 0:
-        return False, None
-    if rule.max_triggers > 0 and rule.trigger_count >= rule.max_triggers:
-        return False, None
-    matches = find_text(ocr_results, rule.target_text, rule.fuzzy, rule.fuzzy_threshold)
-    if not matches:
-        return False, None
-    return True, matches[0]
-
-
-def apply_trigger(rule: Rule) -> dict:
-    rule.trigger_count += 1
-    rule.last_trigger_time = time.monotonic()
-    if 0 < rule.max_triggers <= rule.trigger_count:
-        rule.enabled = False
-    off = rule.random_offset
-    dx = random.randint(-off, off) if off else 0
-    dy = random.randint(-off, off) if off else 0
-    return {"x": rule.custom_x + dx, "y": rule.custom_y + dy, "button": rule.click_button}
-
-
-def get_roi(rule: Rule) -> Optional[dict]:
-    if all(rule.roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
-        return None
-    return dict(rule.roi)
 
 
 # ── Task management ──
@@ -374,107 +416,313 @@ def migrate_old_rules():
         save_task("預設任務", rules)
 
 
+# ── Compat wrappers (TODO Phase 2: remove) ──
+
+
+def _compat_first_detect(rule: Rule) -> Optional[dict]:
+    for s in rule.steps:
+        if s.type == "detect":
+            return s.params
+    return None
+
+
+def _compat_first_click(rule: Rule) -> Optional[dict]:
+    for s in rule.steps:
+        if s.type == "click":
+            return s.params
+    return None
+
+
+def check_trigger(
+    rule: Rule,
+    ocr_results: list[OcrResult],
+) -> tuple[bool, Optional[OcrResult]]:
+    # TODO Phase 2: remove - compat wrapper
+    if not rule.enabled:
+        return False, None
+    dp = _compat_first_detect(rule)
+    if dp is None or not dp.get("text", "").strip():
+        return False, None
+    elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
+    if elapsed_ms < dp.get("cooldown_ms", 2000):
+        return False, None
+    if dp.get("trigger_mode", "once") == "once" and rule.trigger_count > 0:
+        return False, None
+    mt = dp.get("max_triggers", -1)
+    if mt > 0 and rule.trigger_count >= mt:
+        return False, None
+    matches = find_text(
+        ocr_results, dp["text"], dp.get("fuzzy", False), dp.get("fuzzy_threshold", 0.8)
+    )
+    if not matches:
+        return False, None
+    return True, matches[0]
+
+
+def apply_trigger(rule: Rule) -> dict:
+    # TODO Phase 2: remove - compat wrapper
+    rule.trigger_count += 1
+    rule.last_trigger_time = time.monotonic()
+    dp = _compat_first_detect(rule)
+    mt = dp.get("max_triggers", -1) if dp else -1
+    if 0 < mt <= rule.trigger_count:
+        rule.enabled = False
+    cp = _compat_first_click(rule)
+    off = cp.get("random_offset", 0) if cp else 0
+    dx = random.randint(-off, off) if off else 0
+    dy = random.randint(-off, off) if off else 0
+    if cp and cp.get("target") == "custom":
+        cx, cy = cp.get("x", 0), cp.get("y", 0)
+    else:
+        cx = cy = 0
+    button = cp.get("button", "left") if cp else "left"
+    return {"x": cx + dx, "y": cy + dy, "button": button}
+
+
+def get_roi(rule: Rule) -> Optional[dict]:
+    # TODO Phase 2: remove - compat wrapper
+    dp = _compat_first_detect(rule)
+    if dp is None:
+        return None
+    roi = dp.get("roi", {})
+    if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+        return None
+    return dict(roi)
+
+
 if __name__ == "__main__":
-    json_path = str(Path(__file__).resolve().parent.parent / "rules.json")
+    print("=== Phase 1 Self-Check ===\n")
 
-    test_rules = [
-        Rule(
-            id="rule_001",
-            name="確認按鈕",
-            enabled=True,
-            target_text="確認",
-            fuzzy=False,
-            fuzzy_threshold=0.8,
-            roi={"x": 100, "y": 200, "w": 300, "h": 100},
-            click_position="text_center",
-            click_button="left",
-            cooldown_ms=2000,
-            trigger_mode="once",
-            max_triggers=-1,
-            random_offset=3,
-        ),
-        Rule(
-            id="rule_002",
-            name="按按鈕",
-            enabled=True,
-            target_text="確認",
-            fuzzy=False,
-            fuzzy_threshold=0.8,
-            roi={"x": 0, "y": 0, "w": 0, "h": 0},
-            click_position="custom",
-            click_button="right",
-            cooldown_ms=0,
-            trigger_mode="repeat",
-            max_triggers=2,
-            random_offset=0,
-            custom_x=500,
-            custom_y=600,
-        ),
-    ]
+    # ── Test 1: Trigger rule migration ──
+    old_trigger = {
+        "id": "rule_t1",
+        "name": "觸發測試",
+        "enabled": True,
+        "target_text": "確認",
+        "fuzzy": False,
+        "fuzzy_threshold": 0.8,
+        "roi": {"x": 100, "y": 200, "w": 300, "h": 100},
+        "click_position": "text_center",
+        "click_button": "left",
+        "cooldown_ms": 2000,
+        "trigger_mode": "once",
+        "max_triggers": -1,
+        "random_offset": 3,
+        "action_type": "click",
+        "post_delay_ms": 500,
+        "depends_on": ["rule_other"],
+    }
+    new = _migrate_v1_to_v2(old_trigger)
+    assert "steps" in new, "missing steps"
+    assert new["steps"][0]["type"] == "wait_rule", "depends_on should become wait_rule"
+    assert new["steps"][1]["type"] == "detect", "second step should be detect"
+    assert new["steps"][2]["type"] == "click", "third step should be click"
+    assert new["steps"][3]["type"] == "wait", "post_delay should become wait"
+    assert new["steps"][0]["params"]["rule_id"] == "rule_other"
+    assert new["steps"][1]["params"]["text"] == "確認"
+    assert new["steps"][1]["params"]["roi"]["x"] == 100
+    print("  [OK] Trigger rule migration")
 
-    save_rules(test_rules, json_path)
-    print(f"已寫入 {json_path}")
+    # ── Test 1b: Trigger with sub_target_text (Correction 1) ──
+    old_with_sub = dict(old_trigger)
+    old_with_sub["sub_target_text"] = "子目標"
+    old_with_sub["sub_roi"] = {"x": 10, "y": 20, "w": 50, "h": 30}
+    new_sub = _migrate_v1_to_v2(old_with_sub)
+    detect_count = sum(1 for s in new_sub["steps"] if s["type"] == "detect")
+    assert detect_count == 2, f"expected 2 detect steps, got {detect_count}"
+    sub_detect = [s for s in new_sub["steps"] if s["type"] == "detect"][1]
+    assert sub_detect["params"]["text"] == "子目標"
+    assert sub_detect["params"]["roi"]["x"] == 10
+    print("  [OK] Sub-target migration (Correction 1)")
 
-    loaded = load_rules(json_path)
-    print(f"\n=== 載入 {len(loaded)} 條規則 ===")
-    for r in loaded:
-        print(
-            f"  [{r.id}] {r.name}  enabled={r.enabled}  target={r.target_text!r}  "
-            f"fuzzy={r.fuzzy}  roi={r.roi}  click={r.click_position}  "
-            f"mode={r.trigger_mode}  max={r.max_triggers}  "
-            f"cooldown={r.cooldown_ms}ms  offset={r.random_offset}"
-        )
+    # ── Test 1c: Sub-target with zero roi uses main roi ──
+    old_sub_zero = dict(old_trigger)
+    old_sub_zero["sub_target_text"] = "子目標2"
+    old_sub_zero["sub_roi"] = {"x": 0, "y": 0, "w": 0, "h": 0}
+    new_sub_zero = _migrate_v1_to_v2(old_sub_zero)
+    sub_d2 = [s for s in new_sub_zero["steps"] if s["type"] == "detect"][1]
+    assert sub_d2["params"]["roi"]["x"] == 100, "should inherit main roi"
+    print("  [OK] Sub-target with zero roi inherits main roi")
+
+    # ── Test 2: Compare rule migration ──
+    old_compare = {
+        "id": "rule_c1",
+        "name": "比較測試",
+        "enabled": True,
+        "rule_type": "compare",
+        "target_text": "訓練畫面",
+        "retry_key": "1",
+        "max_rounds": 3,
+        "round_wait_ms": 2000,
+        "roi_count": 2,
+        "roi_a": {"x": 10, "y": 10, "w": 100, "h": 20},
+        "roi_a_compare": "higher_better",
+        "roi_a_threshold": 50.0,
+        "roi_a_value_pick": "first",
+        "roi_b": {"x": 10, "y": 40, "w": 100, "h": 20},
+        "roi_b_compare": "lower_better",
+        "roi_b_threshold": 30.0,
+        "roi_b_value_pick": "last",
+        "confirm_action_type": "key",
+        "confirm_key": " ",
+        "on_all_fail": "rule_escape",
+    }
+    new_c = _migrate_v1_to_v2(old_compare)
+    assert "steps" in new_c
+    assert new_c["steps"][0]["type"] == "detect", "compare should have pre-detect"
+    assert new_c["steps"][1]["type"] == "collect_rounds"
+    cr = new_c["steps"][1]["params"]
+    assert len(cr["rounds"]) == 3, f"expected 3 rounds, got {len(cr['rounds'])}"
+    assert cr["rounds"][0]["trigger_action"]["key"] == "1"
+    assert len(cr["rounds"][0]["metrics"]) == 2
+    assert cr["rounds"][0]["metrics"][0]["direction"] == "higher_better"
+    assert cr["rounds"][0]["metrics"][1]["pick"] == "last"
+    # Correction 2: on_all_fail is {"type": "jump", "rule_id": "rule_escape"}
+    assert cr["on_all_fail"]["type"] == "jump"
+    assert cr["on_all_fail"]["rule_id"] == "rule_escape"
+    assert cr["confirm_action"]["type"] == "key"
+    assert cr["confirm_action"]["key"] == " "
+    print("  [OK] Compare rule migration")
+
+    # ── Test 2b: Compare with on_all_fail empty ──
+    old_c_empty = dict(old_compare)
+    old_c_empty["on_all_fail"] = ""
+    new_c_empty = _migrate_v1_to_v2(old_c_empty)
+    cr_e = [s for s in new_c_empty["steps"] if s["type"] == "collect_rounds"][0]
+    assert cr_e["params"]["on_all_fail"]["rule_id"] == ""
+    print("  [OK] Compare with empty on_all_fail")
+
+    # ── Test 3: Round-trip serialization ──
+    rule = Rule(
+        id="rule_rt1",
+        name="來回測試",
+        enabled=True,
+        steps=[
+            Step(
+                type="detect",
+                params={
+                    "text": "測試",
+                    "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+                    "fuzzy": False,
+                    "fuzzy_threshold": 0.8,
+                    "cooldown_ms": 2000,
+                    "trigger_mode": "once",
+                    "max_triggers": -1,
+                },
+            ),
+            Step(
+                type="click",
+                params={
+                    "target": "text_center",
+                    "x": 0,
+                    "y": 0,
+                    "button": "left",
+                    "random_offset": 3,
+                },
+            ),
+        ],
+        trigger_count=5,
+        last_trigger_time=123.456,
+    )
+    serialized = _rule_to_dict(rule)
+    assert "trigger_count" not in serialized, "trigger_count should not be serialized"
+    assert "steps" in serialized
+    assert len(serialized["steps"]) == 2
+    assert serialized["steps"][0]["type"] == "detect"
+    assert serialized["steps"][0]["params"]["text"] == "測試"
+
+    deserialized = _dict_to_rule(serialized)
+    assert deserialized.id == "rule_rt1"
+    assert deserialized.trigger_count == 0, "runtime field should reset"
+    assert len(deserialized.steps) == 2
+    assert deserialized.steps[0].type == "detect"
+    print("  [OK] Round-trip serialization")
+
+    # ── Test 4: Old-format load ──
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
+        json.dump({"rules": [old_trigger, old_compare]}, f, ensure_ascii=False)
+        tmp_path = f.name
+    loaded = load_rules(tmp_path)
+    assert len(loaded) == 2
+    assert isinstance(loaded[0], Rule)
+    assert len(loaded[0].steps) == 4  # wait_rule + detect + click + wait
+    assert loaded[1].steps[1].type == "collect_rounds"
+    Path(tmp_path).unlink()
+    print("  [OK] Old-format load with auto-migration")
+
+    # ── Test 5: Compat wrappers ──
+    test_rule = Rule(
+        id="rule_cw",
+        name="相容測試",
+        enabled=True,
+        steps=[
+            Step(
+                type="detect",
+                params={
+                    "text": "確認",
+                    "roi": {"x": 10, "y": 20, "w": 100, "h": 50},
+                    "fuzzy": False,
+                    "fuzzy_threshold": 0.8,
+                    "cooldown_ms": 0,
+                    "trigger_mode": "repeat",
+                    "max_triggers": -1,
+                },
+            ),
+            Step(
+                type="click",
+                params={
+                    "target": "custom",
+                    "x": 500,
+                    "y": 600,
+                    "button": "right",
+                    "random_offset": 5,
+                },
+            ),
+        ],
+    )
+
+    roi = get_roi(test_rule)
+    assert roi is not None
+    assert roi["x"] == 10
 
     fake_results = [
-        OcrResult(text="取消", x=10, y=10, w=50, h=20, confidence=0.95),
-        OcrResult(text="確認", x=100, y=200, w=50, h=20, confidence=0.98),
-        OcrResult(text="關閉視窗", x=300, y=400, w=80, h=20, confidence=0.90),
+        OcrResult(text="取消", x=0, y=0, w=30, h=15, confidence=0.9),
+        OcrResult(text="確認", x=10, y=20, w=40, h=15, confidence=0.95),
     ]
+    hit, matched = check_trigger(test_rule, fake_results)
+    assert hit, "check_trigger should find match"
+    assert matched is not None and matched.text == "確認"
 
-    rule_a = loaded[0]
-    print(f"\n=== check_trigger 測試 (rule: {rule_a.name}) ===")
-    for i in range(3):
-        hit, ocr = check_trigger(rule_a, fake_results)
-        if hit:
-            params = apply_trigger(rule_a)
-            print(
-                f"  第 {i + 1} 次: 觸發 → {params}  "
-                f"count={rule_a.trigger_count}  enabled={rule_a.enabled}"
-            )
-        else:
-            reason = "冷卻中" if rule_a.enabled else "已停用"
-            print(
-                f"  第 {i + 1} 次: 未觸發 ({reason})  "
-                f"count={rule_a.trigger_count}  enabled={rule_a.enabled}"
-            )
+    params = apply_trigger(test_rule)
+    assert params["button"] == "right"
+    assert abs(params["x"] - 500) <= 5
+    assert test_rule.trigger_count == 1
+    print("  [OK] Compat wrappers (check_trigger / apply_trigger / get_roi)")
 
-    rule_b = loaded[1]
-    print(f"\n=== max_triggers 測試 (rule: {rule_b.name}, max={rule_b.max_triggers}) ===")
-    for i in range(3):
-        hit, ocr = check_trigger(rule_b, fake_results)
-        if hit:
-            params = apply_trigger(rule_b)
-            print(
-                f"  第 {i + 1} 次: 觸發 → {params}  "
-                f"count={rule_b.trigger_count}  enabled={rule_b.enabled}"
-            )
-        else:
-            reason = "已停用 (達上限)" if not rule_b.enabled else "冷卻中"
-            print(
-                f"  第 {i + 1} 次: 未觸發 ({reason})  "
-                f"count={rule_b.trigger_count}  enabled={rule_b.enabled}"
-            )
+    # ── Test 6: Step with key action ──
+    old_key_rule = {
+        "id": "rule_key",
+        "name": "按鍵規則",
+        "enabled": True,
+        "target_text": "請按任意鍵",
+        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+        "action_type": "key",
+        "key": "Enter",
+        "trigger_mode": "once",
+    }
+    new_key = _migrate_v1_to_v2(old_key_rule)
+    assert new_key["steps"][0]["type"] == "detect"
+    assert new_key["steps"][1]["type"] == "key"
+    assert new_key["steps"][1]["params"]["key"] == "Enter"
+    print("  [OK] Key action migration")
 
-    ok = save_rules(loaded, json_path)
-    print(f"\n儲存結果: {'成功' if ok else '失敗'}")
-    with open(json_path, encoding="utf-8") as f:
-        saved_content = json.load(f)
-    print("JSON 內容:")
-    print(json.dumps(saved_content, indent=2, ensure_ascii=False))
+    # ── Test 7: No steps in old data with defaults ──
+    old_minimal = {"id": "rule_min", "name": "最小規則", "enabled": True}
+    new_min = _migrate_v1_to_v2(old_minimal)
+    assert len(new_min["steps"]) >= 1
+    assert new_min["steps"][0]["type"] == "detect"
+    print("  [OK] Minimal old-rule migration")
 
-    trigger_count_in_json = any("trigger_count" in r for r in saved_content["rules"])
-    print(f"\nJSON 包含 trigger_count: {trigger_count_in_json} (應為 False)")
-
-    print("\nROI 測試:")
-    print(f"  rule_001 ROI: {get_roi(rule_a)} (應非 None)")
-    print(f"  rule_002 ROI: {get_roi(rule_b)} (應為 None)")
+    print(f"\n=== All {7} tests passed ===")
