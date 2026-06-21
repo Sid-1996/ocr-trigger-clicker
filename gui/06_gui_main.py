@@ -931,6 +931,9 @@ class MainWindow(QMainWindow):
         self._advanced_form.addRow("", self._edit_confirm_pick_btn)
         self._advanced_form.addRow("全輪失敗:", self._edit_on_all_fail)
 
+        self._edit_form.addRow(self._advanced_toggle)
+        self._edit_form.addRow(self._advanced_panel)
+
         self._edit_test_btn = QPushButton("▶ 測試")
         self._edit_test_btn.setToolTip("執行一次完整檢測（不發送點擊、不修改狀態）")
         self._edit_test_btn.setEnabled(False)
