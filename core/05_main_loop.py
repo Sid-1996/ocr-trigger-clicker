@@ -46,6 +46,43 @@ apply_trigger = _rule.apply_trigger
 get_roi = _rule.get_roi
 
 
+def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
+    h, w = img.shape[:2]
+    x1 = max(0, roi["x"])
+    y1 = max(0, roi["y"])
+    x2 = min(w, roi["x"] + roi["w"])
+    y2 = min(h, roi["y"] + roi["h"])
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return img[y1:y2, x1:x2]
+
+
+def extract_number(text: str, pick: str) -> float | None:
+    nums = re.findall(r"\d+(?:\.\d+)?", text)
+    if not nums:
+        return None
+    idx = 0 if pick == "first" else -1
+    return float(nums[idx])
+
+
+def poll_roi_value(roi: dict, pick: str, timeout_ms: int, title: str) -> float | None:
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
+        img = capture(title)
+        if img is None:
+            img = capture_window_content(title)
+        if img is not None:
+            roi_img = crop_roi(img, roi)
+            if roi_img is not None:
+                results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+                for r in results:
+                    val = extract_number(r.text, pick)
+                    if val is not None:
+                        return val
+        time.sleep(0.2)
+    return None
+
+
 @dataclass
 class TriggerLog:
     timestamp: float
@@ -824,44 +861,7 @@ class MainLoop:
         return True
 
     def _poll_roi_value(self, roi: dict, pick: str, timeout_ms: int, title: str) -> float | None:
-        deadline = time.monotonic() + timeout_ms / 1000.0
-        while time.monotonic() < deadline:
-            img = self._capture_window(title)
-            if img is not None:
-                roi_img = self._crop_roi(img, roi)
-                if roi_img is not None:
-                    results = recognize(
-                        roi_img, preprocess=False, max_side_len=0, min_confidence=0.25
-                    )
-                    for r in results:
-                        val = self._extract_number(r.text, pick)
-                        if val is not None:
-                            return val
-            time.sleep(0.2)
-        return None
-
-    def _capture_window(self, title: str) -> np.ndarray | None:
-        img = capture(title)
-        if img is None:
-            img = capture_window_content(title)
-        return img
-
-    def _crop_roi(self, img: np.ndarray, roi: dict) -> np.ndarray | None:
-        h, w = img.shape[:2]
-        x1 = max(0, roi["x"])
-        y1 = max(0, roi["y"])
-        x2 = min(w, roi["x"] + roi["w"])
-        y2 = min(h, roi["y"] + roi["h"])
-        if x2 <= x1 or y2 <= y1:
-            return None
-        return img[y1:y2, x1:x2]
-
-    def _extract_number(self, text: str, pick: str) -> float | None:
-        nums = re.findall(r"\d+(?:\.\d+)?", text)
-        if not nums:
-            return None
-        idx = 0 if pick == "first" else -1
-        return float(nums[idx])
+        return poll_roi_value(roi, pick, timeout_ms, title)
 
     def _check_threshold(self, value: float, threshold: float, direction: str) -> bool:
         if direction == "higher_better":

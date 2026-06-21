@@ -118,6 +118,7 @@ activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
 capture = _main_loop_mod.capture
 recognize = _main_loop_mod.recognize
+poll_roi_value = _main_loop_mod.poll_roi_value
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -852,6 +853,17 @@ class MainWindow(QMainWindow):
         a_pick_layout.addWidget(self._edit_roi_a_test_btn)
         self._edit_form.addRow("ROI-A 取數字:", self._edit_roi_a_pick_row)
         self._edit_form.addRow("", self._edit_roi_a_test_result)
+        self._edit_roi_a_monitor_row = QWidget()
+        a_mon_layout = QHBoxLayout(self._edit_roi_a_monitor_row)
+        a_mon_layout.setContentsMargins(0, 0, 0, 0)
+        self._edit_roi_a_monitor_btn = QPushButton("▶ 監控")
+        self._edit_roi_a_monitor_btn.setCheckable(True)
+        self._edit_roi_a_monitor_val = QLabel("A: --")
+        self._edit_roi_a_monitor_val.setStyleSheet("color: #888; font-size: 11px;")
+        a_mon_layout.addWidget(self._edit_roi_a_monitor_btn)
+        a_mon_layout.addWidget(self._edit_roi_a_monitor_val)
+        a_mon_layout.addStretch()
+        self._edit_form.addRow("ROI-A 即時:", self._edit_roi_a_monitor_row)
         self._edit_form.addRow("ROI-B 區域:", self._edit_roi_b_label)
         self._edit_form.addRow("", self._edit_roi_b_btn)
         self._edit_form.addRow("ROI-B 比較:", self._edit_roi_b_compare)
@@ -863,6 +875,17 @@ class MainWindow(QMainWindow):
         b_pick_layout.addWidget(self._edit_roi_b_test_btn)
         self._edit_form.addRow("ROI-B 取數字:", self._edit_roi_b_pick_row)
         self._edit_form.addRow("", self._edit_roi_b_test_result)
+        self._edit_roi_b_monitor_row = QWidget()
+        b_mon_layout = QHBoxLayout(self._edit_roi_b_monitor_row)
+        b_mon_layout.setContentsMargins(0, 0, 0, 0)
+        self._edit_roi_b_monitor_btn = QPushButton("▶ 監控")
+        self._edit_roi_b_monitor_btn.setCheckable(True)
+        self._edit_roi_b_monitor_val = QLabel("B: --")
+        self._edit_roi_b_monitor_val.setStyleSheet("color: #888; font-size: 11px;")
+        b_mon_layout.addWidget(self._edit_roi_b_monitor_btn)
+        b_mon_layout.addWidget(self._edit_roi_b_monitor_val)
+        b_mon_layout.addStretch()
+        self._edit_form.addRow("ROI-B 即時:", self._edit_roi_b_monitor_row)
         self._edit_form.addRow("確認動作:", self._edit_confirm_action_type)
         self._edit_form.addRow("確認按鍵:", self._edit_confirm_key)
         self._edit_form.addRow("確認座標:", self._edit_confirm_coord_label)
@@ -918,6 +941,8 @@ class MainWindow(QMainWindow):
         self._perf_timer.start(1000)
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._update_rule_status)
+        self._monitor_timer = QTimer()
+        self._monitor_timer.timeout.connect(self._refresh_monitor_values)
         self.setStatusBar(self._status_bar)
         QTimer.singleShot(3000, self._check_version)
         self._test_was_maximized = False
@@ -966,6 +991,8 @@ class MainWindow(QMainWindow):
         self._ocr_test_signals.done.connect(self._on_ocr_test_done)
         self._edit_roi_a_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_a"))
         self._edit_roi_b_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_b"))
+        self._edit_roi_a_monitor_btn.clicked.connect(lambda: self._toggle_monitor("roi_a"))
+        self._edit_roi_b_monitor_btn.clicked.connect(lambda: self._toggle_monitor("roi_b"))
 
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
@@ -1406,6 +1433,10 @@ class MainWindow(QMainWindow):
         self._edit_roi_a_pick_row.setEnabled(True)
         self._edit_roi_a_test_result.setEnabled(True)
         self._edit_roi_a_test_result.hide()
+        self._edit_roi_a_monitor_row.setEnabled(True)
+        self._edit_roi_a_monitor_btn.setChecked(False)
+        self._edit_roi_a_monitor_btn.setText("▶ 監控")
+        self._edit_roi_a_monitor_val.setText("A: --")
         self._edit_roi_b_label.setEnabled(True)
         self._edit_roi_b_btn.setEnabled(True)
         self._edit_roi_b_compare.setEnabled(True)
@@ -1413,6 +1444,10 @@ class MainWindow(QMainWindow):
         self._edit_roi_b_pick_row.setEnabled(True)
         self._edit_roi_b_test_result.setEnabled(True)
         self._edit_roi_b_test_result.hide()
+        self._edit_roi_b_monitor_row.setEnabled(True)
+        self._edit_roi_b_monitor_btn.setChecked(False)
+        self._edit_roi_b_monitor_btn.setText("▶ 監控")
+        self._edit_roi_b_monitor_val.setText("B: --")
         self._edit_confirm_action_type.setEnabled(True)
         self._edit_confirm_key.setEnabled(True)
         self._edit_confirm_coord_label.setEnabled(True)
@@ -1596,12 +1631,14 @@ class MainWindow(QMainWindow):
         "roi_a_threshold",
         "roi_a_pick_row",
         "roi_a_test_result",
+        "roi_a_monitor_row",
         "roi_b_label",
         "roi_b_btn",
         "roi_b_compare",
         "roi_b_threshold",
         "roi_b_pick_row",
         "roi_b_test_result",
+        "roi_b_monitor_row",
         "confirm_action_type",
         "confirm_key",
         "confirm_coord_label",
@@ -1645,6 +1682,7 @@ class MainWindow(QMainWindow):
             "roi_b_threshold",
             "roi_b_pick_row",
             "roi_b_test_result",
+            "roi_b_monitor_row",
         ]:
             self._toggle_field_visibility(fn, show)
 
@@ -2094,6 +2132,39 @@ class MainWindow(QMainWindow):
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(f"已選取確認點擊座標: X={result[0]}, Y={result[1]}")
 
+    # === ROI monitor ===
+    def _toggle_monitor(self, roi_key: str):
+        btn = self._edit_roi_a_monitor_btn if roi_key == "roi_a" else self._edit_roi_b_monitor_btn
+        if self._monitor_timer.isActive():
+            self._monitor_timer.stop()
+            self._edit_roi_a_monitor_btn.setText("▶ 監控")
+            self._edit_roi_b_monitor_btn.setText("▶ 監控")
+        else:
+            btn.setText("■ 停止")
+            self._monitor_roi_key = roi_key
+            self._monitor_timer.start(500)
+
+    def _refresh_monitor_values(self):
+        title = self._window_combo.currentText()
+        if not title:
+            self._monitor_timer.stop()
+            self._edit_roi_a_monitor_btn.setText("▶ 監控")
+            self._edit_roi_b_monitor_btn.setText("▶ 監控")
+            return
+        rule = self._get_current_rule()
+        if not rule:
+            return
+        roi = rule.roi_a if self._monitor_roi_key == "roi_a" else rule.roi_b
+        pick = rule.roi_a_value_pick if self._monitor_roi_key == "roi_a" else rule.roi_b_value_pick
+        val = poll_roi_value(roi, pick, 2000, title)
+        label = (
+            self._edit_roi_a_monitor_val
+            if self._monitor_roi_key == "roi_a"
+            else self._edit_roi_b_monitor_val
+        )
+        prefix = "A" if self._monitor_roi_key == "roi_a" else "B"
+        label.setText(f"{prefix}: {val if val is not None else '--'}")
+
     # === ROI test-ocr helpers ===
     def _run_ocr_test(self, roi_key: str):
         title = self._window_combo.currentText()
@@ -2365,12 +2436,14 @@ class MainWindow(QMainWindow):
             self._edit_roi_a_threshold.setEnabled(False)
             self._edit_roi_a_pick_row.setEnabled(False)
             self._edit_roi_a_test_result.setEnabled(False)
+            self._edit_roi_a_monitor_row.setEnabled(False)
             self._edit_roi_b_label.setEnabled(False)
             self._edit_roi_b_btn.setEnabled(False)
             self._edit_roi_b_compare.setEnabled(False)
             self._edit_roi_b_threshold.setEnabled(False)
             self._edit_roi_b_pick_row.setEnabled(False)
             self._edit_roi_b_test_result.setEnabled(False)
+            self._edit_roi_b_monitor_row.setEnabled(False)
             self._edit_confirm_action_type.setEnabled(False)
             self._edit_confirm_key.setEnabled(False)
             self._edit_confirm_coord_label.setEnabled(False)
