@@ -118,7 +118,10 @@ activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
 capture = _main_loop_mod.capture
 recognize = _main_loop_mod.recognize
+find_text = _main_loop_mod.find_text
 poll_roi_value = _main_loop_mod.poll_roi_value
+crop_roi = _main_loop_mod.crop_roi
+capture_window_content = _main_loop_mod.capture_window_content
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -939,7 +942,17 @@ class MainWindow(QMainWindow):
         self._advanced_form.addRow("", self._edit_confirm_pick_btn)
         self._advanced_form.addRow("全輪失敗:", self._edit_on_all_fail)
 
-        self._edit_form.addRow(self._edit_save_btn)
+        self._edit_test_btn = QPushButton("▶ 測試")
+        self._edit_test_btn.setToolTip("執行一次完整檢測（不發送點擊、不修改狀態）")
+        self._edit_test_btn.setEnabled(False)
+
+        btn_row = QWidget()
+        btn_layout = QHBoxLayout(btn_row)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.addWidget(self._edit_save_btn)
+        btn_layout.addWidget(self._edit_test_btn)
+        btn_layout.addStretch()
+        self._edit_form.addRow(btn_row)
 
         scroll.setWidget(self._edit_panel)
         self._edit_stack.addWidget(scroll)
@@ -1000,6 +1013,7 @@ class MainWindow(QMainWindow):
         self._rule_list.currentItemChanged.connect(self._on_rule_selected)
         self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
         self._edit_save_btn.clicked.connect(self._save_current_rule)
+        self._edit_test_btn.clicked.connect(self._on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._edit_roi_btn.clicked.connect(self._open_roi_selector)
         self._debug_btn.clicked.connect(self._switch_to_debug)
@@ -1441,6 +1455,7 @@ class MainWindow(QMainWindow):
             return
         self._edit_stack.setCurrentIndex(1)
         self._edit_save_btn.setEnabled(True)
+        self._edit_test_btn.setEnabled(True)
         self._edit_roi_btn.setEnabled(True)
         self._edit_name.setEnabled(True)
         self._edit_target.setEnabled(True)
@@ -2217,6 +2232,127 @@ class MainWindow(QMainWindow):
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(f"已選取確認點擊座標: X={result[0]}, Y={result[1]}")
 
+    # === Test rule ===
+    def _on_test_rule(self):
+        rule = self._get_current_rule()
+        if not rule:
+            QMessageBox.warning(self, "測試", "請先選取一條規則")
+            return
+        title = self._window_combo.currentText()
+        if not title:
+            QMessageBox.warning(self, "測試", "請先選擇目標視窗")
+            return
+        self._edit_test_btn.setEnabled(False)
+        self._edit_test_btn.setText("測試中…")
+        t = threading.Thread(target=self._run_rule_test, args=(rule, title), daemon=True)
+        t.start()
+
+    def _run_rule_test(self, rule: Rule, title: str):
+        is_compare = getattr(rule, "rule_type", "trigger") == "compare"
+        result: dict = {}
+        try:
+            if is_compare:
+                result = self._test_compare_rule(rule, title)
+            else:
+                result = self._test_trigger_rule(rule, title)
+        except Exception as e:
+            result = {"error": f"測試異常：{e}"}
+        QTimer.singleShot(0, lambda: self._show_test_result(result))
+
+    def _test_trigger_rule(self, rule: Rule, title: str) -> dict:
+        img = capture(title)
+        if img is None:
+            img = capture_window_content(title)
+        if img is None:
+            return {"error": f"截圖失敗：無法擷取視窗「{title}」"}
+        roi_img = crop_roi(img, rule.roi)
+        if roi_img is None:
+            return {"error": "裁切區域無效"}
+        results = recognize(roi_img, preprocess=False)
+        matches = find_text(results, rule.target_text, rule.fuzzy, rule.fuzzy_threshold)
+        if matches:
+            m = matches[0]
+            return {
+                "hit": True,
+                "matched_text": m.text,
+                "confidence": m.confidence,
+                "click": (int(m.x + m.w / 2), int(m.y + m.h / 2)),
+            }
+        texts = [r.text for r in results[:5]]
+        return {"hit": False, "ocr_texts": texts}
+
+    def _test_compare_rule(self, rule: Rule, title: str) -> dict:
+        rounds = []
+        for round_idx in range(rule.max_rounds):
+            roi_a_val = poll_roi_value(rule.roi_a, rule.roi_a_value_pick, rule.round_wait_ms, title)
+            roi_b_val = None
+            if rule.roi_count == 2:
+                roi_b_val = poll_roi_value(
+                    rule.roi_b, rule.roi_b_value_pick, rule.round_wait_ms, title
+                )
+            rd = {"round": round_idx, "roi_a": roi_a_val, "roi_b": roi_b_val}
+            if roi_a_val is not None:
+                a_ok = (
+                    roi_a_val >= rule.roi_a_threshold
+                    if rule.roi_a_compare == "higher_better"
+                    else roi_a_val <= rule.roi_a_threshold
+                )
+                b_ok = rule.roi_count == 1 or (
+                    roi_b_val is not None
+                    and (
+                        roi_b_val >= rule.roi_b_threshold
+                        if rule.roi_b_compare == "higher_better"
+                        else roi_b_val <= rule.roi_b_threshold
+                    )
+                )
+                rd["a_ok"] = a_ok
+                rd["b_ok"] = b_ok
+                rounds.append(rd)
+                if a_ok and b_ok:
+                    break
+            if round_idx < rule.max_rounds - 1:
+                time.sleep(0.3)
+        return {"rounds": rounds, "max_rounds": rule.max_rounds}
+
+    def _show_test_result(self, result: dict):
+        self._edit_test_btn.setEnabled(True)
+        self._edit_test_btn.setText("▶ 測試")
+        if "error" in result:
+            QMessageBox.warning(self, "測試結果", result["error"])
+            return
+        if "hit" in result:
+            r = result
+            if r["hit"]:
+                msg = (
+                    f"✅ 命中「{r['matched_text']}」"
+                    f"\n信心: {r['confidence']:.2f}"
+                    f"\n座標: ({r['click'][0]}, {r['click'][1]})"
+                )
+            else:
+                texts = r.get("ocr_texts", [])
+                msg = "❌ 未命中目標文字"
+                if texts:
+                    msg += "\n\n辨識到的文字:\n" + "\n".join(texts[:5])
+            QMessageBox.information(self, "測試結果", msg)
+        elif "rounds" in result:
+            lines = [f"測試比較規則（共 {result['max_rounds']} 輪）:\n"]
+            for rd in result["rounds"]:
+                a = rd.get("roi_a", "?")
+                a_ok = "✓" if rd.get("a_ok") else "✗"
+                line = f"第{rd['round'] + 1}輪: A={a} {a_ok}"
+                if rd.get("roi_b") is not None:
+                    b = rd.get("roi_b")
+                    b_ok = "✓" if rd.get("b_ok") else "✗"
+                    line += f" B={b} {b_ok}"
+                lines.append(line)
+            lines.append("")
+            full = [r for r in result["rounds"] if r.get("a_ok") and r.get("b_ok", True)]
+            if full:
+                lines.append("✅ 有達標輪次，將執行確認動作")
+            else:
+                lines.append("❌ 無達標輪次")
+            QMessageBox.information(self, "測試結果", "\n".join(lines))
+
     # === ROI monitor ===
     def _toggle_monitor(self, roi_key: str):
         btn = self._edit_roi_a_monitor_btn if roi_key == "roi_a" else self._edit_roi_b_monitor_btn
@@ -2481,6 +2617,7 @@ class MainWindow(QMainWindow):
             self._show_rule_detail(self._get_current_rule())
         else:
             self._edit_save_btn.setEnabled(False)
+            self._edit_test_btn.setEnabled(False)
             self._edit_roi_btn.setEnabled(False)
             self._edit_roi_label.setEnabled(False)
             self._edit_name.setEnabled(False)
