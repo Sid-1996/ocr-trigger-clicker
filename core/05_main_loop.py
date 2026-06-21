@@ -697,6 +697,8 @@ class MainLoop:
                     "cooldown_ms": r.cooldown_ms,
                     "max_triggers": r.max_triggers,
                     "auto_disabled": r.id in self._rule_auto_disabled,
+                    "rule_type": getattr(r, "rule_type", "trigger"),
+                    "compare_running": r.id in self._compare_running,
                 }
                 for r in self._rules
             ]

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -1148,6 +1148,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "匯出失敗", "無法寫入目標檔案")
 
     # === Rule list ===
+    @staticmethod
+    def _make_circle_icon(color: tuple[int, int, int], size: int = 12) -> QIcon:
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor(*color))
+        p.setPen(QPen(QColor(*color), 1))
+        p.drawEllipse(1, 1, size - 2, size - 2)
+        p.end()
+        return QIcon(pix)
+
     def _refresh_rule_list(self):
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
@@ -1178,6 +1190,9 @@ class MainWindow(QMainWindow):
                 text = f"[{'✓' if r.enabled else '✗'}] {r.name}{suffix}"
                 item.setText(0, text)
                 item.setData(0, Qt.ItemDataRole.UserRole, r.id)
+                item.setIcon(
+                    0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
+                )
                 for child_item in _build(rid):
                     item.addChild(child_item)
                 items.append(item)
@@ -1217,25 +1232,43 @@ class MainWindow(QMainWindow):
             if st is None:
                 return
             suffix = ""
-            if not st["enabled"]:
-                if st["auto_disabled"] or (
-                    st["max_triggers"] > 0 and st["trigger_count"] >= st["max_triggers"]
-                ):
-                    suffix = " ❌"
+            disabled_reason = not st["enabled"] and (
+                st["auto_disabled"]
+                or (st["max_triggers"] > 0 and st["trigger_count"] >= st["max_triggers"])
+            )
+            if st["compare_running"]:
+                icon_color = (0, 100, 200)
+                suffix = ""
+            elif not st["enabled"] and disabled_reason:
+                icon_color = (200, 0, 0)
+                suffix = " ❌"
+            elif not st["enabled"]:
+                icon_color = (160, 160, 160)
+                suffix = ""
             elif st["trigger_count"] > 0:
                 elapsed_ms = (now - st["last_trigger_time"]) * 1000
                 if elapsed_ms < st["cooldown_ms"]:
+                    icon_color = (200, 180, 0)
                     suffix = " ⏳"
                 elif elapsed_ms < 2000:
+                    icon_color = (0, 180, 0)
                     suffix = " ✅"
+                else:
+                    icon_color = (0, 180, 0)
+                    suffix = ""
+            else:
+                icon_color = (0, 180, 0)
+                suffix = ""
             enabled = st["enabled"]
             rule = next((r for r in self._rules if r.id == sid), None)
             c_suffix = (
                 " [C]" if (rule and getattr(rule, "rule_type", "trigger") == "compare") else ""
             )
             base = f"[{'✓' if enabled else '✗'}] {st['name']}{c_suffix}"
-            if item.text(0) != base + suffix:
-                item.setText(0, base + suffix)
+            new_text = base + suffix
+            if item.text(0) != new_text:
+                item.setText(0, new_text)
+            item.setIcon(0, self._make_circle_icon(icon_color))
 
         def _walk(item):
             _set_text(item)
