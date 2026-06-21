@@ -459,6 +459,7 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         self._edit_panel = QWidget()
         self._edit_form = QFormLayout(self._edit_panel)
+        self._all_forms: list[QFormLayout] = [self._edit_form]
 
         self._edit_name = QLineEdit()
         self._edit_name.setToolTip("觸發規則的名稱，便於辨識")
@@ -815,44 +816,90 @@ class MainWindow(QMainWindow):
         self._edit_save_btn.setEnabled(False)
         self._edit_save_btn.setToolTip("儲存目前編輯的規則")
 
-        # Build form
-        self._edit_form.addRow("啟用:", self._edit_enabled)
-        self._edit_form.addRow("名稱:", self._edit_name)
-        self._edit_form.addRow("目標文字:", self._edit_target)
-        self._edit_form.addRow("偵測區域:", self._edit_roi_label)
-        self._edit_form.addRow("", self._edit_roi_btn)
-        self._edit_form.addRow("冷卻時間:", self._edit_cooldown)
-        self._edit_form.addRow("點擊後等待:", self._edit_post_delay)
-        self._edit_form.addRow("觸發模式:", self._edit_trigger_mode)
-        self._edit_form.addRow("動作類型:", self._edit_action_type)
-        self._edit_form.addRow("按鍵:", self._edit_key)
-        self._edit_form.addRow("滑鼠按鈕:", self._edit_click_button)
-        self._edit_form.addRow("等待規則:", self._edit_depends_on_container)
-        self._edit_form.addRow("點擊位置:", self._edit_click_position)
-        self._edit_form.addRow("點擊座標:", self._coord_row)
-        self._edit_form.addRow("模糊比對:", self._edit_fuzzy)
-        self._edit_form.addRow("模糊閾值:", self._edit_fuzzy_threshold)
-        self._edit_form.addRow("最大觸發:", self._edit_max_triggers)
-        self._edit_form.addRow("隨機抖動:", self._edit_random_offset)
-        self._edit_form.addRow(self._sub_toggle_btn)
-        self._edit_form.addRow(self._sub_panel)
+        # ── Collapsible sections ──
+        self._field_labels: dict[str, QLabel | QWidget] = {}
+        self._edit_form.insertRow(0, "類型:", self._edit_rule_type)
 
-        # ── Compare form rows (hidden by default) ──
-        self._edit_form.addRow("重試按鍵:", self._edit_retry_key)
-        self._edit_form.addRow("最大輪次:", self._edit_compare_max_rounds)
-        self._edit_form.addRow("輪詢超時:", self._edit_round_wait_ms)
-        self._edit_form.addRow("ROI 數量:", self._edit_roi_count)
-        self._edit_form.addRow("ROI-A 區域:", self._edit_roi_a_label)
-        self._edit_form.addRow("", self._edit_roi_a_btn)
-        self._edit_form.addRow("ROI-A 比較:", self._edit_roi_a_compare)
-        self._edit_form.addRow("ROI-A 門檻:", self._edit_roi_a_threshold)
+        def _add(name: str, label: str | None, widget: QWidget):
+            if label:
+                lbl = self._edit_form.addRow(label, widget)
+            else:
+                lbl = self._edit_form.addRow(widget)
+            if isinstance(lbl, QWidget):
+                self._field_labels[name] = lbl
+            self._field_labels[f"_widget_{name}"] = widget
+
+        # ── Section 1: 基本條件 toggle ──
+        self._basic_toggle = QPushButton("▾ 基本條件")
+        self._basic_toggle.setCheckable(True)
+        self._basic_toggle.setChecked(True)
+        self._basic_panel = QWidget()
+        self._basic_form = QFormLayout(self._basic_panel)
+        self._basic_form.setContentsMargins(0, 0, 0, 0)
+        self._all_forms.append(self._basic_form)
+
+        self._basic_form.addRow("啟用:", self._edit_enabled)
+        self._basic_form.addRow("名稱:", self._edit_name)
+        self._basic_form.addRow("目標文字:", self._edit_target)
+        self._basic_form.addRow("偵測區域:", self._edit_roi_label)
+        self._basic_form.addRow("", self._edit_roi_btn)
+        self._basic_form.addRow("模糊比對:", self._edit_fuzzy)
+        self._basic_form.addRow("模糊閾值:", self._edit_fuzzy_threshold)
+        self._edit_form.addRow(self._basic_toggle)
+        self._edit_form.addRow(self._basic_panel)
+
+        # ── Section 2: 動作設定 toggle ──
+        self._action_toggle = QPushButton("▾ 動作設定")
+        self._action_toggle.setCheckable(True)
+        self._action_toggle.setChecked(True)
+        self._action_panel = QWidget()
+        self._action_form = QFormLayout(self._action_panel)
+        self._action_form.setContentsMargins(0, 0, 0, 0)
+        self._all_forms.append(self._action_form)
+
+        self._action_form.addRow("動作類型:", self._edit_action_type)
+        self._action_form.addRow("按鍵:", self._edit_key)
+        self._action_form.addRow("滑鼠按鈕:", self._edit_click_button)
+        self._action_form.addRow("點擊位置:", self._edit_click_position)
+        self._action_form.addRow("點擊座標:", self._coord_row)
+        self._action_form.addRow("隨機抖動:", self._edit_random_offset)
+        self._action_form.addRow("冷卻時間:", self._edit_cooldown)
+        self._action_form.addRow("點擊後等待:", self._edit_post_delay)
+        self._action_form.addRow("觸發模式:", self._edit_trigger_mode)
+        self._action_form.addRow("最大觸發:", self._edit_max_triggers)
+        self._edit_form.addRow(self._action_toggle)
+        self._edit_form.addRow(self._action_panel)
+
+        # ── Section 3: 進階控制 toggle (collapsed by default) ──
+        self._advanced_toggle = QPushButton("▸ 進階控制")
+        self._advanced_toggle.setCheckable(True)
+        self._advanced_toggle.setChecked(False)
+        self._advanced_panel = QWidget()
+        self._advanced_panel.setVisible(False)
+        self._advanced_form = QFormLayout(self._advanced_panel)
+        self._advanced_form.setContentsMargins(0, 0, 0, 0)
+        self._all_forms.append(self._advanced_form)
+
+        self._advanced_form.addRow("等待規則:", self._edit_depends_on_container)
+        self._advanced_form.addRow(self._sub_toggle_btn)
+        self._advanced_form.addRow(self._sub_panel)
+
+        # ── Compare form rows (put in advanced section) ──
+        self._advanced_form.addRow("重試按鍵:", self._edit_retry_key)
+        self._advanced_form.addRow("最大輪次:", self._edit_compare_max_rounds)
+        self._advanced_form.addRow("輪詢超時:", self._edit_round_wait_ms)
+        self._advanced_form.addRow("ROI 數量:", self._edit_roi_count)
+        self._advanced_form.addRow("ROI-A 區域:", self._edit_roi_a_label)
+        self._advanced_form.addRow("", self._edit_roi_a_btn)
+        self._advanced_form.addRow("ROI-A 比較:", self._edit_roi_a_compare)
+        self._advanced_form.addRow("ROI-A 門檻:", self._edit_roi_a_threshold)
         self._edit_roi_a_pick_row = QWidget()
         a_pick_layout = QHBoxLayout(self._edit_roi_a_pick_row)
         a_pick_layout.setContentsMargins(0, 0, 0, 0)
         a_pick_layout.addWidget(self._edit_roi_a_value_pick)
         a_pick_layout.addWidget(self._edit_roi_a_test_btn)
-        self._edit_form.addRow("ROI-A 取數字:", self._edit_roi_a_pick_row)
-        self._edit_form.addRow("", self._edit_roi_a_test_result)
+        self._advanced_form.addRow("ROI-A 取數字:", self._edit_roi_a_pick_row)
+        self._advanced_form.addRow("", self._edit_roi_a_test_result)
         self._edit_roi_a_monitor_row = QWidget()
         a_mon_layout = QHBoxLayout(self._edit_roi_a_monitor_row)
         a_mon_layout.setContentsMargins(0, 0, 0, 0)
@@ -863,18 +910,18 @@ class MainWindow(QMainWindow):
         a_mon_layout.addWidget(self._edit_roi_a_monitor_btn)
         a_mon_layout.addWidget(self._edit_roi_a_monitor_val)
         a_mon_layout.addStretch()
-        self._edit_form.addRow("ROI-A 即時:", self._edit_roi_a_monitor_row)
-        self._edit_form.addRow("ROI-B 區域:", self._edit_roi_b_label)
-        self._edit_form.addRow("", self._edit_roi_b_btn)
-        self._edit_form.addRow("ROI-B 比較:", self._edit_roi_b_compare)
-        self._edit_form.addRow("ROI-B 門檻:", self._edit_roi_b_threshold)
+        self._advanced_form.addRow("ROI-A 即時:", self._edit_roi_a_monitor_row)
+        self._advanced_form.addRow("ROI-B 區域:", self._edit_roi_b_label)
+        self._advanced_form.addRow("", self._edit_roi_b_btn)
+        self._advanced_form.addRow("ROI-B 比較:", self._edit_roi_b_compare)
+        self._advanced_form.addRow("ROI-B 門檻:", self._edit_roi_b_threshold)
         self._edit_roi_b_pick_row = QWidget()
         b_pick_layout = QHBoxLayout(self._edit_roi_b_pick_row)
         b_pick_layout.setContentsMargins(0, 0, 0, 0)
         b_pick_layout.addWidget(self._edit_roi_b_value_pick)
         b_pick_layout.addWidget(self._edit_roi_b_test_btn)
-        self._edit_form.addRow("ROI-B 取數字:", self._edit_roi_b_pick_row)
-        self._edit_form.addRow("", self._edit_roi_b_test_result)
+        self._advanced_form.addRow("ROI-B 取數字:", self._edit_roi_b_pick_row)
+        self._advanced_form.addRow("", self._edit_roi_b_test_result)
         self._edit_roi_b_monitor_row = QWidget()
         b_mon_layout = QHBoxLayout(self._edit_roi_b_monitor_row)
         b_mon_layout.setContentsMargins(0, 0, 0, 0)
@@ -885,17 +932,14 @@ class MainWindow(QMainWindow):
         b_mon_layout.addWidget(self._edit_roi_b_monitor_btn)
         b_mon_layout.addWidget(self._edit_roi_b_monitor_val)
         b_mon_layout.addStretch()
-        self._edit_form.addRow("ROI-B 即時:", self._edit_roi_b_monitor_row)
-        self._edit_form.addRow("確認動作:", self._edit_confirm_action_type)
-        self._edit_form.addRow("確認按鍵:", self._edit_confirm_key)
-        self._edit_form.addRow("確認座標:", self._edit_confirm_coord_label)
-        self._edit_form.addRow("", self._edit_confirm_pick_btn)
-        self._edit_form.addRow("全輪失敗:", self._edit_on_all_fail)
+        self._advanced_form.addRow("ROI-B 即時:", self._edit_roi_b_monitor_row)
+        self._advanced_form.addRow("確認動作:", self._edit_confirm_action_type)
+        self._advanced_form.addRow("確認按鍵:", self._edit_confirm_key)
+        self._advanced_form.addRow("確認座標:", self._edit_confirm_coord_label)
+        self._advanced_form.addRow("", self._edit_confirm_pick_btn)
+        self._advanced_form.addRow("全輪失敗:", self._edit_on_all_fail)
 
         self._edit_form.addRow(self._edit_save_btn)
-
-        # Insert rule_type as first row
-        self._edit_form.insertRow(0, "類型:", self._edit_rule_type)
 
         scroll.setWidget(self._edit_panel)
         self._edit_stack.addWidget(scroll)
@@ -993,6 +1037,9 @@ class MainWindow(QMainWindow):
         self._edit_roi_b_test_btn.clicked.connect(lambda: self._run_ocr_test("roi_b"))
         self._edit_roi_a_monitor_btn.clicked.connect(lambda: self._toggle_monitor("roi_a"))
         self._edit_roi_b_monitor_btn.clicked.connect(lambda: self._toggle_monitor("roi_b"))
+        self._basic_toggle.clicked.connect(self._toggle_basic_section)
+        self._action_toggle.clicked.connect(self._toggle_action_section)
+        self._advanced_toggle.clicked.connect(self._toggle_advanced_section)
 
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
@@ -1561,6 +1608,22 @@ class MainWindow(QMainWindow):
             self._edit_on_not_found_action.currentData() == "click_custom"
         )
 
+    def _toggle_basic_section(self):
+        self._basic_panel.setVisible(self._basic_toggle.isChecked())
+        self._basic_toggle.setText("▾ 基本條件" if self._basic_toggle.isChecked() else "▸ 基本條件")
+
+    def _toggle_action_section(self):
+        self._action_panel.setVisible(self._action_toggle.isChecked())
+        self._action_toggle.setText(
+            "▾ 動作設定" if self._action_toggle.isChecked() else "▸ 動作設定"
+        )
+
+    def _toggle_advanced_section(self):
+        self._advanced_panel.setVisible(self._advanced_toggle.isChecked())
+        self._advanced_toggle.setText(
+            "▾ 進階控制" if self._advanced_toggle.isChecked() else "▸ 進階控制"
+        )
+
     def _toggle_sub_section(self):
         self._update_sub_visibility()
         self._sub_toggle_btn.setText(
@@ -1586,16 +1649,36 @@ class MainWindow(QMainWindow):
     def _update_action_visibility(self):
         is_key = self._edit_action_type.currentData() == "key"
         self._edit_key.setVisible(is_key)
-        self._edit_form.labelForField(self._edit_key).setVisible(is_key)
+        for fl in self._all_forms:
+            lbl = fl.labelForField(self._edit_key)
+            if lbl:
+                lbl.setVisible(is_key)
+                break
         self._edit_click_button.setVisible(not is_key)
-        self._edit_form.labelForField(self._edit_click_button).setVisible(not is_key)
+        for fl in self._all_forms:
+            lbl = fl.labelForField(self._edit_click_button)
+            if lbl:
+                lbl.setVisible(not is_key)
+                break
         self._edit_click_position.setVisible(not is_key)
-        self._edit_form.labelForField(self._edit_click_position).setVisible(not is_key)
+        for fl in self._all_forms:
+            lbl = fl.labelForField(self._edit_click_position)
+            if lbl:
+                lbl.setVisible(not is_key)
+                break
         is_custom = self._edit_click_position.currentData() == "custom"
         self._coord_row.setVisible(not is_key and is_custom)
-        self._edit_form.labelForField(self._coord_row).setVisible(not is_key)
+        for fl in self._all_forms:
+            lbl = fl.labelForField(self._coord_row)
+            if lbl:
+                lbl.setVisible(not is_key)
+                break
         self._edit_random_offset.setVisible(not is_key)
-        self._edit_form.labelForField(self._edit_random_offset).setVisible(not is_key)
+        for fl in self._all_forms:
+            lbl = fl.labelForField(self._edit_random_offset)
+            if lbl:
+                lbl.setVisible(not is_key)
+                break
 
     def _on_action_type_changed(self, atype: str):
         self._update_action_visibility()
@@ -1653,9 +1736,11 @@ class MainWindow(QMainWindow):
         if widget is None:
             return
         widget.setVisible(visible)
-        label = self._edit_form.labelForField(widget)
-        if label:
-            label.setVisible(visible)
+        for fl in self._all_forms:
+            label = fl.labelForField(widget)
+            if label:
+                label.setVisible(visible)
+                break
 
     def _update_rule_type_visibility(self):
         is_compare = self._edit_rule_type.currentData() == "compare"
@@ -2415,6 +2500,9 @@ class MainWindow(QMainWindow):
             self._edit_post_delay.setEnabled(False)
             self._edit_depends_on_container.setEnabled(False)
             self._sub_toggle_btn.setEnabled(False)
+            self._basic_toggle.setEnabled(False)
+            self._action_toggle.setEnabled(False)
+            self._advanced_toggle.setEnabled(False)
             self._edit_sub_target.setEnabled(False)
             self._edit_sub_roi_btn.setEnabled(False)
             self._edit_sub_not_found_retries.setEnabled(False)
