@@ -103,6 +103,7 @@ class MainLoop:
         self.on_info: Optional[Callable[[str], None]] = None
         self.on_window_lost: Optional[Callable[[], None]] = None
         self.on_emergency: Optional[Callable[[], None]] = None
+        self.on_compare_round: Optional[Callable[[dict], None]] = None
 
         self._perf = PerformanceMonitor()
         self._perf.on_rate_limit_exceeded = self._on_rate_limit_exceeded
@@ -753,6 +754,16 @@ class MainLoop:
                             roi_b_val, rule.roi_b_threshold, rule.roi_b_compare
                         )
                     )
+                    rd["a_ok"] = a_ok
+                    rd["b_ok"] = b_ok
+                    if self.on_compare_round:
+                        self.on_compare_round(
+                            {
+                                "rule_id": rule.id,
+                                "rule_name": rule.name,
+                                **rd,
+                            }
+                        )
                     if a_ok and b_ok:
                         self._execute_confirm_action(rule, title, rule.post_delay_ms)
                         return

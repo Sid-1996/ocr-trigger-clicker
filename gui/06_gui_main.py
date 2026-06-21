@@ -150,6 +150,7 @@ class WorkerSignals(QObject):
     info_signal = pyqtSignal(str)
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
+    compare_round_signal = pyqtSignal(dict)
 
 
 class InitWorker(QThread):
@@ -185,6 +186,7 @@ class InitWorker(QThread):
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
             loop.on_emergency = lambda: self._signals.emergency_signal.emit()
+            loop.on_compare_round = lambda d: self._signals.compare_round_signal.emit(d)
             loop.start()
             self.loop = loop
             self.finished.emit(True, "")
@@ -894,6 +896,17 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         layout.addWidget(self._main_stack)
 
+        # === Compare log panel ===
+        self._compare_log_toggle = QPushButton("▸ 比較輪次日誌")
+        self._compare_log_toggle.setCheckable(True)
+        self._compare_log_toggle.setChecked(False)
+        self._compare_log_toggle.clicked.connect(self._toggle_compare_log)
+        self._compare_log_widget = QListWidget()
+        self._compare_log_widget.setMaximumHeight(120)
+        self._compare_log_widget.setVisible(False)
+        layout.addWidget(self._compare_log_toggle)
+        layout.addWidget(self._compare_log_widget)
+
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
@@ -956,6 +969,7 @@ class MainWindow(QMainWindow):
 
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
+        self._signals.compare_round_signal.connect(self._on_compare_round)
 
     def _setup_shortcuts(self):
         QShortcut(
@@ -2380,6 +2394,26 @@ class MainWindow(QMainWindow):
         self._update_edit_enabled(True)
         self._status_bar.showMessage("🛑 緊急停止 — 按「啟動」重新開始")
         self._update_rule_status()
+
+    # === Compare log ===
+    def _toggle_compare_log(self):
+        visible = self._compare_log_toggle.isChecked()
+        self._compare_log_widget.setVisible(visible)
+        self._compare_log_toggle.setText("▾ 比較輪次日誌" if visible else "▸ 比較輪次日誌")
+
+    def _on_compare_round(self, data: dict):
+        name = data.get("rule_name", "?")
+        r = data.get("round", -1)
+        a = data.get("roi_a", "?")
+        b = data.get("roi_b", "?")
+        a_ok = data.get("a_ok", False)
+        b_ok = data.get("b_ok", False)
+        line = f"[{name}] 第{r + 1}輪: A={a} {'✓' if a_ok else '✗'}"
+        if data.get("roi_b") is not None:
+            line += f" B={b} {'✓' if b_ok else '✗'}"
+        self._compare_log_widget.insertItem(0, line)
+        while self._compare_log_widget.count() > 50:
+            self._compare_log_widget.takeItem(self._compare_log_widget.count() - 1)
 
     # === About & Version ===
     def _show_about(self):
