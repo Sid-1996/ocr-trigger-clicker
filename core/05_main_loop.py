@@ -1,5 +1,6 @@
 import random
 import re
+import sys as _sys
 import threading
 import time
 from collections import defaultdict, deque
@@ -10,7 +11,8 @@ from typing import Callable, Optional
 import cv2
 import numpy as np
 
-from _loader import load_sibling
+_sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from _loader import load_sibling  # noqa: E402
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
@@ -41,9 +43,6 @@ init_engine = _ocr.init_engine
 Rule = _rule.Rule
 load_rules = _rule.load_rules
 save_rules = _rule.save_rules
-check_trigger = _rule.check_trigger
-apply_trigger = _rule.apply_trigger
-get_roi = _rule.get_roi
 
 
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
@@ -93,6 +92,19 @@ class TriggerLog:
     click_y: int
 
 
+@dataclass
+class StepContext:
+    img: np.ndarray
+    rect: dict
+    matched_text: Optional[OcrResult] = None
+
+
+@dataclass
+class StepResult:
+    action: str  # "continue" | "stop" | "jump"
+    rule_id: Optional[str] = None
+
+
 class MainLoop:
     def __init__(
         self,
@@ -125,9 +137,6 @@ class MainLoop:
 
         self._rule_trigger_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
         self._rule_auto_disabled: set[str] = set()
-        self._sub_not_found_count: dict[str, int] = defaultdict(int)
-        self._once_skip_announced: set[str] = set()
-        self._compare_running: set[str] = set()
         self._pending_forced_triggers: set[str] = set()
         self._rules_dirty: bool = False
         self._save_period_counter: int = 0
@@ -179,14 +188,110 @@ class MainLoop:
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
 
-    def _execute_trigger(self, rule: Rule, matched: OcrResult, rect: dict) -> None:
+    def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:
+        if roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+            return recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+        h, w = img.shape[:2]
+        x1 = max(0, roi["x"])
+        y1 = max(0, roi["y"])
+        x2 = min(w, roi["x"] + roi["w"])
+        y2 = min(h, roi["y"] + roi["h"])
+        if x2 <= x1 or y2 <= y1:
+            return []
+        roi_img = img[y1:y2, x1:x2]
+        results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+        for r in results:
+            r.x += x1
+            r.y += y1
+            r.center_x = r.x + r.w // 2
+            r.center_y = r.y + r.h // 2
+        return results
+
+    def _make_trigger_log(self, rule, text: str, x: int, y: int) -> TriggerLog:
+        return TriggerLog(
+            timestamp=time.time(),
+            rule_id=rule.id,
+            rule_name=rule.name,
+            matched_text=text,
+            click_x=x,
+            click_y=y,
+        )
+
+    def _emit_trigger(self, log: TriggerLog):
+        with self._logs_lock:
+            self._logs.append(log)
+        if self.on_trigger:
+            self.on_trigger(log)
+
+    # ── Step handlers ──
+
+    def _handle_detect(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        text = params.get("text", "")
+        if not text.strip():
+            return StepResult("stop")
+
+        elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
+        if elapsed_ms < params.get("cooldown_ms", 2000):
+            return StepResult("stop")
+
+        if params.get("trigger_mode", "once") == "once" and rule.trigger_count > 0:
+            return StepResult("stop")
+
+        mt = params.get("max_triggers", -1)
+        if mt > 0 and rule.trigger_count >= mt:
+            return StepResult("stop")
+
+        roi = params.get("roi")
+        results = self._ocr_region(ctx.img, roi)
+        if not results:
+            return StepResult("stop")
+
+        matches = find_text(
+            results, text, params.get("fuzzy", False), params.get("fuzzy_threshold", 0.8)
+        )
+        if not matches:
+            return StepResult("stop")
+
+        ctx.matched_text = matches[0]
+        return StepResult("continue")
+
+    def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        target = params.get("target", "text_center")
+        off = params.get("random_offset", 0)
+        dx = random.randint(-off, off) if off else 0
+        dy = random.randint(-off, off) if off else 0
+
+        if target == "text_center":
+            if ctx.matched_text is None:
+                return StepResult("stop")
+            cx = ctx.matched_text.center_x + dx
+            cy = ctx.matched_text.center_y + dy
+            matched_text = ctx.matched_text.text
+        elif target == "custom":
+            cx = params.get("x", 0) + dx
+            cy = params.get("y", 0) + dy
+            matched_text = ""
+        elif target == "click_text":
+            click_text = params.get("text", "")
+            if not click_text:
+                return StepResult("stop")
+            results = self._ocr_region(ctx.img, None)
+            clk_matches = find_text(results, click_text, False, 0.8)
+            if not clk_matches:
+                return StepResult("stop")
+            cx = clk_matches[0].center_x + dx
+            cy = clk_matches[0].center_y + dy
+            matched_text = clk_matches[0].text
+        else:
+            return StepResult("stop")
+
         if self.check_runaway_rule(rule.id):
             self._rule_auto_disabled.add(rule.id)
             rule.enabled = False
             msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
             if self.on_warning:
                 self.on_warning(msg)
-            return
+            return StepResult("stop")
 
         if self._focus_safe:
             with self._window_lock:
@@ -194,218 +299,286 @@ class MainLoop:
             if hwnd is not None and not is_window_foreground(hwnd):
                 if self._verbose:
                     self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
-                return
+                return StepResult("stop")
 
         if not self._perf.check_rate_limit():
+            return StepResult("stop")
+
+        button = params.get("button", "left")
+        sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
+        ok = self._send_click(sx, sy, button)
+        if ok:
+            self._perf.record_click()
+
+        rule.trigger_count += 1
+        rule.last_trigger_time = time.monotonic()
+
+        for s in rule.steps:
+            if s.type == "detect":
+                mt = s.params.get("max_triggers", -1)
+                if 0 < mt <= rule.trigger_count:
+                    rule.enabled = False
+                break
+
+        log = self._make_trigger_log(rule, matched_text, sx, sy)
+        self._emit_trigger(log)
+
+        with self._rules_lock:
+            self._rules_dirty = True
+
+        return StepResult("continue")
+
+    def _handle_key(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        key = params.get("key", "")
+        if not key:
+            return StepResult("stop")
+
+        if self.check_runaway_rule(rule.id):
+            self._rule_auto_disabled.add(rule.id)
+            rule.enabled = False
+            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
+            if self.on_warning:
+                self.on_warning(msg)
+            return StepResult("stop")
+
+        if self._focus_safe:
+            with self._window_lock:
+                hwnd = self._tracking_hwnd
+            if hwnd is not None and not is_window_foreground(hwnd):
+                if self._verbose:
+                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
+                return StepResult("stop")
+
+        if not self._perf.check_rate_limit():
+            return StepResult("stop")
+
+        ok = self._send_key(key)
+        if ok:
+            self._perf.record_click()
+
+        rule.trigger_count += 1
+        rule.last_trigger_time = time.monotonic()
+
+        for s in rule.steps:
+            if s.type == "detect":
+                mt = s.params.get("max_triggers", -1)
+                if 0 < mt <= rule.trigger_count:
+                    rule.enabled = False
+                break
+
+        log = self._make_trigger_log(rule, "", 0, 0)
+        self._emit_trigger(log)
+
+        with self._rules_lock:
+            self._rules_dirty = True
+
+        return StepResult("continue")
+
+    def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        ms = params.get("ms", 1000)
+        if ms > 0:
             if self._verbose:
-                self._log("全域速率限制生效，跳過此次點擊")
-            return
+                self._log(f"等待 {ms}ms")
+            time.sleep(ms / 1000.0)
+        return StepResult("continue")
 
-        params = apply_trigger(rule)
+    def _handle_wait_rule(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        target_id = params.get("rule_id", "")
+        if not target_id:
+            return StepResult("continue")
 
-        sx = sy = 0
-        if rule.action_type == "key":
-            ok = self._send_key(rule.key)
-            if ok:
-                self._perf.record_click()
+        with self._rules_lock:
+            target = next((r for r in self._rules if r.id == target_id), None)
+
+        if target is None or target.trigger_count < 1:
+            return StepResult("stop")
+
+        return StepResult("continue")
+
+    def _execute_inline_action(self, action: dict, ctx: StepContext) -> None:
+        atype = action.get("type", "")
+        if atype == "click":
+            x = action.get("x", 0)
+            y = action.get("y", 0)
+            button = action.get("button", "left")
+            sx, sy = self._to_screen_coords(ctx.rect, x, y)
+            self._send_click(sx, sy, button)
+        elif atype == "key":
+            self._send_key(action.get("key", ""))
+
+    def _pick_best_from_rounds(
+        self, rounds: list[dict], metric_defs: list[dict], primary_idx: int
+    ) -> Optional[dict]:
+        if not rounds:
+            return None
+        if primary_idx >= len(metric_defs):
+            return rounds[0]
+        direction = metric_defs[primary_idx].get("direction", "higher_better")
+
+        def _val(r):
+            if primary_idx < len(r["metrics"]) and r["metrics"][primary_idx]["value"] is not None:
+                return r["metrics"][primary_idx]["value"]
+            return float("-inf") if direction == "higher_better" else float("inf")
+
+        vals = [_val(r) for r in rounds]
+        if direction == "higher_better":
+            best_val = max(vals)
         else:
-            if rule.click_position == "text_center":
-                off = rule.random_offset
+            best_val = min(vals)
+        candidates = [r for r in rounds if _val(r) == best_val]
+        return min(candidates, key=lambda r: r["round"])
+
+    def _handle_collect_rounds(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        rounds_def = params.get("rounds", [])
+        if not rounds_def:
+            return StepResult("stop")
+
+        metric_defs = rounds_def[0].get("metrics", []) if rounds_def else []
+        confirm_action = params.get("confirm_action", {})
+        on_all_fail = params.get("on_all_fail", {})
+
+        round_results = []
+
+        for round_idx, rd in enumerate(rounds_def):
+            with self._window_lock:
+                title = self._window_title
+
+            trigger_action = rd.get("trigger_action", {})
+            self._execute_inline_action(trigger_action, ctx)
+            time.sleep(0.3)
+
+            round_metrics = []
+            all_ok = True
+            for midx, m in enumerate(rd.get("metrics", [])):
+                value = poll_roi_value(
+                    m.get("roi", {}),
+                    m.get("pick", "first"),
+                    m.get("timeout_ms", 3000),
+                    title,
+                )
+                threshold = m.get("threshold", 0)
+                direction = m.get("direction", "higher_better")
+                if value is not None:
+                    thr_ok = (
+                        value >= threshold if direction == "higher_better" else value <= threshold
+                    )
+                else:
+                    thr_ok = False
+
+                round_metrics.append({"index": midx, "value": value, "threshold_ok": thr_ok})
+                if not thr_ok:
+                    all_ok = False
+
+            rdata = {"round": round_idx, "metrics": round_metrics, "all_ok": all_ok}
+            round_results.append(rdata)
+
+            if self.on_compare_round:
+                self.on_compare_round({"rule_id": rule.id, "rule_name": rule.name, **rdata})
+
+            if all_ok:
+                self._execute_inline_action(rd.get("result_action", {}), ctx)
+                self._execute_inline_action(confirm_action, ctx)
+                return StepResult("stop")
+
+        full = [r for r in round_results if r["all_ok"]]
+        partial = [
+            r
+            for r in round_results
+            if not r["all_ok"] and r["metrics"] and r["metrics"][0].get("threshold_ok")
+        ]
+        best = None
+        if full:
+            best = self._pick_best_from_rounds(
+                full, metric_defs, params.get("primary_metric_index", 0)
+            )
+        elif partial:
+            best = self._pick_best_from_rounds(
+                partial, metric_defs, params.get("primary_metric_index", 0)
+            )
+
+        if best is not None:
+            best_def = rounds_def[best["round"]]
+            self._execute_inline_action(best_def.get("result_action", {}), ctx)
+            self._execute_inline_action(confirm_action, ctx)
+        elif on_all_fail.get("type") == "jump":
+            target_id = on_all_fail.get("rule_id", "")
+            if target_id:
+                with self._rules_lock:
+                    self._pending_forced_triggers.add(target_id)
+                msg = f"多輪比較「{rule.name}」無達標輪次 → 跳轉「{target_id}」"
+                if self.on_warning:
+                    self.on_warning(msg)
+                elif self._verbose:
+                    self._log(msg)
+
+        return StepResult("stop")
+
+    def _handle_jump(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        target_id = params.get("rule_id", "")
+        if target_id:
+            with self._rules_lock:
+                self._pending_forced_triggers.add(target_id)
+            if self._verbose:
+                self._log(f"規則「{rule.name}」跳轉至「{target_id}」")
+        return StepResult("stop")
+
+    def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
+        handlers = {
+            "detect": self._handle_detect,
+            "click": self._handle_click,
+            "key": self._handle_key,
+            "wait": self._handle_wait,
+            "wait_rule": self._handle_wait_rule,
+            "collect_rounds": self._handle_collect_rounds,
+            "jump": self._handle_jump,
+        }
+        handler = handlers.get(step.type)
+        if handler is None:
+            return StepResult("stop")
+        return handler(step.params, ctx, rule)
+
+    def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict) -> None:
+        ctx = StepContext(img=img, rect=rect)
+        for step in rule.steps:
+            result = self._run_step(step, ctx, rule)
+            if result.action == "stop":
+                return
+            if result.action == "jump":
+                if result.rule_id:
+                    with self._rules_lock:
+                        self._pending_forced_triggers.add(result.rule_id)
+                return
+
+    def _execute_forced_trigger(self, rule: Rule, rect: dict) -> None:
+        for step in rule.steps:
+            if step.type == "click":
+                params = step.params
+                off = params.get("random_offset", 0)
                 dx = random.randint(-off, off) if off else 0
                 dy = random.randint(-off, off) if off else 0
-                cx = matched.center_x + dx
-                cy = matched.center_y + dy
-            else:
-                cx, cy = params["x"], params["y"]
-            sx, sy = self._to_screen_coords(rect, cx, cy)
-            ok = self._send_click(sx, sy, params["button"])
-            if ok:
-                self._perf.record_click()
-
-        log = TriggerLog(
-            timestamp=time.time(),
-            rule_id=rule.id,
-            rule_name=rule.name,
-            matched_text=matched.text,
-            click_x=sx,
-            click_y=sy,
-        )
-        with self._logs_lock:
-            self._logs.append(log)
-
-        if self.on_trigger:
-            self.on_trigger(log)
-
-        if rule.post_delay_ms > 0:
-            if self._verbose:
-                self._log(f"規則「{rule.name}」點擊後等待 {rule.post_delay_ms}ms")
-            time.sleep(rule.post_delay_ms / 1000.0)
-
-        with self._rules_lock:
-            self._rules_dirty = True
-
-    def _handle_sub_target(
-        self, rule: Rule, img: np.ndarray, rect: dict, primary_matched: OcrResult
-    ) -> None:
-        roi = (
-            rule.sub_roi if any(rule.sub_roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")) else None
-        )
-        if roi:
-            h, w = img.shape[:2]
-            x1 = max(0, roi["x"])
-            y1 = max(0, roi["y"])
-            x2 = min(w, roi["x"] + roi["w"])
-            y2 = min(h, roi["y"] + roi["h"])
-            if x2 <= x1 or y2 <= y1:
+                cx = params.get("x", 0) + dx
+                cy = params.get("y", 0) + dy
+                button = params.get("button", "left")
+                sx, sy = self._to_screen_coords(rect, cx, cy)
+                self._send_click(sx, sy, button)
+                rule.trigger_count += 1
+                rule.last_trigger_time = time.monotonic()
+                log = self._make_trigger_log(rule, "", sx, sy)
+                self._emit_trigger(log)
+                with self._rules_lock:
+                    self._rules_dirty = True
                 return
-            sub_img = img[y1:y2, x1:x2]
-            sub_results = recognize(sub_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-            for r in sub_results:
-                r.x += x1
-                r.y += y1
-                r.center_x = r.x + r.w // 2
-                r.center_y = r.y + r.h // 2
-        else:
-            sub_results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
-
-        if sub_results:
-            sub_matches = find_text(
-                sub_results, rule.sub_target_text, rule.fuzzy, rule.fuzzy_threshold
-            )
-            if sub_matches:
-                self._sub_not_found_count[rule.id] = 0
-                if self._verbose:
-                    self._log(f"子目標「{rule.sub_target_text}」命中「{sub_matches[0].text}」!")
-                self._do_sub_found(rule, sub_matches[0], rect)
+            if step.type == "key":
+                key = step.params.get("key", "")
+                if key:
+                    self._send_key(key)
+                    rule.trigger_count += 1
+                    rule.last_trigger_time = time.monotonic()
+                    log = self._make_trigger_log(rule, "", 0, 0)
+                    self._emit_trigger(log)
+                    with self._rules_lock:
+                        self._rules_dirty = True
                 return
-
-        self._sub_not_found_count[rule.id] += 1
-        if self._sub_not_found_count[rule.id] >= rule.sub_not_found_retries:
-            self._sub_not_found_count[rule.id] = 0
-            if self._verbose:
-                self._log(
-                    f"子目標「{rule.sub_target_text}」連續 {rule.sub_not_found_retries} 次未找到，執行 not_found 動作"
-                )
-            self._do_sub_not_found(rule, primary_matched, rect)
-
-    def _do_sub_found(self, rule: Rule, matched: OcrResult, rect: dict) -> None:
-        if self.check_runaway_rule(rule.id):
-            self._rule_auto_disabled.add(rule.id)
-            rule.enabled = False
-            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
-            if self.on_warning:
-                self.on_warning(msg)
-            return
-
-        if self._focus_safe:
-            with self._window_lock:
-                hwnd = self._tracking_hwnd
-            if hwnd is not None and not is_window_foreground(hwnd):
-                if self._verbose:
-                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
-                return
-
-        if not self._perf.check_rate_limit():
-            if self._verbose:
-                self._log("全域速率限制生效，跳過此次點擊")
-            return
-
-        apply_trigger(rule)
-
-        if rule.on_found_action == "click_sub_center":
-            cx, cy = matched.center_x, matched.center_y
-        elif rule.on_found_action == "click_custom":
-            cx, cy = rule.on_found_custom_x, rule.on_found_custom_y
-        else:
-            cx, cy = matched.center_x, matched.center_y
-
-        sx, sy = self._to_screen_coords(rect, cx, cy)
-        ok = self._send_click(sx, sy, rule.click_button)
-        if ok:
-            self._perf.record_click()
-
-        log = TriggerLog(
-            timestamp=time.time(),
-            rule_id=rule.id,
-            rule_name=rule.name,
-            matched_text=matched.text,
-            click_x=sx,
-            click_y=sy,
-        )
-        with self._logs_lock:
-            self._logs.append(log)
-
-        if self.on_trigger:
-            self.on_trigger(log)
-
-        if rule.post_delay_ms > 0:
-            if self._verbose:
-                self._log(f"規則「{rule.name}」點擊後等待 {rule.post_delay_ms}ms")
-            time.sleep(rule.post_delay_ms / 1000.0)
-
-        with self._rules_lock:
-            self._rules_dirty = True
-
-    def _do_sub_not_found(self, rule: Rule, primary_matched: OcrResult, rect: dict) -> None:
-        if rule.on_not_found_action == "click_nothing":
-            if self._verbose:
-                self._log(f"規則「{rule.name}」not_found 動作設為「略過」")
-            return
-
-        if self.check_runaway_rule(rule.id):
-            self._rule_auto_disabled.add(rule.id)
-            rule.enabled = False
-            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
-            if self.on_warning:
-                self.on_warning(msg)
-            return
-
-        if self._focus_safe:
-            with self._window_lock:
-                hwnd = self._tracking_hwnd
-            if hwnd is not None and not is_window_foreground(hwnd):
-                if self._verbose:
-                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
-                return
-
-        if not self._perf.check_rate_limit():
-            if self._verbose:
-                self._log("全域速率限制生效，跳過此次點擊")
-            return
-
-        params = apply_trigger(rule)
-
-        if rule.on_not_found_action == "click_custom":
-            cx, cy = rule.on_not_found_custom_x, rule.on_not_found_custom_y
-        else:
-            cx, cy = params["x"], params["y"]
-
-        sx, sy = self._to_screen_coords(rect, cx, cy)
-        ok = self._send_click(sx, sy, rule.click_button)
-        if ok:
-            self._perf.record_click()
-
-        log = TriggerLog(
-            timestamp=time.time(),
-            rule_id=rule.id,
-            rule_name=rule.name,
-            matched_text=primary_matched.text,
-            click_x=sx,
-            click_y=sy,
-        )
-        with self._logs_lock:
-            self._logs.append(log)
-
-        if self.on_trigger:
-            self.on_trigger(log)
-
-        if rule.post_delay_ms > 0:
-            if self._verbose:
-                self._log(f"規則「{rule.name}」點擊後等待 {rule.post_delay_ms}ms")
-            time.sleep(rule.post_delay_ms / 1000.0)
-
-        with self._rules_lock:
-            self._rules_dirty = True
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
@@ -415,36 +588,6 @@ class MainLoop:
                 self._log("無啟用中的規則")
             return
 
-        has_any_rules = any(r.enabled for r in rules_snapshot)
-        if not has_any_rules:
-            return
-
-        ocr_cache: dict[str | None, list] = {}
-
-        def _run_ocr(roi_key, roi_dict):
-            if roi_key in ocr_cache:
-                return ocr_cache[roi_key]
-            if roi_dict:
-                h, w = img.shape[:2]
-                x1 = max(0, roi_dict["x"])
-                y1 = max(0, roi_dict["y"])
-                x2 = min(w, roi_dict["x"] + roi_dict["w"])
-                y2 = min(h, roi_dict["y"] + roi_dict["h"])
-                if x2 <= x1 or y2 <= y1:
-                    ocr_cache[roi_key] = None
-                    return None
-                roi_img = img[y1:y2, x1:x2]
-                results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-                for r in results:
-                    r.x += x1
-                    r.y += y1
-                    r.center_x = r.x + r.w // 2
-                    r.center_y = r.y + r.h // 2
-            else:
-                results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
-            ocr_cache[roi_key] = results
-            return results
-
         for rule in rules_snapshot:
             if not rule.enabled:
                 continue
@@ -453,72 +596,18 @@ class MainLoop:
 
             if rule.id in self._pending_forced_triggers:
                 self._pending_forced_triggers.discard(rule.id)
-                if rule.action_type != "key" and rule.click_position == "text_center":
-                    if self._verbose:
-                        self._log(f"強制觸發規則「{rule.name}」跳過 (text_center 不支援)")
-                    continue
                 if self._verbose:
                     self._log(f"強制觸發規則「{rule.name}」")
-                dummy = OcrResult(text="", x=0, y=0, w=0, h=0, confidence=0.0)
-                self._execute_trigger(rule, dummy, rect)
+                self._execute_forced_trigger(rule, rect)
                 continue
-
-            if rule.trigger_mode == "once" and rule.trigger_count > 0:
-                if self._verbose and rule.id not in self._once_skip_announced:
-                    self._log(
-                        f"規則「{rule.name}」→ once 模式，已觸發 ({rule.trigger_count} 次)，跳過"
-                    )
-                    self._once_skip_announced.add(rule.id)
-                continue
-
-            if rule.depends_on:
-                dep_ids = set(rule.depends_on)
-                deps = [r for r in rules_snapshot if r.id in dep_ids]
-                if len(deps) != len(dep_ids) or not all(r.trigger_count >= 1 for r in deps):
-                    if self._verbose:
-                        self._log(f"規則「{rule.name}」依賴尚未全部觸發 ({rule.depends_on})，跳過")
-                    continue
-
-            if rule.rule_type == "compare":
-                self._run_compare_rule(rule)
-                continue
-
-            if self._verbose:
-                self._log(f"處理規則「{rule.name}」目標「{rule.target_text}」")
 
             try:
-                roi = get_roi(rule)
-                roi_key = (roi["x"], roi["y"], roi["w"], roi["h"]) if roi else None
-                rule_results = _run_ocr(roi_key, roi)
-                if rule_results is None:
-                    if self._verbose:
-                        self._log(f"規則「{rule.name}」ROI 超出畫面，跳過")
-                    continue
-                if not rule_results:
-                    if self._verbose:
-                        self._log(f"規則「{rule.name}」OCR 無結果")
-                    continue
-
-                hit, matched = check_trigger(rule, rule_results)
-                if not hit or matched is None:
-                    if self._verbose:
-                        self._log(
-                            f"規則「{rule.name}」比對「{rule.target_text}」→ 不符合 (共{len(rule_results)}個文字)"
-                        )
-                    continue
-
-                if self._verbose:
-                    self._log(f"規則「{rule.name}」命中「{matched.text}」!")
-
-                if rule.sub_target_text:
-                    self._handle_sub_target(rule, img, rect, matched)
-                else:
-                    self._execute_trigger(rule, matched, rect)
+                self._run_rule(rule, img, rect)
             except Exception as e:
                 if self._verbose:
                     self._log(f"規則「{rule.name}」處理異常: {e}")
-                    if self.on_warning:
-                        self.on_warning(f"規則「{rule.name}」異常: {e}")
+                if self.on_warning:
+                    self.on_warning(f"規則「{rule.name}」異常: {e}")
 
     def _loop(self):
         iteration = 0
@@ -668,7 +757,6 @@ class MainLoop:
 
     def reload_rules(self) -> None:
         self._rule_auto_disabled.clear()
-        self._once_skip_announced.clear()
         with self._rules_lock:
             self._load_rules()
 
@@ -732,11 +820,7 @@ class MainLoop:
                     "enabled": r.enabled,
                     "trigger_count": r.trigger_count,
                     "last_trigger_time": r.last_trigger_time,
-                    "cooldown_ms": r.cooldown_ms,
-                    "max_triggers": r.max_triggers,
                     "auto_disabled": r.id in self._rule_auto_disabled,
-                    "rule_type": getattr(r, "rule_type", "trigger"),
-                    "compare_running": r.id in self._compare_running,
                 }
                 for r in self._rules
             ]
@@ -752,204 +836,185 @@ class MainLoop:
             return True
         return False
 
-    # ── Compare rule ──
-
-    def _run_compare_rule(self, rule: Rule) -> None:
-        if rule.id in self._compare_running:
-            return
-        self._compare_running.add(rule.id)
-        with self._window_lock:
-            title = self._window_title
-        t = threading.Thread(
-            target=self._compare_worker,
-            args=(rule, title),
-            daemon=True,
-        )
-        t.start()
-
-    def _compare_worker(self, rule: Rule, title: str) -> None:
-        try:
-            round_results = []
-            for round_idx in range(rule.max_rounds):
-                roi_a_val = self._poll_roi_value(
-                    rule.roi_a, rule.roi_a_value_pick, rule.round_wait_ms, title
-                )
-                roi_b_val = None
-                if rule.roi_count == 2:
-                    roi_b_val = self._poll_roi_value(
-                        rule.roi_b, rule.roi_b_value_pick, rule.round_wait_ms, title
-                    )
-                if roi_a_val is not None:
-                    rd = {"round": round_idx, "roi_a": roi_a_val, "roi_b": roi_b_val}
-                    round_results.append(rd)
-                    a_ok = self._check_threshold(
-                        roi_a_val, rule.roi_a_threshold, rule.roi_a_compare
-                    )
-                    b_ok = (rule.roi_count == 1) or (
-                        roi_b_val is not None
-                        and self._check_threshold(
-                            roi_b_val, rule.roi_b_threshold, rule.roi_b_compare
-                        )
-                    )
-                    rd["a_ok"] = a_ok
-                    rd["b_ok"] = b_ok
-                    if self.on_compare_round:
-                        self.on_compare_round(
-                            {
-                                "rule_id": rule.id,
-                                "rule_name": rule.name,
-                                **rd,
-                            }
-                        )
-                    if a_ok and b_ok:
-                        self._execute_confirm_action(rule, title, rule.post_delay_ms)
-                        return
-                if round_idx < rule.max_rounds - 1:
-                    if rule.retry_key:
-                        _ahk.send_key(rule.retry_key)
-                    time.sleep(0.3)
-
-            self._finish_compare(rule, round_results, title)
-        finally:
-            self._compare_running.discard(rule.id)
-
-    def _finish_compare(self, rule: Rule, round_results: list[dict], title: str) -> None:
-        if not round_results:
-            if rule.on_all_fail:
-                with self._rules_lock:
-                    self._pending_forced_triggers.add(rule.on_all_fail)
-                msg = f"比較規則「{rule.name}」所有輪次無效 → 強制觸發「{rule.on_all_fail}」"
-                if self.on_warning:
-                    self.on_warning(msg)
-                elif self._verbose:
-                    self._log(msg)
-            return
-
-        full = [r for r in round_results if self._is_round_full_ok(r, rule)]
-        partial = [
-            r
-            for r in round_results
-            if not self._is_round_full_ok(r, rule)
-            and self._check_threshold(r["roi_a"], rule.roi_a_threshold, rule.roi_a_compare)
-        ]
-
-        best = None
-        if full:
-            best = self._pick_best_round(full, "roi_a", rule.roi_a_compare)
-        elif partial:
-            best = self._pick_best_round(partial, "roi_a", rule.roi_a_compare)
-
-        if best is not None:
-            self._execute_confirm_action(rule, title, rule.post_delay_ms)
-        elif rule.on_all_fail:
-            with self._rules_lock:
-                self._pending_forced_triggers.add(rule.on_all_fail)
-            msg = f"比較規則「{rule.name}」無達標輪次 → 強制觸發「{rule.on_all_fail}」"
-            if self.on_warning:
-                self.on_warning(msg)
-            elif self._verbose:
-                self._log(msg)
-
-    def _is_round_full_ok(self, rd: dict, rule: Rule) -> bool:
-        a_ok = self._check_threshold(rd["roi_a"], rule.roi_a_threshold, rule.roi_a_compare)
-        if not a_ok:
-            return False
-        if rule.roi_count == 2:
-            return rd.get("roi_b") is not None and self._check_threshold(
-                rd["roi_b"], rule.roi_b_threshold, rule.roi_b_compare
-            )
-        return True
-
-    def _poll_roi_value(self, roi: dict, pick: str, timeout_ms: int, title: str) -> float | None:
-        return poll_roi_value(roi, pick, timeout_ms, title)
-
-    def _check_threshold(self, value: float, threshold: float, direction: str) -> bool:
-        if direction == "higher_better":
-            return value >= threshold
-        return value <= threshold
-
-    def _pick_best_round(self, rounds: list[dict], val_key: str, direction: str) -> dict:
-        if direction == "higher_better":
-            best_val = max(r[val_key] for r in rounds)
-        else:
-            best_val = min(r[val_key] for r in rounds)
-        candidates = [r for r in rounds if r[val_key] == best_val]
-        return min(candidates, key=lambda r: r["round"])
-
-    def _execute_confirm_action(self, rule: Rule, title: str, post_delay_ms: int = 0) -> None:
-        rect = get_window_rect(title)
-        if rect is None:
-            msg = f"比較規則「{rule.name}」確認動作失敗：找不到視窗"
-            if self.on_warning:
-                self.on_warning(msg)
-            return
-        if rule.confirm_action_type == "key" and rule.confirm_key:
-            _ahk.send_key(rule.confirm_key)
-        elif rule.confirm_action_type == "click":
-            sx, sy = self._to_screen_coords(rect, rule.confirm_x, rule.confirm_y)
-            _ahk.send_click(sx, sy, rule.click_button)
-        if post_delay_ms > 0:
-            time.sleep(post_delay_ms / 1000.0)
-        if self._verbose:
-            self._log(f"比較規則「{rule.name}」確認動作完成")
-
 
 if __name__ == "__main__":
-    from pathlib import Path
+    print("=== Phase 2 Self-Check ===\n")
 
-    _here = Path(__file__).resolve().parent.parent
-    windows = list_windows()
-    print("=== 所有可見視窗 ===")
-    for i, w in enumerate(windows, 1):
-        print(f"{i:3d}. {w}")
+    # ── Test 1: StepResult dataclass ──
+    sr = StepResult("continue")
+    assert sr.action == "continue"
+    assert sr.rule_id is None
+    sr2 = StepResult("jump", "rule_abc")
+    assert sr2.action == "jump"
+    assert sr2.rule_id == "rule_abc"
+    print("  [OK] StepResult dataclass")
 
-    target = input("\n請輸入目標視窗標題關鍵字: ").strip()
-    rect = get_window_rect(target)
-    if rect is None:
-        print("找不到該視窗")
-        raise SystemExit(1)
+    # ── Test 2: StepContext dataclass ──
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    assert ctx.matched_text is None
+    ocr = OcrResult(text="test", x=0, y=0, w=10, h=10, confidence=0.9)
+    ctx.matched_text = ocr
+    assert ctx.matched_text.text == "test"
+    print("  [OK] StepContext dataclass")
 
-    rules_path = str(_here / "rules.json")
-    loop = MainLoop(rules_path, target)
+    # ── Test 3: _pick_best_from_rounds logic ──
+    metric_defs = [
+        {
+            "direction": "higher_better",
+            "threshold": 50,
+            "pick": "first",
+            "roi": {},
+            "timeout_ms": 1000,
+        },
+        {
+            "direction": "lower_better",
+            "threshold": 30,
+            "pick": "first",
+            "roi": {},
+            "timeout_ms": 1000,
+        },
+    ]
+    mock_rounds = [
+        {
+            "round": 0,
+            "metrics": [{"value": 60, "threshold_ok": True}, {"value": 20, "threshold_ok": True}],
+            "all_ok": True,
+        },
+        {
+            "round": 1,
+            "metrics": [{"value": 80, "threshold_ok": True}, {"value": 25, "threshold_ok": True}],
+            "all_ok": True,
+        },
+        {
+            "round": 2,
+            "metrics": [{"value": 40, "threshold_ok": False}, {"value": 10, "threshold_ok": True}],
+            "all_ok": False,
+        },
+    ]
+    ml = MainLoop.__new__(MainLoop)
+    ml._rules_path = ""
+    ml._window_title = "測試視窗"
+    ml._window_hwnd = None
+    ml._dpi_scale = 1.0
+    ml._interval = 0.5
+    ml._rules = []
+    ml._rules_lock = threading.RLock()
+    ml._window_lock = threading.RLock()
+    ml._pending_forced_triggers = set()
+    ml._logs = deque(maxlen=200)
+    ml._logs_lock = threading.Lock()
+    ml._rule_trigger_history = defaultdict(lambda: deque(maxlen=100))
+    ml._rule_auto_disabled = set()
+    ml._rules_dirty = False
+    ml._save_period_counter = 0
+    ml._tracking_hwnd = None
+    ml._focus_safe = False
+    ml._verbose = False
+    ml._log_file = open(
+        Path(__file__).resolve().parent.parent / "logs" / "test.log", "a", encoding="utf-8"
+    )
+    ml._stop_event = threading.Event()
+    ml._pause_event = threading.Event()
+    ml._emergency_event = threading.Event()
+    ml._perf = _perf.PerformanceMonitor()
+    ml.on_trigger = None
+    ml.on_error = None
+    ml.on_warning = None
+    ml.on_info = None
+    ml.on_window_lost = None
+    ml.on_emergency = None
+    ml.on_compare_round = None
 
-    def on_trigger(log: TriggerLog):
-        print(
-            f"[觸發] {log.rule_name} → 點擊 ({log.click_x}, {log.click_y})  文字={log.matched_text!r}"
-        )
+    valid_rounds = [r for r in mock_rounds if r["all_ok"]]
+    best = ml._pick_best_from_rounds(valid_rounds, metric_defs, 0)
+    assert best is not None and best["round"] == 1, "should pick round 1 (highest primary)"
+    best2 = ml._pick_best_from_rounds(valid_rounds, metric_defs, 1)
+    assert best2 is not None and best2["round"] == 0, (
+        "should pick round 0 (lowest secondary, lower_better)"
+    )
+    empty_best = ml._pick_best_from_rounds([], metric_defs, 0)
+    assert empty_best is None
+    print("  [OK] _pick_best_from_rounds logic")
 
-    def on_error(msg: str):
-        print(f"[錯誤] {msg}")
+    # ── Test 4: _run_step dispatcher coverage ──
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    for hn in ["detect", "click", "key", "wait", "wait_rule", "collect_rounds", "jump"]:
+        step = _rule.Step(type=hn, params={})
+        result = ml._run_step(step, ctx, test_rule)
+        assert isinstance(result, StepResult), f"{hn} should return StepResult"
+    # Unknown type → stop
+    unknown_step = _rule.Step(type="nonexistent", params={})
+    result = ml._run_step(unknown_step, ctx, test_rule)
+    assert result.action == "stop", "unknown step type should return stop"
+    print("  [OK] _run_step dispatcher covers all types")
 
-    def on_window_lost():
-        print(f"[警告] 視窗 '{target}' 已消失，暫停偵測")
+    # ── Test 5: _to_screen_coords ──
+    sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
+    assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
+    print("  [OK] _to_screen_coords")
 
-    loop.on_trigger = on_trigger
-    loop.on_error = on_error
-    loop.on_window_lost = on_window_lost
+    # ── Test 6: _execute_inline_action ──
+    _orig_click = _ahk.send_click
+    _orig_key = _ahk.send_key
+    called = []
 
-    loop.start()
-    print(f"\n偵測迴圈已啟動（視窗: {target}）")
-    print("指令: p=暫停/繼續  r=重新載入規則  q=結束\n")
+    def _mock_click(x, y, b):
+        called.append(("click", x, y, b))
+        return True
 
-    import msvcrt
+    def _mock_key(k):
+        called.append(("key", k))
+        return True
 
-    while loop.is_running:
-        if msvcrt.kbhit():
-            key = msvcrt.getch().decode().lower()
-            if key == "p":
-                if loop.is_paused:
-                    loop.resume()
-                    print("▶ 恢復偵測")
-                else:
-                    loop.pause()
-                    print("⏸ 暫停偵測")
-            elif key == "r":
-                loop.reload_rules()
-                print(f"↻ 已重新載入規則 ({len(loop._rules)} 條)")
-            elif key == "q":
-                print("正在結束...")
-                break
-        time.sleep(0.05)
+    _ahk.send_click = _mock_click
+    _ahk.send_key = _mock_key
 
-    loop.stop()
-    print("已結束")
+    ml._execute_inline_action({"type": "click", "x": 10, "y": 20, "button": "right"}, ctx)
+    assert called == [("click", 10, 20, "right")]
+
+    called.clear()
+    ml._execute_inline_action({"type": "key", "key": "Space"}, ctx)
+    assert called == [("key", "Space")]
+
+    called.clear()
+    ml._execute_inline_action({"type": "unknown"}, ctx)
+    assert len(called) == 0
+
+    _ahk.send_click = _orig_click
+    _ahk.send_key = _orig_key
+    print("  [OK] _execute_inline_action")
+
+    # ── Test 7: _handle_wait_rule ──
+    ml._rules = [Rule(id="existing_rule", name="已存在", enabled=True, steps=[], trigger_count=1)]
+    result = ml._handle_wait_rule({"rule_id": "existing_rule"}, ctx, test_rule)
+    assert result.action == "continue", "should continue when target triggered"
+    result = ml._handle_wait_rule({"rule_id": "nonexistent"}, ctx, test_rule)
+    assert result.action == "stop", "should stop when target not found"
+    result = ml._handle_wait_rule({"rule_id": ""}, ctx, test_rule)
+    assert result.action == "continue", "empty rule_id should continue"
+    print("  [OK] _handle_wait_rule")
+
+    # ── Test 8: _handle_jump ──
+    ml._pending_forced_triggers.clear()
+    result = ml._handle_jump({"rule_id": "rule_target"}, ctx, test_rule)
+    assert result.action == "stop"
+    assert "rule_target" in ml._pending_forced_triggers
+    print("  [OK] _handle_jump")
+
+    # ── Test 9: _handle_detect returns stop when text empty ──
+    result = ml._handle_detect({"text": "", "roi": None}, ctx, test_rule)
+    assert result.action == "stop", "empty text should stop"
+    print("  [OK] _handle_detect empty text")
+
+    # ── Test 10: _handle_click missing matched_text ──
+    ctx.matched_text = None
+    result = ml._handle_click({"target": "text_center"}, ctx, test_rule)
+    assert result.action == "stop", "click text_center without matched_text should stop"
+    print("  [OK] _handle_click text_center without match")
+
+    ml._log_file.close()
+    Path(ml._log_file.name).unlink(missing_ok=True)
+
+    print("\n=== All 10 tests passed ===")
