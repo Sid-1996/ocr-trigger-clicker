@@ -819,18 +819,7 @@ class MainWindow(QMainWindow):
         self._edit_save_btn.setEnabled(False)
         self._edit_save_btn.setToolTip("儲存目前編輯的規則")
 
-        # ── Collapsible sections ──
-        self._field_labels: dict[str, QLabel | QWidget] = {}
         self._edit_form.insertRow(0, "類型:", self._edit_rule_type)
-
-        def _add(name: str, label: str | None, widget: QWidget):
-            if label:
-                lbl = self._edit_form.addRow(label, widget)
-            else:
-                lbl = self._edit_form.addRow(widget)
-            if isinstance(lbl, QWidget):
-                self._field_labels[name] = lbl
-            self._field_labels[f"_widget_{name}"] = widget
 
         # ── Section 1: 基本條件 toggle ──
         self._basic_toggle = QPushButton("▾ 基本條件")
@@ -1767,6 +1756,9 @@ class MainWindow(QMainWindow):
         self._update_confirm_action_visibility()
         if is_compare:
             self._populate_on_all_fail_combo()
+            self._advanced_toggle.setChecked(True)
+            self._advanced_panel.setVisible(True)
+            self._advanced_toggle.setText("▾ 進階控制")
             self._sub_toggle_btn.setChecked(False)
             self._sub_panel.setVisible(False)
 
