@@ -235,6 +235,8 @@ class OcrDebugPanel(QWidget):
 
             if img is None:
                 img = capture(self._window_title)
+                if img is not None:
+                    img = img[:, :, ::-1].copy()
                 source = "螢幕截圖"
 
             return img, source
@@ -516,7 +518,7 @@ class OcrDebugPanel(QWidget):
                 return
             img = np.ascontiguousarray(self._latest_raw)
             h, w, ch = img.shape
-            q_img = QImage(img.tobytes(), w, h, ch * w, QImage.Format.Format_RGB888).rgbSwapped()
+            q_img = QImage(img.tobytes(), w, h, ch * w, QImage.Format.Format_RGB888)
             pixmap = QPixmap.fromImage(q_img)
             if pixmap.isNull():
                 self._annotated_pixmap = None
@@ -596,7 +598,7 @@ class OcrDebugPanel(QWidget):
                 crop.shape[0],
                 ch * crop.shape[1],
                 QImage.Format.Format_RGB888,
-            ).rgbSwapped()
+            )
             pixmap = QPixmap.fromImage(q_img)
             self._crop_pixmap = pixmap
             self._crop_label.setPixmap(
