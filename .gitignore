@@ -3,6 +3,7 @@ __pycache__/
 dist/
 build/
 *.spec
+test_*.png
 *.log
 _test_*
 _diag_*
