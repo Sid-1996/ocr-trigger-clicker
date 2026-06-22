@@ -1113,6 +1113,7 @@ class MainWindow(QMainWindow):
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
+            self._debug_panel.step_requested.connect(self._on_debug_step_requested)
             self._debug_page_layout.addWidget(self._debug_panel, 1)
             self._connect_signals()
             self._setup_shortcuts()
@@ -1849,10 +1850,14 @@ class MainWindow(QMainWindow):
             self._edit_stack.setCurrentIndex(0)
             self._edit_save_btn.setVisible(False)
             self._edit_test_btn.setVisible(False)
+            if hasattr(self, "_debug_panel") and self._debug_panel is not None:
+                self._debug_panel.set_has_active_rule(False)
             return
         self._edit_stack.setCurrentIndex(1)
         self._edit_save_btn.setVisible(True)
         self._edit_test_btn.setVisible(True)
+        if hasattr(self, "_debug_panel") and self._debug_panel is not None:
+            self._debug_panel.set_has_active_rule(True)
         self._edit_save_btn.setEnabled(True)
         self._edit_test_btn.setEnabled(True)
         self._edit_name.setEnabled(True)
@@ -2108,18 +2113,54 @@ class MainWindow(QMainWindow):
                         "trigger_mode": "once",
                         "max_triggers": -1,
                     },
-                )
+                ),
+                Step(
+                    type="click",
+                    params={
+                        "target": "text_center",
+                        "button": "left",
+                        "random_offset": 3,
+                        "x": 0,
+                        "y": 0,
+                    },
+                ),
             ],
         )
         self._rules.append(rule)
         save_task(self._current_task, self._rules)
         self._selected_rule_id = rule.id
         self._refresh_rule_list()
+        self._show_rule_detail(rule)
         if self._loop:
             self._loop.reload_rules()
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
+
+    def _on_debug_step_requested(self, step_data: dict):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.steps.append(
+            Step(
+                type="detect",
+                params={
+                    "text": str(step_data.get("target_text", "")).strip() or "請輸入文字",
+                    "roi": step_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
+                    "fuzzy": False,
+                    "fuzzy_threshold": 0.8,
+                    "cooldown_ms": 2000,
+                    "trigger_mode": "once",
+                    "max_triggers": -1,
+                },
+            )
+        )
+        save_task(self._current_task, self._rules)
+        self._refresh_rule_list()
+        self._show_rule_detail(rule)
+        if self._loop:
+            self._loop.reload_rules()
+        self._status_bar.showMessage(f"已加入偵測步驟：「{step_data.get('target_text', '')}」")
 
     # === Start / Pause ===
     def _toggle_start(self):

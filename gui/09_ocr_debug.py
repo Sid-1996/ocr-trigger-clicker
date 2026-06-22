@@ -56,7 +56,7 @@ class _OcrSignals(QObject):
 
 class OcrDebugPanel(QWidget):
     rule_requested = pyqtSignal(dict)
-    sub_target_requested = pyqtSignal(dict)
+    step_requested = pyqtSignal(dict)
     closed = pyqtSignal()
 
     _OCR_MODES = {
@@ -74,6 +74,7 @@ class OcrDebugPanel(QWidget):
         self._capture_source = ""
         self._selected_index = -1
         self._request_id = 0
+        self._has_active_rule = False
         self._signals = _OcrSignals()
         self._signals.ocr_done.connect(self._on_ocr_done)
         self._signals.ocr_status.connect(self._on_ocr_status)
@@ -166,9 +167,9 @@ class OcrDebugPanel(QWidget):
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
-        self._set_sub_target_btn = QPushButton("設為進階條件(&U)")
+        self._set_sub_target_btn = QPushButton("加入偵測步驟(&U)")
         self._set_sub_target_btn.setEnabled(False)
-        self._set_sub_target_btn.setToolTip("將選取的文字設為目前規則的進階條件確認文字")
+        self._set_sub_target_btn.setToolTip("將選取文字新增為目前規則的偵測步驟")
         self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
         right_layout.addWidget(self._set_sub_target_btn)
 
@@ -346,7 +347,7 @@ class OcrDebugPanel(QWidget):
                 self._selected_index = rows[0].row()
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
-                self._set_sub_target_btn.setEnabled(True)
+                self._set_sub_target_btn.setEnabled(self._has_active_rule)
             else:
                 self._selected_index = -1
                 self._add_rule_btn.setEnabled(False)
@@ -390,7 +391,7 @@ class OcrDebugPanel(QWidget):
                 self._result_table.blockSignals(False)
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
-                self._set_sub_target_btn.setEnabled(True)
+                self._set_sub_target_btn.setEnabled(self._has_active_rule)
                 try:
                     self._rebuild_annotated()
                     self._update_display()
@@ -441,7 +442,7 @@ class OcrDebugPanel(QWidget):
             "h": min(img_h - max(0, r.y - pad), r.h + pad * 2),
         }
 
-        self.sub_target_requested.emit(
+        self.step_requested.emit(
             {
                 "target_text": r.text,
                 "roi": roi,
@@ -449,7 +450,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已設為進階條件：「{r.text}」"
+            f"✓ 已加入偵測步驟：「{r.text}」"
             f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
         )
 
@@ -624,6 +625,11 @@ class OcrDebugPanel(QWidget):
             Qt.TransformationMode.SmoothTransformation,
         )
         self._image_label.setPixmap(scaled)
+
+    def set_has_active_rule(self, has_rule: bool):
+        self._has_active_rule = has_rule
+        if self._selected_index >= 0 and self._selected_index < len(self._ocr_results):
+            self._set_sub_target_btn.setEnabled(has_rule)
 
     def clear_results(self):
         self._ocr_results = []
