@@ -2160,10 +2160,14 @@ class MainWindow(QMainWindow):
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setText("測試中…")
         QApplication.processEvents()
+        self.showMinimized()
+        QApplication.processEvents()
         activate_window(title)
         img = capture(title)
         if img is None:
             img = capture_window_full(title)
+        self.showNormal()
+        self.activateWindow()
         self._edit_stack.setCurrentIndex(1)
         if img is None:
             self._edit_test_btn.setEnabled(True)
