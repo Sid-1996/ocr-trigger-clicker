@@ -2038,25 +2038,12 @@ class MainWindow(QMainWindow):
             return
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setText("測試中…")
-        t = threading.Thread(target=self._run_rule_test, args=(rule, title), daemon=True)
-        t.start()
-
-    def _run_rule_test(self, rule: Rule, title: str):
-        result: dict = {}
-        try:
-            result = self._test_first_detect_step(rule, title)
-        except Exception as e:
-            result = {"error": f"測試異常：{e}"}
-        self._signals.test_done_signal.emit(result)
-
-    def _test_first_detect_step(self, rule: Rule, title: str) -> dict:
-        detect = next((s for s in rule.steps if s.type == "detect"), None)
-        if detect is None:
-            return {"error": "規則中無偵測步驟，請新增一個 detect 步驟"}
-        p = detect.params
-        text = p.get("text", "").strip()
-        if not text:
-            return {"error": "偵測步驟的目標文字為空白"}
+        QApplication.processEvents()
+        self.showMinimized()
+        QApplication.processEvents()
+        time.sleep(0.08)
+        activate_window(title)
+        time.sleep(0.12)
         img = capture(title)
         if img is None:
             img = capture_window_content(title)
@@ -2070,8 +2057,33 @@ class MainWindow(QMainWindow):
                             full = np.zeros((rect["h"], rect["w"], 3), dtype=np.uint8)
                             full[co[1] : co[1] + h, co[0] : co[0] + w] = img
                             img = full
+        self.showNormal()
+        self.activateWindow()
+        self._edit_stack.setCurrentIndex(1)
         if img is None:
-            return {"error": f"截圖失敗：無法擷取視窗「{title}」"}
+            self._edit_test_btn.setEnabled(True)
+            self._edit_test_btn.setText("▶ 測試")
+            QMessageBox.warning(self, "測試", f"截圖失敗：無法擷取視窗「{title}」")
+            return
+        t = threading.Thread(target=self._run_rule_test, args=(rule, img), daemon=True)
+        t.start()
+
+    def _run_rule_test(self, rule: Rule, img: np.ndarray):
+        result: dict = {}
+        try:
+            result = self._test_first_detect_step(rule, img)
+        except Exception as e:
+            result = {"error": f"測試異常：{e}"}
+        self._signals.test_done_signal.emit(result)
+
+    def _test_first_detect_step(self, rule: Rule, img: np.ndarray) -> dict:
+        detect = next((s for s in rule.steps if s.type == "detect"), None)
+        if detect is None:
+            return {"error": "規則中無偵測步驟，請新增一個 detect 步驟"}
+        p = detect.params
+        text = p.get("text", "").strip()
+        if not text:
+            return {"error": "偵測步驟的目標文字為空白"}
         roi = p.get("roi", {})
         if any(roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")):
             roi_img = crop_roi(img, roi)
