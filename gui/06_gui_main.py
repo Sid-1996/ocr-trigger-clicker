@@ -297,10 +297,11 @@ class _StepListWidget(QWidget):
             self._layout.addWidget(row)
 
     def _build_row(self, idx: int, step) -> QWidget:
-        row = QWidget()
-        row.setStyleSheet("background:#f5f5f5; border:1px solid #ddd; border-radius:4px;")
+        row = QFrame()
+        row.setFrameShape(QFrame.Shape.StyledPanel)
+        row.setFixedHeight(32)
         hl = QHBoxLayout(row)
-        hl.setContentsMargins(6, 4, 6, 4)
+        hl.setContentsMargins(6, 2, 6, 2)
 
         num = QLabel(str(idx + 1))
         num.setFixedWidth(20)
@@ -312,35 +313,43 @@ class _StepListWidget(QWidget):
 
         label = _STEP_TYPE_LABELS.get(step.type, step.type)
         tl = QLabel(label)
-        tl.setStyleSheet("font-weight:bold; color:#555;")
+        tl.setStyleSheet("font-weight:bold;")
         tl.setFixedWidth(60)
         hl.addWidget(tl)
 
         summary = _step_summary(step)
         sl = QLabel(summary)
-        sl.setStyleSheet("color:#888; font-size:11px;")
+        sl.setStyleSheet("font-size:11px;")
         hl.addWidget(sl, 1)
 
         btn_up = QPushButton("↑")
         btn_up.setFixedWidth(24)
+        btn_up.setFixedHeight(22)
+        btn_up.setStyleSheet("QPushButton { border: none; padding: 2px; }")
         btn_up.setToolTip("上移")
         btn_up.clicked.connect(lambda checked, i=idx: self._move_up(i))
         hl.addWidget(btn_up)
 
         btn_dn = QPushButton("↓")
         btn_dn.setFixedWidth(24)
+        btn_dn.setFixedHeight(22)
+        btn_dn.setStyleSheet("QPushButton { border: none; padding: 2px; }")
         btn_dn.setToolTip("下移")
         btn_dn.clicked.connect(lambda checked, i=idx: self._move_down(i))
         hl.addWidget(btn_dn)
 
-        btn_edit = QPushButton("✎")
+        btn_edit = QPushButton("編")
         btn_edit.setFixedWidth(24)
+        btn_edit.setFixedHeight(22)
+        btn_edit.setStyleSheet("QPushButton { border: none; padding: 2px; }")
         btn_edit.setToolTip("編輯")
         btn_edit.clicked.connect(lambda checked, i=idx: self._toggle_expand(i))
         hl.addWidget(btn_edit)
 
-        btn_del = QPushButton("✕")
+        btn_del = QPushButton("刪")
         btn_del.setFixedWidth(24)
+        btn_del.setFixedHeight(22)
+        btn_del.setStyleSheet("QPushButton { border: none; padding: 2px; }")
         btn_del.setToolTip("刪除")
         btn_del.clicked.connect(lambda checked, i=idx: self._delete_step(i))
         hl.addWidget(btn_del)
@@ -456,7 +465,6 @@ class _DetectStepForm(QWidget):
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         self._text = QLineEdit(p.get("text", ""))
         form.addRow("目標文字:", self._text)
@@ -539,7 +547,6 @@ class _ClickStepForm(QWidget):
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         self._target = _NoWheelCombo()
         self._target.addItem("文字中心", "text_center")
@@ -610,7 +617,6 @@ class _KeyStepForm(QWidget):
         self._step = step
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         self._key = _make_key_combo()
         k = step.params.get("key", "")
@@ -630,7 +636,6 @@ class _WaitStepForm(QWidget):
         self._step = step
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         self._ms = _NoWheelSpin()
         self._ms.setRange(0, 60000)
@@ -649,7 +654,6 @@ class _WaitRuleStepForm(QWidget):
         self._step = step
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         self._rule_id = QLineEdit(step.params.get("rule_id", ""))
         form.addRow("規則 ID:", self._rule_id)
@@ -665,7 +669,6 @@ class _JumpStepForm(QWidget):
         self._step = step
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         self._rule_id = QLineEdit(step.params.get("rule_id", ""))
         form.addRow("跳轉規則 ID:", self._rule_id)
@@ -686,7 +689,6 @@ class _CollectRoundsStepForm(QWidget):
         self._rounds: list[dict] = p.get("rounds", [])
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
-        self.setStyleSheet("background:#eef; border:1px solid #ccd; border-radius:4px;")
 
         # Rounds section
         layout.addWidget(QLabel("<b>輪次列表</b>"))
@@ -831,7 +833,6 @@ class _CollectRoundsStepForm(QWidget):
 
     def _build_metric_widget(self, m: dict, ri: int, mi: int) -> QWidget:
         w = QWidget()
-        w.setStyleSheet("background:#dde; border-radius:3px;")
         form = QFormLayout(w)
         form.setContentsMargins(6, 4, 6, 4)
 
@@ -1389,8 +1390,10 @@ class MainWindow(QMainWindow):
         # Save + Test
         self._edit_save_btn = QPushButton("儲存規則")
         self._edit_save_btn.setEnabled(False)
+        self._edit_save_btn.setVisible(False)
         self._edit_test_btn = QPushButton("▶ 測試")
         self._edit_test_btn.setEnabled(False)
+        self._edit_test_btn.setVisible(False)
         btn_row = QWidget()
         btn_layout = QHBoxLayout(btn_row)
         btn_layout.setContentsMargins(0, 0, 0, 0)
@@ -1841,8 +1844,12 @@ class MainWindow(QMainWindow):
     def _show_rule_detail(self, rule: Optional[Rule]):
         if rule is None:
             self._edit_stack.setCurrentIndex(0)
+            self._edit_save_btn.setVisible(False)
+            self._edit_test_btn.setVisible(False)
             return
         self._edit_stack.setCurrentIndex(1)
+        self._edit_save_btn.setVisible(True)
+        self._edit_test_btn.setVisible(True)
         self._edit_save_btn.setEnabled(True)
         self._edit_test_btn.setEnabled(True)
         self._edit_name.setEnabled(True)
