@@ -280,10 +280,16 @@ class _StepListWidget(QWidget):
         self._steps = list(steps)
         self._rebuild()
 
+    def _save_expanded(self):
+        if self._expanded_form and hasattr(self._expanded_form, "save"):
+            self._expanded_form.save()
+
     def get_steps(self) -> list:
+        self._save_expanded()
         return list(self._steps)
 
     def _rebuild(self):
+        self._save_expanded()
         self._expanded_idx = None
         self._expanded_form = None
         while self._layout.count():
@@ -373,6 +379,7 @@ class _StepListWidget(QWidget):
 
     def _collapse(self):
         if self._expanded_form:
+            self._save_expanded()
             self._layout.removeWidget(self._expanded_form)
             self._expanded_form.deleteLater()
             self._expanded_form = None
@@ -529,6 +536,7 @@ class _DetectStepForm(QWidget):
                     if z
                     else f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
                 )
+                self.save()
                 self._list.steps_changed.emit()
 
     def save(self):
@@ -604,6 +612,7 @@ class _ClickStepForm(QWidget):
                 self._step.params["target"] = "custom"
                 self._coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
                 self._target.setCurrentIndex(self._target.findData("custom"))
+                self.save()
                 self._list.steps_changed.emit()
 
     def save(self):
@@ -1909,10 +1918,6 @@ class MainWindow(QMainWindow):
         self._save_current_rule()
 
     def _on_steps_changed(self):
-        rule = self._get_current_rule()
-        if rule is None:
-            return
-        rule.steps = self._step_list.get_steps()
         self._save_current_rule()
 
     def _delete_rule(self):
@@ -1949,7 +1954,10 @@ class MainWindow(QMainWindow):
         rule.enabled = self._edit_enabled.isChecked()
         rule.steps = self._step_list.get_steps()
         save_task(self._current_task, self._rules)
-        self._refresh_rule_list()
+        item = self._rule_list.currentItem()
+        if item:
+            c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
+            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}")
         if self._loop:
             self._loop.reload_rules()
 
