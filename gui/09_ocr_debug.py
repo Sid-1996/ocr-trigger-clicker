@@ -219,36 +219,16 @@ class OcrDebugPanel(QWidget):
 
     def _minimize_and_capture(self):
         try:
-            parent = self.parent() if self.parent() else None
-
-            self.showMinimized()
-            if parent:
-                parent.showMinimized()
-            QApplication.processEvents()
-            time.sleep(0.08)
-
-            activate_window(self._window_title)
-            time.sleep(0.12)
-
             img = capture_window_full(self._window_title)
             source = "GDI 截圖"
-
             if img is None:
                 img = capture(self._window_title)
                 if img is not None:
                     img = img[:, :, ::-1].copy()
                 source = "螢幕截圖"
-
             return img, source
         except Exception:
             return None, ""
-        finally:
-            parent = self.parent() if self.parent() else None
-            if parent and parent.isMinimized():
-                parent.showNormal()
-                parent.activateWindow()
-            if self.isMinimized():
-                self.showNormal()
 
     def _take_snapshot(self):
         self._request_id += 1
