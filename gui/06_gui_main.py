@@ -700,6 +700,7 @@ class _CollectRoundsStepForm(QWidget):
         self._pick_cb = pick_cb
         p = step.params
         self._rounds: list[dict] = p.get("rounds", [])
+        self._round_widgets: list[dict] = []
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
 
@@ -780,6 +781,7 @@ class _CollectRoundsStepForm(QWidget):
             w = self._rounds_layout.itemAt(i).widget()
             if w:
                 w.deleteLater()
+        self._round_widgets.clear()
         for ri, rd in enumerate(self._rounds):
             frame = QFrame()
             frame.setFrameShape(QFrame.Shape.StyledPanel)
@@ -803,7 +805,6 @@ class _CollectRoundsStepForm(QWidget):
             tai = ta_type.findData(ta.get("type", "key"))
             if tai >= 0:
                 ta_type.setCurrentIndex(tai)
-            ta_type.currentIndexChanged.connect(lambda idx, i=ri: self._on_ta_type(i, idx))
             rl.addWidget(QLabel("觸發動作:"))
             rl.addWidget(ta_type)
 
@@ -832,19 +833,28 @@ class _CollectRoundsStepForm(QWidget):
                 ra_key.setCurrentIndex(rki)
             rl.addWidget(ra_key)
 
+            round_w = {
+                "ta_type": ta_type,
+                "ta_key": ta_key,
+                "ra_type": ra_type,
+                "ra_key": ra_key,
+                "metrics": [],
+            }
+
             # Metrics
             rl.addWidget(QLabel("指標:"))
             for mi, m in enumerate(rd.get("metrics", [])):
-                mw = self._build_metric_widget(m, ri, mi)
+                mw = self._build_metric_widget(m, ri, mi, round_w)
                 rl.addWidget(mw)
 
             add_m_btn = QPushButton("+ 新增指標")
             add_m_btn.clicked.connect(lambda checked, i=ri: self._add_metric(i))
             rl.addWidget(add_m_btn)
 
+            self._round_widgets.append(round_w)
             self._rounds_layout.addWidget(frame)
 
-    def _build_metric_widget(self, m: dict, ri: int, mi: int) -> QWidget:
+    def _build_metric_widget(self, m: dict, ri: int, mi: int, round_store: dict) -> QWidget:
         w = QWidget()
         form = QFormLayout(w)
         form.setContentsMargins(6, 4, 6, 4)
@@ -891,6 +901,15 @@ class _CollectRoundsStepForm(QWidget):
         timeout.setSuffix(" ms")
         timeout.setValue(m.get("timeout_ms", 3000))
         form.addRow("超時:", timeout)
+
+        round_store["metrics"].append(
+            {
+                "direction": direction,
+                "threshold": threshold,
+                "pick": pick,
+                "timeout": timeout,
+            }
+        )
 
         del_m = QPushButton("✕ 刪除指標")
         del_m.clicked.connect(lambda: self._del_metric(ri, mi))
@@ -965,9 +984,34 @@ class _CollectRoundsStepForm(QWidget):
                 self._ca_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
 
     def save(self):
-        # Rounds: read all combo values from widgets
-        # ponytail: store rounds on every change already via callbacks
-        self._step.params["rounds"] = self._rounds
+        rounds = []
+        for ri, rw in enumerate(self._round_widgets):
+            ta_key_str = rw["ta_key"].currentData() or rw["ta_key"].currentText()
+            ra_key_str = rw["ra_key"].currentData() or rw["ra_key"].currentText()
+            metrics = []
+            for mi, mw in enumerate(rw["metrics"]):
+                roi = (
+                    self._rounds[ri]["metrics"][mi]["roi"]
+                    if ri < len(self._rounds) and mi < len(self._rounds[ri].get("metrics", []))
+                    else {"x": 0, "y": 0, "w": 0, "h": 0}
+                )
+                metrics.append(
+                    {
+                        "roi": roi,
+                        "direction": mw["direction"].currentData(),
+                        "threshold": mw["threshold"].value(),
+                        "pick": mw["pick"].currentData(),
+                        "timeout_ms": mw["timeout"].value(),
+                    }
+                )
+            rounds.append(
+                {
+                    "trigger_action": {"type": rw["ta_type"].currentData(), "key": ta_key_str},
+                    "result_action": {"type": rw["ra_type"].currentData(), "key": ra_key_str},
+                    "metrics": metrics,
+                }
+            )
+        self._step.params["rounds"] = rounds
         self._step.params["primary_metric_index"] = self._primary_idx.value()
         ca_type = self._ca_type.currentData()
         if ca_type == "key":
