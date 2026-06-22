@@ -716,12 +716,17 @@ class _CollectRoundsStepForm(QWidget):
         add_round_btn.clicked.connect(self._add_round)
         layout.addWidget(add_round_btn)
 
-        # Primary metric index
+        # Primary metric index (only shown when any round has ≥2 metrics)
+        self._primary_idx_row = QWidget()
+        _pil = QVBoxLayout(self._primary_idx_row)
+        _pil.setContentsMargins(0, 0, 0, 0)
         self._primary_idx = _NoWheelSpin()
         self._primary_idx.setRange(0, 99)
         self._primary_idx.setValue(p.get("primary_metric_index", 0))
-        layout.addWidget(QLabel("主要指標索引:"))
-        layout.addWidget(self._primary_idx)
+        _pil.addWidget(QLabel("最佳輪選取依據（第幾個指標，0=第一個）:"))
+        _pil.addWidget(self._primary_idx)
+        layout.addWidget(self._primary_idx_row)
+        self._primary_idx_row.setVisible(self._max_metrics() >= 2)
 
         # Confirm action
         layout.addWidget(QLabel("<b>確認動作</b>"))
@@ -775,6 +780,9 @@ class _CollectRoundsStepForm(QWidget):
             self._oaf_key.setCurrentIndex(ok_idx)
         self._oaf_key.setVisible(oaf.get("type", "") == "key")
         layout.addWidget(self._oaf_key)
+
+    def _max_metrics(self) -> int:
+        return max((len(rd.get("metrics", [])) for rd in self._rounds), default=0)
 
     def _rebuild_rounds(self):
         # Sync widget values to self._rounds before destroying them
@@ -871,6 +879,7 @@ class _CollectRoundsStepForm(QWidget):
 
             self._round_widgets.append(round_w)
             self._rounds_layout.addWidget(frame)
+        self._primary_idx_row.setVisible(self._max_metrics() >= 2)
 
     def _build_metric_widget(self, m: dict, ri: int, mi: int, round_store: dict) -> QWidget:
         w = QWidget()
@@ -974,12 +983,14 @@ class _CollectRoundsStepForm(QWidget):
             )
             self._rebuild_rounds()
             self._list.steps_changed.emit()
+            self._primary_idx_row.setVisible(self._max_metrics() >= 2)
 
     def _del_metric(self, ri: int, mi: int):
         if ri < len(self._rounds) and mi < len(self._rounds[ri].get("metrics", [])):
             self._rounds[ri]["metrics"].pop(mi)
             self._rebuild_rounds()
             self._list.steps_changed.emit()
+            self._primary_idx_row.setVisible(self._max_metrics() >= 2)
 
     def _on_ta_type(self, ri: int, idx: int):
         pass  # stored on save
