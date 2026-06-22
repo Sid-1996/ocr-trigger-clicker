@@ -1828,7 +1828,23 @@ class MainWindow(QMainWindow):
         return None
 
     def _on_rule_selected(self, current: QTreeWidgetItem, previous: QTreeWidgetItem):
-        self._save_current_rule()
+        if previous:
+            prev_id = previous.data(0, Qt.ItemDataRole.UserRole)
+            if prev_id:
+                prev_rule = next((r for r in self._rules if r.id == prev_id), None)
+                if prev_rule:
+                    prev_rule.name = self._edit_name.text()
+                    prev_rule.enabled = self._edit_enabled.isChecked()
+                    prev_rule.steps = self._step_list.get_steps()
+                    save_task(self._current_task, self._rules)
+                    c_suffix = (
+                        " [C]" if any(s.type == "collect_rounds" for s in prev_rule.steps) else ""
+                    )
+                    previous.setText(
+                        0, f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}{c_suffix}"
+                    )
+                    if self._loop:
+                        self._loop.reload_rules()
         if current:
             rule_id = current.data(0, Qt.ItemDataRole.UserRole)
             rule = next((r for r in self._rules if r.id == rule_id), None)
