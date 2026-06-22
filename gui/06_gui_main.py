@@ -270,12 +270,16 @@ class _StepListWidget(QWidget):
         self._expanded_form: Optional[QWidget] = None
         self._roi_callback: Optional[callable] = None
         self._click_pick_callback: Optional[callable] = None
+        self._rules_provider: Optional[callable] = None  # () -> list[Rule]
 
     def set_roi_callback(self, cb):
         self._roi_callback = cb
 
     def set_click_pick_callback(self, cb):
         self._click_pick_callback = cb
+
+    def set_rules_provider(self, cb):
+        self._rules_provider = cb
 
     def set_steps(self, steps: list):
         self._steps = list(steps)
@@ -453,13 +457,13 @@ class _StepListWidget(QWidget):
         if t == "wait":
             return _WaitStepForm(self, step, idx)
         if t == "wait_rule":
-            return _WaitRuleStepForm(self, step, idx)
+            return _WaitRuleStepForm(self, step, idx, self._rules_provider)
         if t == "collect_rounds":
             return _CollectRoundsStepForm(
                 self, step, idx, self._roi_callback, self._click_pick_callback
             )
         if t == "jump":
-            return _JumpStepForm(self, step, idx)
+            return _JumpStepForm(self, step, idx, self._rules_provider)
         return None
 
 
@@ -661,33 +665,53 @@ class _WaitStepForm(QWidget):
 
 
 class _WaitRuleStepForm(QWidget):
-    def __init__(self, parent_list, step, idx):
+    def __init__(self, parent_list, step, idx, rules_provider=None):
         super().__init__()
         self._list = parent_list
         self._step = step
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
-        self._rule_id = QLineEdit(step.params.get("rule_id", ""))
-        form.addRow("規則 ID:", self._rule_id)
+        self._combo = _NoWheelCombo()
+        rules = rules_provider() if rules_provider else []
+        current_id = step.params.get("rule_id", "")
+        for r in rules:
+            self._combo.addItem(r.name, r.id)
+        idx_r = self._combo.findData(current_id)
+        if idx_r >= 0:
+            self._combo.setCurrentIndex(idx_r)
+        elif current_id:
+            self._combo.addItem(f"(未知: {current_id})", current_id)
+            self._combo.setCurrentIndex(self._combo.count() - 1)
+        form.addRow("等待規則:", self._combo)
 
     def save(self):
-        self._step.params["rule_id"] = self._rule_id.text().strip()
+        self._step.params["rule_id"] = self._combo.currentData() or ""
 
 
 class _JumpStepForm(QWidget):
-    def __init__(self, parent_list, step, idx):
+    def __init__(self, parent_list, step, idx, rules_provider=None):
         super().__init__()
         self._list = parent_list
         self._step = step
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
-        self._rule_id = QLineEdit(step.params.get("rule_id", ""))
-        form.addRow("跳轉規則 ID:", self._rule_id)
+        self._combo = _NoWheelCombo()
+        rules = rules_provider() if rules_provider else []
+        current_id = step.params.get("rule_id", "")
+        for r in rules:
+            self._combo.addItem(r.name, r.id)
+        idx_r = self._combo.findData(current_id)
+        if idx_r >= 0:
+            self._combo.setCurrentIndex(idx_r)
+        elif current_id:
+            self._combo.addItem(f"(未知: {current_id})", current_id)
+            self._combo.setCurrentIndex(self._combo.count() - 1)
+        form.addRow("跳轉至規則:", self._combo)
 
     def save(self):
-        self._step.params["rule_id"] = self._rule_id.text().strip()
+        self._step.params["rule_id"] = self._combo.currentData() or ""
 
 
 class _CollectRoundsStepForm(QWidget):
@@ -1453,6 +1477,7 @@ class MainWindow(QMainWindow):
         self._step_list = _StepListWidget()
         self._step_list.set_roi_callback(self._open_roi_selector)
         self._step_list.set_click_pick_callback(self._on_pick_coord)
+        self._step_list.set_rules_provider(lambda: list(self._rules))
         self._step_list.steps_changed.connect(self._on_steps_changed)
         edit_layout.addWidget(self._step_list, 1)
 
