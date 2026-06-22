@@ -1166,14 +1166,12 @@ class InitWorker(QThread):
         rules_path: str,
         window_title: str,
         signals: WorkerSignals,
-        focus_safe: bool = False,
         verbose: bool = True,
     ):
         super().__init__()
         self._rules_path = rules_path
         self._window_title = window_title
         self._signals = signals
-        self._focus_safe = focus_safe
         self._verbose = verbose
         self.loop: Optional[MainLoop] = None
 
@@ -1182,7 +1180,6 @@ class InitWorker(QThread):
             loop = MainLoop(
                 self._rules_path,
                 self._window_title,
-                focus_safe=self._focus_safe,
                 verbose=self._verbose,
             )
             loop.on_trigger = lambda log: self._signals.trigger_signal.emit(log)
@@ -1303,7 +1300,7 @@ class MainWindow(QMainWindow):
 
     def _restore_last_state(self):
         config = self._load_config()
-        self._focus_safe_cb.setChecked(bool(config.get("focus_safe", False)))
+
         last_win = config.get("last_window", "")
         if last_win:
             idx = self._window_combo.findText(last_win)
@@ -1384,11 +1381,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setToolTip("開始偵測所選視窗（按 F9 暫停／繼續）")
         self._debug_btn = QPushButton("🔍OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
-        self._focus_safe_cb = QCheckBox("僅前景點擊")
-        self._focus_safe_cb.setToolTip("啟用後僅在目標視窗為前景視窗時才執行點擊，避免干擾其他操作")
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
-        toolbar.addWidget(self._focus_safe_cb)
         toolbar.addStretch()
         self._about_btn = QPushButton("關於")
         self._about_btn.setToolTip(f"OCR Trigger Clicker v{__version__} — 作者: {__author__}")
@@ -1579,8 +1573,6 @@ class MainWindow(QMainWindow):
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
         self._debug_back_btn.clicked.connect(self._switch_to_rules)
-        self._focus_safe_cb.stateChanged.connect(self._on_focus_safe_changed)
-
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
         self._task_new_btn.clicked.connect(self._on_task_new)
         self._task_rename_btn.clicked.connect(self._on_task_rename)
@@ -1632,14 +1624,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel._window_title = title
             self._debug_panel.clear_results()
-
-    def _on_focus_safe_changed(self, state):
-        enabled = state == 2
-        config = self._load_config()
-        config["focus_safe"] = enabled
-        self._save_config(config)
-        if self._loop:
-            self._loop.set_focus_safe(enabled)
 
     def _update_perf_display(self):
         if self._loop is None:
@@ -2345,9 +2329,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
         self._status_bar.showMessage("正在初始化 OCR 引擎…")
-        focus_safe = self._focus_safe_cb.isChecked()
         task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
-        self._init_worker = InitWorker(str(task_path), title, self._signals, focus_safe)
+        self._init_worker = InitWorker(str(task_path), title, self._signals)
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
 
@@ -2394,7 +2377,7 @@ class MainWindow(QMainWindow):
         self._del_rule_btn.setEnabled(enabled)
         self._refresh_btn.setEnabled(enabled)
         self._debug_btn.setEnabled(enabled)
-        self._focus_safe_cb.setEnabled(enabled)
+
         self._task_new_btn.setEnabled(enabled)
         self._task_del_btn.setEnabled(enabled)
         self._task_import_btn.setEnabled(enabled)

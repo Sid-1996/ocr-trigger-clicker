@@ -35,6 +35,7 @@ get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda h
 capture = _screenshot.capture
 capture_window_full = getattr(_screenshot, "capture_window_full", lambda title: None)
 activate_window = _screenshot.activate_window
+is_window_foreground = _perf.is_window_foreground
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
 find_text = _ocr.find_text
@@ -110,13 +111,11 @@ class MainLoop:
         rules_path: str,
         window_title: str,
         interval_ms: int = 500,
-        focus_safe: bool = False,
         verbose: bool = True,
     ):
         self._rules_path = rules_path
         self._window_title = window_title
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
-        self._focus_safe = focus_safe
         self._verbose = verbose
         self._window_hwnd = get_window_hwnd_orig(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
@@ -630,8 +629,12 @@ class MainLoop:
                     self._perf.record_frame()
                     continue
 
+                if not is_window_foreground(self._window_hwnd):
+                    self._stop_event.wait(0.2)
+                    self._perf.record_frame()
+                    continue
+
                 t0 = time.monotonic()
-                activate_window(title)
                 img = capture(self._window_title)
                 if img is None:
                     img = capture_window_full(self._window_title)
@@ -748,13 +751,6 @@ class MainLoop:
             self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
             self._tracking_hwnd = self._window_hwnd
             return True
-
-    def set_focus_safe(self, enabled: bool):
-        self._focus_safe = enabled
-
-    @property
-    def focus_safe(self) -> bool:
-        return self._focus_safe
 
     @property
     def perf_monitor(self) -> PerformanceMonitor:
@@ -897,7 +893,6 @@ if __name__ == "__main__":
     ml._rules_dirty = False
     ml._save_period_counter = 0
     ml._tracking_hwnd = None
-    ml._focus_safe = False
     ml._verbose = False
     ml._log_file = open(
         Path(__file__).resolve().parent.parent / "logs" / "test.log", "a", encoding="utf-8"
