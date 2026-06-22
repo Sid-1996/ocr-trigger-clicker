@@ -777,6 +777,24 @@ class _CollectRoundsStepForm(QWidget):
         layout.addWidget(self._oaf_key)
 
     def _rebuild_rounds(self):
+        # Sync widget values to self._rounds before destroying them
+        for ri, rw in enumerate(self._round_widgets):
+            if ri < len(self._rounds):
+                rd = self._rounds[ri]
+                rd.setdefault("trigger_action", {})["type"] = rw["ta_type"].currentData()
+                rd.setdefault("trigger_action", {})["key"] = (
+                    rw["ta_key"].currentData() or rw["ta_key"].currentText()
+                )
+                rd.setdefault("result_action", {})["type"] = rw["ra_type"].currentData()
+                rd.setdefault("result_action", {})["key"] = (
+                    rw["ra_key"].currentData() or rw["ra_key"].currentText()
+                )
+                for mi, mw in enumerate(rw["metrics"]):
+                    if mi < len(rd.get("metrics", [])):
+                        rd["metrics"][mi]["direction"] = mw["direction"].currentData()
+                        rd["metrics"][mi]["threshold"] = mw["threshold"].value()
+                        rd["metrics"][mi]["pick"] = mw["pick"].currentData()
+                        rd["metrics"][mi]["timeout_ms"] = mw["timeout"].value()
         for i in reversed(range(self._rounds_layout.count())):
             w = self._rounds_layout.itemAt(i).widget()
             if w:
