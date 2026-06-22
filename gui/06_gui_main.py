@@ -2254,7 +2254,7 @@ class MainWindow(QMainWindow):
                         "fuzzy": rule_data.get("fuzzy", False),
                         "fuzzy_threshold": 0.8,
                         "cooldown_ms": int(rule_data.get("cooldown", 1.0) * 1000),
-                        "trigger_mode": "once",
+                        "trigger_mode": rule_data.get("trigger_mode", "once"),
                         "max_triggers": -1,
                     },
                 ),
@@ -2279,7 +2279,10 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._show_rule_detail(rule)
-        self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
+        self._status_bar.showMessage(
+            f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」"
+            f"  觸發模式: {rule_data.get('trigger_mode', 'once')}"
+        )
 
     def _on_debug_step_requested(self, data: dict):
         rule = self._get_current_rule()

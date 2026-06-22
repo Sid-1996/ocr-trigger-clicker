@@ -7,6 +7,9 @@ from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -413,6 +416,10 @@ class OcrDebugPanel(QWidget):
             return
         r = self._ocr_results[self._selected_index]
 
+        dlg = _TriggerModeDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
         pad = 20
         img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (9999, 9999)
         roi = {
@@ -429,6 +436,7 @@ class OcrDebugPanel(QWidget):
                 "fuzzy": True,
                 "cooldown": 1.0,
                 "click_position": "text_center",
+                "trigger_mode": dlg.selected_mode(),
             }
         )
 
@@ -662,3 +670,25 @@ class OcrDebugPanel(QWidget):
                 QTimer.singleShot(0, self._update_display)
 
         return super().eventFilter(obj, event)
+
+
+class _TriggerModeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("選擇觸發模式")
+        self.setModal(True)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("請選擇新規則的觸發模式:"))
+        self._combo = QComboBox()
+        self._combo.addItem("觸發一次", "once")
+        self._combo.addItem("重複觸發", "repeat")
+        layout.addWidget(self._combo)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def selected_mode(self) -> str:
+        return self._combo.currentData()
