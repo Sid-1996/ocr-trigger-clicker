@@ -1044,6 +1044,7 @@ class WorkerSignals(QObject):
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
     compare_round_signal = pyqtSignal(dict)
+    test_done_signal = pyqtSignal(dict)
 
 
 class InitWorker(QThread):
@@ -1479,6 +1480,7 @@ class MainWindow(QMainWindow):
         self._step_list.steps_changed.connect(self._on_steps_changed)
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
+        self._signals.test_done_signal.connect(self._show_test_result)
 
     def _setup_shortcuts(self):
         QShortcut(
@@ -2018,7 +2020,7 @@ class MainWindow(QMainWindow):
             result = self._test_first_detect_step(rule, title)
         except Exception as e:
             result = {"error": f"測試異常：{e}"}
-        QTimer.singleShot(0, lambda: self._show_test_result(result))
+        self._signals.test_done_signal.emit(result)
 
     def _test_first_detect_step(self, rule: Rule, title: str) -> dict:
         detect = next((s for s in rule.steps if s.type == "detect"), None)
