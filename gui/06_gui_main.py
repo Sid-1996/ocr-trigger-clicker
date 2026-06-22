@@ -1526,7 +1526,6 @@ class MainWindow(QMainWindow):
         self._status_timer.timeout.connect(self._update_rule_status)
         self.setStatusBar(self._status_bar)
         QTimer.singleShot(3000, self._check_version)
-        self._test_was_maximized = False
 
     def _connect_signals(self):
         self._refresh_btn.clicked.connect(self._refresh_window_list)
@@ -1536,7 +1535,7 @@ class MainWindow(QMainWindow):
         self._del_rule_btn.clicked.connect(self._delete_rule)
         self._rule_list.currentItemChanged.connect(self._on_rule_selected)
         self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
-        self._edit_name.editingFinished.connect(self._save_current_rule)
+        self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
@@ -1554,6 +1553,7 @@ class MainWindow(QMainWindow):
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
         self._signals.test_done_signal.connect(self._show_test_result)
+        self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
 
     def _setup_shortcuts(self):
         QShortcut(
@@ -1823,8 +1823,6 @@ class MainWindow(QMainWindow):
             self._show_rule_detail(None)
 
     def _update_rule_status(self):
-        if getattr(self, "_updating_status", False):
-            return
         if not self._loop or not self._loop.is_running:
             self._refresh_rule_list()
             return
@@ -1878,12 +1876,11 @@ class MainWindow(QMainWindow):
             for j in range(item.childCount()):
                 _walk(item.child(j))
 
-        self._updating_status = True
         try:
             for i in range(self._rule_list.topLevelItemCount()):
                 _walk(self._rule_list.topLevelItem(i))
         finally:
-            self._updating_status = False
+            pass
 
     def _get_current_rule(self) -> Optional[Rule]:
         for r in self._rules:
@@ -1979,15 +1976,20 @@ class MainWindow(QMainWindow):
             id=f"rule_{uuid.uuid4().hex[:8]}",
             name="新規則",
             enabled=True,
-            steps=[Step(type="detect", params={
-                "text": "",
-                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                "fuzzy": False,
-                "fuzzy_threshold": 0.8,
-                "cooldown_ms": 2000,
-                "trigger_mode": "once",
-                "max_triggers": -1,
-            })],
+            steps=[
+                Step(
+                    type="detect",
+                    params={
+                        "text": "",
+                        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+                        "fuzzy": False,
+                        "fuzzy_threshold": 0.8,
+                        "cooldown_ms": 2000,
+                        "trigger_mode": "once",
+                        "max_triggers": -1,
+                    },
+                )
+            ],
         )
         self._rules.append(rule)
         save_task(self._current_task, self._rules)
@@ -2030,6 +2032,16 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
+
+    def _on_name_changed(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.name = self._edit_name.text()
+        item = self._rule_list.currentItem()
+        if item:
+            c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
+            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}")
 
     def _save_current_rule(self):
         if self._loop and self._loop.is_running:
