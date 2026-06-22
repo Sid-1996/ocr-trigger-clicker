@@ -2027,6 +2027,7 @@ class MainWindow(QMainWindow):
 
     # === Test rule ===
     def _on_test_rule(self):
+        self._save_current_rule()
         rule = self._get_current_rule()
         if not rule:
             QMessageBox.warning(self, "測試", "請先選取一條規則")
