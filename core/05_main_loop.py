@@ -35,6 +35,7 @@ get_window_hwnd = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
+capture_window_full = getattr(_screenshot, "capture_window_full", lambda title: None)
 activate_window = _screenshot.activate_window
 get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 OcrResult = _ocr.OcrResult
@@ -68,9 +69,9 @@ def extract_number(text: str, pick: str) -> float | None:
 def poll_roi_value(roi: dict, pick: str, timeout_ms: int, title: str) -> float | None:
     deadline = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < deadline:
-        img = capture(title)
+        img = capture_window_full(title)
         if img is None:
-            img = capture_window_content(title)
+            img = capture(title)
         if img is not None:
             roi_img = crop_roi(img, roi)
             if roi_img is not None:
@@ -642,21 +643,11 @@ class MainLoop:
                     continue
 
                 t0 = time.monotonic()
-                img = capture(self._window_title)
+                img = capture_window_full(self._window_title)
                 if img is None:
-                    img = capture_window_content(self._window_title)
-                    if img is not None:
-                        if self._verbose:
-                            self._log("使用 PrintWindow 後備截圖成功")
-                        h, w = img.shape[:2]
-                        if w < rect["w"] or h < rect["h"]:
-                            co = _screenshot.get_window_client_offset(title)
-                            if co and co[0] + w <= rect["w"] and co[1] + h <= rect["h"]:
-                                full = np.zeros((rect["h"], rect["w"], 3), dtype=np.uint8)
-                                full[co[1] : co[1] + h, co[0] : co[0] + w] = img
-                                img = full
-                                if self._verbose:
-                                    self._log(f"填補視窗邊框至 {rect['w']}x{rect['h']}")
+                    img = capture(self._window_title)
+                    if img is not None and self._verbose:
+                        self._log("使用螢幕截圖後備成功")
                 t1 = time.monotonic()
                 if img is None:
                     if self._verbose and iteration % 30 == 0:
