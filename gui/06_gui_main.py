@@ -1109,7 +1109,6 @@ class MainWindow(QMainWindow):
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
-            self._debug_panel.sub_target_requested.connect(self._on_debug_sub_target_requested)
             self._debug_page_layout.addWidget(self._debug_panel, 1)
             self._connect_signals()
             self._setup_shortcuts()
