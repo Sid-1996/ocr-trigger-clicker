@@ -224,9 +224,11 @@ class OcrDebugPanel(QWidget):
             if parent:
                 parent.showMinimized()
             QApplication.processEvents()
+            time.sleep(0.08)
 
             activate_window(self._window_title)
             QApplication.processEvents()
+            time.sleep(0.12)
 
             img = capture(self._window_title)
             source = "螢幕截圖"

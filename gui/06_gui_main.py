@@ -2162,7 +2162,9 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
         self.showMinimized()
         QApplication.processEvents()
+        time.sleep(0.08)
         activate_window(title)
+        time.sleep(0.12)
         img = capture(title)
         if img is None:
             img = capture_window_full(title)
