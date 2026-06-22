@@ -1,3 +1,7 @@
+> ⚠️ DEPRECATED：本文件描述的比較規則已被步驟系統（Step System）取代。
+> 請參閱 docs/step-system-refactor.md。
+> 保留僅供歷史參考。
+
 # 比較規則（Compare Rule）實作規格
 
 ## 背景與命名
