@@ -1401,17 +1401,17 @@ class MainWindow(QMainWindow):
         add_dropdown.setMenu(add_menu)
         edit_layout.addWidget(add_dropdown)
 
-        # Save + Test
-        self._edit_save_btn = QPushButton("儲存規則")
-        self._edit_save_btn.setEnabled(False)
-        self._edit_save_btn.setVisible(False)
+        # Save indicator + Test
+        self._saved_label = QLabel("✓ 已儲存")
+        self._saved_label.setStyleSheet("color: #4caf50; font-weight: bold;")
+        self._saved_label.setVisible(False)
         self._edit_test_btn = QPushButton("▶ 測試")
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setVisible(False)
         btn_row = QWidget()
         btn_layout = QHBoxLayout(btn_row)
         btn_layout.setContentsMargins(0, 0, 0, 0)
-        btn_layout.addWidget(self._edit_save_btn)
+        btn_layout.addWidget(self._saved_label)
         btn_layout.addWidget(self._edit_test_btn)
         btn_layout.addStretch()
         edit_layout.addWidget(btn_row)
@@ -1472,7 +1472,7 @@ class MainWindow(QMainWindow):
         self._del_rule_btn.clicked.connect(self._delete_rule)
         self._rule_list.currentItemChanged.connect(self._on_rule_selected)
         self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
-        self._edit_save_btn.clicked.connect(self._save_current_rule)
+        self._edit_name.editingFinished.connect(self._save_current_rule)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
@@ -1828,6 +1828,7 @@ class MainWindow(QMainWindow):
         return None
 
     def _on_rule_selected(self, current: QTreeWidgetItem, previous: QTreeWidgetItem):
+        self._save_current_rule()
         if current:
             rule_id = current.data(0, Qt.ItemDataRole.UserRole)
             rule = next((r for r in self._rules if r.id == rule_id), None)
@@ -1859,14 +1860,13 @@ class MainWindow(QMainWindow):
     def _show_rule_detail(self, rule: Optional[Rule]):
         if rule is None:
             self._edit_stack.setCurrentIndex(0)
-            self._edit_save_btn.setVisible(False)
+            self._saved_label.setVisible(False)
             self._edit_test_btn.setVisible(False)
             self._debug_panel.set_has_active_rule(False)
             return
         self._edit_stack.setCurrentIndex(1)
-        self._edit_save_btn.setVisible(True)
+        self._saved_label.setVisible(True)
         self._edit_test_btn.setVisible(True)
-        self._edit_save_btn.setEnabled(True)
         self._edit_test_btn.setEnabled(True)
         self._debug_panel.set_has_active_rule(True)
         self._edit_name.setEnabled(True)
@@ -2247,7 +2247,6 @@ class MainWindow(QMainWindow):
         self._task_del_btn.setEnabled(enabled)
         self._task_import_btn.setEnabled(enabled)
         self._task_export_btn.setEnabled(enabled)
-        self._edit_save_btn.setEnabled(enabled)
         self._edit_test_btn.setEnabled(enabled)
         self._edit_name.setEnabled(enabled)
         self._edit_enabled.setEnabled(enabled)
