@@ -143,28 +143,20 @@ def get_dpi_scaling_factor(hwnd: int | None) -> float:
     return 1.0
 
 
-def _gdi_capture(hwnd: int, render_fn, full_window: bool = False) -> np.ndarray | None:
+def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
     """Generic GDI capture: set up DC+bitmap, call render_fn(mem_dc, hwnd, w, h), read pixels."""
     hwnd_dc = None
     mem_dc = None
     hbitmap = None
     try:
-        if full_window:
-            window_rect = wintypes.RECT()
-            ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(window_rect))
-            w = window_rect.right - window_rect.left
-            h = window_rect.bottom - window_rect.top
-            dc_func = ctypes.windll.user32.GetWindowDC
-        else:
-            rect = wintypes.RECT()
-            ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect))
-            w = rect.right
-            h = rect.bottom
-            dc_func = ctypes.windll.user32.GetDC
+        rect = wintypes.RECT()
+        ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect))
+        w = rect.right
+        h = rect.bottom
         if w <= 0 or h <= 0:
             return None
 
-        hwnd_dc = dc_func(hwnd)
+        hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
         mem_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
         hbitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
         ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
@@ -228,24 +220,6 @@ def capture_window_content(title: str) -> np.ndarray | None:
         return img
 
     return _gdi_capture(hwnd, _bitblt_render)
-
-
-def capture_window_full(title: str) -> np.ndarray | None:
-    """Full-window GDI capture (PrintWindow) — works when window is occluded.
-    Falls back to mss screen capture if GDI fails."""
-    try:
-        matches = _matching_windows(title)
-        if not matches:
-            return None
-        hwnd = matches[0]._hWnd
-    except Exception:
-        return None
-
-    img = _gdi_capture(hwnd, _pw_render, full_window=True)
-    if img is not None:
-        return img
-
-    return capture(title)
 
 
 if __name__ == "__main__":
