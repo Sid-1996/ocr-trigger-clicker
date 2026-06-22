@@ -1979,7 +1979,15 @@ class MainWindow(QMainWindow):
             id=f"rule_{uuid.uuid4().hex[:8]}",
             name="新規則",
             enabled=True,
-            steps=[Step(type="detect", params={"target_text": "請輸入文字"})],
+            steps=[Step(type="detect", params={
+                "text": "",
+                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+                "fuzzy": False,
+                "fuzzy_threshold": 0.8,
+                "cooldown_ms": 2000,
+                "trigger_mode": "once",
+                "max_triggers": -1,
+            })],
         )
         self._rules.append(rule)
         save_task(self._current_task, self._rules)
