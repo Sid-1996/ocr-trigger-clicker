@@ -808,8 +808,8 @@ class _CollectRoundsStepForm(QWidget):
     def _max_metrics(self) -> int:
         return max((len(rd.get("metrics", [])) for rd in self._rounds), default=0)
 
-    def _rebuild_rounds(self):
-        # Sync widget values to self._rounds before destroying them
+    def _sync_widgets_to_rounds(self):
+        """將目前 widget 的值 flush 回 self._rounds（不觸碰不存在的 index）。"""
         for ri, rw in enumerate(self._round_widgets):
             if ri < len(self._rounds):
                 rd = self._rounds[ri]
@@ -827,6 +827,9 @@ class _CollectRoundsStepForm(QWidget):
                         rd["metrics"][mi]["threshold"] = mw["threshold"].value()
                         rd["metrics"][mi]["pick"] = mw["pick"].currentData()
                         rd["metrics"][mi]["timeout_ms"] = mw["timeout"].value()
+
+    def _rebuild_rounds(self):
+        self._sync_widgets_to_rounds()
         for i in reversed(range(self._rounds_layout.count())):
             w = self._rounds_layout.itemAt(i).widget()
             if w:
@@ -1011,6 +1014,7 @@ class _CollectRoundsStepForm(QWidget):
 
     def _del_metric(self, ri: int, mi: int):
         if ri < len(self._rounds) and mi < len(self._rounds[ri].get("metrics", [])):
+            self._sync_widgets_to_rounds()  # flush 當前值，避免 pop 後 index 錯位覆蓋
             self._rounds[ri]["metrics"].pop(mi)
             self._rebuild_rounds()
             self._list.steps_changed.emit()
