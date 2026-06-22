@@ -1850,16 +1850,14 @@ class MainWindow(QMainWindow):
             self._edit_stack.setCurrentIndex(0)
             self._edit_save_btn.setVisible(False)
             self._edit_test_btn.setVisible(False)
-            if hasattr(self, "_debug_panel") and self._debug_panel is not None:
-                self._debug_panel.set_has_active_rule(False)
+            self._debug_panel.set_has_active_rule(False)
             return
         self._edit_stack.setCurrentIndex(1)
         self._edit_save_btn.setVisible(True)
         self._edit_test_btn.setVisible(True)
-        if hasattr(self, "_debug_panel") and self._debug_panel is not None:
-            self._debug_panel.set_has_active_rule(True)
         self._edit_save_btn.setEnabled(True)
         self._edit_test_btn.setEnabled(True)
+        self._debug_panel.set_has_active_rule(True)
         self._edit_name.setEnabled(True)
         self._edit_enabled.setEnabled(True)
         self._edit_name.setText(rule.name)
@@ -2130,14 +2128,14 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         self._selected_rule_id = rule.id
         self._refresh_rule_list()
-        self._show_rule_detail(rule)
         if self._loop:
             self._loop.reload_rules()
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
+        self._show_rule_detail(rule)
         self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
 
-    def _on_debug_step_requested(self, step_data: dict):
+    def _on_debug_step_requested(self, data: dict):
         rule = self._get_current_rule()
         if rule is None:
             return
@@ -2145,8 +2143,8 @@ class MainWindow(QMainWindow):
             Step(
                 type="detect",
                 params={
-                    "text": str(step_data.get("target_text", "")).strip() or "請輸入文字",
-                    "roi": step_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
+                    "text": str(data.get("target_text", "")).strip() or "請輸入文字",
+                    "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "fuzzy": False,
                     "fuzzy_threshold": 0.8,
                     "cooldown_ms": 2000,
@@ -2156,11 +2154,8 @@ class MainWindow(QMainWindow):
             )
         )
         save_task(self._current_task, self._rules)
-        self._refresh_rule_list()
-        self._show_rule_detail(rule)
-        if self._loop:
-            self._loop.reload_rules()
-        self._status_bar.showMessage(f"已加入偵測步驟：「{step_data.get('target_text', '')}」")
+        self._step_list.set_steps(rule.steps)
+        self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     # === Start / Pause ===
     def _toggle_start(self):

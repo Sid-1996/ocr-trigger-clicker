@@ -167,7 +167,7 @@ class OcrDebugPanel(QWidget):
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
-        self._set_sub_target_btn = QPushButton("加入偵測步驟(&U)")
+        self._set_sub_target_btn = QPushButton("加入偵測步驟(&A)")
         self._set_sub_target_btn.setEnabled(False)
         self._set_sub_target_btn.setToolTip("將選取文字新增為目前規則的偵測步驟")
         self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
@@ -257,7 +257,7 @@ class OcrDebugPanel(QWidget):
         self._selected_index = -1
         self._add_rule_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
-        self._set_sub_target_btn.setEnabled(False)
+        self._update_step_btn_state()
 
         raw, src = self._minimize_and_capture()
         self._capture_source = src
@@ -347,12 +347,11 @@ class OcrDebugPanel(QWidget):
                 self._selected_index = rows[0].row()
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
-                self._set_sub_target_btn.setEnabled(self._has_active_rule)
             else:
                 self._selected_index = -1
                 self._add_rule_btn.setEnabled(False)
                 self._click_test_btn.setEnabled(False)
-                self._set_sub_target_btn.setEnabled(False)
+            self._update_step_btn_state()
             self._rebuild_annotated()
             self._update_display()
         except Exception as e:
@@ -391,13 +390,21 @@ class OcrDebugPanel(QWidget):
                 self._result_table.blockSignals(False)
                 self._add_rule_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
-                self._set_sub_target_btn.setEnabled(self._has_active_rule)
+                self._update_step_btn_state()
                 try:
                     self._rebuild_annotated()
                     self._update_display()
                 except Exception:
                     pass
                 return
+
+    def set_has_active_rule(self, active: bool):
+        self._has_active_rule = active
+        self._update_step_btn_state()
+
+    def _update_step_btn_state(self):
+        enabled = self._selected_index >= 0 and self._has_active_rule
+        self._set_sub_target_btn.setEnabled(enabled)
 
     def _on_add_rule(self):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
@@ -626,11 +633,6 @@ class OcrDebugPanel(QWidget):
         )
         self._image_label.setPixmap(scaled)
 
-    def set_has_active_rule(self, has_rule: bool):
-        self._has_active_rule = has_rule
-        if self._selected_index >= 0 and self._selected_index < len(self._ocr_results):
-            self._set_sub_target_btn.setEnabled(has_rule)
-
     def clear_results(self):
         self._ocr_results = []
         self._latest_raw = None
@@ -640,7 +642,7 @@ class OcrDebugPanel(QWidget):
         self._info_label.setText("")
         self._add_rule_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
-        self._set_sub_target_btn.setEnabled(False)
+        self._update_step_btn_state()
         self._image_label.setText("切換視窗 — 請重新拍一張")
         self._image_label.setPixmap(QPixmap())
         self._crop_label.setText("")
