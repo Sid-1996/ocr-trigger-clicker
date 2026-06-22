@@ -1676,6 +1676,10 @@ class MainWindow(QMainWindow):
         p.end()
         return QIcon(pix)
 
+    @staticmethod
+    def _get_wait_rule_ids(r) -> list[str]:
+        return [s.params.get("rule_id", "") for s in r.steps if s.type == "wait_rule"]
+
     def _refresh_rule_list(self):
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
@@ -1687,7 +1691,11 @@ class MainWindow(QMainWindow):
         assigned: set[str] = set()
         for r in self._rules:
             first_dep = next(
-                (dep_id for dep_id in r.depends_on if dep_id in existing_ids and dep_id != r.id),
+                (
+                    dep_id
+                    for dep_id in self._get_wait_rule_ids(r)
+                    if dep_id in existing_ids and dep_id != r.id
+                ),
                 None,
             )
             if first_dep:
