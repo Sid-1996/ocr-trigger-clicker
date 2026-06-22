@@ -36,6 +36,7 @@ get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda h
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 activate_window = _screenshot.activate_window
+get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
 find_text = _ocr.find_text
