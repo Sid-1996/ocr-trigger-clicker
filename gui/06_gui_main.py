@@ -286,15 +286,18 @@ class _StepListWidget(QWidget):
     def _rebuild(self):
         self._expanded_idx = None
         self._expanded_form = None
-        for r in self._rows:
-            self._layout.removeWidget(r)
-            r.deleteLater()
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
         self._rows.clear()
 
         for i, step in enumerate(self._steps):
             row = self._build_row(i, step)
             self._rows.append(row)
             self._layout.addWidget(row)
+        self._layout.addStretch()
 
     def _build_row(self, idx: int, step) -> QWidget:
         row = QFrame()
