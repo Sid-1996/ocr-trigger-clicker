@@ -138,6 +138,9 @@ def _step_summary(step) -> str:
         parts.append(roi_str)
         if cd:
             parts.append(f"冷卻{cd}ms")
+        tm = p.get("trigger_mode", "once")
+        if tm == "repeat":
+            parts.append("[重複]")
         return " ".join(parts)
     if t == "click":
         target = p.get("target", "text_center")
@@ -160,6 +163,10 @@ def _step_summary(step) -> str:
     if t == "jump":
         return f"跳轉規則「{p.get('rule_id', '')}」"
     return t
+
+
+def _has_repeat_step(rule) -> bool:
+    return any(s.type == "detect" and s.params.get("trigger_mode") == "repeat" for s in rule.steps)
 
 
 def _make_key_combo(parent=None):
@@ -1815,8 +1822,13 @@ class MainWindow(QMainWindow):
             for rid in top_ids if parent_id is None else child_map.get(parent_id, []):
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
-                suffix = " [C]" if any(s.type == "collect_rounds" for s in r.steps) else ""
-                text = f"[{'✓' if r.enabled else '✗'}] {r.name}{suffix}"
+                suffixes = []
+                if any(s.type == "collect_rounds" for s in r.steps):
+                    suffixes.append("🎯")
+                if _has_repeat_step(r):
+                    suffixes.append("🔁")
+                suffix_str = " " + " ".join(suffixes) if suffixes else ""
+                text = f"[{'✓' if r.enabled else '✗'}] {r.name}{suffix_str}"
                 item.setText(0, text)
                 item.setData(0, Qt.ItemDataRole.UserRole, r.id)
                 item.setIcon(
@@ -1885,10 +1897,14 @@ class MainWindow(QMainWindow):
                 suffix = ""
             enabled = st["enabled"]
             rule = next((r for r in self._rules if r.id == sid), None)
-            c_suffix = (
-                " [C]" if (rule and any(s.type == "collect_rounds" for s in rule.steps)) else ""
-            )
-            base = f"[{'✓' if enabled else '✗'}] {st['name']}{c_suffix}"
+            suffixes = []
+            if rule:
+                if any(s.type == "collect_rounds" for s in rule.steps):
+                    suffixes.append("🎯")
+                if _has_repeat_step(rule):
+                    suffixes.append("🔁")
+            suffix_str = " " + " ".join(suffixes) if suffixes else ""
+            base = f"[{'✓' if enabled else '✗'}] {st['name']}{suffix_str}"
             new_text = base + suffix
             if item.text(0) != new_text:
                 item.setText(0, new_text)
@@ -1921,11 +1937,14 @@ class MainWindow(QMainWindow):
                     prev_rule.enabled = self._edit_enabled.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
                     save_task(self._current_task, self._rules)
-                    c_suffix = (
-                        " [C]" if any(s.type == "collect_rounds" for s in prev_rule.steps) else ""
-                    )
+                    suffixes = []
+                    if any(s.type == "collect_rounds" for s in prev_rule.steps):
+                        suffixes.append("🎯")
+                    if _has_repeat_step(prev_rule):
+                        suffixes.append("🔁")
+                    suffix_str = " " + " ".join(suffixes) if suffixes else ""
                     previous.setText(
-                        0, f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}{c_suffix}"
+                        0, f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}{suffix_str}"
                     )
                     if self._loop:
                         self._loop.reload_rules()
