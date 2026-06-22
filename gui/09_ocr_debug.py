@@ -29,7 +29,7 @@ _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 
 activate_window = _screenshot.activate_window
 capture = _screenshot.capture
-capture_window_content = _screenshot.capture_window_content
+capture_window_full = getattr(_screenshot, "capture_window_full", lambda title: None)
 recognize = _ocr.recognize
 
 
@@ -219,16 +219,7 @@ class OcrDebugPanel(QWidget):
 
     def _minimize_and_capture(self):
         try:
-            parent = self.parent() if self.parent() else None
-
-            self.showMinimized()
-            if parent:
-                parent.showMinimized()
-            QApplication.processEvents()
-            time.sleep(0.08)
-
             activate_window(self._window_title)
-            time.sleep(0.12)
 
             img = capture(self._window_title)
             source = "螢幕截圖"
@@ -242,13 +233,6 @@ class OcrDebugPanel(QWidget):
             return img, source
         except Exception:
             return None, ""
-        finally:
-            parent = self.parent() if self.parent() else None
-            if parent and parent.isMinimized():
-                parent.showNormal()
-                parent.activateWindow()
-            if self.isMinimized():
-                self.showNormal()
 
     def _take_snapshot(self):
         self._request_id += 1

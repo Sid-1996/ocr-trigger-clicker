@@ -20,7 +20,6 @@ _ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
-is_window_foreground = _perf.is_window_foreground
 get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 
 _MIN_INTERVAL_SEC = 0.1
@@ -34,9 +33,8 @@ get_window_rect = _screenshot.get_window_rect
 get_window_hwnd = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
-capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
+capture_window_full = getattr(_screenshot, "capture_window_full", lambda title: None)
 activate_window = _screenshot.activate_window
-get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
 find_text = _ocr.find_text
@@ -70,7 +68,7 @@ def poll_roi_value(roi: dict, pick: str, timeout_ms: int, title: str) -> float |
     while time.monotonic() < deadline:
         img = capture(title)
         if img is None:
-            img = capture_window_content(title)
+            img = capture_window_full(title)
         if img is not None:
             roi_img = crop_roi(img, roi)
             if roi_img is not None:
@@ -294,19 +292,14 @@ class MainLoop:
                 self.on_warning(msg)
             return StepResult("stop")
 
-        if self._focus_safe:
-            with self._window_lock:
-                hwnd = self._tracking_hwnd
-            if hwnd is not None and not is_window_foreground(hwnd):
-                if self._verbose:
-                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
-                return StepResult("stop")
-
         if not self._perf.check_rate_limit():
             return StepResult("stop")
 
         button = params.get("button", "left")
         sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
+
+        activate_window(self._window_title)
+
         ok = self._send_click(sx, sy, button)
         if ok:
             self._perf.record_click()
@@ -342,16 +335,10 @@ class MainLoop:
                 self.on_warning(msg)
             return StepResult("stop")
 
-        if self._focus_safe:
-            with self._window_lock:
-                hwnd = self._tracking_hwnd
-            if hwnd is not None and not is_window_foreground(hwnd):
-                if self._verbose:
-                    self._log(f"規則「{rule.name}」命中但視窗不在前景，跳過")
-                return StepResult("stop")
-
         if not self._perf.check_rate_limit():
             return StepResult("stop")
+
+        activate_window(self._window_title)
 
         ok = self._send_key(key)
         if ok:
@@ -553,6 +540,7 @@ class MainLoop:
     def _execute_forced_trigger(self, rule: Rule, rect: dict) -> None:
         for step in rule.steps:
             if step.type == "click":
+                activate_window(self._window_title)
                 params = step.params
                 off = params.get("random_offset", 0)
                 dx = random.randint(-off, off) if off else 0
@@ -570,6 +558,7 @@ class MainLoop:
                     self._rules_dirty = True
                 return
             if step.type == "key":
+                activate_window(self._window_title)
                 key = step.params.get("key", "")
                 if key:
                     self._send_key(key)
@@ -642,21 +631,10 @@ class MainLoop:
                     continue
 
                 t0 = time.monotonic()
+                activate_window(title)
                 img = capture(self._window_title)
                 if img is None:
-                    img = capture_window_content(self._window_title)
-                    if img is not None:
-                        if self._verbose:
-                            self._log("使用 PrintWindow 後備截圖成功")
-                        h, w = img.shape[:2]
-                        if w < rect["w"] or h < rect["h"]:
-                            co = _screenshot.get_window_client_offset(title)
-                            if co and co[0] + w <= rect["w"] and co[1] + h <= rect["h"]:
-                                full = np.zeros((rect["h"], rect["w"], 3), dtype=np.uint8)
-                                full[co[1] : co[1] + h, co[0] : co[0] + w] = img
-                                img = full
-                                if self._verbose:
-                                    self._log(f"填補視窗邊框至 {rect['w']}x{rect['h']}")
+                    img = capture_window_full(self._window_title)
                 t1 = time.monotonic()
                 if img is None:
                     if self._verbose and iteration % 30 == 0:

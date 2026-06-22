@@ -1115,13 +1115,12 @@ load_rules = _main_loop_mod.load_rules
 save_rules = _main_loop_mod.save_rules
 activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
-get_window_client_offset = _main_loop_mod.get_window_client_offset
 capture = _main_loop_mod.capture
 recognize = _main_loop_mod.recognize
 find_text = _main_loop_mod.find_text
 poll_roi_value = _main_loop_mod.poll_roi_value
 crop_roi = _main_loop_mod.crop_roi
-capture_window_content = _main_loop_mod.capture_window_content
+capture_window_full = getattr(_main_loop_mod, "capture_window_full", lambda title: None)
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 Step = _rule_mod.Step
@@ -2161,26 +2160,10 @@ class MainWindow(QMainWindow):
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setText("測試中…")
         QApplication.processEvents()
-        self.showMinimized()
-        QApplication.processEvents()
-        time.sleep(0.08)
         activate_window(title)
-        time.sleep(0.12)
         img = capture(title)
         if img is None:
-            img = capture_window_content(title)
-            if img is not None:
-                rect = get_window_rect(title)
-                if rect:
-                    h, w = img.shape[:2]
-                    if w < rect["w"] or h < rect["h"]:
-                        co = get_window_client_offset(title)
-                        if co and co[0] + w <= rect["w"] and co[1] + h <= rect["h"]:
-                            full = np.zeros((rect["h"], rect["w"], 3), dtype=np.uint8)
-                            full[co[1] : co[1] + h, co[0] : co[0] + w] = img
-                            img = full
-        self.showNormal()
-        self.activateWindow()
+            img = capture_window_full(title)
         self._edit_stack.setCurrentIndex(1)
         if img is None:
             self._edit_test_btn.setEnabled(True)
