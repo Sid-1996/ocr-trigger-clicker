@@ -821,6 +821,14 @@ class MainLoop:
                     "enabled": r.enabled,
                     "trigger_count": r.trigger_count,
                     "last_trigger_time": r.last_trigger_time,
+                    "cooldown_ms": next(
+                        (s.params.get("cooldown_ms", 2000) for s in r.steps if s.type == "detect"),
+                        2000,
+                    ),
+                    "max_triggers": next(
+                        (s.params.get("max_triggers", -1) for s in r.steps if s.type == "detect"),
+                        -1,
+                    ),
                     "auto_disabled": r.id in self._rule_auto_disabled,
                 }
                 for r in self._rules
