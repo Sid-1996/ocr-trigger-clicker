@@ -223,11 +223,11 @@ class OcrDebugPanel(QWidget):
 
             img = capture(self._window_title)
             source = "螢幕截圖"
+            if img is not None:
+                img = img[:, :, ::-1].copy()
 
             if img is None:
                 img = capture_window_full(self._window_title)
-                if img is not None:
-                    img = img[:, :, ::-1].copy()
                 source = "GDI 截圖"
 
             return img, source
