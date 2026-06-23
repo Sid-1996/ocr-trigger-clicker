@@ -63,7 +63,7 @@ _STEP_DEFAULTS = {
     "detect": {
         "text": "",
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "match_mode": "contains",
+        "match_mode": "fuzzy",
         "fuzzy_threshold": 0.8,
         "cooldown_ms": 2000,
         "trigger_mode": "once",
@@ -470,7 +470,7 @@ def check_trigger(
     if mt > 0 and rule.trigger_count >= mt:
         return False, None
     matches = find_text(
-        ocr_results, dp["text"], dp.get("match_mode", "contains"), dp.get("fuzzy_threshold", 0.8)
+        ocr_results, dp["text"], dp.get("match_mode", "fuzzy"), dp.get("fuzzy_threshold", 0.8)
     )
     if not matches:
         return False, None

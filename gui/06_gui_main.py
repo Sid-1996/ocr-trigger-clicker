@@ -549,7 +549,7 @@ class _DetectStepForm(QWidget):
         self._match_mode.addItem("包含關鍵字", "contains")
         self._match_mode.addItem("完全符合", "exact")
         self._match_mode.addItem("近似比對", "fuzzy")
-        idx_mm = self._match_mode.findData(p.get("match_mode", "contains"))
+        idx_mm = self._match_mode.findData(p.get("match_mode", "fuzzy"))
         if idx_mm >= 0:
             self._match_mode.setCurrentIndex(idx_mm)
         self._match_mode.currentIndexChanged.connect(self._on_match_mode_changed)
@@ -2073,7 +2073,7 @@ class MainWindow(QMainWindow):
                     params={
                         "text": "",
                         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                        "match_mode": "contains",
+                        "match_mode": "fuzzy",
                         "fuzzy_threshold": 0.8,
                         "cooldown_ms": 2000,
                         "trigger_mode": "once",
@@ -2322,7 +2322,7 @@ class MainWindow(QMainWindow):
         else:
             roi_img = img
         results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-        match_mode = p.get("match_mode", "contains")
+        match_mode = p.get("match_mode", "fuzzy")
         threshold = p.get("fuzzy_threshold", 0.8)
         matches = find_text(results, text, match_mode, threshold)
         if matches:
@@ -2386,7 +2386,7 @@ class MainWindow(QMainWindow):
                     params={
                         "text": str(rule_data["target_text"]).strip() or "請輸入文字",
                         "roi": rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                        "match_mode": "contains",
+                        "match_mode": "fuzzy",
                         "fuzzy_threshold": 0.8,
                         "cooldown_ms": int(rule_data.get("cooldown", 1.0) * 1000),
                         "trigger_mode": rule_data.get("trigger_mode", "once"),
@@ -2429,7 +2429,7 @@ class MainWindow(QMainWindow):
                 params={
                     "text": str(data.get("target_text", "")).strip() or "請輸入文字",
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                    "match_mode": "contains",
+                    "match_mode": "fuzzy",
                     "fuzzy_threshold": 0.8,
                     "cooldown_ms": 2000,
                     "trigger_mode": "once",

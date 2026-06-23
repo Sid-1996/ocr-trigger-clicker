@@ -262,7 +262,7 @@ class MainLoop:
             return StepResult("stop")
 
         matches = find_text(
-            results, text, params.get("match_mode", "contains"), params.get("fuzzy_threshold", 0.8)
+            results, text, params.get("match_mode", "fuzzy"), params.get("fuzzy_threshold", 0.8)
         )
         if not matches:
             return StepResult("stop")

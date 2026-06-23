@@ -283,7 +283,7 @@ def recognize(
 def find_text(
     results: list[OcrResult],
     target: str,
-    match_mode: str = "contains",
+    match_mode: str = "fuzzy",
     threshold: float = 0.8,
     fuzzy: bool | None = None,
 ) -> list[OcrResult]:
