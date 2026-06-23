@@ -1357,7 +1357,7 @@ class MainWindow(QMainWindow):
         # -- Action section --
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
-        self._btn_toggle.setToolTip("開始偵測所選視窗（按 F10 啟動／停止）")
+        self._btn_toggle.setToolTip("開始偵測所選視窗")
         self._debug_btn = QPushButton("🔍OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
         toolbar.addWidget(self._btn_toggle)
@@ -1423,7 +1423,6 @@ class MainWindow(QMainWindow):
             "③ 設定觸發文字與點擊參數\n"
             "④ 點擊「儲存規則」\n"
             "⑤ 點擊「啟動」開始自動偵測\n\n"
-            "按 F10 可啟動／停止\n"
             "框選偵測區域可限制 OCR 範圍"
         )
         guide_label.setStyleSheet("color: #666; font-size: 13px;")
@@ -1566,24 +1565,6 @@ class MainWindow(QMainWindow):
         self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
 
     def _setup_shortcuts(self):
-        QShortcut(
-            QKeySequence("F8"),
-            self,
-            self._f8_snapshot,
-            context=Qt.ShortcutContext.ApplicationShortcut,
-        )
-        QShortcut(
-            QKeySequence("F10"),
-            self,
-            self._toggle_start_stop,
-            context=Qt.ShortcutContext.ApplicationShortcut,
-        )
-        QShortcut(
-            QKeySequence("F12"),
-            self,
-            self._emergency_stop,
-            context=Qt.ShortcutContext.ApplicationShortcut,
-        )
         QShortcut(QKeySequence("Ctrl+S"), self, self._save_current_rule)
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
         QShortcut(QKeySequence("Delete"), self, self._delete_rule)
@@ -2303,19 +2284,6 @@ class MainWindow(QMainWindow):
         self._step_list.set_steps(rule.steps)
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
-    # === F8 快捷拍一張 ===
-    def _f8_snapshot(self):
-        if self._loop is not None and self._loop.is_running:
-            return
-        if not self._debug_panel._capture_btn.isEnabled():
-            return
-        title = self._window_combo.currentText()
-        if not title:
-            return
-        self._debug_panel._window_title = title
-        self._main_stack.setCurrentIndex(1)
-        self._debug_panel._take_snapshot()
-
     # === Start / Pause ===
     def _toggle_start_stop(self):
         if self._loop is not None and self._loop.is_running:
@@ -2359,9 +2327,7 @@ class MainWindow(QMainWindow):
             self._loop = self._init_worker.loop
             self._btn_toggle.setText("暫停")
             self._update_edit_enabled(False)
-            self._status_bar.showMessage(
-                f"偵測中 — 目標: {self._window_combo.currentText()}（按 F10 停止）"
-            )
+            self._status_bar.showMessage(f"偵測中 — 目標: {self._window_combo.currentText()}")
             self._status_timer.start(1000)
         else:
             QMessageBox.critical(self, "初始化失敗", f"無法啟動主迴圈：\n{error_msg}")
