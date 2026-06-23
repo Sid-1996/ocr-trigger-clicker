@@ -1987,7 +1987,7 @@ class MainWindow(QMainWindow):
                     params={
                         "text": "",
                         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                        "fuzzy": False,
+                        "match_mode": "contains",
                         "fuzzy_threshold": 0.8,
                         "cooldown_ms": 2000,
                         "trigger_mode": "once",
@@ -2169,9 +2169,9 @@ class MainWindow(QMainWindow):
         else:
             roi_img = img
         results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-        fuzzy = p.get("fuzzy", False)
+        match_mode = p.get("match_mode", "contains")
         threshold = p.get("fuzzy_threshold", 0.8)
-        matches = find_text(results, text, fuzzy, threshold)
+        matches = find_text(results, text, match_mode, threshold)
         if matches:
             m = matches[0]
             return {
@@ -2233,7 +2233,7 @@ class MainWindow(QMainWindow):
                     params={
                         "text": str(rule_data["target_text"]).strip() or "請輸入文字",
                         "roi": rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                        "fuzzy": rule_data.get("fuzzy", False),
+                        "match_mode": "contains",
                         "fuzzy_threshold": 0.8,
                         "cooldown_ms": int(rule_data.get("cooldown", 1.0) * 1000),
                         "trigger_mode": rule_data.get("trigger_mode", "once"),
@@ -2276,7 +2276,7 @@ class MainWindow(QMainWindow):
                 params={
                     "text": str(data.get("target_text", "")).strip() or "請輸入文字",
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                    "fuzzy": False,
+                    "match_mode": "contains",
                     "fuzzy_threshold": 0.8,
                     "cooldown_ms": 2000,
                     "trigger_mode": "once",
