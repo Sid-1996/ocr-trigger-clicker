@@ -12,3 +12,6 @@ _diag_*
 custom_models/
 tasks/
 *任務*.json
+_check_*
+_err.*
+startup_error.log
