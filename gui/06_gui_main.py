@@ -1454,6 +1454,9 @@ class MainWindow(QMainWindow):
         self._rule_list.setAnimated(True)
         self._rule_list.setIndentation(20)
         self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._rule_list.setToolTip("右鍵可複製規則")
+        self._rule_list.customContextMenuRequested.connect(self._on_rule_context_menu)
         left_layout.addWidget(self._rule_list)
 
         self._rule_hint = QLabel("← 點擊「新增」建立第一條規則")
@@ -2092,6 +2095,37 @@ class MainWindow(QMainWindow):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
         save_task(self._current_task, self._rules)
+        self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
+
+    def _on_rule_context_menu(self, pos):
+        item = self._rule_list.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        act = menu.addAction("複製規則")
+        act.triggered.connect(self._duplicate_rule)
+        menu.exec(self._rule_list.viewport().mapToGlobal(pos))
+
+    def _duplicate_rule(self):
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再複製規則")
+            return
+        src = self._get_current_rule()
+        if src is None:
+            return
+        import uuid
+
+        new = deepcopy(src)
+        new.id = f"rule_{uuid.uuid4().hex[:8]}"
+        new.name = f"{src.name} (副本)"
+        new.trigger_count = 0
+        new.last_trigger_time = 0.0
+        idx = self._rules.index(src) + 1
+        self._rules.insert(idx, new)
+        save_task(self._current_task, self._rules)
+        self._selected_rule_id = new.id
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
