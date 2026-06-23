@@ -291,6 +291,8 @@ class OcrDebugPanel(QWidget):
             import traceback
 
             traceback.print_exc()
+            self._capture_btn.setText("拍一張")
+            self._capture_btn.setEnabled(True)
         finally:
             self._ocr_busy = False
 

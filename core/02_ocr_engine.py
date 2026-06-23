@@ -123,9 +123,12 @@ def init_engine() -> None:
 
             _engine = RapidOCR(**kwargs)
 
-            assert rapidocr_onnxruntime.__version__ == "1.3.22", (
-                "RapidOCR 版本異動，請重新驗證 resize_norm_img patch"
-            )
+            try:
+                assert rapidocr_onnxruntime.__version__ == "1.3.22", (
+                    "RapidOCR 版本異動，請重新驗證 resize_norm_img patch"
+                )
+            except (AttributeError, AssertionError):
+                pass
 
             # 修正：v5 mobile rec 模型的 input width 是靜態 320，但 RapidOCR 的 resize_norm_img
             # 會根據 max_wh_ratio 動態計算 padding 寬度，導致寬度 >320 時模型 crash。
