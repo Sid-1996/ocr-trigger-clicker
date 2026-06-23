@@ -5,6 +5,7 @@ build/
 *.spec
 test_*.png
 *.log
+logs/
 _test_*
 _diag_*
 *.exe
