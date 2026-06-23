@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from PyQt6.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QDrag, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -259,6 +259,39 @@ def _make_key_combo(parent=None):
     return cb
 
 
+# ── DragHandle ──
+
+
+class _DragHandle(QLabel):
+    """⠿ handle that starts a QDrag for step reordering."""
+
+    def __init__(self, idx: int, parent=None):
+        super().__init__("⠿", parent)
+        self._idx = idx
+        self._drag_start = None
+        self.setFixedWidth(20)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._drag_start = e.position().toPoint()
+        super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if not (e.buttons() & Qt.MouseButton.LeftButton):
+            return
+        if self._drag_start is None:
+            return
+        if (e.position().toPoint() - self._drag_start).manhattanLength() < 5:
+            return
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setData("step/index", str(self._idx).encode())
+        drag.setMimeData(mime)
+        drag.exec_(Qt.DropAction.MoveAction)
+        self._drag_start = None
+
+
 # ── StepListWidget ──
 
 
@@ -269,6 +302,7 @@ class _StepListWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAcceptDrops(True)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(2)
@@ -324,6 +358,9 @@ class _StepListWidget(QWidget):
         row.setFixedHeight(32)
         hl = QHBoxLayout(row)
         hl.setContentsMargins(6, 2, 6, 2)
+
+        handle = _DragHandle(idx)
+        hl.addWidget(handle)
 
         num = QLabel(str(idx + 1))
         num.setFixedWidth(20)
@@ -414,6 +451,26 @@ class _StepListWidget(QWidget):
 
     def _delete_step(self, idx: int):
         self._steps.pop(idx)
+        self._rebuild()
+        self.steps_changed.emit()
+
+    # drag-drop reorder
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasFormat("step/index"):
+            e.acceptProposedAction()
+
+    def dragMoveEvent(self, e):
+        e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        src = int(e.mimeData().data("step/index").data().decode())
+        self._collapse()
+        y = e.position().y()
+        # row height 32 + spacing 2 = 34 per row
+        target = max(0, min(len(self._steps) - 1, int(y / 34)))
+        if src == target:
+            return
+        self._steps.insert(target, self._steps.pop(src))
         self._rebuild()
         self.steps_changed.emit()
 
