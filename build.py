@@ -86,8 +86,16 @@ def main():
         if f.exists():
             datas.append((str(f), dest))
 
-    # 僅保留 transitive deps（PyInstaller 無法自動追蹤的內部依賴）
+    # 被 _loader.py 動態載入的模組（PyInstaller 靜態分析無法追蹤）
+    # 以及 transitive deps（PyInstaller 無法自動追蹤的內部依賴）
     hidden = [
+        # 動態載入（透過 _loader.load_sibling）
+        "mss",
+        "cv2",
+        "pygetwindow",
+        "numpy",
+        "rapidocr_onnxruntime",
+        # transitive deps
         "onnxruntime",
         "PIL",
         "pyclipper",
