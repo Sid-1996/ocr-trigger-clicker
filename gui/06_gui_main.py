@@ -1,4 +1,3 @@
-import ctypes
 import json
 import sys
 import threading
@@ -1117,8 +1116,6 @@ _ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
-_hk_mod = load_sibling("global_hotkey", "core/00_global_hotkey.py")
-
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 
 # ── Helpers ──
@@ -1208,7 +1205,6 @@ class MainWindow(QMainWindow):
             self._debug_page_layout.addWidget(self._debug_panel, 1)
             self._connect_signals()
             self._setup_shortcuts()
-            _hk_mod.register_all(int(self.winId()))
 
             _ocr_mod.set_ocr_health_callback(None)
 
@@ -1570,6 +1566,24 @@ class MainWindow(QMainWindow):
         self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
 
     def _setup_shortcuts(self):
+        QShortcut(
+            QKeySequence("F8"),
+            self,
+            self._f8_snapshot,
+            context=Qt.ShortcutContext.ApplicationShortcut,
+        )
+        QShortcut(
+            QKeySequence("F10"),
+            self,
+            self._toggle_start_stop,
+            context=Qt.ShortcutContext.ApplicationShortcut,
+        )
+        QShortcut(
+            QKeySequence("F12"),
+            self,
+            self._emergency_stop,
+            context=Qt.ShortcutContext.ApplicationShortcut,
+        )
         QShortcut(QKeySequence("Ctrl+S"), self, self._save_current_rule)
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
         QShortcut(QKeySequence("Delete"), self, self._delete_rule)
@@ -2289,10 +2303,9 @@ class MainWindow(QMainWindow):
         self._step_list.set_steps(rule.steps)
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
-    # === F8（主循環停止時）OCR 診斷擷圖 ===
+    # === F8 快捷拍一張 ===
     def _f8_snapshot(self):
         if self._loop is not None and self._loop.is_running:
-            self._status_bar.showMessage("主循環執行中，請按 F10 停止後再操作")
             return
         if not self._debug_panel._capture_btn.isEnabled():
             return
@@ -2447,25 +2460,12 @@ class MainWindow(QMainWindow):
         except Exception:
             pass  # 網路錯誤不影響啟動
 
-    # === Native events (global hotkeys) ===
-    def nativeEvent(self, eventType, message):
-        try:
-            msg = ctypes.wintypes.MSG.from_address(message)
-        except Exception:
-            return False, 0
-        name = _hk_mod.handler_name(msg)
-        if name:
-            QTimer.singleShot(0, getattr(self, name))
-            return True, 0
-        return False, 0
-
     # === Close ===
     def closeEvent(self, event):
         self._status_timer.stop()
         if self._loop:
             self._loop.stop()
         self._perf_timer.stop()
-        _hk_mod.unregister_all(int(self.winId()))
         _ahk_mod.shutdown()
         event.accept()
 
