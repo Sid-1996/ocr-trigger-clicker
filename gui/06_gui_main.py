@@ -1,9 +1,9 @@
-import ctypes
 import json
 import sys
 import threading
 import time
 from copy import deepcopy
+from ctypes import wintypes
 from pathlib import Path
 from typing import Optional
 
@@ -2451,7 +2451,7 @@ class MainWindow(QMainWindow):
     def nativeEvent(self, eventType, message):
         try:
             addr = int(message)
-            msg = ctypes.wintypes.MSG.from_address(addr)
+            msg = wintypes.MSG.from_address(addr)
         except Exception:
             return super().nativeEvent(eventType, message)
         name = _hk_mod.handler_name(msg)
@@ -2490,8 +2490,19 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     import sys
+    import traceback
 
     app = QApplication(sys.argv)
-    win = MainWindow()
-    win.show()
-    sys.exit(app.exec())
+    try:
+        win = MainWindow()
+        win.show()
+        sys.exit(app.exec())
+    except Exception:
+        tb = traceback.format_exc()
+        sys.stderr.write(tb + "\n")
+        with open(str(Path(__file__).resolve().parent.parent / "startup_error.log"), "w") as f:
+            f.write(tb + "\n")
+        QMessageBox.critical(
+            None, "啟動失敗", f"發生未預期錯誤：\n{tb}\n\n詳細資訊已寫入 startup_error.log"
+        )
+        sys.exit(1)
