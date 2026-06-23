@@ -62,7 +62,7 @@ _STEP_DEFAULTS = {
     "detect": {
         "text": "",
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "fuzzy": False,
+        "match_mode": "contains",
         "fuzzy_threshold": 0.8,
         "cooldown_ms": 2000,
         "trigger_mode": "once",
@@ -127,10 +127,17 @@ def _parse_depends_on(value: object) -> list[str]:
 
 
 def _build_detect_params(old: dict) -> dict:
+    # backward compat: old rules store fuzzy bool instead of match_mode
+    if "match_mode" in old:
+        match_mode_ = str(old["match_mode"])
+    elif "fuzzy" in old:
+        match_mode_ = "fuzzy" if bool(old["fuzzy"]) else "contains"
+    else:
+        match_mode_ = "contains"
     return {
         "text": str(old.get("target_text", "")).strip(),
         "roi": _sanitize_roi(old.get("roi")),
-        "fuzzy": bool(old.get("fuzzy", False)),
+        "match_mode": match_mode_,
         "fuzzy_threshold": max(0.0, min(1.0, _as_float(old.get("fuzzy_threshold", 0.8), 0.8))),
         "cooldown_ms": max(0, _as_int(old.get("cooldown_ms", 2000), 2000)),
         "trigger_mode": str(old.get("trigger_mode", "once")),
@@ -460,7 +467,7 @@ def check_trigger(
     if mt > 0 and rule.trigger_count >= mt:
         return False, None
     matches = find_text(
-        ocr_results, dp["text"], dp.get("fuzzy", False), dp.get("fuzzy_threshold", 0.8)
+        ocr_results, dp["text"], dp.get("match_mode", "contains"), dp.get("fuzzy_threshold", 0.8)
     )
     if not matches:
         return False, None

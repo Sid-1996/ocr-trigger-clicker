@@ -257,7 +257,7 @@ class MainLoop:
             return StepResult("stop")
 
         matches = find_text(
-            results, text, params.get("fuzzy", False), params.get("fuzzy_threshold", 0.8)
+            results, text, params.get("match_mode", "contains"), params.get("fuzzy_threshold", 0.8)
         )
         if not matches:
             return StepResult("stop")
@@ -286,7 +286,7 @@ class MainLoop:
             if not click_text:
                 return StepResult("stop")
             results = self._ocr_region(ctx.img, None)
-            clk_matches = find_text(results, click_text, False, 0.8)
+            clk_matches = find_text(results, click_text, "contains", 0.8)
             if not clk_matches:
                 return StepResult("stop")
             cx = clk_matches[0].center_x + dx

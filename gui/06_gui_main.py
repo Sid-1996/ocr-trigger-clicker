@@ -473,17 +473,22 @@ class _DetectStepForm(QWidget):
         form.addRow("偵測區域:", self._roi_label)
         form.addRow("", self._roi_btn)
 
-        self._fuzzy = QCheckBox()
-        self._fuzzy.setChecked(p.get("fuzzy", False))
-        self._fuzzy.stateChanged.connect(self._on_fuzzy)
-        form.addRow("模糊比對:", self._fuzzy)
+        self._match_mode = _NoWheelCombo()
+        self._match_mode.addItem("包含關鍵字", "contains")
+        self._match_mode.addItem("完全符合", "exact")
+        self._match_mode.addItem("近似比對", "fuzzy")
+        idx_mm = self._match_mode.findData(p.get("match_mode", "contains"))
+        if idx_mm >= 0:
+            self._match_mode.setCurrentIndex(idx_mm)
+        self._match_mode.currentIndexChanged.connect(self._on_match_mode_changed)
+        form.addRow("比對模式:", self._match_mode)
 
         self._fuzzy_th = _NoWheelSpin()
         self._fuzzy_th.setRange(1, 100)
         self._fuzzy_th.setSuffix(" %")
         self._fuzzy_th.setValue(int(p.get("fuzzy_threshold", 0.8) * 100))
-        self._fuzzy_th.setEnabled(self._fuzzy.isChecked())
-        form.addRow("模糊閾值:", self._fuzzy_th)
+        self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
+        form.addRow("精準度:", self._fuzzy_th)
 
         self._cooldown = _NoWheelSpin()
         self._cooldown.setRange(0, 60000)
@@ -505,8 +510,8 @@ class _DetectStepForm(QWidget):
         self._max_triggers.setValue(p.get("max_triggers", -1))
         form.addRow("最大觸發:", self._max_triggers)
 
-    def _on_fuzzy(self, state):
-        self._fuzzy_th.setEnabled(state == 2)
+    def _on_match_mode_changed(self, idx):
+        self._fuzzy_th.setVisible(self._match_mode.itemData(idx) == "fuzzy")
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -524,7 +529,7 @@ class _DetectStepForm(QWidget):
 
     def save(self):
         self._step.params["text"] = self._text.text().strip()
-        self._step.params["fuzzy"] = self._fuzzy.isChecked()
+        self._step.params["match_mode"] = self._match_mode.currentData()
         self._step.params["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
         self._step.params["cooldown_ms"] = self._cooldown.value()
         self._step.params["trigger_mode"] = self._mode.currentData()

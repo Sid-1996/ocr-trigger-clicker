@@ -283,18 +283,27 @@ def recognize(
 def find_text(
     results: list[OcrResult],
     target: str,
-    fuzzy: bool = False,
+    match_mode: str = "contains",
     threshold: float = 0.8,
+    fuzzy: bool | None = None,
 ) -> list[OcrResult]:
+    # backward compat: old callers pass fuzzy=True / False
+    if fuzzy is not None:
+        match_mode = "fuzzy" if fuzzy else "contains"
+
     matched: list[OcrResult] = []
     target_lower = target.lower()
     for r in results:
-        if fuzzy:
-            ratio = SequenceMatcher(None, target_lower, r.text.lower()).ratio()
-            if ratio >= threshold:
+        text_lower = r.text.lower()
+        if match_mode == "exact":
+            if text_lower == target_lower:
                 matched.append(r)
-        else:
-            if target_lower in r.text.lower():
+        elif match_mode == "contains":
+            if target_lower in text_lower:
+                matched.append(r)
+        elif match_mode == "fuzzy":
+            ratio = SequenceMatcher(None, target_lower, text_lower).ratio()
+            if ratio >= threshold:
                 matched.append(r)
     return matched
 
