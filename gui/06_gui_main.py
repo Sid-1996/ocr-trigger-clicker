@@ -126,7 +126,16 @@ _STEP_TYPE_LABELS = {
 }
 
 
-def _step_summary(step) -> str:
+def _resolve_rule_name(rule_id: str, rules_provider=None) -> str:
+    if not rule_id or not rules_provider:
+        return rule_id
+    for r in rules_provider():
+        if r.id == rule_id:
+            return r.name
+    return rule_id
+
+
+def _step_summary(step, rules_provider=None) -> str:
     p = step.params
     t = step.type
     if t == "detect":
@@ -156,13 +165,15 @@ def _step_summary(step) -> str:
     if t == "wait":
         return f"等待 {p.get('ms', 1000)}ms"
     if t == "wait_rule":
-        return f"等待規則「{p.get('rule_id', '')}」"
+        name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
+        return f"等待規則「{name}」"
     if t == "collect_rounds":
         rds = p.get("rounds", [])
         mcount = len(rds[0].get("metrics", [])) if rds else 0
         return f"{len(rds)}輪 {mcount}指標"
     if t == "jump":
-        return f"跳轉規則「{p.get('rule_id', '')}」"
+        name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
+        return f"跳轉規則「{name}」"
     return t
 
 
@@ -376,7 +387,7 @@ class _StepListWidget(QWidget):
         tl.setFixedWidth(60)
         hl.addWidget(tl)
 
-        summary = _step_summary(step)
+        summary = _step_summary(step, self._rules_provider)
         sl = QLabel(summary)
         sl.setStyleSheet("font-size:11px;")
         hl.addWidget(sl, 1)
