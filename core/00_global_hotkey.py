@@ -7,18 +7,18 @@ MOD_NOREPEAT = 0x4000
 _HOTKEYS = {
     1: ("F8", "_f8_snapshot", 0x77),
     2: ("F10", "_toggle_start_stop", 0x79),
-    3: ("F12", "_close_tool", 0x7B),
+    3: ("F12", "_emergency_stop", 0x7B),
 }
 
 
 def register_all(hwnd: int) -> None:
     for hid, (_, _, vk) in _HOTKEYS.items():
-        ctypes.windll.user32.RegisterHotKey(ctypes.c_void_p(hwnd), hid, MOD_NOREPEAT, vk)
+        ctypes.windll.user32.RegisterHotKey(None, hid, MOD_NOREPEAT, vk)
 
 
 def unregister_all(hwnd: int) -> None:
     for hid in _HOTKEYS:
-        ctypes.windll.user32.UnregisterHotKey(ctypes.c_void_p(hwnd), hid)
+        ctypes.windll.user32.UnregisterHotKey(None, hid)
 
 
 def handler_name(msg) -> str | None:
