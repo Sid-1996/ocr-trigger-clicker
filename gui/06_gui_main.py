@@ -1567,6 +1567,12 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self):
         QShortcut(
+            QKeySequence("F8"),
+            self,
+            self._f8_snapshot,
+            context=Qt.ShortcutContext.ApplicationShortcut,
+        )
+        QShortcut(
             QKeySequence("F10"),
             self,
             self._toggle_start_stop,
@@ -2296,6 +2302,19 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         self._step_list.set_steps(rule.steps)
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
+
+    # === F8 快捷拍一張 ===
+    def _f8_snapshot(self):
+        if self._loop is not None and self._loop.is_running:
+            return
+        if not self._debug_panel._capture_btn.isEnabled():
+            return
+        title = self._window_combo.currentText()
+        if not title:
+            return
+        self._debug_panel._window_title = title
+        self._main_stack.setCurrentIndex(1)
+        self._debug_panel._take_snapshot()
 
     # === Start / Pause ===
     def _toggle_start_stop(self):
