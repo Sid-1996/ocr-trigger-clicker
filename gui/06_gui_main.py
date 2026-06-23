@@ -1357,7 +1357,7 @@ class MainWindow(QMainWindow):
         # -- Action section --
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
-        self._btn_toggle.setToolTip("開始偵測所選視窗（按 F9 暫停／繼續）")
+        self._btn_toggle.setToolTip("開始偵測所選視窗（按 F10 啟動／停止）")
         self._debug_btn = QPushButton("🔍OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
         toolbar.addWidget(self._btn_toggle)
@@ -1423,7 +1423,7 @@ class MainWindow(QMainWindow):
             "③ 設定觸發文字與點擊參數\n"
             "④ 點擊「儲存規則」\n"
             "⑤ 點擊「啟動」開始自動偵測\n\n"
-            "按 F9 可暫停／繼續\n"
+            "按 F10 可啟動／停止\n"
             "框選偵測區域可限制 OCR 範圍"
         )
         guide_label.setStyleSheet("color: #666; font-size: 13px;")
@@ -1567,9 +1567,9 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self):
         QShortcut(
-            QKeySequence("F9"),
+            QKeySequence("F10"),
             self,
-            self._toggle_pause,
+            self._toggle_start_stop,
             context=Qt.ShortcutContext.ApplicationShortcut,
         )
         QShortcut(
@@ -2298,6 +2298,12 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     # === Start / Pause ===
+    def _toggle_start_stop(self):
+        if self._loop is not None and self._loop.is_running:
+            self._stop_loop()
+        else:
+            self._start_loop()
+
     def _toggle_start(self):
         if self._window_lost:
             self._stop_loop()
@@ -2335,7 +2341,7 @@ class MainWindow(QMainWindow):
             self._btn_toggle.setText("暫停")
             self._update_edit_enabled(False)
             self._status_bar.showMessage(
-                f"偵測中 — 目標: {self._window_combo.currentText()}（按 F9 暫停）"
+                f"偵測中 — 目標: {self._window_combo.currentText()}（按 F10 停止）"
             )
             self._status_timer.start(1000)
         else:
@@ -2352,18 +2358,6 @@ class MainWindow(QMainWindow):
         self._update_edit_enabled(True)
         self._status_bar.showMessage("已停止")
         self._update_rule_status()
-
-    def _toggle_pause(self):
-        if self._loop is None or not self._loop.is_running:
-            return
-        if self._loop.is_paused:
-            self._loop.resume()
-            self._btn_toggle.setText("暫停")
-            self._status_bar.showMessage("偵測中（按 F9 暫停）")
-        else:
-            self._loop.pause()
-            self._btn_toggle.setText("繼續")
-            self._status_bar.showMessage("已暫停 — 按 F9 繼續")
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)
