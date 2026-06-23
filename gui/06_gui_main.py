@@ -324,6 +324,7 @@ class _StepListWidget(QWidget):
         self._roi_callback: Optional[callable] = None
         self._click_pick_callback: Optional[callable] = None
         self._rules_provider: Optional[callable] = None  # () -> list[Rule]
+        self._rule_id: str = ""
 
     def set_roi_callback(self, cb):
         self._roi_callback = cb
@@ -333,6 +334,9 @@ class _StepListWidget(QWidget):
 
     def set_rules_provider(self, cb):
         self._rules_provider = cb
+
+    def set_rule_id(self, rule_id: str):
+        self._rule_id = rule_id
 
     def set_steps(self, steps: list):
         self._steps = list(steps)
@@ -503,13 +507,13 @@ class _StepListWidget(QWidget):
         if t == "wait":
             return _WaitStepForm(self, step, idx)
         if t == "wait_rule":
-            return _WaitRuleStepForm(self, step, idx, self._rules_provider)
+            return _WaitRuleStepForm(self, step, idx, self._rules_provider, self._rule_id)
         if t == "collect_rounds":
             return _CollectRoundsStepForm(
                 self, step, idx, self._roi_callback, self._click_pick_callback
             )
         if t == "jump":
-            return _JumpStepForm(self, step, idx, self._rules_provider)
+            return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
         return None
 
 
@@ -716,7 +720,7 @@ class _WaitStepForm(QWidget):
 
 
 class _WaitRuleStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, rules_provider=None):
+    def __init__(self, parent_list, step, idx, rules_provider=None, exclude_rule_id=""):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -727,7 +731,8 @@ class _WaitRuleStepForm(QWidget):
         rules = rules_provider() if rules_provider else []
         current_id = step.params.get("rule_id", "")
         for r in rules:
-            self._combo.addItem(r.name, r.id)
+            if r.id != exclude_rule_id:
+                self._combo.addItem(r.name, r.id)
         idx_r = self._combo.findData(current_id)
         if idx_r >= 0:
             self._combo.setCurrentIndex(idx_r)
@@ -741,7 +746,7 @@ class _WaitRuleStepForm(QWidget):
 
 
 class _JumpStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, rules_provider=None):
+    def __init__(self, parent_list, step, idx, rules_provider=None, exclude_rule_id=""):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -752,7 +757,8 @@ class _JumpStepForm(QWidget):
         rules = rules_provider() if rules_provider else []
         current_id = step.params.get("rule_id", "")
         for r in rules:
-            self._combo.addItem(r.name, r.id)
+            if r.id != exclude_rule_id:
+                self._combo.addItem(r.name, r.id)
         idx_r = self._combo.findData(current_id)
         if idx_r >= 0:
             self._combo.setCurrentIndex(idx_r)
@@ -2034,6 +2040,7 @@ class MainWindow(QMainWindow):
         self._edit_enabled.setEnabled(True)
         self._edit_name.setText(rule.name)
         self._edit_enabled.setChecked(rule.enabled)
+        self._step_list.set_rule_id(rule.id)
         self._step_list.set_steps(rule.steps)
 
     def _on_enabled_changed(self, state):
