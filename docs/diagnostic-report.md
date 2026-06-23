@@ -2,7 +2,9 @@
 
 > **診斷範圍：** 13 個核心模組，共 ~5,500 行程式碼  
 > **診斷日期：** 2026-06-23  
-> **版本：** v0.1.0 
+> **版本：** v0.0.2
+
+> ✅ 本報告多數項目已於後續版本修正，詳見各項標記。 
 
 ---
 
@@ -42,7 +44,7 @@ PyQt6 GUI（規則編輯 / 診斷 / 效能監控）
 
 ### 🔴 P0 — 確認性 Bug（立即影響功能）
 
-#### P0-1　`iteration % 1` 永遠為 0，每幀都輸出日誌
+#### P0-1　`iteration % 1` 永遠為 0，每幀都輸出日誌 ✅ 已修正
 
 **位置：** `core/05_main_loop.py` 第 665 行
 
@@ -62,7 +64,7 @@ if self._verbose and iteration % 30 == 0:
 
 ---
 
-#### P0-2　fallback 截圖函數名稱錯誤，永遠取不到
+#### P0-2　fallback 截圖函數名稱錯誤，永遠取不到 ✅ 已修正
 
 **位置：** `core/05_main_loop.py` 第 32 行 vs `core/01_screenshot.py` 第 209 行
 
@@ -85,7 +87,7 @@ capture_window_full = capture_window_content
 
 ---
 
-#### P0-3　`_handle_wait` 阻塞執行緒，無法響應停止訊號
+#### P0-3　`_handle_wait` 阻塞執行緒，無法響應停止訊號 ✅ 已修正
 
 **位置：** `core/05_main_loop.py` `_handle_wait` 函式
 
@@ -112,7 +114,7 @@ def _handle_wait(self, params, ctx, rule) -> StepResult:
 
 ---
 
-#### P0-4　`save_rules` 非原子寫入，crash 會損毀 JSON
+#### P0-4　`save_rules` 非原子寫入，crash 會損毀 JSON ✅ 已修正
 
 **位置：** `core/04_rule_engine.py` `save_rules` 函式
 
@@ -149,7 +151,7 @@ def save_rules(rules, path) -> bool:
 
 ### 🟠 P1 — 高優先（影響效能 / 安全 / 可維護性）
 
-#### P1-1　OCR 計時每次都輸出至 stdout，無法關閉
+#### P1-1　OCR 計時每次都輸出至 stdout，無法關閉 ✅ 已修正
 
 **位置：** `core/02_ocr_engine.py` 第 212–215 行
 
@@ -247,24 +249,19 @@ def poll_roi_value(roi, pick, timeout_ms, title, stop_event=None):
 
 ---
 
-#### P1-6　前景視窗保護不可設定，主循環無條件跳過非前景視窗
+#### P1-6　前景視窗保護不可設定，主循環無條件跳過非前景視窗 ✅ 已解決
 
 **位置：** `core/05_main_loop.py` 第 632–635 行
 
 ```python
+# 現況 ✅ — 移除可設定開關，前景檢查固定為強制行為
 if not is_window_foreground(self._window_hwnd):
     self._stop_event.wait(0.2)
     self._perf.record_frame()
-    continue   # ❌ 永遠跳過背景視窗，README 說「可設定」但實際無法關閉
+    continue
 ```
 
-README 明確說「可設定僅在前景時才執行」，但目前是強制開啟。
-
-```python
-# 修正 ✅ — 加入 foreground_only 設定項
-if self._foreground_only and not is_window_foreground(self._window_hwnd):
-    ...
-```
+**處理方式：** 移除前景保護 checkbox 與相關設定，前景檢查改為固定強制行為。非前景時靜默等待，不再搶奪焦點。
 
 ---
 
@@ -389,8 +386,8 @@ assert rapidocr_onnxruntime.__version__ == "1.3.x", \
 
 | # | 位置 | 問題 | 建議 |
 |---|---|---|---|
-| P3-1 | `_version.py` | 版本 `0.1.0` 功能已達 0.3+ 水準 | 更新至語義版號 |
-| P3-2 | 根目錄 | 缺 `requirements.txt` / `pyproject.toml` 依賴清單 | 補上依賴與 Python 版本約束 |
+| P3-1 | `_version.py` | 版本 `0.1.0` 功能已達 0.3+ 水準 | ✅ 重置為語義版號 `v0.0.2` |
+| P3-2 | 根目錄 | 缺 `requirements.txt` / `pyproject.toml` 依賴清單 | ✅ 已補上 `requirements.txt`（僅 6 個實際依賴） |
 | P3-3 | 各 `__main__` 測試 | Self-test 無法被 pytest 自動發現 | 遷移至 `tests/` 目錄，使用 pytest |
 | P3-4 | `02_ocr_engine.py:22` | `_DET_USE_V5 = False` 硬編碼 | 透過 config / GUI 開關控制 |
 | P3-5 | `05_main_loop.py:173` | Log 只寫 `HH:MM:SS`，跨日無法對應 | 改為 `%Y-%m-%d %H:%M:%S` |

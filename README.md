@@ -46,8 +46,6 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 2. **新增規則** — 設定目標文字，可框選 ROI 縮小偵測範圍
 3. **調整冷卻時間** — 避免短時間內重複觸發
 4. **啟動主循環** — 點擊「啟動」按鈕開始偵測
-5. **暫停／繼續** — 按下 `F9` 切換
-6. **緊急停止** — 按下 `F12` 立即終止所有動作
 
 ---
 
@@ -59,20 +57,15 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 | 欄位 | 說明 |
 |---|---|
-| `target_text` | 目標文字（大小寫不敏感） |
-| `fuzzy` | 啟用模糊比對，可容忍 OCR 錯字 |
-| `fuzzy_threshold` | 模糊比對相似度閾值（0.0 ~ 1.0） |
+| 欄位 | 說明 |
+|---|---|---|
+| `text` | 目標文字（大小寫不敏感） |
+| `match_mode` | `contains` 包含關鍵字／`exact` 完全符合／`fuzzy` 近似比對 |
+| `fuzzy_threshold` | 近似比對相似度閾值（0.0 ~ 1.0） |
 | `roi` | 偵測區域 `{x, y, w, h}`，全 0 表示全視窗 |
-| `click_position` | `text_center` 點擊文字中心／`custom` 自訂座標 |
-| `click_button` | `left` 或 `right` |
+| `trigger_mode` | `once` 觸發一次（多輪比較用）／`repeat` 循環觸發 |
 | `cooldown_ms` | 觸發後冷卻時間（毫秒） |
-| `trigger_mode` | `once` 觸發一次／`repeat` 循環觸發 |
 | `max_triggers` | 最大觸發次數（`-1` 為無限） |
-| `random_offset` | 點擊座標隨機抖動像素，模擬真人操作 |
-
-### 二階段規則（Phase-2）
-
-支援 if / if-not 子條件：偵測到主目標文字後，再檢查／排除子目標區域的特定文字，通過後才執行點擊。適合需要二次確認的場景。
 
 ### 多任務管理
 
@@ -98,10 +91,10 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 ### 安全機制
 
-- **前景保護** — 可設定僅在目標視窗位於前景時才執行點擊
+- **前景保護** — 僅在目標視窗位於前景時才執行點擊，非前景時靜默等待
 - **速率限制** — 最高每秒 5 次點擊，超限自動暫停
-- **失控規則偵測** — 規則 10 秒內觸發超過 5 次自動停用
-- **緊急停止** — F12 立即終止 AHK 點擊程序
+- **失控規則偵測** — 規則 10 秒內觸發超過 5 次自動停用，30 秒後自動恢復
+- **緊急停止** — 主視窗停止按鈕立即終止循環
 
 ---
 
@@ -138,15 +131,16 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 | 模組 | 功能 |
 |---|---|
-| `01_screenshot.py` | `mss` 截取視窗畫面，fallback GDI PrintWindow / BitBlt |
-| `02_ocr_engine.py` | RapidOCR 文字辨識、模糊比對（SequenceMatcher） |
+| `_loader.py` | 動態載入以數字開頭的模組檔案 |
+| `01_screenshot.py` | `mss` 截取視窗畫面，fallback GDI PrintWindow |
+| `02_ocr_engine.py` | RapidOCR 文字辨識、三種比對模式（contains/exact/fuzzy） |
 | `03_ahk_socket.py` | TCP Server，與 AHK 跨行程通訊 |
-| `04_rule_engine.py` | 規則載入、觸發判斷、冷卻管理 |
-| `05_main_loop.py` | 主循環：截圖 → 變動偵測 → OCR → 比對 → 點擊 |
-| `06_gui_main.py` | PyQt6 主視窗（含多任務管理） |
+| `04_rule_engine.py` | 規則模型、步驟系統、任務管理、舊格式遷移 |
+| `05_main_loop.py` | 主循環：步驟執行模型、安全機制、跳轉偵測 |
+| `06_gui_main.py` | PyQt6 主視窗（規則編輯、步驟拖曳排序、任務管理） |
 | `07_gui_roi.py` | 全螢幕 ROI 框選覆蓋層 |
-| `09_ocr_debug.py` | OCR 診斷面板 |
-| `10_performance_monitor.py` | CPU／記憶體／FPS 監控 |
+| `09_ocr_debug.py` | OCR 診斷面板（即時截圖、OCR 標註、測試按鈕） |
+| `10_performance_monitor.py` | CPU／記憶體／FPS 監控、速率限制 |
 | `13_gui_click_picker.py` | 全螢幕點擊座標選取覆蓋層 |
 | `build.py` | PyInstaller 打包腳本 |
 | `clicker.ahk` | AHK v2 TCP Client |

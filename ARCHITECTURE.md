@@ -310,8 +310,9 @@ MainLoop.emergency_stop()
 | 螢幕邊界檢查 | `03_ahk_socket.py:274` | 發送 CLICK 前檢查座標是否在螢幕範圍內 |
 | 全域速率限制 (CPS) | `10_performance_monitor.py:224` | 限制每秒點擊 ≤ 5 次，違規 3 次自動暫停偵測 |
 | Runaway 規則偵測 | `05_main_loop.py:617` | 10 秒內觸發 ≥ 5 次的規則自動停用 |
-| 前景安全模式 | `05_main_loop.py:131` | 啟用後僅在目標視窗為前景時才執行點擊 |
-| 緊急停止 (F12) | `05_main_loop.py:591` | 設事件旗標 + 發送 ESTOP 給 AHK（釋放所有按鍵） |
+| 前景安全模式 | `05_main_loop.py:131` | 目標視窗非前景時跳過該幀，不搶奪焦點 |
+| 跳轉循環偵測 | `05_main_loop.py` | `_cycle_visited` set 追蹤已訪問規則，防止 A→B→A 無限循環 |
+| Runaway 規則自動恢復 | `05_main_loop.py` | 失控停用的規則 30 秒後自動 re-enable |
 | OCR 連續失敗重啟 | `02_ocr_engine.py:41` | 連續 5 次失敗 → 重建引擎實例 |
 | 視窗消失自動暫停 | `05_main_loop.py:451` | `get_window_rect()` 回傳 None → 暫停循環，每 5 秒檢查視窗是否重現 |
 
