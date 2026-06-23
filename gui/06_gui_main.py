@@ -2450,32 +2450,17 @@ class MainWindow(QMainWindow):
     # === Native events (global hotkeys) ===
     def nativeEvent(self, eventType, message):
         try:
-            addr = int(message)
-            msg = ctypes.wintypes.MSG.from_address(addr)
+            msg = ctypes.wintypes.MSG.from_address(message)
         except Exception:
-            return super().nativeEvent(eventType, message)
+            return False, 0
         name = _hk_mod.handler_name(msg)
         if name:
             QTimer.singleShot(0, getattr(self, name))
             return True, 0
-        return super().nativeEvent(eventType, message)
+        return False, 0
 
     def _close_tool(self):
-        # F12: 強制結束整個工具（emergency stop + sys.exit）
-        try:
-            if self._loop is not None:
-                self._loop.emergency_stop()
-        except Exception:
-            pass
-        try:
-            _hk_mod.unregister_all(int(self.winId()))
-        except Exception:
-            pass
-        try:
-            _ahk_mod.shutdown()
-        except Exception:
-            pass
-        QApplication.instance().quit()
+        self.close()
 
     # === Close ===
     def closeEvent(self, event):
