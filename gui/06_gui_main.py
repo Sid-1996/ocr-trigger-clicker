@@ -288,7 +288,7 @@ class _DragHandle(QLabel):
         mime = QMimeData()
         mime.setData("step/index", str(self._idx).encode())
         drag.setMimeData(mime)
-        drag.exec_(Qt.DropAction.MoveAction)
+        drag.exec(Qt.DropAction.MoveAction)
         self._drag_start = None
 
 
