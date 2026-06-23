@@ -2014,6 +2014,7 @@ class MainWindow(QMainWindow):
 
     def _on_steps_changed(self):
         self._save_current_rule()
+        self._refresh_rule_list()
 
     def _delete_rule(self):
         if self._loop and self._loop.is_running:
