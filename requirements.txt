@@ -1,0 +1,11 @@
+# ===== 執行環境依賴 =====
+opencv-python>=4.10
+mss>=10.0
+numpy>=1.26
+pygetwindow>=0.0.9
+rapidocr-onnxruntime>=1.4
+PyQt6>=6.6
+
+# ===== 開發／打包工具（選用） =====
+# pyinstaller>=6.0
+# ruff>=0.15
