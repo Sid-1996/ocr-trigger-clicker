@@ -87,9 +87,9 @@ class OcrDebugPanel(QWidget):
         layout.setSpacing(8)
 
         toolbar = QHBoxLayout()
-        self._capture_btn = QPushButton("拍一張(&C)")
+        self._capture_btn = QPushButton("截圖辨識(F8)")
         self._capture_btn.setMinimumWidth(80)
-        self._capture_btn.setToolTip("擷取一次畫面並執行 OCR 辨識 (Alt+C)")
+        self._capture_btn.setToolTip("擷取遊戲畫面 → OCR 辨識 → 供建立規則使用（F8）")
         toolbar.addWidget(self._capture_btn)
         self._click_test_btn = QPushButton("點擊測試(&T)")
         self._click_test_btn.setMinimumWidth(80)
@@ -105,7 +105,7 @@ class OcrDebugPanel(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._image_label = _ImageLabel()
-        self._image_label.setText("尚未截圖 — 點擊「拍一張」開始")
+        self._image_label.setText("尚未截圖 — 按 F8 或點此按鈕開始")
         self._image_label.clicked.connect(self._on_image_clicked)
         self._image_label.installEventFilter(self)
         splitter.addWidget(self._image_label)
@@ -270,7 +270,7 @@ class OcrDebugPanel(QWidget):
         if raw is None:
             print(f"[_take_snapshot] capture failed for '{self._window_title}'")
             self._status_bar.showMessage(f"無法擷取視窗「{self._window_title}」")
-            self._capture_btn.setText("拍一張")
+            self._capture_btn.setText("截圖辨識(F8)")
             self._capture_btn.setEnabled(True)
             return
 
@@ -291,7 +291,7 @@ class OcrDebugPanel(QWidget):
             import traceback
 
             traceback.print_exc()
-            self._capture_btn.setText("拍一張")
+            self._capture_btn.setText("截圖辨識(F8)")
             self._capture_btn.setEnabled(True)
         finally:
             self._ocr_busy = False
@@ -304,7 +304,7 @@ class OcrDebugPanel(QWidget):
             if request_id != self._request_id:
                 return
             self._ocr_results = results
-            self._capture_btn.setText("拍一張")
+            self._capture_btn.setText("截圖辨識(F8)")
             self._capture_btn.setEnabled(True)
             self._populate_table()
             self._rebuild_annotated()
