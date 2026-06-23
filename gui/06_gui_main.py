@@ -1611,6 +1611,10 @@ class MainWindow(QMainWindow):
         self._perf_timer.start(1000)
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._update_rule_status)
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(500)
+        self._save_timer.timeout.connect(self._do_debounced_save)
         self.setStatusBar(self._status_bar)
         QTimer.singleShot(3000, self._check_version)
 
@@ -1974,7 +1978,7 @@ class MainWindow(QMainWindow):
                     prev_rule.name = self._edit_name.text()
                     prev_rule.enabled = self._edit_enabled.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
-                    save_task(self._current_task, self._rules)
+                    self._flush_save()
                     suffixes = []
                     if any(s.type == "collect_rounds" for s in prev_rule.steps):
                         suffixes.append("🎯")
@@ -2098,11 +2102,27 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
+        # 檢查是否有其他規則參照此規則
+        refs = [
+            r.name
+            for r in self._rules
+            if r.id != rule.id
+            and any(
+                s.params.get("rule_id", "") == rule.id
+                for s in r.steps
+                if s.type in ("jump", "wait_rule")
+            )
+        ]
+        msg = f"確定刪除規則「{rule.name}」？"
+        if refs:
+            msg += "\n\n⚠ 以下規則依賴此規則，刪除後將失效：\n" + "\n".join(
+                f"  • {n}" for n in refs
+            )
         if (
             QMessageBox.question(
                 self,
                 "刪除規則",
-                f"確定刪除規則「{rule.name}」？",
+                msg,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             != QMessageBox.StandardButton.Yes
@@ -2155,6 +2175,20 @@ class MainWindow(QMainWindow):
             c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
             item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}")
 
+    def _schedule_save(self):
+        self._save_timer.start()
+
+    def _do_debounced_save(self):
+        if not self._current_task:
+            return
+        save_task(self._current_task, self._rules)
+        if self._loop:
+            self._loop.reload_rules()
+
+    def _flush_save(self):
+        self._save_timer.stop()
+        self._do_debounced_save()
+
     def _save_current_rule(self):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再儲存規則")
@@ -2165,13 +2199,18 @@ class MainWindow(QMainWindow):
         rule.name = self._edit_name.text()
         rule.enabled = self._edit_enabled.isChecked()
         rule.steps = self._step_list.get_steps()
-        save_task(self._current_task, self._rules)
+        # 檢查 jump/wait_rule 參照的規則是否存在
+        valid_ids = {r.id for r in self._rules}
+        for s in rule.steps:
+            if s.type in ("jump", "wait_rule"):
+                tid = s.params.get("rule_id", "")
+                if tid and tid not in valid_ids:
+                    self._status_bar.showMessage(f"⚠ 步驟「{s.type}」參照的規則已不存在", 5000)
+        self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
             c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
             item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}")
-        if self._loop:
-            self._loop.reload_rules()
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
@@ -2539,6 +2578,7 @@ class MainWindow(QMainWindow):
 
     # === Close ===
     def closeEvent(self, event):
+        self._flush_save()
         self._status_timer.stop()
         if self._loop:
             self._loop.stop()

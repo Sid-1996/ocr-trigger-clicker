@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import sys
@@ -299,13 +300,15 @@ def load_rules(path: str) -> list[Rule]:
     try:
         with open(p, encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, OSError, KeyError):
+    except (json.JSONDecodeError, OSError, KeyError) as e:
+        logging.warning("規則檔案載入失敗 (%s): %s", path, e)
         return []
     rules: list[Rule] = []
     for raw in data.get("rules", []):
         try:
             rules.append(_dict_to_rule(raw))
-        except Exception:
+        except Exception as e:
+            logging.warning("規則項目解析失敗，已略過: %s", e)
             continue
     return rules
 

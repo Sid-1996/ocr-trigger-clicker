@@ -593,26 +593,28 @@ class MainLoop:
         for rule in rules_snapshot:
             if not rule.enabled:
                 continue
-            if rule.id in self._rule_auto_disabled:
-                if (
-                    self._auto_disabled_at.get(rule.id, 0) + _AUTO_DISABLE_RECOVERY_SEC
-                    < time.monotonic()
-                ):
-                    self._rule_auto_disabled.discard(rule.id)
-                    self._auto_disabled_at.pop(rule.id, None)
-                    rule.enabled = True
-                    if self._verbose:
-                        self._log(f"規則「{rule.name}」自動恢復啟用")
-                else:
-                    continue
+            with self._rules_lock:
+                if rule.id in self._rule_auto_disabled:
+                    if (
+                        self._auto_disabled_at.get(rule.id, 0) + _AUTO_DISABLE_RECOVERY_SEC
+                        < time.monotonic()
+                    ):
+                        self._rule_auto_disabled.discard(rule.id)
+                        self._auto_disabled_at.pop(rule.id, None)
+                        rule.enabled = True
+                        if self._verbose:
+                            self._log(f"規則「{rule.name}」自動恢復啟用")
+                    else:
+                        continue
             self._cycle_visited.add(rule.id)
 
-            if rule.id in self._pending_forced_triggers:
-                self._pending_forced_triggers.discard(rule.id)
-                if self._verbose:
-                    self._log(f"強制觸發規則「{rule.name}」")
-                self._run_rule(rule, img, rect)
-                continue
+            with self._rules_lock:
+                if rule.id in self._pending_forced_triggers:
+                    self._pending_forced_triggers.discard(rule.id)
+                    if self._verbose:
+                        self._log(f"強制觸發規則「{rule.name}」")
+                    self._run_rule(rule, img, rect)
+                    continue
 
             try:
                 self._run_rule(rule, img, rect)
@@ -623,13 +625,15 @@ class MainLoop:
                     self.on_warning(f"規則「{rule.name}」異常: {e}")
 
         # 定期清理 orphan pending triggers（不存在於目前規則中的 ID）
-        if self._process_counter % 50 == 0 and self._pending_forced_triggers:
-            valid_ids = {r.id for r in rules_snapshot}
-            orphans = self._pending_forced_triggers - valid_ids
-            if orphans:
-                self._pending_forced_triggers -= orphans
-                if self._verbose:
-                    self._log(f"清理 {len(orphans)} 個孤兒跳轉目標")
+        if self._process_counter % 50 == 0:
+            with self._rules_lock:
+                if self._pending_forced_triggers:
+                    valid_ids = {r.id for r in rules_snapshot}
+                    orphans = self._pending_forced_triggers - valid_ids
+                    if orphans:
+                        self._pending_forced_triggers -= orphans
+                        if self._verbose:
+                            self._log(f"清理 {len(orphans)} 個孤兒跳轉目標")
 
     def _loop(self):
         iteration = 0
@@ -843,15 +847,16 @@ class MainLoop:
             ]
 
     def check_runaway_rule(self, rule_id: str) -> bool:
-        now = time.monotonic()
-        history = self._rule_trigger_history[rule_id]
-        cutoff = now - _RUNAWAY_WINDOW_SEC
-        while history and history[0] < cutoff:
-            history.popleft()
-        history.append(now)
-        if len(history) > _RUNAWAY_THRESHOLD:
-            return True
-        return False
+        with self._rules_lock:
+            now = time.monotonic()
+            history = self._rule_trigger_history[rule_id]
+            cutoff = now - _RUNAWAY_WINDOW_SEC
+            while history and history[0] < cutoff:
+                history.popleft()
+            history.append(now)
+            if len(history) > _RUNAWAY_THRESHOLD:
+                return True
+            return False
 
 
 if __name__ == "__main__":
