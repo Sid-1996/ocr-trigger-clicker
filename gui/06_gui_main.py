@@ -2136,8 +2136,16 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
+        # 自動清理其他規則指向被刪規則的參照
+        for r in self._rules:
+            for s in r.steps:
+                if s.type in ("jump", "wait_rule") and s.params.get("rule_id", "") == rule.id:
+                    s.params["rule_id"] = ""
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
+        cur = self._get_current_rule()
+        if cur is not None:
+            self._step_list.set_steps(cur.steps)
         if self._loop:
             self._loop.reload_rules()
 
