@@ -1,11 +1,21 @@
 import ctypes
 import time
 from ctypes import wintypes
+from typing import Optional
 
 import cv2
 import mss
 import numpy as np
 import pygetwindow as gw
+
+_mss_instance: Optional[mss.mss] = None
+
+
+def _get_mss() -> mss.mss:
+    global _mss_instance
+    if _mss_instance is None:
+        _mss_instance = mss.mss()
+    return _mss_instance
 
 
 class _BITMAPINFOHEADER(ctypes.Structure):
@@ -89,34 +99,34 @@ def capture(title: str) -> np.ndarray | None:
         hwnd = get_window_hwnd(title)
         scale = get_dpi_scaling_factor(hwnd)
 
-        with mss.mss() as sct:
-            left = int(rect["x"] * scale)
-            top = int(rect["y"] * scale)
-            right = int((rect["x"] + rect["w"]) * scale)
-            bottom = int((rect["y"] + rect["h"]) * scale)
+        sct = _get_mss()
+        left = int(rect["x"] * scale)
+        top = int(rect["y"] * scale)
+        right = int((rect["x"] + rect["w"]) * scale)
+        bottom = int((rect["y"] + rect["h"]) * scale)
 
-            # 多螢幕支援：找出涵蓋此視窗的螢幕（跳過 monitors[0] 全局虛擬螢幕）
-            best_monitor = None
-            for m in sct.monitors[1:]:
-                mx1, my1 = m["left"], m["top"]
-                mx2, my2 = mx1 + m["width"], my1 + m["height"]
-                if left < mx2 and right > mx1 and top < my2 and bottom > my1:
-                    best_monitor = m
-                    break
-            if best_monitor is None:
-                best_monitor = sct.monitors[0]
+        # 多螢幕支援：找出涵蓋此視窗的螢幕（跳過 monitors[0] 全局虛擬螢幕）
+        best_monitor = None
+        for m in sct.monitors[1:]:
+            mx1, my1 = m["left"], m["top"]
+            mx2, my2 = mx1 + m["width"], my1 + m["height"]
+            if left < mx2 and right > mx1 and top < my2 and bottom > my1:
+                best_monitor = m
+                break
+        if best_monitor is None:
+            best_monitor = sct.monitors[0]
 
-            x1 = max(left, best_monitor["left"])
-            y1 = max(top, best_monitor["top"])
-            x2 = min(right, best_monitor["left"] + best_monitor["width"])
-            y2 = min(bottom, best_monitor["top"] + best_monitor["height"])
-            if x2 <= x1 or y2 <= y1:
-                return None
+        x1 = max(left, best_monitor["left"])
+        y1 = max(top, best_monitor["top"])
+        x2 = min(right, best_monitor["left"] + best_monitor["width"])
+        y2 = min(bottom, best_monitor["top"] + best_monitor["height"])
+        if x2 <= x1 or y2 <= y1:
+            return None
 
-            region = {"left": x1, "top": y1, "width": x2 - x1, "height": y2 - y1}
-            img = sct.grab(region)
-            arr = np.array(img)
-            return arr[:, :, :3]
+        region = {"left": x1, "top": y1, "width": x2 - x1, "height": y2 - y1}
+        img = sct.grab(region)
+        arr = np.array(img)
+        return arr[:, :, :3]
     except Exception:
         return None
 
@@ -220,6 +230,9 @@ def capture_window_content(title: str) -> np.ndarray | None:
         return img
 
     return _gdi_capture(hwnd, _bitblt_render)
+
+
+capture_window_full = capture_window_content
 
 
 if __name__ == "__main__":

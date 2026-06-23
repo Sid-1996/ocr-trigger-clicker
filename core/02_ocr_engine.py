@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 import cv2
 import numpy as np
+import rapidocr_onnxruntime
 from rapidocr_onnxruntime import RapidOCR
 
 OCR_BACKEND = "rapidocr"  # 可切換為 "easyocr" / "cnocr"
@@ -20,6 +21,7 @@ _ocr_executor = ThreadPoolExecutor(max_workers=1)
 _DEFAULT_DET_LIMIT_SIDE_LEN = 480
 _DEFAULT_MAX_SIDE_LEN = 480
 _DET_USE_V5: bool = False
+_DEBUG_OCR_TIMING: bool = False
 
 _OCR_FAILURE_COUNT = 0
 _OCR_FAILURE_LOCK = threading.Lock()
@@ -121,6 +123,10 @@ def init_engine() -> None:
 
             _engine = RapidOCR(**kwargs)
 
+            assert rapidocr_onnxruntime.__version__ == "1.3.22", (
+                "RapidOCR 版本異動，請重新驗證 resize_norm_img patch"
+            )
+
             # 修正：v5 mobile rec 模型的 input width 是靜態 320，但 RapidOCR 的 resize_norm_img
             # 會根據 max_wh_ratio 動態計算 padding 寬度，導致寬度 >320 時模型 crash。
             # 這裡 monkey-patch 把 width 限制在 rec_image_shape[2]（320）以內。
@@ -211,7 +217,8 @@ def _run_engine(img, use_cls):
                 timings = result[1]
                 det_ms = timings[0] * 1000
                 rec_ms = timings[2] * 1000
-                print(f"[OCR] {det_ms:.0f}ms(檢測) + {rec_ms:.0f}ms(辨識)")
+                if _DEBUG_OCR_TIMING:
+                    print(f"[OCR] {det_ms:.0f}ms + {rec_ms:.0f}ms")
             return result
         elif OCR_BACKEND == "easyocr":
             results = _engine.readtext(img)

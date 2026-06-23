@@ -32,7 +32,7 @@ _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 
 activate_window = _screenshot.activate_window
 capture = _screenshot.capture
-capture_window_full = getattr(_screenshot, "capture_window_full", lambda title: None)
+capture_window_full = getattr(_screenshot, "capture_window_content", lambda title: None)
 recognize = _ocr.recognize
 
 

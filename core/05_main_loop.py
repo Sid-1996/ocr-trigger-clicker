@@ -1,3 +1,4 @@
+import logging
 import random
 import re
 import sys as _sys
@@ -5,6 +6,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -33,7 +35,7 @@ get_window_rect = _screenshot.get_window_rect
 get_window_hwnd = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
-capture_window_full = getattr(_screenshot, "capture_window_full", lambda title: None)
+capture_window_full = getattr(_screenshot, "capture_window_content", lambda title: None)
 activate_window = _screenshot.activate_window
 is_window_foreground = _perf.is_window_foreground
 OcrResult = _ocr.OcrResult
@@ -64,9 +66,13 @@ def extract_number(text: str, pick: str) -> float | None:
     return float(nums[idx])
 
 
-def poll_roi_value(roi: dict, pick: str, timeout_ms: int, title: str) -> float | None:
+def poll_roi_value(
+    roi: dict, pick: str, timeout_ms: int, title: str, stop_event=None
+) -> float | None:
     deadline = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < deadline:
+        if stop_event and stop_event.is_set():
+            return None
         img = capture(title)
         if img is None:
             img = capture_window_full(title)
@@ -78,7 +84,8 @@ def poll_roi_value(roi: dict, pick: str, timeout_ms: int, title: str) -> float |
                     val = extract_number(r.text, pick)
                     if val is not None:
                         return val
-        time.sleep(0.2)
+        if (stop_event or threading.Event()).wait(timeout=0.2):
+            return None
     return None
 
 
@@ -122,6 +129,7 @@ class MainLoop:
 
         self._rules_lock = threading.RLock()
         self._window_lock = threading.RLock()
+        self._foreground_only = True
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
         self._emergency_event = threading.Event()
@@ -158,20 +166,24 @@ class MainLoop:
         self._rules: list[Rule] = []
         self._log_dir = Path(__file__).resolve().parent.parent / "logs"
         self._log_dir.mkdir(exist_ok=True)
-        for f in self._log_dir.glob("*.log"):
-            if time.time() - f.stat().st_mtime > 7 * 86400:
-                f.unlink()
-        self._log_file = open(
-            self._log_dir / f"{time.strftime('%Y-%m-%d')}.log", "a", encoding="utf-8"
+        self._logger = logging.getLogger("main_loop")
+        self._logger.setLevel(logging.INFO)
+        self._logger.handlers.clear()
+        handler = TimedRotatingFileHandler(
+            self._log_dir / "main.log", when="midnight", backupCount=7, encoding="utf-8"
         )
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        )
+        self._logger.addHandler(handler)
+        self._logger.handler = handler
         self._load_rules()
         init_engine()
 
     def _log(self, msg: str):
         if self._verbose:
             print(f"[主循環] {msg}")
-        self._log_file.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
-        self._log_file.flush()
+        self._logger.info(msg)
 
     def _load_rules(self):
         with self._rules_lock:
@@ -366,7 +378,9 @@ class MainLoop:
         if ms > 0:
             if self._verbose:
                 self._log(f"等待 {ms}ms")
-            time.sleep(ms / 1000.0)
+            interrupted = self._stop_event.wait(timeout=ms / 1000.0)
+            if interrupted:
+                return StepResult("stop")
         return StepResult("continue")
 
     def _handle_wait_rule(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -442,6 +456,7 @@ class MainLoop:
                     m.get("pick", "first"),
                     m.get("timeout_ms", 3000),
                     title,
+                    self._stop_event,
                 )
                 threshold = m.get("threshold", 0)
                 direction = m.get("direction", "higher_better")
@@ -537,36 +552,10 @@ class MainLoop:
                 return
 
     def _execute_forced_trigger(self, rule: Rule, rect: dict) -> None:
+        ctx = StepContext(img=np.zeros((1, 1, 3), dtype=np.uint8), rect=rect)
         for step in rule.steps:
-            if step.type == "click":
-                activate_window(self._window_title)
-                params = step.params
-                off = params.get("random_offset", 0)
-                dx = random.randint(-off, off) if off else 0
-                dy = random.randint(-off, off) if off else 0
-                cx = params.get("x", 0) + dx
-                cy = params.get("y", 0) + dy
-                button = params.get("button", "left")
-                sx, sy = self._to_screen_coords(rect, cx, cy)
-                self._send_click(sx, sy, button)
-                rule.trigger_count += 1
-                rule.last_trigger_time = time.monotonic()
-                log = self._make_trigger_log(rule, "", sx, sy)
-                self._emit_trigger(log)
-                with self._rules_lock:
-                    self._rules_dirty = True
-                return
-            if step.type == "key":
-                activate_window(self._window_title)
-                key = step.params.get("key", "")
-                if key:
-                    self._send_key(key)
-                    rule.trigger_count += 1
-                    rule.last_trigger_time = time.monotonic()
-                    log = self._make_trigger_log(rule, "", 0, 0)
-                    self._emit_trigger(log)
-                    with self._rules_lock:
-                        self._rules_dirty = True
+            if step.type in ("click", "key"):
+                self._run_step(step, ctx, rule)
                 return
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -629,7 +618,7 @@ class MainLoop:
                     self._perf.record_frame()
                     continue
 
-                if not is_window_foreground(self._window_hwnd):
+                if self._foreground_only and not is_window_foreground(self._window_hwnd):
                     self._stop_event.wait(0.2)
                     self._perf.record_frame()
                     continue
@@ -662,7 +651,7 @@ class MainLoop:
                 else:
                     self._frame_diff_ratio = 1.0
 
-                if self._verbose and iteration % 1 == 0:
+                if self._verbose and iteration % 30 == 0:
                     self._log(
                         f"視窗位置=({rect['x']},{rect['y']}) 尺寸=({rect['w']}×{rect['h']}) img={img.shape}"
                     )
@@ -714,8 +703,9 @@ class MainLoop:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
         self._perf.stop()
-        if self._log_file:
-            self._log_file.close()
+        handler = getattr(self._logger, "handler", None)
+        if handler:
+            handler.close()
 
     def pause(self) -> None:
         self._pause_event.set()
@@ -894,9 +884,14 @@ if __name__ == "__main__":
     ml._save_period_counter = 0
     ml._tracking_hwnd = None
     ml._verbose = False
-    ml._log_file = open(
-        Path(__file__).resolve().parent.parent / "logs" / "test.log", "a", encoding="utf-8"
+    ml._logger = logging.getLogger("main_loop_test")
+    ml._logger.setLevel(logging.INFO)
+    ml._logger.handlers.clear()
+    ml._test_handler = logging.FileHandler(
+        Path(__file__).resolve().parent.parent / "logs" / "test.log", encoding="utf-8"
     )
+    ml._logger.addHandler(ml._test_handler)
+    ml._logger.handler = ml._test_handler
     ml._stop_event = threading.Event()
     ml._pause_event = threading.Event()
     ml._emergency_event = threading.Event()
@@ -996,7 +991,7 @@ if __name__ == "__main__":
     assert result.action == "stop", "click text_center without matched_text should stop"
     print("  [OK] _handle_click text_center without match")
 
-    ml._log_file.close()
-    Path(ml._log_file.name).unlink(missing_ok=True)
+    ml._test_handler.close()
+    (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
     print("\n=== All 10 tests passed ===")

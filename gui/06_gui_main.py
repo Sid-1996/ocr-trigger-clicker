@@ -2,6 +2,7 @@ import json
 import sys
 import threading
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +46,8 @@ from _loader import load_sibling
 
 _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
+
+from core.rule_engine import _STEP_DEFAULTS, Step  # noqa: E402
 
 from _version import __author__, __github__, __version__  # noqa: E402
 
@@ -417,37 +420,7 @@ class _StepListWidget(QWidget):
         self.steps_changed.emit()
 
     def add_step(self, step_type: str):
-        defaults = {
-            "detect": {
-                "text": "",
-                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                "fuzzy": False,
-                "fuzzy_threshold": 0.8,
-                "cooldown_ms": 2000,
-                "trigger_mode": "once",
-                "max_triggers": -1,
-            },
-            "click": {
-                "target": "text_center",
-                "x": 0,
-                "y": 0,
-                "button": "left",
-                "random_offset": 3,
-            },
-            "key": {"key": ""},
-            "wait": {"ms": 1000},
-            "wait_rule": {"rule_id": ""},
-            "collect_rounds": {
-                "rounds": [],
-                "primary_metric_index": 0,
-                "confirm_action": {"type": "key", "key": ""},
-                "on_all_fail": {"type": "jump", "rule_id": ""},
-            },
-            "jump": {"rule_id": ""},
-        }
-        from core.rule_engine import Step
-
-        step = Step(type=step_type, params=dict(defaults.get(step_type, {})))
+        step = Step(type=step_type, params=deepcopy(_STEP_DEFAULTS.get(step_type, {})))
         self._steps.append(step)
         self._rebuild()
         self._toggle_expand(len(self._steps) - 1)
@@ -1130,7 +1103,6 @@ crop_roi = _main_loop_mod.crop_roi
 capture_window_full = getattr(_main_loop_mod, "capture_window_full", lambda title: None)
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
-Step = _rule_mod.Step
 list_tasks = _rule_mod.list_tasks
 load_task = _rule_mod.load_task
 save_task = _rule_mod.save_task

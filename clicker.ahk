@@ -17,7 +17,7 @@ F12:: {
 WSAData := Buffer(400)
 DllCall("ws2_32\WSAStartup", "UShort", 0x0202, "Ptr", WSAData)
 
-PORT := 12345
+PORT := A_Args.Length > 0 ? Integer(A_Args[1]) : 12345
 HOST := 0x0100007F  ; 127.0.0.1
 cmd_buffer := ""
 

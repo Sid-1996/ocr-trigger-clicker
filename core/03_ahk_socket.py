@@ -129,7 +129,8 @@ def _restart_ahk() -> bool:
 
         time.sleep(0.5)
 
-        if not _launch_ahk():
+        port = getattr(_launch_ahk, "port", 12345)
+        if not _launch_ahk(port):
             _restart_fail_count += 1
             return False
 
@@ -170,7 +171,7 @@ def _find_ahk_executable() -> str | None:
     return None
 
 
-def _launch_ahk() -> bool:
+def _launch_ahk(port: int = 12345) -> bool:
     global _ahk_process
     ahk_script = getattr(_launch_ahk, "ahk_path", _find_ahk())
     exe_path = _find_ahk_executable()
@@ -179,7 +180,7 @@ def _launch_ahk() -> bool:
         return False
     try:
         _ahk_process = subprocess.Popen(
-            [exe_path, ahk_script],
+            [exe_path, ahk_script, str(port)],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         return True
@@ -274,12 +275,13 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
     if ahk_path is None:
         ahk_path = _find_ahk()
     _launch_ahk.ahk_path = ahk_path
+    _launch_ahk.port = port
 
     _server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     _server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     _server.bind(("127.0.0.1", port))
 
-    if not _launch_ahk():
+    if not _launch_ahk(port):
         return False
 
     accept_thread = threading.Thread(target=_accept_loop, daemon=True)
@@ -352,6 +354,9 @@ def send_move(x: int, y: int) -> bool:
 
 
 def send_key(key: str) -> bool:
+    key = key.strip().replace("\n", "").replace("\r", "")
+    if not key:
+        return False
     return _send_cmd(f"KEY,{key}")
 
 
