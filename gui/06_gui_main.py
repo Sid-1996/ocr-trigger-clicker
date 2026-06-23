@@ -2459,6 +2459,9 @@ class MainWindow(QMainWindow):
             return True, 0
         return False, 0
 
+    def _close_tool(self):
+        self.close()
+
     # === Close ===
     def closeEvent(self, event):
         self._status_timer.stop()
