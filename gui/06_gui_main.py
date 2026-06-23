@@ -47,8 +47,6 @@ from _loader import load_sibling
 _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
 
-from core.rule_engine import _STEP_DEFAULTS, Step  # noqa: E402
-
 from _version import __author__, __github__, __version__  # noqa: E402
 
 
@@ -1111,6 +1109,8 @@ rename_task = _rule_mod.rename_task
 export_task = _rule_mod.export_task
 import_task = _rule_mod.import_task
 migrate_old_rules = _rule_mod.migrate_old_rules
+Step = _rule_mod.Step
+_STEP_DEFAULTS = _rule_mod._STEP_DEFAULTS
 
 _ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
