@@ -551,13 +551,6 @@ class MainLoop:
                         self._pending_forced_triggers.add(result.rule_id)
                 return
 
-    def _execute_forced_trigger(self, rule: Rule, rect: dict) -> None:
-        ctx = StepContext(img=np.zeros((1, 1, 3), dtype=np.uint8), rect=rect)
-        for step in rule.steps:
-            if step.type in ("click", "key"):
-                self._run_step(step, ctx, rule)
-                return
-
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
             rules_snapshot = list(self._rules)
@@ -576,7 +569,7 @@ class MainLoop:
                 self._pending_forced_triggers.discard(rule.id)
                 if self._verbose:
                     self._log(f"強制觸發規則「{rule.name}」")
-                self._execute_forced_trigger(rule, rect)
+                self._run_rule(rule, img, rect)
                 continue
 
             try:

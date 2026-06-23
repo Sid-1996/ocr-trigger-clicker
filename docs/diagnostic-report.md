@@ -218,21 +218,11 @@ def _get_mss() -> mss.mss:
 
 ---
 
-#### P1-4　`_execute_forced_trigger` 複製了 handler 邏輯
+#### ~~P1-4　`_execute_forced_trigger` 複製了 handler 邏輯~~ ✅ 已修正
 
-**位置：** `core/05_main_loop.py` 第 539–570 行
+**commit:** f0cfc04
 
-強制觸發路徑（jump / on_all_fail）獨立處理 click/key，完全繞過：速率限制、失控規則偵測、TriggerLog 記錄（click 有但 key 無），未來修改 handler 時需同步改兩處。
-
-```python
-# 修正方向 ✅ — 重用現有 handler
-def _execute_forced_trigger(self, rule: Rule, rect: dict) -> None:
-    ctx = StepContext(img=np.zeros((1, 1, 3), dtype=np.uint8), rect=rect)
-    for step in rule.steps:
-        if step.type in ("click", "key"):
-            self._run_step(step, ctx, rule)
-            return
-```
+jump 與 on_all_fail 現直接呼叫 `_run_rule`（含完整 detect → click/key 流程），`_execute_forced_trigger` 已移除。
 
 ---
 
