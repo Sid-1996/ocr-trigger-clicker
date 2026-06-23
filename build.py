@@ -206,6 +206,10 @@ def main():
     exe = here / "dist" / "ocr-trigger-clicker.exe"
     if exe.exists():
         print(f"\n打包成功: {exe}")
+        # 清理 build/ 暫存（spec 保留供除錯）
+        import shutil
+
+        shutil.rmtree(here / "build", ignore_errors=True)
     else:
         print("\n打包失敗")
 
