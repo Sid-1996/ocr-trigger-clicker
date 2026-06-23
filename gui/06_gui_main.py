@@ -1639,6 +1639,10 @@ class MainWindow(QMainWindow):
         self._signals.emergency_signal.connect(self._emergency_stop)
         self._signals.test_done_signal.connect(self._show_test_result)
         self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
+        self._signals.warning_signal.connect(
+            lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
+        )
+        self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
 
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)

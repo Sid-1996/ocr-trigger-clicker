@@ -29,6 +29,8 @@ _RUNAWAY_THRESHOLD = 5
 _RUNAWAY_WINDOW_SEC = 10.0
 _MAX_CPS = 5
 _CPS_WINDOW_SEC = 1.0
+_MAX_PENDING_TRIGGERS = 200
+_AUTO_DISABLE_RECOVERY_SEC = 30.0
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -143,9 +145,12 @@ class MainLoop:
 
         self._rule_trigger_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
         self._rule_auto_disabled: set[str] = set()
+        self._auto_disabled_at: dict[str, float] = {}
         self._pending_forced_triggers: set[str] = set()
         self._rules_dirty: bool = False
         self._save_period_counter: int = 0
+        self._cycle_visited: set[str] = set()
+        self._process_counter: int = 0
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -297,6 +302,7 @@ class MainLoop:
 
         if self.check_runaway_rule(rule.id):
             self._rule_auto_disabled.add(rule.id)
+            self._auto_disabled_at[rule.id] = time.monotonic()
             rule.enabled = False
             msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
             if self.on_warning:
@@ -340,6 +346,7 @@ class MainLoop:
 
         if self.check_runaway_rule(rule.id):
             self._rule_auto_disabled.add(rule.id)
+            self._auto_disabled_at[rule.id] = time.monotonic()
             rule.enabled = False
             msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
             if self.on_warning:
@@ -397,6 +404,8 @@ class MainLoop:
         return StepResult("continue")
 
     def _execute_inline_action(self, action: dict, ctx: StepContext) -> None:
+        if not self._perf.check_rate_limit():
+            return
         atype = action.get("type", "")
         if atype == "click":
             x = action.get("x", 0)
@@ -505,23 +514,41 @@ class MainLoop:
         elif on_all_fail.get("type") == "jump":
             target_id = on_all_fail.get("rule_id", "")
             if target_id:
-                with self._rules_lock:
-                    self._pending_forced_triggers.add(target_id)
-                msg = f"多輪比較「{rule.name}」無達標輪次 → 跳轉「{target_id}」"
-                if self.on_warning:
-                    self.on_warning(msg)
-                elif self._verbose:
-                    self._log(msg)
+                if target_id in self._cycle_visited:
+                    if self._verbose:
+                        self._log(f"偵測到跳轉循環，略過「{rule.name}」→「{target_id}」")
+                    if self.on_warning:
+                        self.on_warning(f"規則「{rule.name}」跳轉循環已中斷")
+                elif len(self._pending_forced_triggers) >= _MAX_PENDING_TRIGGERS:
+                    if self._verbose:
+                        self._log(f"跳轉佇列已滿，略過「{rule.name}」→「{target_id}」")
+                else:
+                    with self._rules_lock:
+                        self._pending_forced_triggers.add(target_id)
+                    msg = f"多輪比較「{rule.name}」無達標輪次 → 跳轉「{target_id}」"
+                    if self.on_warning:
+                        self.on_warning(msg)
+                    elif self._verbose:
+                        self._log(msg)
 
         return StepResult("stop")
 
     def _handle_jump(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         target_id = params.get("rule_id", "")
         if target_id:
-            with self._rules_lock:
-                self._pending_forced_triggers.add(target_id)
-            if self._verbose:
-                self._log(f"規則「{rule.name}」跳轉至「{target_id}」")
+            if target_id in self._cycle_visited:
+                if self._verbose:
+                    self._log(f"偵測到跳轉循環，略過「{rule.name}」→「{target_id}」")
+                if self.on_warning:
+                    self.on_warning(f"規則「{rule.name}」跳轉循環已中斷")
+            elif len(self._pending_forced_triggers) >= _MAX_PENDING_TRIGGERS:
+                if self._verbose:
+                    self._log(f"跳轉佇列已滿，略過「{rule.name}」→「{target_id}」")
+            else:
+                with self._rules_lock:
+                    self._pending_forced_triggers.add(target_id)
+                if self._verbose:
+                    self._log(f"規則「{rule.name}」跳轉至「{target_id}」")
         return StepResult("stop")
 
     def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
@@ -546,9 +573,10 @@ class MainLoop:
             if result.action == "stop":
                 return
             if result.action == "jump":
-                if result.rule_id:
-                    with self._rules_lock:
-                        self._pending_forced_triggers.add(result.rule_id)
+                if result.rule_id and result.rule_id not in self._cycle_visited:
+                    if len(self._pending_forced_triggers) < _MAX_PENDING_TRIGGERS:
+                        with self._rules_lock:
+                            self._pending_forced_triggers.add(result.rule_id)
                 return
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -559,11 +587,25 @@ class MainLoop:
                 self._log("無啟用中的規則")
             return
 
+        self._cycle_visited.clear()
+        self._process_counter += 1
+
         for rule in rules_snapshot:
             if not rule.enabled:
                 continue
             if rule.id in self._rule_auto_disabled:
-                continue
+                if (
+                    self._auto_disabled_at.get(rule.id, 0) + _AUTO_DISABLE_RECOVERY_SEC
+                    < time.monotonic()
+                ):
+                    self._rule_auto_disabled.discard(rule.id)
+                    self._auto_disabled_at.pop(rule.id, None)
+                    rule.enabled = True
+                    if self._verbose:
+                        self._log(f"規則「{rule.name}」自動恢復啟用")
+                else:
+                    continue
+            self._cycle_visited.add(rule.id)
 
             if rule.id in self._pending_forced_triggers:
                 self._pending_forced_triggers.discard(rule.id)
@@ -579,6 +621,15 @@ class MainLoop:
                     self._log(f"規則「{rule.name}」處理異常: {e}")
                 if self.on_warning:
                     self.on_warning(f"規則「{rule.name}」異常: {e}")
+
+        # 定期清理 orphan pending triggers（不存在於目前規則中的 ID）
+        if self._process_counter % 50 == 0 and self._pending_forced_triggers:
+            valid_ids = {r.id for r in rules_snapshot}
+            orphans = self._pending_forced_triggers - valid_ids
+            if orphans:
+                self._pending_forced_triggers -= orphans
+                if self._verbose:
+                    self._log(f"清理 {len(orphans)} 個孤兒跳轉目標")
 
     def _loop(self):
         iteration = 0
