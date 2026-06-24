@@ -5,8 +5,10 @@ import random
 import sys
 import tempfile
 import time
+import uuid
 from copy import deepcopy
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +22,18 @@ from _loader import load_sibling  # noqa: E402
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
 find_text = _ocr_mod.find_text
+
+_FORMAT_VERSION = 1
+_IMPORT_DESCRIPTION_MAX = 200
+
+
+@dataclass
+class ImportPreview:
+    meta: dict
+    rule_names: list[str]
+    rule_count: int
+    warnings: list[str]
+    raw_data: dict
 
 
 # ── New dataclasses ──
@@ -384,34 +398,117 @@ def rename_task(old_name: str, new_name: str) -> bool:
         return False
 
 
+def _export_meta() -> dict:
+    try:
+        from _version import __version__
+    except ImportError:
+        __version__ = "0.0.0"
+    return {
+        "format_version": _FORMAT_VERSION,
+        "app_version": __version__,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
+    if not isinstance(raw.get("id"), str) or not raw["id"]:
+        warnings.append("規則缺少 id，已略過")
+        return False
+    if not isinstance(raw.get("name"), str) or not raw["name"]:
+        warnings.append(f"規則 {raw.get('id', '?')} 缺少 name，已略過")
+        return False
+    steps = raw.get("steps")
+    if not isinstance(steps, list) or len(steps) == 0:
+        warnings.append(f"規則「{raw.get('name', '?')}」缺少 steps，已略過")
+        return False
+    valid_types = {"detect", "click", "key", "wait_rule", "jump", "pause"}
+    for i, s in enumerate(steps):
+        if not isinstance(s, dict):
+            warnings.append(f"規則「{raw['name']}」步驟 {i} 格式錯誤，已略過")
+            return False
+        if s.get("type") not in valid_types:
+            warnings.append(f"規則「{raw['name']}」步驟 {i} 未知類型「{s.get('type')}」，已略過")
+            return False
+    return True
+
+
 def export_task(name: str, dest_path: str) -> bool:
     src = get_tasks_dir() / f"{name}.json"
     if not src.exists():
         return False
     try:
-        import shutil
-
-        shutil.copy2(str(src), dest_path)
+        data = json.loads(src.read_text(encoding="utf-8"))
+        data["_meta"] = _export_meta()
+        Path(dest_path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         return True
-    except OSError:
+    except (OSError, json.JSONDecodeError):
         return False
 
 
-def import_task(src_path: str) -> Optional[str]:
+def preview_import_task(src_path: str) -> Optional[ImportPreview]:
+    """Read & validate a task file, return preview info without writing anything."""
     src = Path(src_path)
     if not src.exists():
         return None
     try:
         data = json.loads(src.read_text(encoding="utf-8"))
-        if not isinstance(data, dict) or "rules" not in data:
-            return None
     except (json.JSONDecodeError, OSError):
         return None
-    name = src.stem
-    dest = get_tasks_dir() / f"{name}.json"
+    if not isinstance(data, dict) or "rules" not in data:
+        return None
+    if not isinstance(data["rules"], list):
+        return None
+
+    meta = data.get("_meta", {})
+    if not isinstance(meta, dict):
+        meta = {}
+
+    warnings: list[str] = []
+    valid_rules = []
+    for raw in data["rules"]:
+        if isinstance(raw, dict) and _validate_rule_structure(raw, warnings):
+            valid_rules.append(raw)
+
+    rule_names = [r.get("name", "?") for r in valid_rules]
+    if len(valid_rules) < len(data["rules"]):
+        warnings.append(
+            f"共 {len(data['rules'])} 條規則，{len(valid_rules)} 條格式正確，{len(data['rules']) - len(valid_rules)} 條已略過"
+        )
+
+    return ImportPreview(
+        meta=meta,
+        rule_names=rule_names,
+        rule_count=len(valid_rules),
+        warnings=warnings,
+        raw_data={"rules": valid_rules},
+    )
+
+
+def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
+    preview = preview_import_task(src_path)
+    if preview is None or preview.rule_count == 0:
+        return None
+    data = preview.raw_data
+    if regenerate_uuids:
+        id_map: dict[str, str] = {}
+        for r in data["rules"]:
+            old_id = r["id"]
+            new_id = uuid.uuid4().hex[:12]
+            id_map[old_id] = new_id
+            r["id"] = new_id
+        for r in data["rules"]:
+            for s in r.get("steps", []):
+                p = s.get("params", {})
+                if s["type"] in ("wait_rule", "jump"):
+                    rid = p.get("rule_id", "")
+                    if rid in id_map:
+                        p["rule_id"] = id_map[rid]
+
+    src_name = Path(src_path).stem
+    dest = get_tasks_dir() / f"{src_name}.json"
     suffix = 1
     while dest.exists():
-        dest = get_tasks_dir() / f"{name}_{suffix}.json"
+        dest = get_tasks_dir() / f"{src_name}_{suffix}.json"
         suffix += 1
     try:
         dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

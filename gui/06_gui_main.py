@@ -14,6 +14,8 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -1187,6 +1189,8 @@ delete_task = _rule_mod.delete_task
 rename_task = _rule_mod.rename_task
 export_task = _rule_mod.export_task
 import_task = _rule_mod.import_task
+preview_import_task = _rule_mod.preview_import_task
+ImportPreview = _rule_mod.ImportPreview
 migrate_old_rules = _rule_mod.migrate_old_rules
 Step = _rule_mod.Step
 _STEP_DEFAULTS = _rule_mod._STEP_DEFAULTS
@@ -1796,19 +1800,91 @@ class MainWindow(QMainWindow):
         delete_task(self._current_task)
         self._refresh_task_list()
 
+    def _show_import_preview_dialog(self, preview: ImportPreview) -> tuple[bool, bool]:
+        """Show import preview dialog. Returns (accepted, regenerate_uuids)."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("匯入任務預覽")
+        dialog.setMinimumWidth(480)
+        layout = QVBoxLayout(dialog)
+
+        meta = preview.meta
+        meta_lines = []
+        if meta.get("description"):
+            meta_lines.append(f"說明：{meta['description']}")
+        if meta.get("author"):
+            meta_lines.append(f"作者：{meta['author']}")
+        if meta.get("game"):
+            meta_lines.append(f"遊戲：{meta['game']}")
+        if meta.get("app_version"):
+            meta_lines.append(f"來源版本：{meta['app_version']}")
+        if meta_lines:
+            layout.addWidget(QLabel("▸ 任務資訊"))
+            meta_label = QLabel("\n".join(meta_lines))
+            meta_label.setWordWrap(True)
+            layout.addWidget(meta_label)
+
+        layout.addWidget(QLabel(f"▸ 將匯入 {preview.rule_count} 條規則："))
+        names_text = "\n".join(f"  • {n}" for n in preview.rule_names[:20])
+        if preview.rule_count > 20:
+            names_text += f"\n  …及其他 {preview.rule_count - 20} 條"
+        names_label = QLabel(names_text)
+        names_label.setWordWrap(True)
+        layout.addWidget(names_label)
+
+        if preview.warnings:
+            layout.addWidget(QLabel("▸ 警告："))
+            warn_label = QLabel("\n".join(f"  ⚠ {w}" for w in preview.warnings))
+            warn_label.setWordWrap(True)
+            warn_label.setStyleSheet("color: #cc8800;")
+            layout.addWidget(warn_label)
+
+        cb = QCheckBox("重新產生所有規則 ID（避免與現有規則衝突）")
+        cb.setChecked(False)
+        layout.addWidget(cb)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("匯入")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        result = dialog.exec()
+        return result == QDialog.DialogCode.Accepted, cb.isChecked()
+
     def _on_task_import(self):
         path, _ = QFileDialog.getOpenFileName(self, "匯入任務", str(_here), "JSON (*.json)")
         if not path:
             return
-        imported_name = import_task(path)
+        preview = preview_import_task(path)
+        if preview is None or preview.rule_count == 0:
+            QMessageBox.warning(
+                self, "匯入失敗", "檔案格式無效或無有效規則，請確認是包含 rules 陣列的 JSON。"
+            )
+            return
+        accepted, regen = self._show_import_preview_dialog(preview)
+        if not accepted:
+            return
+        imported_name = import_task(path, regenerate_uuids=regen)
         if imported_name is None:
-            QMessageBox.warning(self, "匯入失敗", "檔案格式無效，請確認是包含 rules 陣列的 JSON。")
+            QMessageBox.warning(self, "匯入失敗", "無法寫入目標檔案。")
             return
         self._refresh_task_list()
         idx = self._task_combo.findText(imported_name)
         if idx >= 0:
             self._task_combo.setCurrentIndex(idx)
-        self._status_bar.showMessage(f"已匯入任務「{imported_name}」")
+        msg = f"已匯入任務「{imported_name}」"
+        if preview.warnings:
+            msg += f"（{len(preview.warnings)} 條警告）"
+        self._status_bar.showMessage(msg, 8000)
+        if preview.warnings:
+            QMessageBox.information(
+                self,
+                "匯入完成（有警告）",
+                f"任務「{imported_name}」已匯入，但有 {len(preview.warnings)} 條警告：\n\n"
+                + "\n".join(preview.warnings),
+            )
 
     def _on_task_export(self):
         if not self._current_task:
