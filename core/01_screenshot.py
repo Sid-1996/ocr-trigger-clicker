@@ -1,21 +1,20 @@
 import ctypes
+import threading
 import time
 from ctypes import wintypes
-from typing import Optional
 
 import cv2
 import mss
 import numpy as np
 import pygetwindow as gw
 
-_mss_instance: Optional[mss.mss] = None
+_mss_tls = threading.local()
 
 
 def _get_mss() -> mss.mss:
-    global _mss_instance
-    if _mss_instance is None:
-        _mss_instance = mss.mss()
-    return _mss_instance
+    if not hasattr(_mss_tls, "instance") or _mss_tls.instance is None:
+        _mss_tls.instance = mss.mss()
+    return _mss_tls.instance
 
 
 class _BITMAPINFOHEADER(ctypes.Structure):

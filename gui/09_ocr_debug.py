@@ -487,15 +487,36 @@ class OcrDebugPanel(QWidget):
         QApplication.processEvents()
         time.sleep(0.15)
 
-        rect = _screenshot.get_window_rect(self._window_title)
-        if rect is None:
-            self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
-            return
-
-        cx = rect["x"] + int(r.x + r.w / 2)
-        cy = rect["y"] + int(r.y + r.h / 2)
         ocr_center_x = int(r.x + r.w / 2)
         ocr_center_y = int(r.y + r.h / 2)
+
+        rect = _screenshot.get_window_rect(self._window_title)
+
+        if self._capture_source == "GDI 截圖":
+            import ctypes
+            from ctypes import wintypes
+
+            hwnd_val = _screenshot.get_window_hwnd(self._window_title)
+            if hwnd_val:
+                pt = wintypes.POINT()
+                pt.x, pt.y = 0, 0
+                ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
+                cx = pt.x + ocr_center_x
+                cy = pt.y + ocr_center_y
+            elif rect is not None:
+                cx = rect["x"] + ocr_center_x
+                cy = rect["y"] + ocr_center_y
+            else:
+                self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
+                return
+            if rect is None:
+                rect = {"x": cx - ocr_center_x, "y": cy - ocr_center_y, "w": 0, "h": 0}
+        else:
+            if rect is None:
+                self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
+                return
+            cx = rect["x"] + ocr_center_x
+            cy = rect["y"] + ocr_center_y
 
         click_ok = _ahk.send_click(cx, cy)
         if not click_ok:
@@ -511,6 +532,7 @@ class OcrDebugPanel(QWidget):
         status_text = "成功" if click_ok else "失敗"
         tooltip = (
             f"{status_icon} 點擊{status_text}：{r.text}\n"
+            f"截圖來源：{self._capture_source}\n"
             f"視窗 rect: ({rect['x']}, {rect['y']}) {rect['w']}×{rect['h']}\n"
             f"OCR 中心: ({ocr_center_x}, {ocr_center_y})\n"
             f"螢幕座標: ({cx}, {cy})"
