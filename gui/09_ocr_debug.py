@@ -488,6 +488,8 @@ class OcrDebugPanel(QWidget):
 
         cx = rect["x"] + int(r.x + r.w / 2)
         cy = rect["y"] + int(r.y + r.h / 2)
+        ocr_center_x = int(r.x + r.w / 2)
+        ocr_center_y = int(r.y + r.h / 2)
 
         _screenshot.activate_window(self._window_title)
         QApplication.processEvents()
@@ -506,14 +508,18 @@ class OcrDebugPanel(QWidget):
         btn_pos = self._click_test_btn.mapToGlobal(QPoint(0, self._click_test_btn.height()))
         status_icon = "✓" if click_ok else "✗"
         status_text = "成功" if click_ok else "失敗"
-        QToolTip.showText(
-            btn_pos,
-            f"{status_icon} 點擊{status_text}：{r.text}  ({cx}, {cy})",
-            self._click_test_btn,
+        tooltip = (
+            f"{status_icon} 點擊{status_text}：{r.text}\n"
+            f"視窗 rect: ({rect['x']}, {rect['y']}) {rect['w']}×{rect['h']}\n"
+            f"OCR 中心: ({ocr_center_x}, {ocr_center_y})\n"
+            f"螢幕座標: ({cx}, {cy})"
         )
-        QTimer.singleShot(1500, QToolTip.hideText)
+        QToolTip.showText(btn_pos, tooltip, self._click_test_btn)
+        QTimer.singleShot(2500, QToolTip.hideText)
 
-        self._status_bar.showMessage(f"點擊測試{status_text}：「{r.text}」  螢幕座標 ({cx}, {cy})")
+        self._status_bar.showMessage(
+            f"點擊測試{status_text}：「{r.text}」  rect({rect['x']},{rect['y']}) OCR中心({ocr_center_x},{ocr_center_y}) 螢幕({cx},{cy})"
+        )
 
     def _rebuild_annotated(self):
         try:

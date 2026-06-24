@@ -2693,6 +2693,13 @@ class MainWindow(QMainWindow):
         match_mode = p.get("match_mode", "fuzzy")
         threshold = p.get("fuzzy_threshold", 0.8)
         matches = find_text(results, text, match_mode, threshold)
+        common = {
+            "target_text": text,
+            "match_mode": match_mode,
+            "threshold": threshold,
+            "roi": roi,
+            "total_results": len(results),
+        }
         if matches:
             m = matches[0]
             return {
@@ -2700,9 +2707,13 @@ class MainWindow(QMainWindow):
                 "matched_text": m.text,
                 "confidence": m.confidence,
                 "click": (int(m.x + m.w / 2), int(m.y + m.h / 2)),
+                **common,
             }
-        texts = [r.text for r in results[:5]]
-        return {"hit": False, "ocr_texts": texts}
+        return {
+            "hit": False,
+            "all_results": [(r.text, r.confidence) for r in results],
+            **common,
+        }
 
     def _show_test_result(self, result: dict):
         self._edit_test_btn.setEnabled(True)
@@ -2711,17 +2722,39 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "測試結果", result["error"])
             return
         r = result
+        mode_labels = {
+            "contains": "包含關鍵字",
+            "exact": "完全符合",
+            "fuzzy": "近似比對",
+            "regex": "正規表達式",
+        }
+        mode_str = mode_labels.get(r.get("match_mode", ""), r.get("match_mode", "?"))
+        roi = r.get("roi", {})
+        zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        roi_str = "全視窗" if zero_roi else f"({roi['x']},{roi['y']}) {roi['w']}×{roi['h']}"
+        header = (
+            f"目標：「{r.get('target_text', '')}」\n"
+            f"比對：{mode_str}\n"
+            f"ROI：{roi_str}\n"
+            f"辨識總數：{r.get('total_results', '?')} 筆"
+        )
         if r["hit"]:
             msg = (
-                f"✅ 命中「{r['matched_text']}」"
-                f"\n信心: {r['confidence']:.2f}"
-                f"\n座標: ({r['click'][0]}, {r['click'][1]})"
+                f"✅ 命中「{r['matched_text']}」\n"
+                f"信心: {r['confidence']:.2f}\n"
+                f"座標: ({r['click'][0]}, {r['click'][1]})\n\n"
+                f"{header}"
             )
         else:
-            texts = r.get("ocr_texts", [])
-            msg = "❌ 未命中目標文字"
-            if texts:
-                msg += "\n\n辨識到的文字:\n" + "\n".join(texts[:5])
+            lines = [f"❌ 未命中目標文字\n\n{header}\n"]
+            all_texts = r.get("all_results", [])
+            if all_texts:
+                lines.append("\n辨識結果（前 10 筆）：")
+                for i, (t, c) in enumerate(all_texts[:10], 1):
+                    lines.append(f"  {i}. {t} ({c:.2f})")
+                if len(all_texts) > 10:
+                    lines.append(f"  … 尚有 {len(all_texts) - 10} 筆")
+            msg = "\n".join(lines)
         QMessageBox.information(self, "測試結果", msg)
 
     # === OCR diagnostic ===
