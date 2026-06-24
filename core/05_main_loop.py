@@ -288,8 +288,12 @@ class MainLoop:
             jump_rule_id = ""
         elif isinstance(raw, dict):
             action = raw.get("action", "stop")
-            retries = int(raw.get("retries", 5))
-            retry_delay_ms = int(raw.get("retry_delay_ms", 1000))
+            try:
+                retries = int(raw.get("retries", 5))
+                retry_delay_ms = int(raw.get("retry_delay_ms", 1000))
+            except (ValueError, TypeError):
+                retries = 5
+                retry_delay_ms = 1000
             fail_key = str(raw.get("key", ""))
             jump_rule_id = str(raw.get("jump_rule_id", ""))
         else:
@@ -328,7 +332,7 @@ class MainLoop:
 
         if action == "jump":
             if jump_rule_id:
-                if jump_rule_id in self._cycle_visited:
+                if jump_rule_id in self._cycle_visited and jump_rule_id != rule.id:
                     if self._verbose:
                         self._log(f"on_fail 跳轉循環偵測，略過「{rule.name}」→「{jump_rule_id}」")
                 elif len(self._pending_forced_triggers) >= _MAX_PENDING_TRIGGERS:
@@ -539,7 +543,9 @@ class MainLoop:
         # ponytail: re-run target's first detect step on current frame, not historical count
         detect_step = next((s for s in target.steps if s.type == "detect"), None)
         if detect_step is None:
-            return StepResult("stop")
+            if self._verbose:
+                self._log(f"wait_rule「{rule.name}」→「{target.name}」無偵測步驟，略過等待")
+            return StepResult("continue")
 
         p = detect_step.params
         target_text = p.get("text", "")
@@ -673,7 +679,7 @@ class MainLoop:
         elif on_all_fail.get("type") == "jump":
             target_id = on_all_fail.get("rule_id", "")
             if target_id:
-                if target_id in self._cycle_visited:
+                if target_id in self._cycle_visited and target_id != rule.id:
                     if self._verbose:
                         self._log(f"偵測到跳轉循環，略過「{rule.name}」→「{target_id}」")
                     if self.on_warning:
@@ -695,7 +701,7 @@ class MainLoop:
     def _handle_jump(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         target_id = params.get("rule_id", "")
         if target_id:
-            if target_id in self._cycle_visited:
+            if target_id in self._cycle_visited and target_id != rule.id:
                 if self._verbose:
                     self._log(f"偵測到跳轉循環，略過「{rule.name}」→「{target_id}」")
                 if self.on_warning:
@@ -733,12 +739,6 @@ class MainLoop:
             result = self._run_step(step, ctx, rule)
             if result.action == "stop":
                 return
-            if result.action == "jump":
-                if result.rule_id and result.rule_id not in self._cycle_visited:
-                    if len(self._pending_forced_triggers) < _MAX_PENDING_TRIGGERS:
-                        with self._rules_lock:
-                            self._pending_forced_triggers.add(result.rule_id)
-                return
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
@@ -753,6 +753,8 @@ class MainLoop:
 
         for rule in rules_snapshot:
             if not rule.enabled:
+                with self._rules_lock:
+                    self._pending_forced_triggers.discard(rule.id)
                 continue
             with self._rules_lock:
                 if rule.id in self._rule_auto_disabled:
@@ -957,6 +959,7 @@ class MainLoop:
 
     def emergency_stop(self):
         self._emergency_event.set()
+        self._stop_event.set()
         self._pause_event.set()
         _ahk.send_emergency_stop()
         if self.on_emergency:
@@ -1187,7 +1190,7 @@ if __name__ == "__main__":
         ),
     ]
     result = ml._handle_wait_rule({"rule_id": "empty_steps"}, ctx, test_rule)
-    assert result.action == "stop", "no detect step should stop"
+    assert result.action == "continue", "no detect step should pass (no condition to check)"
     result = ml._handle_wait_rule({"rule_id": "detect_no_match"}, ctx, test_rule)
     assert result.action == "stop", "text not found in current frame should stop"
     result = ml._handle_wait_rule({"rule_id": "nonexistent"}, ctx, test_rule)

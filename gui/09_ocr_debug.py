@@ -481,6 +481,12 @@ class OcrDebugPanel(QWidget):
         from _loader import load_sibling
 
         _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+        _ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+
+        _screenshot.activate_window(self._window_title)
+        QApplication.processEvents()
+        time.sleep(0.15)
+
         rect = _screenshot.get_window_rect(self._window_title)
         if rect is None:
             self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
@@ -491,11 +497,6 @@ class OcrDebugPanel(QWidget):
         ocr_center_x = int(r.x + r.w / 2)
         ocr_center_y = int(r.y + r.h / 2)
 
-        _screenshot.activate_window(self._window_title)
-        QApplication.processEvents()
-        time.sleep(0.15)
-
-        _ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
         click_ok = _ahk.send_click(cx, cy)
         if not click_ok:
             _ahk.init_ahk()
