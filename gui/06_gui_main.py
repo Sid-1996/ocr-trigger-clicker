@@ -1928,6 +1928,7 @@ class MainWindow(QMainWindow):
             != QMessageBox.StandardButton.Yes
         ):
             return
+        self._flush_save()
         delete_task(self._current_task)
         self._refresh_task_list()
 

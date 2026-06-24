@@ -96,14 +96,11 @@ def capture(title: str) -> np.ndarray | None:
     if rect is None:
         return None
     try:
-        hwnd = get_window_hwnd(title)
-        scale = get_dpi_scaling_factor(hwnd)
-
         sct = _get_mss()
-        left = int(rect["x"] * scale)
-        top = int(rect["y"] * scale)
-        right = int((rect["x"] + rect["w"]) * scale)
-        bottom = int((rect["y"] + rect["h"]) * scale)
+        left = rect["x"]
+        top = rect["y"]
+        right = rect["x"] + rect["w"]
+        bottom = rect["y"] + rect["h"]
 
         # 多螢幕支援：找出涵蓋此視窗的螢幕（跳過 monitors[0] 全局虛擬螢幕）
         best_monitor = None

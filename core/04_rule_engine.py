@@ -330,6 +330,7 @@ def load_rules(path: str) -> list[Rule]:
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
+    tmp_path: str = ""
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}
         p = Path(path)
@@ -341,7 +342,8 @@ def save_rules(rules: list[Rule], path: str) -> bool:
         os.replace(tmp_path, p)
         return True
     except OSError:
-        Path(tmp_path).unlink(missing_ok=True)
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
         return False
 
 
