@@ -106,6 +106,7 @@ class StepContext:
     img: np.ndarray
     rect: dict
     matched_text: Optional[OcrResult] = None
+    forced: bool = False
 
 
 @dataclass
@@ -252,7 +253,11 @@ class MainLoop:
         if elapsed_ms < params.get("cooldown_ms", 2000):
             return StepResult("stop")
 
-        if params.get("trigger_mode", "once") == "once" and rule.trigger_count > 0:
+        if (
+            not ctx.forced
+            and params.get("trigger_mode", "once") == "once"
+            and rule.trigger_count > 0
+        ):
             return StepResult("stop")
 
         mt = params.get("max_triggers", -1)
@@ -528,7 +533,31 @@ class MainLoop:
         with self._rules_lock:
             target = next((r for r in self._rules if r.id == target_id), None)
 
-        if target is None or target.trigger_count < 1:
+        if target is None:
+            return StepResult("stop")
+
+        # ponytail: re-run target's first detect step on current frame, not historical count
+        detect_step = next((s for s in target.steps if s.type == "detect"), None)
+        if detect_step is None:
+            return StepResult("stop")
+
+        p = detect_step.params
+        target_text = p.get("text", "")
+        if not target_text.strip():
+            return StepResult("stop")
+
+        roi = p.get("roi")
+        results = self._ocr_region(ctx.img, roi)
+        if not results:
+            return StepResult("stop")
+
+        matches = find_text(
+            results,
+            target_text,
+            p.get("match_mode", "fuzzy"),
+            p.get("fuzzy_threshold", 0.8),
+        )
+        if not matches:
             return StepResult("stop")
 
         return StepResult("continue")
@@ -698,8 +727,8 @@ class MainLoop:
             return StepResult("stop")
         return handler(step.params, ctx, rule)
 
-    def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict) -> None:
-        ctx = StepContext(img=img, rect=rect)
+    def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict, forced: bool = False) -> None:
+        ctx = StepContext(img=img, rect=rect, forced=forced)
         for step in rule.steps:
             result = self._run_step(step, ctx, rule)
             if result.action == "stop":
@@ -745,7 +774,7 @@ class MainLoop:
                     self._pending_forced_triggers.discard(rule.id)
                     if self._verbose:
                         self._log(f"強制觸發規則「{rule.name}」")
-                    self._run_rule(rule, img, rect)
+                    self._run_rule(rule, img, rect, forced=True)
                     continue
 
             try:
@@ -1146,12 +1175,23 @@ if __name__ == "__main__":
     _ahk.send_key = _orig_key
     print("  [OK] _execute_inline_action")
 
-    # ── Test 7: _handle_wait_rule ──
-    ml._rules = [Rule(id="existing_rule", name="已存在", enabled=True, steps=[], trigger_count=1)]
-    result = ml._handle_wait_rule({"rule_id": "existing_rule"}, ctx, test_rule)
-    assert result.action == "continue", "should continue when target triggered"
+    # ── Test 7: _handle_wait_rule (live OCR check) ──
+    ml._rules = [
+        Rule(id="empty_steps", name="無步驟", enabled=True, steps=[], trigger_count=1),
+        Rule(
+            id="detect_no_match",
+            name="不匹配",
+            enabled=True,
+            steps=[_rule.Step(type="detect", params={"text": "NONEXISTENT"})],
+            trigger_count=1,
+        ),
+    ]
+    result = ml._handle_wait_rule({"rule_id": "empty_steps"}, ctx, test_rule)
+    assert result.action == "stop", "no detect step should stop"
+    result = ml._handle_wait_rule({"rule_id": "detect_no_match"}, ctx, test_rule)
+    assert result.action == "stop", "text not found in current frame should stop"
     result = ml._handle_wait_rule({"rule_id": "nonexistent"}, ctx, test_rule)
-    assert result.action == "stop", "should stop when target not found"
+    assert result.action == "stop", "nonexistent target should stop"
     result = ml._handle_wait_rule({"rule_id": ""}, ctx, test_rule)
     assert result.action == "continue", "empty rule_id should continue"
     print("  [OK] _handle_wait_rule")
