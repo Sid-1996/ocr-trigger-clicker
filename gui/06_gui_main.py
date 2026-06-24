@@ -2454,7 +2454,10 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
-        rule.steps.append(step)
+        if step_type == "wait_rule":
+            rule.steps.insert(0, step)
+        else:
+            rule.steps.append(step)
         self._step_list.set_steps(rule.steps)
         self._save_current_rule()
 
