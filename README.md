@@ -57,8 +57,6 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 | 欄位 | 說明 |
 |---|---|
-| 欄位 | 說明 |
-|---|---|---|
 | `text` | 目標文字（大小寫不敏感） |
 | `match_mode` | `contains` 包含關鍵字／`exact` 完全符合／`fuzzy` 近似比對 |
 | `fuzzy_threshold` | 近似比對相似度閾值（0.0 ~ 1.0） |
