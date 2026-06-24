@@ -200,6 +200,9 @@ class MainLoop:
     def _send_key(self, key: str) -> bool:
         return _ahk.send_key(key)
 
+    def _send_scroll(self, direction: str) -> bool:
+        return _ahk.send_scroll(1, direction)
+
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
 
@@ -429,7 +432,11 @@ class MainLoop:
 
         activate_window(self._window_title)
 
-        ok = self._send_key(key)
+        hold_ms = params.get("hold_ms", 0)
+        if hold_ms > 0:
+            ok = _ahk.send_hold_key(key, hold_ms)
+        else:
+            ok = self._send_key(key)
         if ok:
             self._perf.record_click()
 
@@ -448,6 +455,58 @@ class MainLoop:
 
         with self._rules_lock:
             self._rules_dirty = True
+
+        return StepResult("continue")
+
+    def _handle_drag(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        target = params.get("target", "text_center")
+        if target == "text_center":
+            if ctx.matched_text is None:
+                return StepResult("stop")
+            sx = ctx.matched_text.center_x
+            sy = ctx.matched_text.center_y
+        elif target == "custom":
+            sx = params.get("x", 0)
+            sy = params.get("y", 0)
+        elif target == "click_text":
+            click_text = params.get("text", "")
+            if not click_text:
+                return StepResult("stop")
+            results = self._ocr_region(ctx.img, None)
+            matches = find_text(results, click_text, "contains", 0.8)
+            if not matches:
+                return StepResult("stop")
+            sx = matches[0].center_x
+            sy = matches[0].center_y
+        else:
+            return StepResult("stop")
+
+        dx = params.get("dx", 0)
+        dy = params.get("dy", 0)
+        button = params.get("button", "left")
+
+        ssx, ssy = self._to_screen_coords(ctx.rect, sx, sy)
+        sex, sey = self._to_screen_coords(ctx.rect, sx + dx, sy + dy)
+
+        activate_window(self._window_title)
+        ok = _ahk.send_drag(ssx, ssy, sex, sey, button)
+        if ok:
+            self._perf.record_click()
+
+        return StepResult("continue")
+
+    def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        direction = params.get("direction", "WheelDown")
+        amount = params.get("amount", 1)
+        delay_ms = params.get("delay_ms", 30)
+
+        activate_window(self._window_title)
+        for _ in range(amount):
+            ok = self._send_scroll(direction)
+            if not ok:
+                return StepResult("stop")
+            if delay_ms > 0:
+                time.sleep(delay_ms / 1000.0)
 
         return StepResult("continue")
 
@@ -631,6 +690,8 @@ class MainLoop:
             "wait_rule": self._handle_wait_rule,
             "collect_rounds": self._handle_collect_rounds,
             "jump": self._handle_jump,
+            "drag": self._handle_drag,
+            "scroll": self._handle_scroll,
         }
         handler = handlers.get(step.type)
         if handler is None:

@@ -360,6 +360,23 @@ def send_key(key: str) -> bool:
     return _send_cmd(f"KEY,{key}")
 
 
+def send_drag(x1: int, y1: int, x2: int, y2: int, button: str = "left") -> bool:
+    if not _validate_coords(x1, y1) or not _validate_coords(x2, y2):
+        return False
+    return _send_cmd(f"DRAG,{x1},{y1},{x2},{y2},{button}")
+
+
+def send_scroll(amount: int = 1, direction: str = "WheelDown") -> bool:
+    return _send_cmd(f"SCROLL,{amount},{direction}")
+
+
+def send_hold_key(key: str, duration_ms: int = 0) -> bool:
+    key = key.strip().replace("\n", "").replace("\r", "")
+    if not key:
+        return False
+    return _send_cmd(f"HOLDKEY,{key},{duration_ms}")
+
+
 def send_emergency_stop() -> bool:
     global _conn
     print("[安全] 發送緊急停止指令 (ESTOP)")

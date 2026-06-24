@@ -115,6 +115,8 @@ _STEP_TYPE_ICONS = {
     "wait_rule": "🔗",
     "collect_rounds": "🔄",
     "jump": "↩",
+    "drag": "↗",
+    "scroll": "↕",
 }
 
 _STEP_TYPE_LABELS = {
@@ -125,6 +127,8 @@ _STEP_TYPE_LABELS = {
     "wait_rule": "等待規則",
     "collect_rounds": "多輪比較",
     "jump": "跳轉規則",
+    "drag": "拖曳",
+    "scroll": "滾輪",
 }
 
 
@@ -176,6 +180,25 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "jump":
         name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
         return f"跳轉規則「{name}」"
+    if t == "drag":
+        target = p.get("target", "text_center")
+        dx, dy = p.get("dx", 0), p.get("dy", 0)
+        base = {
+            "text_center": "文字中心",
+            "custom": "座標",
+            "click_text": f"文字「{p.get('text', '')}」",
+        }.get(target, "?")
+        return f"拖曳 {base} → ({dx:+},{dy:+})"
+    if t == "scroll":
+        d = p.get("direction", "WheelDown")
+        a = p.get("amount", 1)
+        dir_label = {
+            "WheelDown": "向下",
+            "WheelUp": "向上",
+            "WheelLeft": "向左",
+            "WheelRight": "向右",
+        }.get(d, d)
+        return f"滾輪 {dir_label} ×{a}"
     return t
 
 
@@ -518,6 +541,10 @@ class _StepListWidget(QWidget):
             )
         if t == "jump":
             return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
+        if t == "drag":
+            return _DragStepForm(self, step, idx, self._click_pick_callback)
+        if t == "scroll":
+            return _ScrollStepForm(self, step, idx)
         return None
 
 
@@ -555,6 +582,7 @@ class _DetectStepForm(QWidget):
         self._match_mode.addItem("包含關鍵字", "contains")
         self._match_mode.addItem("完全符合", "exact")
         self._match_mode.addItem("近似比對", "fuzzy")
+        self._match_mode.addItem("正規表達式", "regex")
         idx_mm = self._match_mode.findData(p.get("match_mode", "fuzzy"))
         if idx_mm >= 0:
             self._match_mode.setCurrentIndex(idx_mm)
@@ -815,6 +843,120 @@ class _ClickStepForm(QWidget):
         self._step.params["random_offset"] = self._offset.value()
 
 
+class _DragStepForm(QWidget):
+    def __init__(self, parent_list, step, idx, pick_cb):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        self._idx = idx
+        self._pick_cb = pick_cb
+        p = step.params
+        form = QFormLayout(self)
+        form.setContentsMargins(12, 6, 12, 6)
+
+        self._target = _NoWheelCombo()
+        self._target.addItem("文字中心", "text_center")
+        self._target.addItem("自訂座標", "custom")
+        self._target.addItem("點擊文字", "click_text")
+        t_idx = self._target.findData(p.get("target", "text_center"))
+        if t_idx >= 0:
+            self._target.setCurrentIndex(t_idx)
+        self._target.currentIndexChanged.connect(self._on_target_changed)
+        form.addRow("拖曳起點:", self._target)
+
+        self._click_text = QLineEdit(p.get("text", ""))
+        self._click_text.setVisible(p.get("target", "") == "click_text")
+        form.addRow("目標文字:", self._click_text)
+
+        self._coord_label = QLabel(f"X: {p.get('x', 0)}, Y: {p.get('y', 0)}")
+        self._pick_btn = QPushButton("選取座標")
+        if pick_cb:
+            self._pick_btn.clicked.connect(self._pick_coord)
+        self._coord_row = QWidget()
+        cl = QHBoxLayout(self._coord_row)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.addWidget(self._coord_label)
+        cl.addWidget(self._pick_btn)
+        self._coord_row.setVisible(p.get("target", "") == "custom")
+        form.addRow("起點座標:", self._coord_row)
+
+        self._dx = _NoWheelSpin()
+        self._dx.setRange(-9999, 9999)
+        self._dx.setSuffix(" px")
+        self._dx.setValue(p.get("dx", 0))
+        form.addRow("水平偏移:", self._dx)
+
+        self._dy = _NoWheelSpin()
+        self._dy.setRange(-9999, 9999)
+        self._dy.setSuffix(" px")
+        self._dy.setValue(p.get("dy", 0))
+        form.addRow("垂直偏移:", self._dy)
+
+        self._button = _NoWheelCombo()
+        self._button.addItem("左鍵", "left")
+        self._button.addItem("右鍵", "right")
+        b_idx = self._button.findData(p.get("button", "left"))
+        if b_idx >= 0:
+            self._button.setCurrentIndex(b_idx)
+        form.addRow("滑鼠按鈕:", self._button)
+
+    def _on_target_changed(self, idx):
+        t = self._target.currentData()
+        self._coord_row.setVisible(t == "custom")
+        self._click_text.setVisible(t == "click_text")
+
+    def _pick_coord(self):
+        if self._pick_cb:
+            result = self._pick_cb()
+            if result:
+                self._step.params["x"], self._step.params["y"] = result
+                self._coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
+                self._target.setCurrentIndex(self._target.findData("custom"))
+
+    def save(self):
+        self._step.params["target"] = self._target.currentData()
+        self._step.params["text"] = self._click_text.text().strip()
+        self._step.params["dx"] = self._dx.value()
+        self._step.params["dy"] = self._dy.value()
+        self._step.params["button"] = self._button.currentData()
+
+
+class _ScrollStepForm(QWidget):
+    def __init__(self, parent_list, step, idx):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        form = QFormLayout(self)
+        form.setContentsMargins(12, 6, 12, 6)
+        p = step.params
+
+        self._direction = _NoWheelCombo()
+        self._direction.addItem("向下", "WheelDown")
+        self._direction.addItem("向上", "WheelUp")
+        self._direction.addItem("向左", "WheelLeft")
+        self._direction.addItem("向右", "WheelRight")
+        d_idx = self._direction.findData(p.get("direction", "WheelDown"))
+        if d_idx >= 0:
+            self._direction.setCurrentIndex(d_idx)
+        form.addRow("方向:", self._direction)
+
+        self._amount = _NoWheelSpin()
+        self._amount.setRange(1, 99)
+        self._amount.setValue(p.get("amount", 1))
+        form.addRow("次數:", self._amount)
+
+        self._delay = _NoWheelSpin()
+        self._delay.setRange(0, 1000)
+        self._delay.setSuffix(" ms")
+        self._delay.setValue(p.get("delay_ms", 30))
+        form.addRow("間隔:", self._delay)
+
+    def save(self):
+        self._step.params["direction"] = self._direction.currentData()
+        self._step.params["amount"] = self._amount.value()
+        self._step.params["delay_ms"] = self._delay.value()
+
+
 class _KeyStepForm(QWidget):
     def __init__(self, parent_list, step, idx):
         super().__init__()
@@ -830,8 +972,16 @@ class _KeyStepForm(QWidget):
             self._key.setCurrentIndex(k_idx)
         form.addRow("按鍵:", self._key)
 
+        self._hold_ms = _NoWheelSpin()
+        self._hold_ms.setRange(0, 60000)
+        self._hold_ms.setSuffix(" ms")
+        self._hold_ms.setValue(step.params.get("hold_ms", 0))
+        self._hold_ms.setToolTip("0 = 立即按下放開，>0 = 按住指定毫秒後放開")
+        form.addRow("按住 (0=立即放開):", self._hold_ms)
+
     def save(self):
         self._step.params["key"] = self._key.currentData() or self._key.currentText()
+        self._step.params["hold_ms"] = self._hold_ms.value()
 
 
 class _WaitStepForm(QWidget):
@@ -1681,6 +1831,8 @@ class MainWindow(QMainWindow):
             ("detect", "🔍 偵測文字"),
             ("click", "🖱 點擊"),
             ("key", "⌨ 按鍵"),
+            ("drag", "↗ 拖曳"),
+            ("scroll", "↕ 滾輪"),
             ("wait", "⏱ 等待"),
             ("wait_rule", "🔗 等待規則"),
             ("collect_rounds", "🔄 多輪比較"),

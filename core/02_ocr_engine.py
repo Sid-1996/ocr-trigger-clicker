@@ -305,6 +305,11 @@ def find_text(
             ratio = SequenceMatcher(None, target_lower, text_lower).ratio()
             if ratio >= threshold:
                 matched.append(r)
+        elif match_mode == "regex":
+            import re
+
+            if re.search(target, r.text, re.IGNORECASE):
+                matched.append(r)
     return matched
 
 

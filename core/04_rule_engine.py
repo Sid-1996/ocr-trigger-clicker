@@ -91,7 +91,17 @@ _STEP_DEFAULTS = {
         "button": "left",
         "random_offset": 3,
     },
-    "key": {"key": ""},
+    "key": {"key": "", "hold_ms": 0},
+    "drag": {
+        "target": "text_center",
+        "x": 0,
+        "y": 0,
+        "text": "",
+        "dx": 0,
+        "dy": 0,
+        "button": "left",
+    },
+    "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
     "wait": {"ms": 1000},
     "wait_rule": {"rule_id": ""},
     "collect_rounds": {
@@ -425,7 +435,18 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
     if not isinstance(steps, list) or len(steps) == 0:
         warnings.append(f"規則「{raw.get('name', '?')}」缺少 steps，已略過")
         return False
-    valid_types = {"detect", "click", "key", "wait", "wait_rule", "collect_rounds", "jump", "pause"}
+    valid_types = {
+        "detect",
+        "click",
+        "key",
+        "wait",
+        "wait_rule",
+        "collect_rounds",
+        "jump",
+        "drag",
+        "scroll",
+        "pause",
+    }
     for i, s in enumerate(steps):
         if not isinstance(s, dict):
             warnings.append(f"規則「{raw['name']}」步驟 {i} 格式錯誤，已略過")

@@ -93,6 +93,11 @@ loop {
             Send "{LButton Up}"
             Send "{RButton Up}"
             Send "{MButton Up}"
+            Send "{Control Up}"
+            Send "{Shift Up}"
+            Send "{Alt Up}"
+            Send "{LWin Up}"
+            Send "{RWin Up}"
         } else if SubStr(cmd, 1, 5) = "CLICK" {
             parts := StrSplit(cmd, ",")
             if parts.Length >= 4 {
@@ -118,6 +123,46 @@ loop {
                     SendInput key
                 else
                     SendInput "{" key "}"
+            }
+        } else if SubStr(cmd, 1, 4) = "DRAG" {
+            parts := StrSplit(cmd, ",")
+            if parts.Length >= 6 {
+                x1 := Integer(parts[2]), y1 := Integer(parts[3])
+                x2 := Integer(parts[4]), y2 := Integer(parts[5])
+                btn := parts[6] = "right" ? "Right" : "Left"
+                SendMode "Input"
+                MouseMove x1, y1, 0
+                MouseClick btn, x1, y1, 1, 0, "D"
+                MouseMove x2, y2, 0
+                MouseClick btn, x2, y2, 1, 0, "U"
+                SendMode "Event"
+            }
+        } else if SubStr(cmd, 1, 6) = "SCROLL" {
+            parts := StrSplit(cmd, ",")
+            if parts.Length >= 3 {
+                amount := Integer(parts[2])
+                dir := parts[3]
+                loop amount {
+                    Send "{" dir "}"
+                    Sleep 30
+                }
+            }
+        } else if SubStr(cmd, 1, 7) = "HOLDKEY" {
+            parts := StrSplit(cmd, ",")
+            if parts.Length >= 3 {
+                k := parts[2]
+                dur := Integer(parts[3])
+                if RegExMatch(k, "[\^!+#]")
+                    SendInput "{" SubStr(k, 2) " down}"
+                else
+                    SendInput "{" k " down}"
+                if dur > 0 {
+                    Sleep dur
+                    if RegExMatch(k, "[\^!+#]")
+                        SendInput "{" SubStr(k, 2) " up}"
+                    else
+                        SendInput "{" k " up}"
+                }
             }
         }
 
