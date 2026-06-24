@@ -501,7 +501,9 @@ class _StepListWidget(QWidget):
     def _build_form(self, idx: int, step) -> Optional[QWidget]:
         t = step.type
         if t == "detect":
-            return _DetectStepForm(self, step, idx, self._roi_callback)
+            return _DetectStepForm(
+                self, step, idx, self._roi_callback, self._rules_provider, self._rule_id
+            )
         if t == "click":
             return _ClickStepForm(self, step, idx, self._click_pick_callback)
         if t == "key":
@@ -523,12 +525,14 @@ class _StepListWidget(QWidget):
 
 
 class _DetectStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb):
+    def __init__(self, parent_list, step, idx, roi_cb, rules_provider=None, exclude_rule_id=""):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
         self._roi_cb = roi_cb
+        self._rules_provider = rules_provider
+        self._exclude_rule_id = exclude_rule_id
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
@@ -584,8 +588,114 @@ class _DetectStepForm(QWidget):
         self._max_triggers.setValue(p.get("max_triggers", -1))
         form.addRow("最大觸發:", self._max_triggers)
 
+        # ── on_fail collapsible section ──
+        self._on_fail_expanded = False
+        self._toggle_btn = QPushButton("▶ 進階：找不到文字時…")
+        self._toggle_btn.setFlat(True)
+        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setStyleSheet(
+            "QPushButton { text-align: left; border: none; color: #888; }"
+        )
+        self._toggle_btn.clicked.connect(self._toggle_on_fail)
+        form.addRow(self._toggle_btn)
+
+        self._on_fail_container = QWidget()
+        self._on_fail_container.setVisible(False)
+        of_form = QFormLayout(self._on_fail_container)
+        of_form.setContentsMargins(0, 0, 0, 0)
+
+        self._of_action = _NoWheelCombo()
+        self._of_action.addItem("停止規則（預設）", "stop")
+        self._of_action.addItem("跳過繼續", "continue")
+        self._of_action.addItem("重試偵測", "retry")
+        self._of_action.addItem("按下按鍵後繼續", "key")
+        self._of_action.addItem("跳轉至規則", "jump")
+        raw = p.get("on_fail", "stop")
+        if isinstance(raw, dict):
+            act = raw.get("action", "stop")
+        else:
+            act = raw
+        idx_of = self._of_action.findData(act)
+        if idx_of >= 0:
+            self._of_action.setCurrentIndex(idx_of)
+        self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
+        of_form.addRow("動作:", self._of_action)
+
+        # retry row
+        self._of_retry_row = QWidget()
+        rf = QHBoxLayout(self._of_retry_row)
+        rf.setContentsMargins(0, 0, 0, 0)
+        self._of_retries = _NoWheelSpin()
+        self._of_retries.setRange(1, 999)
+        self._of_retries.setValue(int(raw.get("retries", 5)) if isinstance(raw, dict) else 5)
+        rf.addWidget(QLabel("重試"))
+        rf.addWidget(self._of_retries)
+        rf.addWidget(QLabel("次，間隔"))
+        self._of_retry_delay = _NoWheelSpin()
+        self._of_retry_delay.setRange(100, 60000)
+        self._of_retry_delay.setSuffix(" ms")
+        self._of_retry_delay.setSingleStep(500)
+        self._of_retry_delay.setValue(
+            int(raw.get("retry_delay_ms", 1000)) if isinstance(raw, dict) else 1000
+        )
+        rf.addWidget(self._of_retry_delay)
+        of_form.addRow("", self._of_retry_row)
+
+        # key row
+        self._of_key = _make_key_combo()
+        if isinstance(raw, dict) and raw.get("action") == "key":
+            kv = raw.get("key", "")
+            k_idx = self._of_key.findData(kv)
+            if k_idx >= 0:
+                self._of_key.setCurrentIndex(k_idx)
+        self._of_key_row = QWidget()
+        kf = QHBoxLayout(self._of_key_row)
+        kf.setContentsMargins(0, 0, 0, 0)
+        kf.addWidget(QLabel("按下"))
+        kf.addWidget(self._of_key)
+        kf.addWidget(QLabel("後繼續"))
+        kf.addStretch()
+        of_form.addRow("", self._of_key_row)
+
+        # jump row
+        self._of_jump = _NoWheelCombo()
+        rules = rules_provider() if rules_provider else []
+        current_jump_id = raw.get("jump_rule_id", "") if isinstance(raw, dict) else ""
+        for r in rules:
+            if r.id != exclude_rule_id:
+                self._of_jump.addItem(r.name, r.id)
+        idx_j = self._of_jump.findData(current_jump_id)
+        if idx_j >= 0:
+            self._of_jump.setCurrentIndex(idx_j)
+        elif current_jump_id:
+            self._of_jump.addItem(f"(未知: {current_jump_id})", current_jump_id)
+            self._of_jump.setCurrentIndex(self._of_jump.count() - 1)
+        self._of_jump_row = QWidget()
+        jf = QHBoxLayout(self._of_jump_row)
+        jf.setContentsMargins(0, 0, 0, 0)
+        jf.addWidget(QLabel("跳至"))
+        jf.addWidget(self._of_jump)
+        jf.addStretch()
+        of_form.addRow("", self._of_jump_row)
+
+        form.addRow(self._on_fail_container)
+        self._on_of_action_changed()
+
     def _on_match_mode_changed(self, idx):
         self._fuzzy_th.setVisible(self._match_mode.itemData(idx) == "fuzzy")
+
+    def _toggle_on_fail(self):
+        self._on_fail_expanded = not self._on_fail_expanded
+        self._on_fail_container.setVisible(self._on_fail_expanded)
+        self._toggle_btn.setText(
+            "▼ 進階：找不到文字時…" if self._on_fail_expanded else "▶ 進階：找不到文字時…"
+        )
+
+    def _on_of_action_changed(self, idx=None):
+        action = self._of_action.currentData()
+        self._of_retry_row.setVisible(action == "retry")
+        self._of_key_row.setVisible(action == "key")
+        self._of_jump_row.setVisible(action == "jump")
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -608,6 +718,27 @@ class _DetectStepForm(QWidget):
         self._step.params["cooldown_ms"] = self._cooldown.value()
         self._step.params["trigger_mode"] = self._mode.currentData()
         self._step.params["max_triggers"] = self._max_triggers.value()
+        action = self._of_action.currentData()
+        if action == "stop":
+            self._step.params["on_fail"] = "stop"
+        elif action == "continue":
+            self._step.params["on_fail"] = "continue"
+        elif action == "retry":
+            self._step.params["on_fail"] = {
+                "action": "retry",
+                "retries": self._of_retries.value(),
+                "retry_delay_ms": self._of_retry_delay.value(),
+            }
+        elif action == "key":
+            self._step.params["on_fail"] = {
+                "action": "key",
+                "key": self._of_key.currentData() or self._of_key.currentText(),
+            }
+        elif action == "jump":
+            self._step.params["on_fail"] = {
+                "action": "jump",
+                "jump_rule_id": self._of_jump.currentData() or "",
+            }
 
 
 class _ClickStepForm(QWidget):

@@ -82,6 +82,7 @@ _STEP_DEFAULTS = {
         "cooldown_ms": 2000,
         "trigger_mode": "once",
         "max_triggers": -1,
+        "on_fail": "stop",
     },
     "click": {
         "target": "text_center",
@@ -157,6 +158,7 @@ def _build_detect_params(old: dict) -> dict:
         "cooldown_ms": max(0, _as_int(old.get("cooldown_ms", 2000), 2000)),
         "trigger_mode": str(old.get("trigger_mode", "once")),
         "max_triggers": _as_int(old.get("max_triggers", -1), -1),
+        "on_fail": old.get("on_fail", "stop"),
     }
 
 
@@ -421,7 +423,7 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
     if not isinstance(steps, list) or len(steps) == 0:
         warnings.append(f"規則「{raw.get('name', '?')}」缺少 steps，已略過")
         return False
-    valid_types = {"detect", "click", "key", "wait_rule", "jump", "pause"}
+    valid_types = {"detect", "click", "key", "wait", "wait_rule", "collect_rounds", "jump", "pause"}
     for i, s in enumerate(steps):
         if not isinstance(s, dict):
             warnings.append(f"規則「{raw['name']}」步驟 {i} 格式錯誤，已略過")

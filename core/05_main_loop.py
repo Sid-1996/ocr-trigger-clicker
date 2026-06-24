@@ -259,16 +259,87 @@ class MainLoop:
         roi = params.get("roi")
         results = self._ocr_region(ctx.img, roi)
         if not results:
-            return StepResult("stop")
+            return self._handle_on_fail(params, ctx, rule)
 
         matches = find_text(
             results, text, params.get("match_mode", "fuzzy"), params.get("fuzzy_threshold", 0.8)
         )
         if not matches:
-            return StepResult("stop")
+            return self._handle_on_fail(params, ctx, rule)
 
         ctx.matched_text = matches[0]
         return StepResult("continue")
+
+    def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        raw = params.get("on_fail", "stop")
+        if isinstance(raw, str):
+            action = raw
+            retries = 5
+            retry_delay_ms = 1000
+            fail_key = ""
+            jump_rule_id = ""
+        elif isinstance(raw, dict):
+            action = raw.get("action", "stop")
+            retries = int(raw.get("retries", 5))
+            retry_delay_ms = int(raw.get("retry_delay_ms", 1000))
+            fail_key = str(raw.get("key", ""))
+            jump_rule_id = str(raw.get("jump_rule_id", ""))
+        else:
+            action = "stop"
+
+        if action == "continue":
+            return StepResult("continue")
+
+        if action == "retry":
+            text = params.get("text", "")
+            for attempt in range(retries):
+                if self._stop_event.is_set():
+                    return StepResult("stop")
+                interrupted = self._stop_event.wait(timeout=retry_delay_ms / 1000.0)
+                if interrupted:
+                    return StepResult("stop")
+                img = capture(self._window_title)
+                if img is None:
+                    img = capture_window_full(self._window_title)
+                if img is None:
+                    continue
+                roi = params.get("roi")
+                results = self._ocr_region(img, roi)
+                if results:
+                    matches = find_text(
+                        results,
+                        text,
+                        params.get("match_mode", "fuzzy"),
+                        params.get("fuzzy_threshold", 0.8),
+                    )
+                    if matches:
+                        ctx.matched_text = matches[0]
+                        ctx.img = img
+                        return StepResult("continue")
+            return StepResult("stop")
+
+        if action == "jump":
+            if jump_rule_id:
+                if jump_rule_id in self._cycle_visited:
+                    if self._verbose:
+                        self._log(f"on_fail 跳轉循環偵測，略過「{rule.name}」→「{jump_rule_id}」")
+                elif len(self._pending_forced_triggers) >= _MAX_PENDING_TRIGGERS:
+                    if self._verbose:
+                        self._log(
+                            f"跳轉佇列已滿，略過 on_fail 跳轉「{rule.name}」→「{jump_rule_id}」"
+                        )
+                else:
+                    with self._rules_lock:
+                        self._pending_forced_triggers.add(jump_rule_id)
+            return StepResult("stop")
+
+        if action == "key":
+            if fail_key:
+                activate_window(self._window_title)
+                self._send_key(fail_key)
+            return StepResult("continue")
+
+        return StepResult("stop")
 
     def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         target = params.get("target", "text_center")
@@ -925,6 +996,8 @@ if __name__ == "__main__":
     ml._rules_lock = threading.RLock()
     ml._window_lock = threading.RLock()
     ml._pending_forced_triggers = set()
+    ml._cycle_visited = set()
+    ml._process_counter = 0
     ml._logs = deque(maxlen=200)
     ml._logs_lock = threading.Lock()
     ml._rule_trigger_history = defaultdict(lambda: deque(maxlen=100))
@@ -1040,7 +1113,27 @@ if __name__ == "__main__":
     assert result.action == "stop", "click text_center without matched_text should stop"
     print("  [OK] _handle_click text_center without match")
 
+    # ── Test 11: _handle_on_fail actions ──
+    result = ml._handle_on_fail({"on_fail": "stop"}, ctx, test_rule)
+    assert result.action == "stop", "on_fail stop should return stop"
+    result = ml._handle_on_fail({"on_fail": "continue"}, ctx, test_rule)
+    assert result.action == "continue", "on_fail continue should return continue"
+    result = ml._handle_on_fail(
+        {"on_fail": {"action": "jump", "jump_rule_id": "tgt"}}, ctx, test_rule
+    )
+    assert result.action == "stop", "on_fail jump should return stop"
+    assert "tgt" in ml._pending_forced_triggers, "on_fail jump should enqueue target"
+    ml._pending_forced_triggers.clear()
+    mock_called = []
+    _orig_k = _ahk.send_key
+    _ahk.send_key = lambda k: mock_called.append(k) or True
+    result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
+    _ahk.send_key = _orig_k
+    assert result.action == "continue", "on_fail key should return continue"
+    assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
+    print("  [OK] _handle_on_fail")
+
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 10 tests passed ===")
+    print("\n=== All 11 tests passed ===")
