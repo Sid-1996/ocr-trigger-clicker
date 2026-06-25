@@ -1,0 +1,33 @@
+{
+  "rules": [
+    {
+      "id": "template_collect",
+      "name": "點擊採集",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "採集",
+            "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+            "match_mode": "contains",
+            "fuzzy_threshold": 0.8,
+            "cooldown_ms": 2000,
+            "trigger_mode": "repeat",
+            "max_triggers": -1
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0,
+            "y": 0,
+            "button": "left",
+            "random_offset": 3
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -85,7 +85,7 @@ _STEP_DEFAULTS = {
     },
     "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
     "wait": {"ms": 1000},
-    "wait_rule": {"rule_id": ""},
+    "wait_rule": {"rule_id": "", "timeout_ms": 5000},
     "collect_rounds": {
         "rounds": [],
         "primary_metric_index": 0,
@@ -446,6 +446,21 @@ def _tasks_base() -> Path:
         return Path(raw).parent
     except ImportError:
         return Path(__file__).resolve().parent.parent
+
+
+def get_templates_dir() -> Path:
+    tdir = _tasks_base() / "templates"
+    tdir.mkdir(parents=True, exist_ok=True)
+    return tdir
+
+
+def list_templates() -> list[str]:
+    return sorted(f.stem for f in get_templates_dir().glob("*.json"))
+
+
+def load_template(name: str) -> list[Rule]:
+    path = get_templates_dir() / f"{name}.json"
+    return load_rules(str(path))
 
 
 def get_tasks_dir() -> Path:

@@ -569,36 +569,59 @@ class MainLoop:
         if target is None:
             return StepResult("stop")
 
-        # ponytail: target 已觸發過即放行，不依賴當幀 OCR
+        timeout_ms = params.get("timeout_ms", 5000)
+        deadline = time.monotonic() + timeout_ms / 1000.0
+
+        # ponytail: 先檢查當前幀，快速路徑
         if target.trigger_count > 0:
             return StepResult("continue")
-
-        detect_step = next((s for s in target.steps if s.type == "detect"), None)
-        if detect_step is None:
-            if self._verbose:
-                self._log(f"wait_rule「{rule.name}」→「{target.name}」無偵測步驟，略過等待")
+        if self._check_wait_rule_frame(target, ctx):
             return StepResult("continue")
 
+        if self._verbose:
+            self._log(f"wait_rule「{rule.name}」等待「{target.name}」最長 {timeout_ms}ms")
+
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                if self._verbose:
+                    self._log(f"wait_rule「{rule.name}」等待「{target.name}」超時 ({timeout_ms}ms)")
+                return StepResult("stop")
+
+            # Poll with 200ms interval, interruptible
+            if self._stop_event.wait(timeout=min(0.2, remaining)):
+                return StepResult("stop")
+
+            if target.trigger_count > 0:
+                return StepResult("continue")
+
+            img = _screenshot.capture(self._window_title)
+            if img is None:
+                img = _screenshot.capture_window_content(self._window_title)
+            if img is not None and self._check_wait_rule_frame(target, ctx):
+                return StepResult("continue")
+
+    def _check_wait_rule_frame(self, target, ctx: StepContext) -> bool:
+        if target.trigger_count > 0:
+            return True
+        detect_step = next((s for s in target.steps if s.type == "detect"), None)
+        if detect_step is None:
+            return True
         p = detect_step.params
         target_text = p.get("text", "")
         if not target_text.strip():
-            return StepResult("stop")
-
+            return True
         roi = p.get("roi")
         results = self._ocr_region(ctx.img, roi)
         if not results:
-            return StepResult("stop")
-
+            return False
         matches = find_text(
             results,
             target_text,
             p.get("match_mode", "fuzzy"),
             p.get("fuzzy_threshold", 0.8),
         )
-        if not matches:
-            return StepResult("stop")
-
-        return StepResult("continue")
+        return bool(matches)
 
     def _execute_inline_action(self, action: dict, ctx: StepContext) -> tuple[bool, int, int]:
         if not self._perf.check_rate_limit():

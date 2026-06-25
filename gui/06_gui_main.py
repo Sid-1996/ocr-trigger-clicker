@@ -1,8 +1,10 @@
+import ctypes
 import json
 import sys
 import threading
 import time
 from copy import deepcopy
+from ctypes import wintypes
 from pathlib import Path
 from typing import Optional
 
@@ -61,6 +63,13 @@ _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
 
 from _version import __author__, __github__, __version__  # noqa: E402
+
+# global hotkey: Ctrl+Shift+F12 → _toggle_start
+_HOTKEY_ID = 1
+_WM_HOTKEY = 0x0312
+_MOD_CONTROL = 0x0002
+_MOD_SHIFT = 0x0004
+_VK_F12 = 0x7B
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -183,7 +192,8 @@ def _step_summary(step, rules_provider=None) -> str:
         return f"等待 {p.get('ms', 500)}ms"
     if t == "wait_rule":
         name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
-        return f"等待規則「{name}」"
+        timeout = p.get("timeout_ms", 5000)
+        return f"等待規則「{name}」超時{timeout}ms"
     if t == "collect_rounds":
         rds = p.get("rounds", [])
         mcount = len(rds[0].get("metrics", [])) if rds else 0
@@ -370,6 +380,8 @@ class _StepListWidget(QWidget):
         self._click_pick_callback: Optional[callable] = None
         self._rules_provider: Optional[callable] = None  # () -> list[Rule]
         self._rule_id: str = ""
+        self._drag_indicator_idx: int = -1
+        self._simplified_mode: bool = False
 
     def set_roi_callback(self, cb):
         self._roi_callback = cb
@@ -382,6 +394,9 @@ class _StepListWidget(QWidget):
 
     def set_rule_id(self, rule_id: str):
         self._rule_id = rule_id
+
+    def set_simplified_mode(self, enabled: bool):
+        self._simplified_mode = enabled
 
     def set_steps(self, steps: list):
         self._steps = list(steps)
@@ -515,25 +530,51 @@ class _StepListWidget(QWidget):
         self._rebuild()
         self.steps_changed.emit()
 
-    # drag-drop reorder
+    # drag-drop reorder with insertion indicator
     def dragEnterEvent(self, e):
         if e.mimeData().hasFormat("step/index"):
             e.acceptProposedAction()
 
     def dragMoveEvent(self, e):
         e.acceptProposedAction()
+        y = e.position().y()
+        row_h = 34
+        idx = max(0, min(len(self._steps), int((y + row_h // 2) / row_h)))
+        if self._drag_indicator_idx != idx:
+            self._drag_indicator_idx = idx
+            self.update()
+
+    def dragLeaveEvent(self, e):
+        self._drag_indicator_idx = -1
+        self.update()
+        super().dragLeaveEvent(e)
 
     def dropEvent(self, e):
         src = int(e.mimeData().data("step/index").data().decode())
         self._collapse()
-        y = e.position().y()
-        # row height 32 + spacing 2 = 34 per row
-        target = max(0, min(len(self._steps) - 1, int(y / 34)))
-        if src == target:
+        target = self._drag_indicator_idx
+        self._drag_indicator_idx = -1
+        if target < 0 or target > len(self._steps):
             return
-        self._steps.insert(target, self._steps.pop(src))
+        adjusted = target if target < src else target - 1
+        if src == adjusted:
+            return
+        self._steps.insert(adjusted, self._steps.pop(src))
         self._rebuild()
         self.steps_changed.emit()
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self._drag_indicator_idx < 0:
+            return
+        row_h = 34
+        y_pos = self._drag_indicator_idx * row_h
+        painter = QPainter(self)
+        pen = QPen(QColor("#4a90d9"))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.drawLine(0, y_pos, self.width(), y_pos)
+        painter.end()
 
     def add_step(self, step_type: str):
         step = Step(type=step_type, params=deepcopy(_STEP_DEFAULTS.get(step_type, {})))
@@ -546,10 +587,18 @@ class _StepListWidget(QWidget):
         t = step.type
         if t == "detect":
             return _DetectStepForm(
-                self, step, idx, self._roi_callback, self._rules_provider, self._rule_id
+                self,
+                step,
+                idx,
+                self._roi_callback,
+                self._rules_provider,
+                self._rule_id,
+                simplified=self._simplified_mode,
             )
         if t == "click":
-            return _ClickStepForm(self, step, idx, self._click_pick_callback)
+            return _ClickStepForm(
+                self, step, idx, self._click_pick_callback, simplified=self._simplified_mode
+            )
         if t == "key":
             return _KeyStepForm(self, step, idx)
         if t == "wait":
@@ -579,7 +628,16 @@ class _StepListWidget(QWidget):
 
 
 class _DetectStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb, rules_provider=None, exclude_rule_id=""):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        roi_cb,
+        rules_provider=None,
+        exclude_rule_id="",
+        simplified=False,
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -594,6 +652,10 @@ class _DetectStepForm(QWidget):
         self._text = QLineEdit(p.get("text", ""))
         form.addRow("目標文字:", self._text)
 
+        self._advanced_container = QWidget()
+        adv_form = QFormLayout(self._advanced_container)
+        adv_form.setContentsMargins(0, 0, 0, 0)
+
         roi = p.get("roi", {})
         zero = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         self._roi_label = QLabel(
@@ -602,8 +664,8 @@ class _DetectStepForm(QWidget):
         self._roi_btn = QPushButton("框選偵測區域")
         if roi_cb:
             self._roi_btn.clicked.connect(self._pick_roi)
-        form.addRow("偵測區域:", self._roi_label)
-        form.addRow("", self._roi_btn)
+        adv_form.addRow("偵測區域:", self._roi_label)
+        adv_form.addRow("", self._roi_btn)
 
         self._match_mode = _NoWheelCombo()
         self._match_mode.addItem("包含關鍵字", "contains")
@@ -614,36 +676,28 @@ class _DetectStepForm(QWidget):
         if idx_mm >= 0:
             self._match_mode.setCurrentIndex(idx_mm)
         self._match_mode.currentIndexChanged.connect(self._on_match_mode_changed)
-        form.addRow("比對模式:", self._match_mode)
+        adv_form.addRow("比對模式:", self._match_mode)
 
         self._fuzzy_th = _NoWheelSpin()
         self._fuzzy_th.setRange(1, 100)
         self._fuzzy_th.setSuffix(" %")
         self._fuzzy_th.setValue(int(p.get("fuzzy_threshold", 0.8) * 100))
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
-        form.addRow("精準度:", self._fuzzy_th)
+        adv_form.addRow("精準度:", self._fuzzy_th)
 
         self._cooldown = _NoWheelSpin()
         self._cooldown.setRange(0, 60000)
         self._cooldown.setSuffix(" ms")
         self._cooldown.setValue(p.get("cooldown_ms", 500))
-        form.addRow("冷卻時間:", self._cooldown)
-
-        self._mode = _NoWheelCombo()
-        self._mode.addItem("觸發一次", "once")
-        self._mode.addItem("重複觸發", "repeat")
-        idx_m = self._mode.findData(p.get("trigger_mode", "once"))
-        if idx_m >= 0:
-            self._mode.setCurrentIndex(idx_m)
-        form.addRow("觸發模式:", self._mode)
+        adv_form.addRow("冷卻時間:", self._cooldown)
 
         self._max_triggers = _NoWheelSpin()
         self._max_triggers.setRange(-1, 9999)
         self._max_triggers.setSpecialValueText("無限")
         self._max_triggers.setValue(p.get("max_triggers", -1))
-        form.addRow("最大觸發:", self._max_triggers)
+        adv_form.addRow("最大觸發:", self._max_triggers)
 
-        # ── on_fail collapsible section ──
+        # ── on_fail collapsible section (in advanced) ──
         self._on_fail_expanded = False
         self._toggle_btn = QPushButton("▶ 進階：找不到文字時…")
         self._toggle_btn.setFlat(True)
@@ -652,7 +706,7 @@ class _DetectStepForm(QWidget):
             "QPushButton { text-align: left; border: none; color: #888; }"
         )
         self._toggle_btn.clicked.connect(self._toggle_on_fail)
-        form.addRow(self._toggle_btn)
+        adv_form.addRow(self._toggle_btn)
 
         self._on_fail_container = QWidget()
         self._on_fail_container.setVisible(False)
@@ -660,6 +714,17 @@ class _DetectStepForm(QWidget):
         of_form.setContentsMargins(0, 0, 0, 0)
 
         self._of_action = _NoWheelCombo()
+
+        self._advanced_container.setVisible(not simplified)
+        form.addRow(self._advanced_container)
+
+        self._mode = _NoWheelCombo()
+        self._mode.addItem("觸發一次", "once")
+        self._mode.addItem("重複觸發", "repeat")
+        idx_m = self._mode.findData(p.get("trigger_mode", "once"))
+        if idx_m >= 0:
+            self._mode.setCurrentIndex(idx_m)
+        form.addRow("觸發模式:", self._mode)
         self._of_action.addItem("跳過本次（預設）", "stop")
         self._of_action.addItem("重試偵測", "retry")
         self._of_action.addItem("按下按鍵後繼續", "key")
@@ -817,7 +882,7 @@ class _DetectStepForm(QWidget):
 
 
 class _ClickStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, pick_cb):
+    def __init__(self, parent_list, step, idx, pick_cb, simplified=False):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -853,19 +918,26 @@ class _ClickStepForm(QWidget):
         self._coord_row.setVisible(p.get("target", "") == "custom")
         form.addRow("點擊座標:", self._coord_row)
 
+        self._adv_container = QWidget()
+        adv_form = QFormLayout(self._adv_container)
+        adv_form.setContentsMargins(0, 0, 0, 0)
+
         self._button = _NoWheelCombo()
         self._button.addItem("左鍵", "left")
         self._button.addItem("右鍵", "right")
         b_idx = self._button.findData(p.get("button", "left"))
         if b_idx >= 0:
             self._button.setCurrentIndex(b_idx)
-        form.addRow("滑鼠按鈕:", self._button)
+        adv_form.addRow("滑鼠按鈕:", self._button)
 
         self._offset = _NoWheelSpin()
         self._offset.setRange(0, 100)
         self._offset.setSuffix(" px")
         self._offset.setValue(p.get("random_offset", 3))
-        form.addRow("隨機抖動:", self._offset)
+        adv_form.addRow("隨機抖動:", self._offset)
+
+        self._adv_container.setVisible(not simplified)
+        form.addRow(self._adv_container)
 
     def _on_target_changed(self, idx):
         t = self._target.currentData()
@@ -1074,8 +1146,15 @@ class _WaitRuleStepForm(QWidget):
             self._combo.setCurrentIndex(self._combo.count() - 1)
         form.addRow("等待規則:", self._combo)
 
+        self._timeout_spin = _NoWheelSpin()
+        self._timeout_spin.setRange(100, 120000)
+        self._timeout_spin.setSuffix(" ms")
+        self._timeout_spin.setValue(step.params.get("timeout_ms", 5000))
+        form.addRow("超時:", self._timeout_spin)
+
     def save(self):
         self._step.params["rule_id"] = self._combo.currentData() or ""
+        self._step.params["timeout_ms"] = self._timeout_spin.value()
 
 
 class _JumpStepForm(QWidget):
@@ -1618,6 +1697,7 @@ class MainWindow(QMainWindow):
             self._window_lost = False
             self._current_task: str = ""
             self._collapsed_ids: set[str] = set()
+            self._simplified_mode = False
 
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
@@ -1627,11 +1707,12 @@ class MainWindow(QMainWindow):
             self._connect_signals()
             self._setup_shortcuts()
 
-            _ocr_mod.set_ocr_health_callback(None)
+            _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
 
             self._refresh_window_list()
             self._restore_last_state()
             self._refresh_task_list()
+            self._refresh_template_menu()
             self._maybe_show_startup_guide()
 
             if not _ahk_mod.is_ahk_available():
@@ -1716,6 +1797,13 @@ class MainWindow(QMainWindow):
             idx = self._task_combo.findText(last_task)
             if idx >= 0:
                 self._task_combo.setCurrentIndex(idx)
+
+        simplified = config.get("simplified_mode", False)
+        if simplified:
+            self._simplified_btn.setChecked(True)
+            self._simplified_mode = True
+            self._step_list.set_simplified_mode(True)
+            self._step_list._rebuild()
 
     def _setup_ui(self):
         central = QWidget()
@@ -1810,6 +1898,12 @@ class MainWindow(QMainWindow):
         self._guide_btn.setToolTip("開啟 GitHub Pages 的互動式使用指引")
         self._guide_btn.clicked.connect(self._open_guide)
         toolbar.addWidget(self._guide_btn)
+        self._simplified_btn = QPushButton("簡易")
+        self._simplified_btn.setCheckable(True)
+        self._simplified_btn.setChecked(False)
+        self._simplified_btn.setToolTip("切換至簡易模式（僅顯示核心欄位）")
+        self._simplified_btn.clicked.connect(self._toggle_simplified_mode)
+        toolbar.addWidget(self._simplified_btn)
         layout.addLayout(toolbar)
 
         # === Middle: stacked pages (rules / OCR debug) ===
@@ -1847,6 +1941,12 @@ class MainWindow(QMainWindow):
         self._del_rule_btn.setToolTip("刪除目前選取的規則 (Del)")
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
+        self._template_btn = QPushButton("從模板建立 ▾")
+        self._template_btn.setToolTip("從內建模板快速建立規則")
+        self._template_menu = QMenu(self)
+        self._template_btn.setMenu(self._template_menu)
+        self._template_btn.setVisible(False)
+        rule_btn_bar.addWidget(self._template_btn)
         left_layout.addLayout(rule_btn_bar)
 
         rules_layout.addWidget(left_widget, 1)
@@ -1967,6 +2067,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._compare_log_toggle)
         layout.addWidget(self._compare_log_widget)
 
+        # === Trigger log panel ===
+        self._trigger_log_toggle = QPushButton("▸ 觸發記錄")
+        self._trigger_log_toggle.setCheckable(True)
+        self._trigger_log_toggle.setChecked(False)
+        self._trigger_log_toggle.clicked.connect(self._toggle_trigger_log)
+        self._trigger_log_widget = QListWidget()
+        self._trigger_log_widget.setMaximumHeight(100)
+        self._trigger_log_widget.setVisible(False)
+        layout.addWidget(self._trigger_log_toggle)
+        layout.addWidget(self._trigger_log_widget)
+
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
@@ -2016,10 +2127,36 @@ class MainWindow(QMainWindow):
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
         )
         self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
+        self._signals.trigger_signal.connect(self._on_trigger_log_received)
 
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
         QShortcut(QKeySequence("Delete"), self, self._delete_rule)
+        try:
+            ctypes.windll.user32.RegisterHotKey(
+                None, _HOTKEY_ID, _MOD_CONTROL | _MOD_SHIFT, _VK_F12
+            )
+        except Exception:
+            pass
+
+    def nativeEvent(self, eventType, message):
+        if eventType == b"windows_generic_MSG" or eventType == b"windows_dispatcher_MSG":
+            msg = ctypes.cast(int(message.__int__()), ctypes.POINTER(wintypes.MSG)).contents
+            if msg.message == _WM_HOTKEY and msg.wParam == _HOTKEY_ID:
+                self._toggle_start()
+                return True, 0
+        return super().nativeEvent(eventType, message)
+
+    def _toggle_simplified_mode(self):
+        self._simplified_mode = self._simplified_btn.isChecked()
+        self._step_list.set_simplified_mode(self._simplified_mode)
+        self._step_list._rebuild()
+        config = self._load_config()
+        config["simplified_mode"] = self._simplified_mode
+        self._save_config(config)
+
+    def _on_ocr_health(self, msg: str):
+        self._status_bar.showMessage(f"⚠ {msg}", 8000)
 
     # === Window list ===
     def _refresh_window_list(self):
@@ -2596,6 +2733,38 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.reload_rules()
 
+    def _refresh_template_menu(self):
+        self._template_menu.clear()
+        names = _rule_mod.list_templates()
+        if names:
+            self._template_btn.setVisible(True)
+            for name in names:
+                action = self._template_menu.addAction(name)
+                action.setData(name)
+                action.triggered.connect(lambda checked, n=name: self._apply_template(n))
+        else:
+            self._template_btn.setVisible(False)
+
+    def _apply_template(self, template_name: str):
+        import uuid
+
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再從模板建立規則")
+            return
+        rules = _rule_mod.load_template(template_name)
+        if not rules:
+            self._status_bar.showMessage(f"⚠ 模板「{template_name}」載入失敗", 5000)
+            return
+        for r in rules:
+            r.id = f"rule_{uuid.uuid4().hex[:8]}"
+            r.name = f"{template_name}-{r.name}"
+            self._rules.append(r)
+        save_task(self._current_task, self._rules)
+        self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
+        self._status_bar.showMessage(f"✓ 已從模板「{template_name}」建立 {len(rules)} 條規則", 5000)
+
     def _add_step(self, step_type: str):
         step = Step(type=step_type, params={})
         rule = self._get_current_rule()
@@ -2726,6 +2895,20 @@ class MainWindow(QMainWindow):
         rule.name = self._edit_name.text()
         rule.enabled = self._edit_enabled.isChecked()
         rule.steps = self._step_list.get_steps()
+        # 校驗 detect 步驟文字不可為空
+        for i, s in enumerate(rule.steps):
+            if s.type == "detect" and not s.params.get("text", "").strip():
+                QMessageBox.warning(self, "儲存失敗", f"步驟 {i + 1} (偵測文字)：目標文字不可為空")
+                return
+            if s.type == "click" and s.params.get("target", "") == "custom":
+                x, y = s.params.get("x", 0), s.params.get("y", 0)
+                if x == 0 and y == 0:
+                    QMessageBox.warning(
+                        self,
+                        "儲存失敗",
+                        f"步驟 {i + 1} (點擊)：自訂座標 (0,0) 可能未設定正確，請選取座標",
+                    )
+                    return
         # 檢查 jump/wait_rule 參照的規則是否存在
         valid_ids = {r.id for r in self._rules}
         for s in rule.steps:
@@ -3389,6 +3572,22 @@ class MainWindow(QMainWindow):
         visible = self._compare_log_toggle.isChecked()
         self._compare_log_widget.setVisible(visible)
         self._compare_log_toggle.setText("▾ 比較輪次日誌" if visible else "▸ 比較輪次日誌")
+
+    def _toggle_trigger_log(self):
+        visible = self._trigger_log_toggle.isChecked()
+        self._trigger_log_widget.setVisible(visible)
+        self._trigger_log_toggle.setText("▾ 觸發記錄" if visible else "▸ 觸發記錄")
+
+    def _on_trigger_log_received(self, log):
+        ts = time.strftime("%H:%M:%S", time.localtime(log.timestamp))
+        text = f"[{ts}] {log.rule_name} → ({log.click_x}, {log.click_y})「{log.matched_text}」"
+        self._trigger_log_widget.insertItem(0, text)
+        while self._trigger_log_widget.count() > 20:
+            self._trigger_log_widget.takeItem(self._trigger_log_widget.count() - 1)
+        if not self._trigger_log_toggle.isChecked():
+            self._trigger_log_toggle.setChecked(True)
+            self._trigger_log_widget.setVisible(True)
+            self._trigger_log_toggle.setText("▾ 觸發記錄")
 
     # === About & Version ===
     def _show_about(self):
