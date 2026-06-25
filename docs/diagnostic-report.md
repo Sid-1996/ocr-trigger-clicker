@@ -1,4 +1,4 @@
-# OCR Trigger Clicker — 專案診斷報告 v2
+﻿# OCR Trigger Clicker — 專案診斷報告 v2
 
 > **診斷範圍：** 10 個核心模組 + 1 個 AHK 腳本，共 ~6,600 行程式碼
 > **診斷日期：** 2026-06-25
@@ -140,7 +140,16 @@ if delay_ms > 0:
 
 ---
 
-## 三、新功能速覽（v0.0.2 新增，含 bugfix）
+## 三、已修復問題記錄
+
+| Commit | 位置 | 問題 | 修法 |
+|--------|------|------|------|
+| `3756236` | `core/01_screenshot.py` | `_mss_instance` 全域單例無鎖，主循環 background thread 與 GUI main thread 競爭導致 mss 靜默損壞，`capture()` 回傳 None | 改為 `threading.local()`，每個 thread 各持獨立 mss 實例 |
+| `3756236` | `gui/09_ocr_debug.py` | GDI fallback 截的是 client area，OCR 座標從 client 左上角算起，但 `_on_click_test` 加回的是 `rect["y"]`（window 左上角含標題列），偏高約 30px | GDI 路徑改用 `ClientToScreen(hwnd, POINT(0,0))` 取得 client 原點；tooltip 加上截圖來源 |
+
+---
+
+## 四、新功能速覽（v0.0.2 新增，含 bugfix）
 
 | 功能 | Commit | 說明 |
 |------|--------|------|
