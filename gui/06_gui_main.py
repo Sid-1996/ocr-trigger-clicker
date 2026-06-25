@@ -648,6 +648,7 @@ class _DetectStepForm(QWidget):
         self._of_action.addItem("重試偵測", "retry")
         self._of_action.addItem("按下按鍵後繼續", "key")
         self._of_action.addItem("跳轉至規則", "jump")
+        self._of_action.addItem("重試從指定步驟", "retry_from")
         raw = p.get("on_fail", "stop")
         if isinstance(raw, dict):
             act = raw.get("action", "stop")
@@ -716,6 +717,19 @@ class _DetectStepForm(QWidget):
         jf.addStretch()
         of_form.addRow("", self._of_jump_row)
 
+        # retry_from step_index row
+        self._of_step_index_row = QWidget()
+        sif = QHBoxLayout(self._of_step_index_row)
+        sif.setContentsMargins(0, 0, 0, 0)
+        self._of_step_index = _NoWheelSpin()
+        self._of_step_index.setRange(0, 99)
+        self._of_step_index.setValue(int(raw.get("step_index", 0)) if isinstance(raw, dict) else 0)
+        sif.addWidget(QLabel("回到第"))
+        sif.addWidget(self._of_step_index)
+        sif.addWidget(QLabel("步（0=第一步）"))
+        sif.addStretch()
+        of_form.addRow("", self._of_step_index_row)
+
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
 
@@ -731,9 +745,10 @@ class _DetectStepForm(QWidget):
 
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
-        self._of_retry_row.setVisible(action == "retry")
+        self._of_retry_row.setVisible(action in ("retry", "retry_from"))
         self._of_key_row.setVisible(action == "key")
         self._of_jump_row.setVisible(action == "jump")
+        self._of_step_index_row.setVisible(action == "retry_from")
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -776,6 +791,13 @@ class _DetectStepForm(QWidget):
             self._step.params["on_fail"] = {
                 "action": "jump",
                 "jump_rule_id": self._of_jump.currentData() or "",
+            }
+        elif action == "retry_from":
+            self._step.params["on_fail"] = {
+                "action": "retry_from",
+                "step_index": self._of_step_index.value(),
+                "retries": self._of_retries.value(),
+                "retry_delay_ms": self._of_retry_delay.value(),
             }
 
 

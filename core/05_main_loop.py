@@ -5,7 +5,7 @@ import sys as _sys
 import threading
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Callable, Optional
@@ -110,8 +110,9 @@ class StepContext:
 
 @dataclass
 class StepResult:
-    action: str  # "continue" | "stop" | "jump"
+    action: str  # "continue" | "stop" | "jump" | "retry_from"
     rule_id: Optional[str] = None
+    data: dict = field(default_factory=dict)
 
 
 class MainLoop:
@@ -343,6 +344,20 @@ class MainLoop:
                     with self._rules_lock:
                         self._pending_forced_triggers.add(jump_rule_id)
             return StepResult("stop")
+
+        if action == "retry_from":
+            if not isinstance(raw, dict):
+                return StepResult("stop")
+            steps = rule.steps
+            target = max(0, min(int(raw.get("step_index", 0)), len(steps) - 1))
+            return StepResult(
+                "retry_from",
+                data={
+                    "step_index": target,
+                    "retries": retries,
+                    "retry_delay_ms": retry_delay_ms,
+                },
+            )
 
         if action == "key":
             if fail_key:
@@ -734,10 +749,40 @@ class MainLoop:
 
     def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict, forced: bool = False) -> None:
         ctx = StepContext(img=img, rect=rect, forced=forced)
-        for step in rule.steps:
-            result = self._run_step(step, ctx, rule)
+        steps = rule.steps
+        i = 0
+        retry_budget: dict[int, int] = {}
+        while i < len(steps):
+            result = self._run_step(steps[i], ctx, rule)
             if result.action == "stop":
                 return
+            if result.action == "retry_from":
+                target = result.data.get("step_index", 0)
+                delay_ms = result.data.get("retry_delay_ms", 1000)
+                max_retries = result.data.get("retries", 3)
+                budget = retry_budget.get(i, max_retries)
+                if budget <= 0:
+                    if self._verbose:
+                        self._log(f"「{rule.name}」retry_from 重試次數耗盡，放棄")
+                    return
+                retry_budget[i] = budget - 1
+                interrupted = self._stop_event.wait(timeout=delay_ms / 1000.0)
+                if interrupted:
+                    return
+                with self._window_lock:
+                    title = self._window_title
+                new_img = capture(title)
+                if new_img is None:
+                    new_img = capture_window_full(title)
+                if new_img is not None:
+                    ctx.img = new_img
+                    new_rect = get_window_rect(title)
+                    if new_rect:
+                        ctx.rect = new_rect
+                ctx.forced = True
+                i = target
+                continue
+            i += 1
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
@@ -1032,6 +1077,10 @@ if __name__ == "__main__":
     sr2 = StepResult("jump", "rule_abc")
     assert sr2.action == "jump"
     assert sr2.rule_id == "rule_abc"
+    sr3 = StepResult("retry_from", data={"step_index": 0, "retries": 3})
+    assert sr3.action == "retry_from"
+    assert sr3.data["step_index"] == 0
+    assert sr3.data["retries"] == 3
     print("  [OK] StepResult dataclass")
 
     # ── Test 2: StepContext dataclass ──
