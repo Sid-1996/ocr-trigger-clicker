@@ -1617,6 +1617,7 @@ class MainWindow(QMainWindow):
             self._selected_rule_id: Optional[str] = None
             self._window_lost = False
             self._current_task: str = ""
+            self._collapsed_ids: set[str] = set()
 
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
@@ -1991,6 +1992,8 @@ class MainWindow(QMainWindow):
         self._add_rule_btn.clicked.connect(self._add_rule)
         self._del_rule_btn.clicked.connect(self._delete_rule)
         self._rule_list.currentItemChanged.connect(self._on_rule_selected)
+        self._rule_list.itemCollapsed.connect(self._on_rule_item_collapsed)
+        self._rule_list.itemExpanded.connect(self._on_rule_item_expanded)
         self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
         self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
@@ -2084,6 +2087,16 @@ class MainWindow(QMainWindow):
             return
         self._current_task = name
         self._rules = load_task(name)
+        # load collapsed state from task file
+        self._collapsed_ids = set()
+        try:
+            task_path = Path(_tasks_dir()) / f"{name}.json"
+            if task_path.exists():
+                with open(task_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                self._collapsed_ids = set(data.get("_collapsed", []))
+        except Exception:
+            pass
         config = self._load_config()
         config["last_task"] = name
         self._save_config(config)
@@ -2355,6 +2368,17 @@ class MainWindow(QMainWindow):
             self._rule_list.addTopLevelItem(item)
 
         self._rule_list.expandAll()
+
+        # collapse items the user previously collapsed
+        def _collapse_items(item):
+            rid = item.data(0, Qt.ItemDataRole.UserRole)
+            if rid and rid in self._collapsed_ids:
+                item.setExpanded(False)
+            for j in range(item.childCount()):
+                _collapse_items(item.child(j))
+
+        for i in range(self._rule_list.topLevelItemCount()):
+            _collapse_items(self._rule_list.topLevelItem(i))
         self._rule_list.blockSignals(False)
         self._rule_hint.setVisible(len(self._rules) == 0)
 
@@ -2423,6 +2447,36 @@ class MainWindow(QMainWindow):
             for i in range(self._rule_list.topLevelItemCount()):
                 _walk(self._rule_list.topLevelItem(i))
         finally:
+            pass
+
+    def _on_rule_item_collapsed(self, item):
+        rid = item.data(0, Qt.ItemDataRole.UserRole)
+        if rid:
+            self._collapsed_ids.add(rid)
+            self._persist_collapsed()
+
+    def _on_rule_item_expanded(self, item):
+        rid = item.data(0, Qt.ItemDataRole.UserRole)
+        if rid:
+            self._collapsed_ids.discard(rid)
+            self._persist_collapsed()
+
+    def _persist_collapsed(self):
+        if not self._current_task:
+            return
+        try:
+            task_path = Path(_tasks_dir()) / f"{self._current_task}.json"
+            if task_path.exists():
+                with open(task_path, encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                data = {}
+            data["_collapsed"] = list(self._collapsed_ids)
+            tmp = task_path.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp.replace(task_path)
+        except Exception:
             pass
 
     def _get_current_rule(self) -> Optional[Rule]:
