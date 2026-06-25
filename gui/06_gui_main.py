@@ -649,7 +649,7 @@ class _DetectStepForm(QWidget):
         of_form.setContentsMargins(0, 0, 0, 0)
 
         self._of_action = _NoWheelCombo()
-        self._of_action.addItem("停止規則（預設）", "stop")
+        self._of_action.addItem("跳過本次（預設）", "stop")
         self._of_action.addItem("跳過繼續", "continue")
         self._of_action.addItem("重試偵測", "retry")
         self._of_action.addItem("按下按鍵後繼續", "key")
