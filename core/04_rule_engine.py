@@ -123,6 +123,90 @@ def _sanitize_roi(roi: dict | None) -> dict:
     }
 
 
+def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
+    action = action if isinstance(action, dict) else {}
+    action_type = str(action.get("type", default_type))
+    if action_type == "click":
+        return {
+            "type": "click",
+            "x": _as_int(action.get("x", 0), 0),
+            "y": _as_int(action.get("y", 0), 0),
+            "button": str(action.get("button", "left")),
+        }
+    if action_type == "jump":
+        return {"type": "jump", "rule_id": str(action.get("rule_id", ""))}
+    return {"type": "key", "key": str(action.get("key", ""))}
+
+
+def _normalize_step_params(step_type: str, params: dict | None) -> dict:
+    base = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
+    params = params if isinstance(params, dict) else {}
+    base.update(params)
+
+    if step_type == "detect":
+        base["text"] = str(base.get("text", "")).strip()
+        base["roi"] = _sanitize_roi(base.get("roi"))
+        base["match_mode"] = str(base.get("match_mode", "fuzzy"))
+        base["fuzzy_threshold"] = max(
+            0.0, min(1.0, _as_float(base.get("fuzzy_threshold", 0.8), 0.8))
+        )
+        base["cooldown_ms"] = max(0, _as_int(base.get("cooldown_ms", 2000), 2000))
+        base["trigger_mode"] = str(base.get("trigger_mode", "once"))
+        base["max_triggers"] = _as_int(base.get("max_triggers", -1), -1)
+    elif step_type in ("click", "drag"):
+        base["target"] = str(base.get("target", "text_center"))
+        base["x"] = _as_int(base.get("x", 0), 0)
+        base["y"] = _as_int(base.get("y", 0), 0)
+        base["text"] = str(base.get("text", "")).strip()
+        base["button"] = str(base.get("button", "left"))
+        if step_type == "click":
+            base["random_offset"] = max(0, _as_int(base.get("random_offset", 3), 3))
+        else:
+            base["dx"] = _as_int(base.get("dx", 0), 0)
+            base["dy"] = _as_int(base.get("dy", 0), 0)
+    elif step_type == "key":
+        base["key"] = str(base.get("key", ""))
+        base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
+    elif step_type == "scroll":
+        base["direction"] = str(base.get("direction", "WheelDown"))
+        base["amount"] = max(1, _as_int(base.get("amount", 1), 1))
+        base["delay_ms"] = max(0, _as_int(base.get("delay_ms", 30), 30))
+    elif step_type == "wait":
+        base["ms"] = max(0, _as_int(base.get("ms", 1000), 1000))
+    elif step_type in ("wait_rule", "jump"):
+        base["rule_id"] = str(base.get("rule_id", ""))
+    elif step_type == "collect_rounds":
+        rounds = []
+        for rd in base.get("rounds", []):
+            if not isinstance(rd, dict):
+                continue
+            metrics = []
+            for m in rd.get("metrics", []):
+                if not isinstance(m, dict):
+                    continue
+                metrics.append(
+                    {
+                        "roi": _sanitize_roi(m.get("roi")),
+                        "pick": str(m.get("pick", "first")),
+                        "direction": str(m.get("direction", "higher_better")),
+                        "threshold": _as_float(m.get("threshold", 0.0), 0.0),
+                        "timeout_ms": max(100, _as_int(m.get("timeout_ms", 3000), 3000)),
+                    }
+                )
+            rounds.append(
+                {
+                    "trigger_action": _normalize_action(rd.get("trigger_action"), "key"),
+                    "metrics": metrics,
+                    "result_action": _normalize_action(rd.get("result_action"), "key"),
+                }
+            )
+        base["rounds"] = rounds
+        base["primary_metric_index"] = max(0, _as_int(base.get("primary_metric_index", 0), 0))
+        base["confirm_action"] = _normalize_action(base.get("confirm_action"), "key")
+        base["on_all_fail"] = _normalize_action(base.get("on_all_fail"), "jump")
+    return base
+
+
 def _parse_depends_on(value: object) -> list[str]:
     if isinstance(value, list):
         return [str(v) for v in value if v]
@@ -283,7 +367,10 @@ def _dict_to_rule(d: dict) -> Rule:
     if "steps" not in d:
         d = _migrate_v1_to_v2(d)
     steps = [
-        Step(type=str(s.get("type", "")), params=dict(s.get("params", {})))
+        Step(
+            type=str(s.get("type", "")),
+            params=_normalize_step_params(str(s.get("type", "")), s.get("params")),
+        )
         for s in d.get("steps", [])
     ]
     return Rule(
@@ -510,6 +597,16 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
                     rid = p.get("rule_id", "")
                     if rid in id_map:
                         p["rule_id"] = id_map[rid]
+                if s["type"] == "detect" and isinstance(p.get("on_fail"), dict):
+                    rid = p["on_fail"].get("jump_rule_id", "")
+                    if rid in id_map:
+                        p["on_fail"]["jump_rule_id"] = id_map[rid]
+                if s["type"] == "collect_rounds":
+                    oaf = p.get("on_all_fail", {})
+                    if isinstance(oaf, dict):
+                        rid = oaf.get("rule_id", "")
+                        if rid in id_map:
+                            oaf["rule_id"] = id_map[rid]
 
     src_name = Path(src_path).stem
     dest = get_tasks_dir() / f"{src_name}.json"

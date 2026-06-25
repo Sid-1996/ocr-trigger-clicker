@@ -207,6 +207,53 @@ class MainLoop:
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
 
+    def _can_perform_action(self, rule: Rule) -> bool:
+        if self.check_runaway_rule(rule.id):
+            self._rule_auto_disabled.add(rule.id)
+            self._auto_disabled_at[rule.id] = time.monotonic()
+            rule.enabled = False
+            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
+            if self.on_warning:
+                self.on_warning(msg)
+            return False
+        return self._perf.check_rate_limit()
+
+    def _mark_rule_triggered(
+        self, rule: Rule, matched_text: str = "", screen_x: int = 0, screen_y: int = 0
+    ) -> None:
+        rule.trigger_count += 1
+        rule.last_trigger_time = time.monotonic()
+
+        for s in rule.steps:
+            if s.type == "detect":
+                mt = s.params.get("max_triggers", -1)
+                if 0 < mt <= rule.trigger_count:
+                    rule.enabled = False
+                break
+
+        self._emit_trigger(self._make_trigger_log(rule, matched_text, screen_x, screen_y))
+
+        with self._rules_lock:
+            self._rules_dirty = True
+
+    def _should_process_static_frame(self) -> bool:
+        with self._rules_lock:
+            if self._pending_forced_triggers:
+                return True
+            now = time.monotonic()
+            for rule in self._rules:
+                if not rule.enabled or rule.id in self._rule_auto_disabled:
+                    continue
+                for step in rule.steps:
+                    if step.type != "detect":
+                        continue
+                    if step.params.get("trigger_mode", "once") != "repeat":
+                        continue
+                    cooldown = step.params.get("cooldown_ms", 2000) / 1000.0
+                    if now - rule.last_trigger_time >= cooldown:
+                        return True
+        return False
+
     def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:
         if roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
             return recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
@@ -397,16 +444,7 @@ class MainLoop:
         else:
             return StepResult("stop")
 
-        if self.check_runaway_rule(rule.id):
-            self._rule_auto_disabled.add(rule.id)
-            self._auto_disabled_at[rule.id] = time.monotonic()
-            rule.enabled = False
-            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
-            if self.on_warning:
-                self.on_warning(msg)
-            return StepResult("stop")
-
-        if not self._perf.check_rate_limit():
+        if not self._can_perform_action(rule):
             return StepResult("stop")
 
         button = params.get("button", "left")
@@ -417,22 +455,7 @@ class MainLoop:
         ok = self._send_click(sx, sy, button)
         if ok:
             self._perf.record_click()
-
-        rule.trigger_count += 1
-        rule.last_trigger_time = time.monotonic()
-
-        for s in rule.steps:
-            if s.type == "detect":
-                mt = s.params.get("max_triggers", -1)
-                if 0 < mt <= rule.trigger_count:
-                    rule.enabled = False
-                break
-
-        log = self._make_trigger_log(rule, matched_text, sx, sy)
-        self._emit_trigger(log)
-
-        with self._rules_lock:
-            self._rules_dirty = True
+            self._mark_rule_triggered(rule, matched_text, sx, sy)
 
         return StepResult("continue")
 
@@ -441,16 +464,7 @@ class MainLoop:
         if not key:
             return StepResult("stop")
 
-        if self.check_runaway_rule(rule.id):
-            self._rule_auto_disabled.add(rule.id)
-            self._auto_disabled_at[rule.id] = time.monotonic()
-            rule.enabled = False
-            msg = f"規則「{rule.name}」觸發過於頻繁，已自動停用"
-            if self.on_warning:
-                self.on_warning(msg)
-            return StepResult("stop")
-
-        if not self._perf.check_rate_limit():
+        if not self._can_perform_action(rule):
             return StepResult("stop")
 
         activate_window(self._window_title)
@@ -462,22 +476,7 @@ class MainLoop:
             ok = self._send_key(key)
         if ok:
             self._perf.record_click()
-
-        rule.trigger_count += 1
-        rule.last_trigger_time = time.monotonic()
-
-        for s in rule.steps:
-            if s.type == "detect":
-                mt = s.params.get("max_triggers", -1)
-                if 0 < mt <= rule.trigger_count:
-                    rule.enabled = False
-                break
-
-        log = self._make_trigger_log(rule, "", 0, 0)
-        self._emit_trigger(log)
-
-        with self._rules_lock:
-            self._rules_dirty = True
+            self._mark_rule_triggered(rule)
 
         return StepResult("continue")
 
@@ -504,6 +503,9 @@ class MainLoop:
         else:
             return StepResult("stop")
 
+        if not self._can_perform_action(rule):
+            return StepResult("stop")
+
         dx = params.get("dx", 0)
         dy = params.get("dy", 0)
         button = params.get("button", "left")
@@ -515,10 +517,14 @@ class MainLoop:
         ok = _ahk.send_drag(ssx, ssy, sex, sey, button)
         if ok:
             self._perf.record_click()
+            self._mark_rule_triggered(rule, "", ssx, ssy)
 
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        if not self._can_perform_action(rule):
+            return StepResult("stop")
+
         direction = params.get("direction", "WheelDown")
         amount = params.get("amount", 1)
         delay_ms = params.get("delay_ms", 30)
@@ -531,6 +537,8 @@ class MainLoop:
             if delay_ms > 0:
                 time.sleep(delay_ms / 1000.0)
 
+        self._perf.record_click()
+        self._mark_rule_triggered(rule)
         return StepResult("continue")
 
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -582,18 +590,25 @@ class MainLoop:
 
         return StepResult("continue")
 
-    def _execute_inline_action(self, action: dict, ctx: StepContext) -> None:
+    def _execute_inline_action(self, action: dict, ctx: StepContext) -> tuple[bool, int, int]:
         if not self._perf.check_rate_limit():
-            return
+            return False, 0, 0
         atype = action.get("type", "")
         if atype == "click":
             x = action.get("x", 0)
             y = action.get("y", 0)
             button = action.get("button", "left")
             sx, sy = self._to_screen_coords(ctx.rect, x, y)
-            self._send_click(sx, sy, button)
+            ok = self._send_click(sx, sy, button)
+            if ok:
+                self._perf.record_click()
+            return ok, sx, sy
         elif atype == "key":
-            self._send_key(action.get("key", ""))
+            ok = self._send_key(action.get("key", ""))
+            if ok:
+                self._perf.record_click()
+            return ok, 0, 0
+        return False, 0, 0
 
     def _pick_best_from_rounds(
         self, rounds: list[dict], metric_defs: list[dict], primary_idx: int
@@ -625,6 +640,9 @@ class MainLoop:
         metric_defs = rounds_def[0].get("metrics", []) if rounds_def else []
         confirm_action = params.get("confirm_action", {})
         on_all_fail = params.get("on_all_fail", {})
+
+        if not self._can_perform_action(rule):
+            return StepResult("stop")
 
         round_results = []
 
@@ -665,11 +683,6 @@ class MainLoop:
             if self.on_compare_round:
                 self.on_compare_round({"rule_id": rule.id, "rule_name": rule.name, **rdata})
 
-            if all_ok:
-                self._execute_inline_action(rd.get("result_action", {}), ctx)
-                self._execute_inline_action(confirm_action, ctx)
-                return StepResult("stop")
-
         full = [r for r in round_results if r["all_ok"]]
         partial = [
             r
@@ -688,8 +701,10 @@ class MainLoop:
 
         if best is not None:
             best_def = rounds_def[best["round"]]
-            self._execute_inline_action(best_def.get("result_action", {}), ctx)
-            self._execute_inline_action(confirm_action, ctx)
+            ok, sx, sy = self._execute_inline_action(best_def.get("result_action", {}), ctx)
+            ok2, sx2, sy2 = self._execute_inline_action(confirm_action, ctx)
+            if ok or ok2:
+                self._mark_rule_triggered(rule, "", sx2 or sx, sy2 or sy)
         elif on_all_fail.get("type") == "jump":
             target_id = on_all_fail.get("rule_id", "")
             if target_id:
@@ -709,6 +724,10 @@ class MainLoop:
                         self.on_warning(msg)
                     elif self._verbose:
                         self._log(msg)
+        elif on_all_fail.get("type") == "key":
+            ok, sx, sy = self._execute_inline_action(on_all_fail, ctx)
+            if ok:
+                self._mark_rule_triggered(rule, "", sx, sy)
 
         return StepResult("stop")
 
@@ -897,7 +916,7 @@ class MainLoop:
                     diff = cv2.absdiff(prev, img)
                     change_ratio = np.mean(diff) / 255.0
                     self._frame_diff_ratio = change_ratio
-                    if change_ratio < 0.02:
+                    if change_ratio < 0.02 and not self._should_process_static_frame():
                         if self._verbose and iteration % 30 == 0:
                             self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR")
                         self._perf.record_frame()
