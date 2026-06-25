@@ -1074,7 +1074,6 @@ class _CollectRoundsStepForm(QWidget):
         self._rounds_layout = QVBoxLayout(self._rounds_widget)
         self._rounds_layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._rounds_widget)
-        self._rebuild_rounds()
 
         add_round_btn = QPushButton("+ 新增輪次")
         add_round_btn.clicked.connect(self._add_round)
@@ -1091,6 +1090,7 @@ class _CollectRoundsStepForm(QWidget):
         _pil.addWidget(self._primary_idx)
         layout.addWidget(self._primary_idx_row)
         self._primary_idx_row.setVisible(self._max_metrics() >= 2)
+        self._rebuild_rounds()
 
         # Confirm action
         layout.addWidget(QLabel("<b>確認動作</b>"))
