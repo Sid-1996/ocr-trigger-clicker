@@ -154,7 +154,8 @@ class MainLoop:
         self._cycle_visited: set[str] = set()
         self._process_counter: int = 0
         self._pending_retry: dict[str, dict] = {}
-        self._waiting_rules: dict[str, dict] = {}
+        self._wait_rule_deadlines: dict[str, float] = {}
+        self._wait_rule_done: set[str] = set()
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -570,24 +571,25 @@ class MainLoop:
         if target is None:
             return StepResult("stop")
 
-        timeout_ms = params.get("timeout_ms", 5000)
+        if rule.id in self._wait_rule_done:
+            return StepResult("stop")
 
         if target.trigger_count > 0:
+            self._wait_rule_deadlines.pop(rule.id, None)
+            self._wait_rule_done.discard(rule.id)
             return StepResult("continue")
         if self._check_wait_rule_frame(target, ctx):
+            self._wait_rule_deadlines.pop(rule.id, None)
+            self._wait_rule_done.discard(rule.id)
             return StepResult("continue")
 
-        if self._verbose:
-            self._log(f"wait_rule「{rule.name}」等待「{target.name}」最長 {timeout_ms}ms")
+        timeout_ms = params.get("timeout_ms", 5000)
+        if rule.id not in self._wait_rule_deadlines:
+            self._wait_rule_deadlines[rule.id] = time.monotonic() + timeout_ms / 1000.0
+            if self._verbose:
+                self._log(f"wait_rule「{rule.name}」等待「{target.name}」最長 {timeout_ms}ms")
 
-        return StepResult(
-            "waiting",
-            data={
-                "target_id": target_id,
-                "timeout_ms": timeout_ms,
-                "deadline": time.monotonic() + timeout_ms / 1000.0,
-            },
-        )
+        return StepResult("stop")
 
     def _check_wait_rule_frame(self, target, ctx: StepContext) -> bool:
         if target.trigger_count > 0:
@@ -810,14 +812,6 @@ class MainLoop:
             result = self._run_step(steps[i], ctx, rule)
             if result.action == "stop":
                 return
-            if result.action == "waiting":
-                self._waiting_rules[rule.id] = {
-                    "deadline": result.data.get("deadline", time.monotonic() + 5),
-                    "step_index": i,
-                    "target_id": result.data.get("target_id", ""),
-                    "timeout_ms": result.data.get("timeout_ms", 5000),
-                }
-                return
             if result.action == "retry_from":
                 target = result.data.get("step_index", 0)
                 delay_ms = result.data.get("retry_delay_ms", 1000)
@@ -898,7 +892,8 @@ class MainLoop:
             if not rule.enabled:
                 with self._rules_lock:
                     self._pending_forced_triggers.discard(rule.id)
-                self._waiting_rules.pop(rule.id, None)
+                self._wait_rule_deadlines.pop(rule.id, None)
+                self._wait_rule_done.discard(rule.id)
                 continue
             with self._rules_lock:
                 if rule.id in self._rule_auto_disabled:
@@ -916,28 +911,15 @@ class MainLoop:
             if rule.id in self._pending_retry:
                 continue
 
-            # 跨幀等待規則 (wait_rule) — 每幀檢查條件
-            if rule.id in self._waiting_rules:
-                wr = self._waiting_rules[rule.id]
-                now = time.monotonic()
-                if now >= wr["deadline"]:
-                    del self._waiting_rules[rule.id]
-                    if self._verbose:
-                        self._log(f"wait_rule「{rule.name}」等待超時 ({wr['timeout_ms']}ms)")
-                    continue
-                target = next((r for r in rules_snapshot if r.id == wr["target_id"]), None)
-                resolved = False
-                if target is not None:
-                    if target.trigger_count > 0:
-                        resolved = True
-                    else:
-                        tmp_ctx = StepContext(img=img, rect=rect)
-                        if self._check_wait_rule_frame(target, tmp_ctx):
-                            resolved = True
-                if resolved:
-                    del self._waiting_rules[rule.id]
-                    self._cycle_visited.add(rule.id)
-                    self._run_rule(rule, img, rect, forced=True, start_step=wr["step_index"])
+            now = time.monotonic()
+            wr_deadline = self._wait_rule_deadlines.get(rule.id)
+            if wr_deadline is not None and now >= wr_deadline:
+                del self._wait_rule_deadlines[rule.id]
+                self._wait_rule_done.add(rule.id)
+                if self._verbose:
+                    self._log(f"wait_rule「{rule.name}」等待超時，已永久跳過")
+                continue
+            if rule.id in self._wait_rule_done:
                 continue
 
             self._cycle_visited.add(rule.id)
@@ -1083,7 +1065,8 @@ class MainLoop:
                 save_rules(self._rules, self._rules_path)
                 self._rules_dirty = False
         self._stop_event.set()
-        self._waiting_rules.clear()
+        self._wait_rule_deadlines.clear()
+        self._wait_rule_done.clear()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
         self._perf.stop()
@@ -1113,7 +1096,8 @@ class MainLoop:
 
     def reload_rules(self) -> None:
         self._rule_auto_disabled.clear()
-        self._waiting_rules.clear()
+        self._wait_rule_deadlines.clear()
+        self._wait_rule_done.clear()
         with self._rules_lock:
             self._load_rules()
 
@@ -1135,7 +1119,8 @@ class MainLoop:
         self._emergency_event.set()
         self._stop_event.set()
         self._pause_event.set()
-        self._waiting_rules.clear()
+        self._wait_rule_deadlines.clear()
+        self._wait_rule_done.clear()
         _ahk.send_emergency_stop()
         if self.on_emergency:
             self.on_emergency()
@@ -1271,7 +1256,8 @@ if __name__ == "__main__":
     ml._cycle_visited = set()
     ml._process_counter = 0
     ml._pending_retry = {}
-    ml._waiting_rules = {}
+    ml._wait_rule_deadlines = {}
+    ml._wait_rule_done = set()
     ml._execution_mode = "parallel"
     ml._logs = deque(maxlen=200)
     ml._logs_lock = threading.Lock()
@@ -1381,7 +1367,7 @@ if __name__ == "__main__":
     result = ml._handle_wait_rule({"rule_id": "empty_steps"}, ctx, test_rule)
     assert result.action == "continue", "no detect step should pass (no condition to check)"
     result = ml._handle_wait_rule({"rule_id": "detect_no_match"}, ctx, test_rule)
-    assert result.action == "waiting", "text not found in current frame should return waiting"
+    assert result.action == "stop", "text not found in current frame should stop"
     result = ml._handle_wait_rule({"rule_id": "nonexistent"}, ctx, test_rule)
     assert result.action == "stop", "nonexistent target should stop"
     result = ml._handle_wait_rule({"rule_id": ""}, ctx, test_rule)
