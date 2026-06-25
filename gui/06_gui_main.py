@@ -3120,7 +3120,7 @@ class MainWindow(QMainWindow):
 
         dialog = QDialog(self)
         dialog.setWindowTitle("測試結果（視覺化）")
-        dialog.resize(min(900, w + 40), min(750, h + 200))
+        dialog.resize(min(960, w + 40), min(850, h + 200))
         layout = QVBoxLayout(dialog)
 
         title_lbl = QLabel(log_text.split("\n", 1)[0])
@@ -3130,8 +3130,8 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         img_label = QLabel()
         pixmap_scaled = pixmap.scaled(
-            min(860, w),
-            min(500, h),
+            min(920, w),
+            min(650, h),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
@@ -3144,10 +3144,12 @@ class MainWindow(QMainWindow):
         log_edit = QTextEdit()
         log_edit.setReadOnly(True)
         log_edit.setText(log_text)
-        log_edit.setMaximumHeight(200)
+        log_edit.setMaximumHeight(150)
         layout.addWidget(log_edit)
 
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_btn = btn_box.button(QDialogButtonBox.StandardButton.Close)
+        close_btn.setText("關閉(Esc)")
         btn_box.rejected.connect(dialog.close)
         layout.addWidget(btn_box)
 
