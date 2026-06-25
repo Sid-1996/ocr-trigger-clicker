@@ -615,7 +615,7 @@ class _DetectStepForm(QWidget):
         self._cooldown = _NoWheelSpin()
         self._cooldown.setRange(0, 60000)
         self._cooldown.setSuffix(" ms")
-        self._cooldown.setValue(p.get("cooldown_ms", 2000))
+        self._cooldown.setValue(p.get("cooldown_ms", 500))
         form.addRow("冷卻時間:", self._cooldown)
 
         self._mode = _NoWheelCombo()
@@ -1033,7 +1033,7 @@ class _WaitStepForm(QWidget):
         self._ms = _NoWheelSpin()
         self._ms.setRange(0, 60000)
         self._ms.setSuffix(" ms")
-        self._ms.setValue(step.params.get("ms", 1000))
+        self._ms.setValue(step.params.get("ms", 500))
         form.addRow("毫秒:", self._ms)
 
     def save(self):
@@ -2516,7 +2516,7 @@ class MainWindow(QMainWindow):
                         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
                         "match_mode": "fuzzy",
                         "fuzzy_threshold": 0.8,
-                        "cooldown_ms": 2000,
+                        "cooldown_ms": 500,
                         "trigger_mode": "once",
                         "max_triggers": -1,
                     },
@@ -2917,7 +2917,7 @@ class MainWindow(QMainWindow):
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "match_mode": "fuzzy",
                     "fuzzy_threshold": 0.8,
-                    "cooldown_ms": 2000,
+                    "cooldown_ms": 500,
                     "trigger_mode": "once",
                     "max_triggers": -1,
                 },

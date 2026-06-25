@@ -257,7 +257,7 @@ class MainLoop:
                         continue
                     if step.params.get("trigger_mode", "once") != "repeat":
                         continue
-                    cooldown = step.params.get("cooldown_ms", 2000) / 1000.0
+                    cooldown = step.params.get("cooldown_ms", 500) / 1000.0
                     if now - rule.last_trigger_time >= cooldown:
                         return True
         return False
@@ -305,7 +305,7 @@ class MainLoop:
             return StepResult("stop")
 
         elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
-        if elapsed_ms < params.get("cooldown_ms", 2000) and not ctx.forced:
+        if elapsed_ms < params.get("cooldown_ms", 500) and not ctx.forced:
             return StepResult("stop")
 
         if (
@@ -1117,7 +1117,7 @@ class MainLoop:
                     "trigger_count": r.trigger_count,
                     "last_trigger_time": r.last_trigger_time,
                     "cooldown_ms": next(
-                        (s.params.get("cooldown_ms", 2000) for s in r.steps if s.type == "detect"),
+                        (s.params.get("cooldown_ms", 500) for s in r.steps if s.type == "detect"),
                         2000,
                     ),
                     "max_triggers": next(

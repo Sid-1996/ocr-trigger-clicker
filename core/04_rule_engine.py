@@ -61,7 +61,7 @@ _STEP_DEFAULTS = {
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
         "match_mode": "fuzzy",
         "fuzzy_threshold": 0.8,
-        "cooldown_ms": 2000,
+        "cooldown_ms": 500,
         "trigger_mode": "once",
         "max_triggers": -1,
         "on_fail": "stop",
@@ -150,7 +150,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["fuzzy_threshold"] = max(
             0.0, min(1.0, _as_float(base.get("fuzzy_threshold", 0.8), 0.8))
         )
-        base["cooldown_ms"] = max(0, _as_int(base.get("cooldown_ms", 2000), 2000))
+        base["cooldown_ms"] = max(0, _as_int(base.get("cooldown_ms", 500), 500))
         base["trigger_mode"] = str(base.get("trigger_mode", "once"))
         base["max_triggers"] = _as_int(base.get("max_triggers", -1), -1)
     elif step_type in ("click", "drag"):
@@ -231,7 +231,7 @@ def _build_detect_params(old: dict) -> dict:
         "roi": _sanitize_roi(old.get("roi")),
         "match_mode": match_mode_,
         "fuzzy_threshold": max(0.0, min(1.0, _as_float(old.get("fuzzy_threshold", 0.8), 0.8))),
-        "cooldown_ms": max(0, _as_int(old.get("cooldown_ms", 2000), 2000)),
+        "cooldown_ms": max(0, _as_int(old.get("cooldown_ms", 500), 500)),
         "trigger_mode": str(old.get("trigger_mode", "once")),
         "max_triggers": _as_int(old.get("max_triggers", -1), -1),
         "on_fail": old.get("on_fail", "stop"),
@@ -661,7 +661,7 @@ if __name__ == "__main__":
         "roi": {"x": 100, "y": 200, "w": 300, "h": 100},
         "click_position": "text_center",
         "click_button": "left",
-        "cooldown_ms": 2000,
+        "cooldown_ms": 500,
         "trigger_mode": "once",
         "max_triggers": -1,
         "random_offset": 3,
@@ -762,7 +762,7 @@ if __name__ == "__main__":
                     "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
                     "fuzzy": False,
                     "fuzzy_threshold": 0.8,
-                    "cooldown_ms": 2000,
+                    "cooldown_ms": 500,
                     "trigger_mode": "once",
                     "max_triggers": -1,
                 },
