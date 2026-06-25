@@ -152,6 +152,7 @@ class MainLoop:
         self._save_period_counter: int = 0
         self._cycle_visited: set[str] = set()
         self._process_counter: int = 0
+        self._pending_retry: dict[str, dict] = {}
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -297,7 +298,7 @@ class MainLoop:
             return StepResult("stop")
 
         elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
-        if elapsed_ms < params.get("cooldown_ms", 2000):
+        if elapsed_ms < params.get("cooldown_ms", 2000) and not ctx.forced:
             return StepResult("stop")
 
         if (
@@ -323,6 +324,7 @@ class MainLoop:
             return self._handle_on_fail(params, ctx, rule)
 
         ctx.matched_text = matches[0]
+        ctx.forced = False
         return StepResult("continue")
 
     def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -642,7 +644,12 @@ class MainLoop:
         confirm_action = params.get("confirm_action", {})
         on_all_fail = params.get("on_all_fail", {})
 
-        if not self._can_perform_action(rule):
+        if self.check_runaway_rule(rule.id):
+            self._rule_auto_disabled.add(rule.id)
+            self._auto_disabled_at[rule.id] = time.monotonic()
+            rule.enabled = False
+            if self.on_warning:
+                self.on_warning(f"規則「{rule.name}」觸發過於頻繁，已自動停用")
             return StepResult("stop")
 
         round_results = []
@@ -768,11 +775,19 @@ class MainLoop:
             return StepResult("stop")
         return handler(step.params, ctx, rule)
 
-    def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict, forced: bool = False) -> None:
+    def _run_rule(
+        self,
+        rule: Rule,
+        img: np.ndarray,
+        rect: dict,
+        forced: bool = False,
+        start_step: int = 0,
+        retry_budget: dict | None = None,
+    ) -> None:
         ctx = StepContext(img=img, rect=rect, forced=forced)
         steps = rule.steps
-        i = 0
-        retry_budget: dict[int, int] = {}
+        i = start_step
+        _retry_budget = dict(retry_budget) if retry_budget else {}
         while i < len(steps):
             result = self._run_step(steps[i], ctx, rule)
             if result.action == "stop":
@@ -781,28 +796,19 @@ class MainLoop:
                 target = result.data.get("step_index", 0)
                 delay_ms = result.data.get("retry_delay_ms", 1000)
                 max_retries = result.data.get("retries", 3)
-                budget = retry_budget.get(i, max_retries)
+                budget = _retry_budget.get(i, max_retries)
                 if budget <= 0:
                     if self._verbose:
                         self._log(f"「{rule.name}」retry_from 重試次數耗盡，放棄")
                     return
-                retry_budget[i] = budget - 1
-                interrupted = self._stop_event.wait(timeout=delay_ms / 1000.0)
-                if interrupted:
-                    return
-                with self._window_lock:
-                    title = self._window_title
-                new_img = capture(title)
-                if new_img is None:
-                    new_img = capture_window_full(title)
-                if new_img is not None:
-                    ctx.img = new_img
-                    new_rect = get_window_rect(title)
-                    if new_rect:
-                        ctx.rect = new_rect
-                ctx.forced = True
-                i = target
-                continue
+                _retry_budget[i] = budget - 1
+                self._pending_retry[rule.id] = {
+                    "step_index": target,
+                    "retry_after": time.monotonic() + delay_ms / 1000.0,
+                    "budget": _retry_budget,
+                    "forced": True,
+                }
+                return
             i += 1
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -812,6 +818,25 @@ class MainLoop:
             if self._verbose:
                 self._log("無啟用中的規則")
             return
+
+        # Handle pending retries before normal processing
+        now = time.monotonic()
+        for rid in list(self._pending_retry.keys()):
+            pending = self._pending_retry.get(rid)
+            if pending and now >= pending["retry_after"]:
+                del self._pending_retry[rid]
+                rule = next((r for r in rules_snapshot if r.id == rid), None)
+                if rule and rule.enabled:
+                    if self._verbose:
+                        self._log(f"retry_from 延遲結束，恢復規則「{rule.name}」")
+                    self._run_rule(
+                        rule,
+                        img,
+                        rect,
+                        forced=True,
+                        start_step=pending["step_index"],
+                        retry_budget=pending["budget"],
+                    )
 
         self._cycle_visited.clear()
         self._process_counter += 1
@@ -834,6 +859,8 @@ class MainLoop:
                             self._log(f"規則「{rule.name}」自動恢復啟用")
                     else:
                         continue
+            if rule.id in self._pending_retry:
+                continue
             self._cycle_visited.add(rule.id)
 
             with self._rules_lock:
@@ -1160,6 +1187,7 @@ if __name__ == "__main__":
     ml._pending_forced_triggers = set()
     ml._cycle_visited = set()
     ml._process_counter = 0
+    ml._pending_retry = {}
     ml._logs = deque(maxlen=200)
     ml._logs_lock = threading.Lock()
     ml._rule_trigger_history = defaultdict(lambda: deque(maxlen=100))
@@ -1377,7 +1405,67 @@ if __name__ == "__main__":
     assert collect_rule.trigger_count == 1
     print("  [OK] collect_rounds chooses best after all rounds")
 
+    # ── Test 13: forced=True bypasses cooldown ──
+    detect_params_cd = {"text": "ANYTHING", "cooldown_ms": 50000, "on_fail": "continue"}
+    cd_rule = Rule(
+        id="cd",
+        name="cd",
+        enabled=True,
+        trigger_count=1,
+        last_trigger_time=time.monotonic(),
+        steps=[],
+    )
+    ctx_normal = StepContext(
+        img=np.zeros((100, 100, 3), dtype=np.uint8),
+        rect={"x": 0, "y": 0, "w": 100, "h": 100},
+        forced=False,
+    )
+    r1 = ml._handle_detect(detect_params_cd, ctx_normal, cd_rule)
+    assert r1.action == "stop", "cooldown should block when not forced"
+    ctx_forced = StepContext(
+        img=np.zeros((100, 100, 3), dtype=np.uint8),
+        rect={"x": 0, "y": 0, "w": 100, "h": 100},
+        forced=True,
+    )
+    r2 = ml._handle_detect(detect_params_cd, ctx_forced, cd_rule)
+    assert r2.action == "continue", "cooldown bypassed when forced, on_fail=continue"
+    print("  [OK] forced=True bypasses cooldown check")
+
+    # ── Test 14: retry_from populates _pending_retry ──
+    retry_rule = Rule(
+        id="rule_retry",
+        name="retry測試",
+        enabled=True,
+        trigger_count=0,
+        last_trigger_time=0,
+        steps=[
+            _rule.Step(
+                type="detect",
+                params={
+                    "text": "NONEXISTENT",
+                    "on_fail": {
+                        "action": "retry_from",
+                        "step_index": 0,
+                        "retries": 2,
+                        "retry_delay_ms": 100,
+                    },
+                },
+            )
+        ],
+    )
+    ml._pending_retry.clear()
+    ml._run_rule(
+        retry_rule, np.zeros((100, 100, 3), dtype=np.uint8), {"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    assert "rule_retry" in ml._pending_retry, "_pending_retry should be populated"
+    p = ml._pending_retry["rule_retry"]
+    assert p["step_index"] == 0
+    assert p["retry_after"] > time.monotonic() - 1
+    assert p["budget"] == {0: 1}
+    assert p["forced"] is True
+    print("  [OK] retry_from populates _pending_retry")
+
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 12 tests passed ===")
+    print("\n=== All 14 tests passed ===")
