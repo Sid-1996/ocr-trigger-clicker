@@ -2901,7 +2901,7 @@ class MainWindow(QMainWindow):
                             {
                                 "step": idx + 1,
                                 "shape": "click",
-                                "color": (0, 120, 255),
+                                "color": (0, 0, 255),
                                 "x": cx,
                                 "y": cy,
                             }
@@ -3016,8 +3016,8 @@ class MainWindow(QMainWindow):
                 cv2.circle(overlay, (m["x"], m["y"]), 6, color, -1)
             elif shape == "click":
                 cx, cy = m["x"], m["y"]
-                cv2.line(overlay, (cx - 12, cy), (cx + 12, cy), color, 2)
-                cv2.line(overlay, (cx, cy - 12), (cx, cy + 12), color, 2)
+                cv2.line(overlay, (cx - 15, cy), (cx + 15, cy), color, 3)
+                cv2.line(overlay, (cx, cy - 15), (cx, cy + 15), color, 3)
                 cv2.circle(overlay, (cx, cy), 6, color, -1)
             elif shape == "drag":
                 cv2.arrowedLine(overlay, (m["x1"], m["y1"]), (m["x2"], m["y2"]), color, 2)
