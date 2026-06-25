@@ -1034,6 +1034,7 @@ class _WaitStepForm(QWidget):
         self._ms.setRange(0, 60000)
         self._ms.setSuffix(" ms")
         self._ms.setValue(step.params.get("ms", 500))
+        self._ms.valueChanged.connect(lambda: self._list.steps_changed.emit())
         form.addRow("毫秒:", self._ms)
 
     def save(self):
