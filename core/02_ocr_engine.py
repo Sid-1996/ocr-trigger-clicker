@@ -221,11 +221,9 @@ def recognize(
     try:
         result = future.result(timeout=_OCR_TIMEOUT)
     except FutureTimeout:
-        print("[OCR] timeout (30s)")
         _incr_ocr_failure()
         return []
-    except Exception as e:
-        print(f"[OCR] exception: {e}")
+    except Exception:
         _incr_ocr_failure()
         return []
 

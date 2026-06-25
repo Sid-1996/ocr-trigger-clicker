@@ -535,7 +535,8 @@ class MainLoop:
             if not ok:
                 return StepResult("stop")
             if delay_ms > 0:
-                time.sleep(delay_ms / 1000.0)
+                if self._stop_event.wait(timeout=delay_ms / 1000.0):
+                    return StepResult("stop")
 
         self._perf.record_click()
         self._mark_rule_triggered(rule)
@@ -652,7 +653,8 @@ class MainLoop:
 
             trigger_action = rd.get("trigger_action", {})
             self._execute_inline_action(trigger_action, ctx)
-            time.sleep(0.3)
+            if self._stop_event.wait(timeout=0.3):
+                return StepResult("stop")
 
             round_metrics = []
             all_ok = True
