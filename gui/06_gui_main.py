@@ -1,10 +1,8 @@
-import ctypes
 import json
 import sys
 import threading
 import time
 from copy import deepcopy
-from ctypes import wintypes
 from pathlib import Path
 from typing import Optional
 
@@ -63,13 +61,6 @@ _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
 
 from _version import __author__, __github__, __version__  # noqa: E402
-
-# global hotkey: Ctrl+Shift+F12 → _toggle_start
-_HOTKEY_ID = 1
-_WM_HOTKEY = 0x0312
-_MOD_CONTROL = 0x0002
-_MOD_SHIFT = 0x0004
-_VK_F12 = 0x7B
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -2132,20 +2123,6 @@ class MainWindow(QMainWindow):
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
         QShortcut(QKeySequence("Delete"), self, self._delete_rule)
-        try:
-            ctypes.windll.user32.RegisterHotKey(
-                None, _HOTKEY_ID, _MOD_CONTROL | _MOD_SHIFT, _VK_F12
-            )
-        except Exception:
-            pass
-
-    def nativeEvent(self, eventType, message):
-        if eventType == b"windows_generic_MSG" or eventType == b"windows_dispatcher_MSG":
-            msg = ctypes.cast(int(message.__int__()), ctypes.POINTER(wintypes.MSG)).contents
-            if msg.message == _WM_HOTKEY and msg.wParam == _HOTKEY_ID:
-                self._toggle_start()
-                return True, 0
-        return super().nativeEvent(eventType, message)
 
     def _toggle_simplified_mode(self):
         self._simplified_mode = self._simplified_btn.isChecked()
@@ -3642,8 +3619,14 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     import sys
+    import traceback
 
-    app = QApplication(sys.argv)
-    win = MainWindow()
-    win.show()
-    sys.exit(app.exec())
+    try:
+        app = QApplication(sys.argv)
+        win = MainWindow()
+        win.show()
+        sys.exit(app.exec())
+    except Exception:
+        with open("startup_error.log", "w", encoding="utf-8") as f:
+            traceback.print_exc(file=f)
+        raise
