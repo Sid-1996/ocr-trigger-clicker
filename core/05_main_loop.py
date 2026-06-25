@@ -848,17 +848,27 @@ class MainLoop:
         self._cycle_visited.clear()
         self._process_counter += 1
 
-        # sequential 模式：只處理到第一個觸發次數為 0 的規則
+        # sequential 模式：once 規則依序完成，repeat 規則穿透
         sequential_limit = len(rules_snapshot)
         if self._execution_mode == "sequential":
             for i, r in enumerate(rules_snapshot):
-                if r.trigger_count == 0:
-                    sequential_limit = i
-                    break
+                detect_params = next((s.params for s in r.steps if s.type == "detect"), None)
+                if detect_params:
+                    once = detect_params.get("trigger_mode", "once") == "once"
+                    mt = detect_params.get("max_triggers", -1)
+                    if (once and r.trigger_count > 0) or (mt > 0 and r.trigger_count >= mt):
+                        continue
+                elif r.trigger_count > 0:
+                    continue
+                sequential_limit = i
+                break
 
         for idx, rule in enumerate(rules_snapshot):
             if idx > sequential_limit:
-                break
+                # repeat 規則穿透執行，不影響循序順序
+                detect_params = next((s.params for s in rule.steps if s.type == "detect"), None)
+                if not detect_params or detect_params.get("trigger_mode", "once") != "repeat":
+                    break
             if not rule.enabled:
                 with self._rules_lock:
                     self._pending_forced_triggers.discard(rule.id)
