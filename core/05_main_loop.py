@@ -569,7 +569,10 @@ class MainLoop:
         if target is None:
             return StepResult("stop")
 
-        # ponytail: re-run target's first detect step on current frame, not historical count
+        # ponytail: target 已觸發過即放行，不依賴當幀 OCR
+        if target.trigger_count > 0:
+            return StepResult("continue")
+
         detect_step = next((s for s in target.steps if s.type == "detect"), None)
         if detect_step is None:
             if self._verbose:
@@ -1299,14 +1302,21 @@ if __name__ == "__main__":
     _ahk.send_key = _orig_key
     print("  [OK] _execute_inline_action")
 
-    # ── Test 7: _handle_wait_rule (live OCR check) ──
+    # ── Test 7: _handle_wait_rule ──
     ml._rules = [
-        Rule(id="empty_steps", name="無步驟", enabled=True, steps=[], trigger_count=1),
+        Rule(id="empty_steps", name="無步驟", enabled=True, steps=[], trigger_count=0),
         Rule(
             id="detect_no_match",
             name="不匹配",
             enabled=True,
             steps=[_rule.Step(type="detect", params={"text": "NONEXISTENT"})],
+            trigger_count=0,
+        ),
+        Rule(
+            id="triggered_once",
+            name="已觸發",
+            enabled=True,
+            steps=[_rule.Step(type="detect", params={"text": "ANYTHING"})],
             trigger_count=1,
         ),
     ]
@@ -1318,6 +1328,8 @@ if __name__ == "__main__":
     assert result.action == "stop", "nonexistent target should stop"
     result = ml._handle_wait_rule({"rule_id": ""}, ctx, test_rule)
     assert result.action == "continue", "empty rule_id should continue"
+    result = ml._handle_wait_rule({"rule_id": "triggered_once"}, ctx, test_rule)
+    assert result.action == "continue", "target with trigger_count>0 should pass"
     print("  [OK] _handle_wait_rule")
 
     # ── Test 8: _handle_jump ──
