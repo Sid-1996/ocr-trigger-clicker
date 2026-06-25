@@ -169,7 +169,7 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "key":
         return f"按鍵 {p.get('key', '')}"
     if t == "wait":
-        return f"等待 {p.get('ms', 1000)}ms"
+        return f"等待 {p.get('ms', 500)}ms"
     if t == "wait_rule":
         name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
         return f"等待規則「{name}」"
