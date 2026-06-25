@@ -8,7 +8,17 @@ from typing import Optional
 
 import numpy as np
 from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QDrag, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PyQt6.QtGui import (
+    QColor,
+    QDrag,
+    QIcon,
+    QImage,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPixmap,
+    QShortcut,
+)
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -32,6 +42,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QStackedWidget,
     QStatusBar,
+    QTextEdit,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -2753,53 +2764,342 @@ class MainWindow(QMainWindow):
         t.start()
 
     def _run_rule_test(self, rule: Rule, img: np.ndarray):
+        """Background thread: run all steps dry-run, produce annotated image."""
         result: dict = {}
         try:
-            result = self._test_first_detect_step(rule, img)
+            markers, log_lines = self._run_dry_run(rule, img)
+            annotated = self._draw_test_annotations(img.copy(), markers)
+            result = {
+                "image": annotated,
+                "log": "\n".join(log_lines),
+            }
         except Exception as e:
             result = {"error": f"測試異常：{e}"}
         self._signals.test_done_signal.emit(result)
 
-    def _test_first_detect_step(self, rule: Rule, img: np.ndarray) -> dict:
-        detect = next((s for s in rule.steps if s.type == "detect"), None)
-        if detect is None:
-            return {"error": "規則中無偵測步驟，請新增一個 detect 步驟"}
-        p = detect.params
-        text = p.get("text", "").strip()
-        if not text:
-            return {"error": "偵測步驟的目標文字為空白"}
-        roi = p.get("roi", {})
-        if any(roi.get(k, 0) != 0 for k in ("x", "y", "w", "h")):
-            roi_img = crop_roi(img, roi)
-            if roi_img is None:
-                return {"error": "裁切區域無效"}
-        else:
-            roi_img = img
-        results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-        match_mode = p.get("match_mode", "fuzzy")
-        threshold = p.get("fuzzy_threshold", 0.8)
-        matches = find_text(results, text, match_mode, threshold)
-        common = {
-            "target_text": text,
-            "match_mode": match_mode,
-            "threshold": threshold,
-            "roi": roi,
-            "total_results": len(results),
-        }
-        if matches:
-            m = matches[0]
-            return {
-                "hit": True,
-                "matched_text": m.text,
-                "confidence": m.confidence,
-                "click": (int(m.x + m.w / 2), int(m.y + m.h / 2)),
-                **common,
-            }
-        return {
-            "hit": False,
-            "all_results": [(r.text, r.confidence) for r in results],
-            **common,
-        }
+    def _run_dry_run(self, rule: Rule, img: np.ndarray):
+        """Execute all steps in dry-run mode, collect visual markers + log."""
+        markers = []
+        log = []
+        log.append(f"規則「{rule.name}」— {len(rule.steps)} 個步驟")
+        log.append("─" * 40)
+
+        last_center = None
+
+        for idx, step in enumerate(rule.steps):
+            try:
+                if step.type == "detect":
+                    p = step.params
+                    text = p.get("text", "").strip()
+                    if not text:
+                        log.append(f"[{idx + 1}] ⚠ 偵測文字為空白")
+                        continue
+                    roi = p.get("roi", {})
+                    use_roi = any(roi.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
+                    if use_roi:
+                        roi_img = crop_roi(img, roi)
+                        if roi_img is None:
+                            log.append(f"[{idx + 1}] ⚠ ROI 裁切無效")
+                            continue
+                    else:
+                        roi_img = img
+                        roi = {"x": 0, "y": 0, "w": img.shape[1], "h": img.shape[0]}
+                    results_ocr = recognize(
+                        roi_img, preprocess=False, max_side_len=0, min_confidence=0.25
+                    )
+                    match_mode = p.get("match_mode", "fuzzy")
+                    threshold = p.get("fuzzy_threshold", 0.8)
+                    matches = find_text(results_ocr, text, match_mode, threshold)
+                    rx = roi.get("x", 0)
+                    ry = roi.get("y", 0)
+                    if matches:
+                        m = matches[0]
+                        mx = rx + int(m.x)
+                        my = ry + int(m.y)
+                        mw = int(m.w)
+                        mh = int(m.h)
+                        cx = mx + mw // 2
+                        cy = my + mh // 2
+                        last_center = (cx, cy)
+                        log.append(
+                            f"[{idx + 1}] 🔍 命中「{m.text}」{m.confidence:.2f}  ({mx},{my}) {mw}×{mh}"
+                        )
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "rect",
+                                "color": (0, 200, 0),
+                                "x": mx,
+                                "y": my,
+                                "w": mw,
+                                "h": mh,
+                            }
+                        )
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "point",
+                                "color": (0, 200, 0),
+                                "x": cx,
+                                "y": cy,
+                            }
+                        )
+                    else:
+                        log.append(
+                            f"[{idx + 1}] ❌ 未命中「{text}」（{match_mode}，閾值 {threshold}）"
+                        )
+                        rw = roi.get("w", img.shape[1])
+                        rh = roi.get("h", img.shape[0])
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "rect",
+                                "color": (0, 0, 200),
+                                "x": rx,
+                                "y": ry,
+                                "w": rw,
+                                "h": rh,
+                            }
+                        )
+                        if results_ocr:
+                            top5 = "、".join(
+                                f"「{r.text}」({r.confidence:.2f})" for r in results_ocr[:5]
+                            )
+                            log.append(f"  附近文字: {top5}")
+                            if len(results_ocr) > 5:
+                                log.append(f"  … 尚有 {len(results_ocr) - 5} 筆")
+
+                elif step.type == "click":
+                    p = step.params
+                    target = p.get("target", "text_center")
+                    cx, cy = None, None
+                    if target == "custom":
+                        cx, cy = p.get("x", 0), p.get("y", 0)
+                    elif target == "text_center":
+                        if last_center:
+                            cx, cy = last_center
+                        else:
+                            log.append(f"[{idx + 1}] ⚠ 目標「文字中心」但無前一步偵測結果")
+                            continue
+                    elif target == "click_text":
+                        ct = p.get("text", "").strip()
+                        if ct:
+                            r = recognize(
+                                img, preprocess=False, max_side_len=0, min_confidence=0.25
+                            )
+                            ms = find_text(r, ct, "fuzzy", 0.8)
+                            if ms:
+                                m = ms[0]
+                                cx = int(m.x + m.w / 2)
+                                cy = int(m.y + m.h / 2)
+                            else:
+                                log.append(f"[{idx + 1}] ⚠ 點擊目標文字「{ct}」未找到")
+                                continue
+                    if cx is not None:
+                        log.append(f"[{idx + 1}] 🖱 {p.get('button', 'left')} 點擊 ({cx},{cy})")
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "click",
+                                "color": (0, 120, 255),
+                                "x": cx,
+                                "y": cy,
+                            }
+                        )
+
+                elif step.type == "drag":
+                    p = step.params
+                    target = p.get("target", "text_center")
+                    sx, sy = None, None
+                    if target == "custom":
+                        sx, sy = p.get("x", 0), p.get("y", 0)
+                    elif target == "text_center":
+                        if last_center:
+                            sx, sy = last_center
+                        else:
+                            log.append(f"[{idx + 1}] ⚠ 拖曳起點「文字中心」但無前一步偵測結果")
+                            continue
+                    elif target == "click_text":
+                        ct = p.get("text", "").strip()
+                        if ct:
+                            r = recognize(
+                                img, preprocess=False, max_side_len=0, min_confidence=0.25
+                            )
+                            ms = find_text(r, ct, "fuzzy", 0.8)
+                            if ms:
+                                m = ms[0]
+                                sx = int(m.x + m.w / 2)
+                                sy = int(m.y + m.h / 2)
+                            else:
+                                log.append(f"[{idx + 1}] ⚠ 拖曳目標文字「{ct}」未找到")
+                                continue
+                    if sx is not None:
+                        dx = p.get("dx", 0)
+                        dy = p.get("dy", 0)
+                        ex = sx + dx
+                        ey = sy + dy
+                        log.append(
+                            f"[{idx + 1}] ↗ {p.get('button', 'left')} 拖曳 ({sx},{sy}) → ({ex},{ey})"
+                        )
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "drag",
+                                "color": (255, 150, 0),
+                                "x1": sx,
+                                "y1": sy,
+                                "x2": ex,
+                                "y2": ey,
+                            }
+                        )
+
+                elif step.type == "scroll":
+                    p = step.params
+                    dirs = {
+                        "WheelDown": "向下",
+                        "WheelUp": "向上",
+                        "WheelLeft": "向左",
+                        "WheelRight": "向右",
+                    }
+                    d = dirs.get(p.get("direction", "WheelDown"), p.get("direction", ""))
+                    log.append(f"[{idx + 1}] ↕ 滾輪 {d} ×{p.get('amount', 1)}")
+
+                elif step.type == "key":
+                    p = step.params
+                    k = p.get("key", "")
+                    hm = p.get("hold_ms", 0)
+                    s = f"按住 {hm}ms" if hm else "按下"
+                    log.append(f"[{idx + 1}] ⌨ {s} {k}")
+
+                elif step.type == "wait":
+                    p = step.params
+                    log.append(f"[{idx + 1}] ⏱ 等待 {p.get('ms', 500)}ms")
+
+                elif step.type == "wait_rule":
+                    rid = step.params.get("rule_id", "")
+                    name = _resolve_rule_name(rid, lambda: list(self._rules))
+                    log.append(f"[{idx + 1}] 🔗 等待規則「{name}」")
+
+                elif step.type == "jump":
+                    rid = step.params.get("rule_id", "")
+                    name = _resolve_rule_name(rid, lambda: list(self._rules))
+                    log.append(f"[{idx + 1}] ↩ 跳轉規則「{name}」")
+
+                elif step.type == "collect_rounds":
+                    log.append(f"[{idx + 1}] 🔄 多輪比較（請直接執行觀看效果）")
+
+                else:
+                    log.append(f"[{idx + 1}] ? 未知步驟: {step.type}")
+
+            except Exception as e:
+                log.append(f"[{idx + 1}] ⚠ {type(e).__name__}: {e}")
+
+        return markers, log
+
+    def _draw_test_annotations(self, img: np.ndarray, markers: list) -> np.ndarray:
+        import cv2
+
+        h, w = img.shape[:2]
+        overlay = np.zeros_like(img, dtype=np.uint8)
+
+        for m in markers:
+            color = m.get("color", (0, 255, 0))
+            shape = m.get("shape", "")
+            if shape == "rect":
+                x = max(0, m["x"])
+                y = max(0, m["y"])
+                rw = min(w - x, m["w"])
+                rh = min(h - y, m["h"])
+                if rw > 0 and rh > 0:
+                    cv2.rectangle(overlay, (x, y), (x + rw, y + rh), color, -1)
+            elif shape == "point":
+                cv2.circle(overlay, (m["x"], m["y"]), 6, color, -1)
+            elif shape == "click":
+                cx, cy = m["x"], m["y"]
+                cv2.line(overlay, (cx - 12, cy), (cx + 12, cy), color, 2)
+                cv2.line(overlay, (cx, cy - 12), (cx, cy + 12), color, 2)
+                cv2.circle(overlay, (cx, cy), 6, color, -1)
+            elif shape == "drag":
+                cv2.arrowedLine(overlay, (m["x1"], m["y1"]), (m["x2"], m["y2"]), color, 2)
+                cv2.circle(overlay, (m["x1"], m["y1"]), 4, color, -1)
+
+        target = img.copy()
+        cv2.addWeighted(overlay, 0.25, target, 0.75, 0, target)
+
+        for m in markers:
+            color = m.get("color", (0, 255, 0))
+            step = m.get("step", 0)
+            shape = m.get("shape", "")
+            if shape == "rect":
+                x = max(0, m["x"])
+                y = max(0, m["y"])
+                rw = min(w - x, m["w"])
+                rh = min(h - y, m["h"])
+                if rw > 0 and rh > 0:
+                    cv2.rectangle(target, (x, y), (x + rw - 1, y + rh - 1), color, 2)
+                    if step:
+                        cv2.putText(
+                            target,
+                            str(step),
+                            (x + 4, y + 16),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.55,
+                            (255, 255, 255),
+                            2,
+                        )
+                        cv2.putText(
+                            target,
+                            str(step),
+                            (x + 4, y + 16),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.55,
+                            color,
+                            1,
+                        )
+            elif shape == "click":
+                if step:
+                    cx, cy = m["x"], m["y"]
+                    cv2.putText(
+                        target,
+                        str(step),
+                        (cx + 14, cy + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (255, 255, 255),
+                        2,
+                    )
+                    cv2.putText(
+                        target,
+                        str(step),
+                        (cx + 14, cy + 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        color,
+                        1,
+                    )
+            elif shape == "drag":
+                if step:
+                    sx, sy = m["x1"], m["y1"]
+                    cv2.putText(
+                        target,
+                        str(step),
+                        (sx + 6, sy - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (255, 255, 255),
+                        2,
+                    )
+                    cv2.putText(
+                        target,
+                        str(step),
+                        (sx + 6, sy - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        color,
+                        1,
+                    )
+
+        return target
 
     def _show_test_result(self, result: dict):
         self._edit_test_btn.setEnabled(True)
@@ -2807,41 +3107,51 @@ class MainWindow(QMainWindow):
         if "error" in result:
             QMessageBox.warning(self, "測試結果", result["error"])
             return
-        r = result
-        mode_labels = {
-            "contains": "包含關鍵字",
-            "exact": "完全符合",
-            "fuzzy": "近似比對",
-            "regex": "正規表達式",
-        }
-        mode_str = mode_labels.get(r.get("match_mode", ""), r.get("match_mode", "?"))
-        roi = r.get("roi", {})
-        zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        roi_str = "全視窗" if zero_roi else f"({roi['x']},{roi['y']}) {roi['w']}×{roi['h']}"
-        header = (
-            f"目標：「{r.get('target_text', '')}」\n"
-            f"比對：{mode_str}\n"
-            f"ROI：{roi_str}\n"
-            f"辨識總數：{r.get('total_results', '?')} 筆"
+        img = result["image"]
+        log_text = result["log"]
+
+        h, w = img.shape[:2]
+        import cv2
+
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        bytes_per_line = 3 * w
+        qt_img = QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(qt_img)
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("測試結果（視覺化）")
+        dialog.resize(min(900, w + 40), min(750, h + 200))
+        layout = QVBoxLayout(dialog)
+
+        title_lbl = QLabel(log_text.split("\n", 1)[0])
+        title_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        layout.addWidget(title_lbl)
+
+        scroll = QScrollArea()
+        img_label = QLabel()
+        pixmap_scaled = pixmap.scaled(
+            min(860, w),
+            min(500, h),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
         )
-        if r["hit"]:
-            msg = (
-                f"✅ 命中「{r['matched_text']}」\n"
-                f"信心: {r['confidence']:.2f}\n"
-                f"座標: ({r['click'][0]}, {r['click'][1]})\n\n"
-                f"{header}"
-            )
-        else:
-            lines = [f"❌ 未命中目標文字\n\n{header}\n"]
-            all_texts = r.get("all_results", [])
-            if all_texts:
-                lines.append("\n辨識結果（前 10 筆）：")
-                for i, (t, c) in enumerate(all_texts[:10], 1):
-                    lines.append(f"  {i}. {t} ({c:.2f})")
-                if len(all_texts) > 10:
-                    lines.append(f"  … 尚有 {len(all_texts) - 10} 筆")
-            msg = "\n".join(lines)
-        QMessageBox.information(self, "測試結果", msg)
+        img_label.setPixmap(pixmap_scaled)
+        scroll.setWidget(img_label)
+        scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(300)
+        layout.addWidget(scroll)
+
+        log_edit = QTextEdit()
+        log_edit.setReadOnly(True)
+        log_edit.setText(log_text)
+        log_edit.setMaximumHeight(200)
+        layout.addWidget(log_edit)
+
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btn_box.rejected.connect(dialog.close)
+        layout.addWidget(btn_box)
+
+        dialog.exec()
 
     # === OCR diagnostic ===
     def _switch_to_debug(self):
