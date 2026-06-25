@@ -355,9 +355,6 @@ class MainLoop:
         else:
             action = "stop"
 
-        if action == "continue":
-            return StepResult("continue")
-
         if action == "retry":
             text = params.get("text", "")
             for attempt in range(retries):
@@ -1344,8 +1341,6 @@ if __name__ == "__main__":
     # ── Test 11: _handle_on_fail actions ──
     result = ml._handle_on_fail({"on_fail": "stop"}, ctx, test_rule)
     assert result.action == "stop", "on_fail stop should return stop"
-    result = ml._handle_on_fail({"on_fail": "continue"}, ctx, test_rule)
-    assert result.action == "continue", "on_fail continue should return continue"
     result = ml._handle_on_fail(
         {"on_fail": {"action": "jump", "jump_rule_id": "tgt"}}, ctx, test_rule
     )
@@ -1455,7 +1450,7 @@ if __name__ == "__main__":
         forced=True,
     )
     r2 = ml._handle_detect(detect_params_cd, ctx_forced, cd_rule)
-    assert r2.action == "continue", "cooldown bypassed when forced, on_fail=continue"
+    assert r2.action == "stop", "cooldown bypassed when forced, on_fail continues to OCR"
     print("  [OK] forced=True bypasses cooldown check")
 
     # ── Test 14: retry_from populates _pending_retry ──

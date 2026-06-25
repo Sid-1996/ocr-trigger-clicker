@@ -650,7 +650,6 @@ class _DetectStepForm(QWidget):
 
         self._of_action = _NoWheelCombo()
         self._of_action.addItem("跳過本次（預設）", "stop")
-        self._of_action.addItem("跳過繼續", "continue")
         self._of_action.addItem("重試偵測", "retry")
         self._of_action.addItem("按下按鍵後繼續", "key")
         self._of_action.addItem("跳轉至規則", "jump")
@@ -781,8 +780,6 @@ class _DetectStepForm(QWidget):
         action = self._of_action.currentData()
         if action == "stop":
             self._step.params["on_fail"] = "stop"
-        elif action == "continue":
-            self._step.params["on_fail"] = "continue"
         elif action == "retry":
             self._step.params["on_fail"] = {
                 "action": "retry",
