@@ -1765,6 +1765,24 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(sep2)
         toolbar.addSpacing(8)
 
+        # -- Mode section --
+        self._mode_combo = _NoWheelCombo()
+        self._mode_combo.addItem("平行模式", "parallel")
+        self._mode_combo.addItem("循序模式", "sequential")
+        self._mode_combo.setToolTip(
+            "平行：所有啟用的規則同時掃描（預設）\n"
+            "循序：依規則順序逐條執行，上一條觸發後才啟動下一條"
+        )
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        toolbar.addWidget(QLabel("模式:"))
+        toolbar.addWidget(self._mode_combo)
+        toolbar.addSpacing(8)
+        sep3 = QFrame()
+        sep3.setFrameShape(QFrame.Shape.VLine)
+        sep3.setFrameShadow(QFrame.Shadow.Sunken)
+        toolbar.addWidget(sep3)
+        toolbar.addSpacing(8)
+
         # -- Action section --
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
@@ -2064,6 +2082,37 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel.clear_results()
         self._status_bar.showMessage(f"任務「{name}」— {len(self._rules)} 條規則")
+        # 讀取執行模式
+        try:
+            task_path = Path(_tasks_dir()) / f"{name}.json"
+            if task_path.exists():
+                with open(task_path, encoding="utf-8") as f:
+                    mode = json.load(f).get("execution_mode", "parallel")
+                idx = self._mode_combo.findData(mode)
+                if idx >= 0:
+                    self._mode_combo.blockSignals(True)
+                    self._mode_combo.setCurrentIndex(idx)
+                    self._mode_combo.blockSignals(False)
+        except Exception:
+            pass
+
+    def _on_mode_changed(self, idx):
+        mode = self._mode_combo.itemData(idx)
+        if not self._current_task:
+            return
+        task_path = Path(_tasks_dir()) / f"{self._current_task}.json"
+        try:
+            with open(task_path, encoding="utf-8") as f:
+                data = json.load(f)
+            data["execution_mode"] = mode
+            tmp = task_path.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp.replace(task_path)
+        except Exception:
+            return
+        if self._loop:
+            self._loop.reload_rules()
 
     def _on_task_new(self):
         from PyQt6.QtWidgets import QInputDialog

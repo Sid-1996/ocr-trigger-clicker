@@ -1,3 +1,4 @@
+import json
 import logging
 import random
 import re
@@ -171,6 +172,7 @@ class MainLoop:
         self._perf.start()
 
         self._rules: list[Rule] = []
+        self._execution_mode: str = "parallel"
         self._log_dir = Path(__file__).resolve().parent.parent / "logs"
         self._log_dir.mkdir(exist_ok=True)
         self._logger = logging.getLogger("main_loop")
@@ -195,6 +197,11 @@ class MainLoop:
     def _load_rules(self):
         with self._rules_lock:
             self._rules = load_rules(self._rules_path)
+        try:
+            with open(self._rules_path, encoding="utf-8") as f:
+                self._execution_mode = json.load(f).get("execution_mode", "parallel")
+        except Exception:
+            self._execution_mode = "parallel"
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -841,7 +848,17 @@ class MainLoop:
         self._cycle_visited.clear()
         self._process_counter += 1
 
-        for rule in rules_snapshot:
+        # sequential 模式：只處理到第一個觸發次數為 0 的規則
+        sequential_limit = len(rules_snapshot)
+        if self._execution_mode == "sequential":
+            for i, r in enumerate(rules_snapshot):
+                if r.trigger_count == 0:
+                    sequential_limit = i
+                    break
+
+        for idx, rule in enumerate(rules_snapshot):
+            if idx > sequential_limit:
+                break
             if not rule.enabled:
                 with self._rules_lock:
                     self._pending_forced_triggers.discard(rule.id)

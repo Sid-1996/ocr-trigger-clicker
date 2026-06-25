@@ -413,6 +413,15 @@ def save_rules(rules: list[Rule], path: str) -> bool:
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}
         p = Path(path)
+        if p.exists():
+            try:
+                with open(p, encoding="utf-8") as f:
+                    existing = json.load(f)
+                for k, v in existing.items():
+                    if k != "rules":
+                        data[k] = v
+            except (json.JSONDecodeError, OSError):
+                pass
         with tempfile.NamedTemporaryFile(
             "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
         ) as f:
