@@ -206,6 +206,15 @@ def _has_repeat_step(rule) -> bool:
     return any(s.type == "detect" and s.params.get("trigger_mode") == "repeat" for s in rule.steps)
 
 
+def _rule_suffix_str(rule) -> str:
+    suffixes = []
+    if any(s.type == "collect_rounds" for s in rule.steps):
+        suffixes.append("🎯")
+    if _has_repeat_step(rule):
+        suffixes.append("🔁")
+    return " " + " ".join(suffixes) if suffixes else ""
+
+
 def _make_key_combo(parent=None):
     cb = _KeyCombo(parent)
     for group in [
@@ -474,6 +483,7 @@ class _StepListWidget(QWidget):
             self._expanded_form.deleteLater()
             self._expanded_form = None
             self._expanded_idx = None
+            self._rebuild()
 
     def _move_up(self, idx: int):
         if idx <= 0:
@@ -912,6 +922,8 @@ class _DragStepForm(QWidget):
                 self._step.params["x"], self._step.params["y"] = result
                 self._coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
                 self._target.setCurrentIndex(self._target.findData("custom"))
+                self.save()
+                self._list.steps_changed.emit()
 
     def save(self):
         self._step.params["target"] = self._target.currentData()
@@ -1360,9 +1372,6 @@ class _CollectRoundsStepForm(QWidget):
             self._list.steps_changed.emit()
             self._primary_idx_row.setVisible(self._max_metrics() >= 2)
 
-    def _on_ta_type(self, ri: int, idx: int):
-        pass  # stored on save
-
     def _on_ca_type(self, idx: int):
         is_key = self._ca_type.currentData() == "key"
         self._ca_key.setVisible(is_key)
@@ -1379,6 +1388,7 @@ class _CollectRoundsStepForm(QWidget):
             result = self._pick_cb()
             if result:
                 self._ca_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
+                self._list.steps_changed.emit()
 
     def save(self):
         rounds = []
@@ -1820,7 +1830,6 @@ class MainWindow(QMainWindow):
         self._step_list.set_roi_callback(self._open_roi_selector)
         self._step_list.set_click_pick_callback(self._on_pick_coord)
         self._step_list.set_rules_provider(lambda: list(self._rules))
-        self._step_list.steps_changed.connect(self._on_steps_changed)
         edit_layout.addWidget(self._step_list, 1)
 
         # Add step dropdown
@@ -2066,6 +2075,9 @@ class MainWindow(QMainWindow):
     def _on_task_delete(self):
         if not self._current_task:
             return
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再刪除任務")
+            return
         tasks = list_tasks()
         if len(tasks) <= 1:
             QMessageBox.warning(self, "無法刪除", "至少需要保留一個任務。")
@@ -2230,13 +2242,7 @@ class MainWindow(QMainWindow):
             for rid in top_ids if parent_id is None else child_map.get(parent_id, []):
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
-                suffixes = []
-                if any(s.type == "collect_rounds" for s in r.steps):
-                    suffixes.append("🎯")
-                if _has_repeat_step(r):
-                    suffixes.append("🔁")
-                suffix_str = " " + " ".join(suffixes) if suffixes else ""
-                text = f"[{'✓' if r.enabled else '✗'}] {r.name}{suffix_str}"
+                text = f"[{'✓' if r.enabled else '✗'}] {r.name}{_rule_suffix_str(r)}"
                 item.setText(0, text)
                 item.setData(0, Qt.ItemDataRole.UserRole, r.id)
                 item.setIcon(
@@ -2305,14 +2311,9 @@ class MainWindow(QMainWindow):
                 suffix = ""
             enabled = st["enabled"]
             rule = next((r for r in self._rules if r.id == sid), None)
-            suffixes = []
-            if rule:
-                if any(s.type == "collect_rounds" for s in rule.steps):
-                    suffixes.append("🎯")
-                if _has_repeat_step(rule):
-                    suffixes.append("🔁")
-            suffix_str = " " + " ".join(suffixes) if suffixes else ""
-            base = f"[{'✓' if enabled else '✗'}] {st['name']}{suffix_str}"
+            base = (
+                f"[{'✓' if enabled else '✗'}] {st['name']}{_rule_suffix_str(rule) if rule else ''}"
+            )
             new_text = base + suffix
             if item.text(0) != new_text:
                 item.setText(0, new_text)
@@ -2345,14 +2346,9 @@ class MainWindow(QMainWindow):
                     prev_rule.enabled = self._edit_enabled.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
                     self._flush_save()
-                    suffixes = []
-                    if any(s.type == "collect_rounds" for s in prev_rule.steps):
-                        suffixes.append("🎯")
-                    if _has_repeat_step(prev_rule):
-                        suffixes.append("🔁")
-                    suffix_str = " " + " ".join(suffixes) if suffixes else ""
                     previous.setText(
-                        0, f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}{suffix_str}"
+                        0,
+                        f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}{_rule_suffix_str(prev_rule)}",
                     )
                     if self._loop:
                         self._loop.reload_rules()
@@ -2411,8 +2407,7 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         item = self._rule_list.currentItem()
         if item:
-            c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
-            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}"
+            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}{_rule_suffix_str(rule)}"
             item.setText(0, text)
         if self._loop:
             self._loop.reload_rules()
@@ -2421,6 +2416,9 @@ class MainWindow(QMainWindow):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再新增規則")
             return
+        cur = self._get_current_rule()
+        if cur is not None:
+            cur.steps = self._step_list.get_steps()
         import uuid
 
         rule = Rule(
@@ -2460,6 +2458,7 @@ class MainWindow(QMainWindow):
             rule.steps.append(step)
         self._step_list.set_steps(rule.steps)
         self._save_current_rule()
+        self._refresh_rule_list()
 
     def _on_steps_changed(self):
         self._save_current_rule()
@@ -2525,6 +2524,9 @@ class MainWindow(QMainWindow):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再複製規則")
             return
+        cur = self._get_current_rule()
+        if cur is not None:
+            cur.steps = self._step_list.get_steps()
         src = self._get_current_rule()
         if src is None:
             return
@@ -2548,10 +2550,8 @@ class MainWindow(QMainWindow):
         if rule is None:
             return
         rule.name = self._edit_name.text()
-        item = self._rule_list.currentItem()
-        if item:
-            c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
-            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}")
+        self._schedule_save()
+        self._refresh_rule_list()
 
     def _schedule_save(self):
         self._save_timer.start()
@@ -2587,8 +2587,7 @@ class MainWindow(QMainWindow):
         self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
-            c_suffix = " [C]" if any(s.type == "collect_rounds" for s in rule.steps) else ""
-            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{c_suffix}")
+            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{_rule_suffix_str(rule)}")
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
@@ -2846,12 +2845,6 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     # === Start / Pause ===
-    def _toggle_start_stop(self):
-        if self._loop is not None and self._loop.is_running:
-            self._stop_loop()
-        else:
-            self._start_loop()
-
     def _toggle_start(self):
         if self._window_lost:
             self._stop_loop()

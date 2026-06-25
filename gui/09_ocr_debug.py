@@ -60,7 +60,6 @@ class _OcrSignals(QObject):
 class OcrDebugPanel(QWidget):
     rule_requested = pyqtSignal(dict)
     step_requested = pyqtSignal(dict)
-    closed = pyqtSignal()
 
     _OCR_MODES = {
         "完整測試": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},

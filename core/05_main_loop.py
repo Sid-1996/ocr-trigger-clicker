@@ -34,7 +34,6 @@ _AUTO_DISABLE_RECOVERY_SEC = 30.0
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
-get_window_hwnd = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
 capture_window_full = getattr(_screenshot, "capture_window_content", lambda title: None)

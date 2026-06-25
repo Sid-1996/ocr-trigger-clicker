@@ -1,10 +1,8 @@
 import json
 import logging
 import os
-import random
 import sys
 import tempfile
-import time
 import uuid
 from copy import deepcopy
 from dataclasses import asdict, dataclass
@@ -43,22 +41,6 @@ class ImportPreview:
 class Step:
     type: str
     params: dict
-
-
-@dataclass
-class Metric:
-    roi: dict
-    pick: str
-    direction: str
-    threshold: float
-    timeout_ms: int
-
-
-@dataclass
-class Round:
-    trigger_action: dict
-    metrics: list[Metric]
-    result_action: dict
 
 
 @dataclass
@@ -559,77 +541,6 @@ def migrate_old_rules():
 # ── Compat wrappers (TODO Phase 2: remove) ──
 
 
-def _compat_first_detect(rule: Rule) -> Optional[dict]:
-    for s in rule.steps:
-        if s.type == "detect":
-            return s.params
-    return None
-
-
-def _compat_first_click(rule: Rule) -> Optional[dict]:
-    for s in rule.steps:
-        if s.type == "click":
-            return s.params
-    return None
-
-
-def check_trigger(
-    rule: Rule,
-    ocr_results: list[OcrResult],
-) -> tuple[bool, Optional[OcrResult]]:
-    # TODO Phase 2: remove - compat wrapper
-    if not rule.enabled:
-        return False, None
-    dp = _compat_first_detect(rule)
-    if dp is None or not dp.get("text", "").strip():
-        return False, None
-    elapsed_ms = (time.monotonic() - rule.last_trigger_time) * 1000
-    if elapsed_ms < dp.get("cooldown_ms", 2000):
-        return False, None
-    if dp.get("trigger_mode", "once") == "once" and rule.trigger_count > 0:
-        return False, None
-    mt = dp.get("max_triggers", -1)
-    if mt > 0 and rule.trigger_count >= mt:
-        return False, None
-    matches = find_text(
-        ocr_results, dp["text"], dp.get("match_mode", "fuzzy"), dp.get("fuzzy_threshold", 0.8)
-    )
-    if not matches:
-        return False, None
-    return True, matches[0]
-
-
-def apply_trigger(rule: Rule) -> dict:
-    # TODO Phase 2: remove - compat wrapper
-    rule.trigger_count += 1
-    rule.last_trigger_time = time.monotonic()
-    dp = _compat_first_detect(rule)
-    mt = dp.get("max_triggers", -1) if dp else -1
-    if 0 < mt <= rule.trigger_count:
-        rule.enabled = False
-    cp = _compat_first_click(rule)
-    off = cp.get("random_offset", 0) if cp else 0
-    dx = random.randint(-off, off) if off else 0
-    dy = random.randint(-off, off) if off else 0
-    if cp and cp.get("target") == "custom":
-        cx, cy = cp.get("x", 0), cp.get("y", 0)
-    else:
-        cx = cy = 0
-    button = cp.get("button", "left") if cp else "left"
-    return {"x": cx + dx, "y": cy + dy, "button": button}
-
-
-def get_roi(rule: Rule) -> Optional[dict]:
-    # TODO Phase 2: remove - compat wrapper
-    dp = _compat_first_detect(rule)
-    if dp is None:
-        return None
-    roi = dp.get("roi", {})
-    if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
-        return None
-    return dict(roi)
-
-
 if __name__ == "__main__":
     print("=== Phase 1 Self-Check ===\n")
 
@@ -792,55 +703,6 @@ if __name__ == "__main__":
     Path(tmp_path).unlink()
     print("  [OK] Old-format load with auto-migration")
 
-    # ── Test 5: Compat wrappers ──
-    test_rule = Rule(
-        id="rule_cw",
-        name="相容測試",
-        enabled=True,
-        steps=[
-            Step(
-                type="detect",
-                params={
-                    "text": "確認",
-                    "roi": {"x": 10, "y": 20, "w": 100, "h": 50},
-                    "fuzzy": False,
-                    "fuzzy_threshold": 0.8,
-                    "cooldown_ms": 0,
-                    "trigger_mode": "repeat",
-                    "max_triggers": -1,
-                },
-            ),
-            Step(
-                type="click",
-                params={
-                    "target": "custom",
-                    "x": 500,
-                    "y": 600,
-                    "button": "right",
-                    "random_offset": 5,
-                },
-            ),
-        ],
-    )
-
-    roi = get_roi(test_rule)
-    assert roi is not None
-    assert roi["x"] == 10
-
-    fake_results = [
-        OcrResult(text="取消", x=0, y=0, w=30, h=15, confidence=0.9),
-        OcrResult(text="確認", x=10, y=20, w=40, h=15, confidence=0.95),
-    ]
-    hit, matched = check_trigger(test_rule, fake_results)
-    assert hit, "check_trigger should find match"
-    assert matched is not None and matched.text == "確認"
-
-    params = apply_trigger(test_rule)
-    assert params["button"] == "right"
-    assert abs(params["x"] - 500) <= 5
-    assert test_rule.trigger_count == 1
-    print("  [OK] Compat wrappers (check_trigger / apply_trigger / get_roi)")
-
     # ── Test 6: Step with key action ──
     old_key_rule = {
         "id": "rule_key",
@@ -865,4 +727,4 @@ if __name__ == "__main__":
     assert new_min["steps"][0]["type"] == "detect"
     print("  [OK] Minimal old-rule migration")
 
-    print(f"\n=== All {7} tests passed ===")
+    print("\n=== All 9 tests passed ===")

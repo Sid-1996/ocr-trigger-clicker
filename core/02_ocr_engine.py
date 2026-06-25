@@ -13,15 +13,12 @@ import numpy as np
 import rapidocr_onnxruntime
 from rapidocr_onnxruntime import RapidOCR
 
-OCR_BACKEND = "rapidocr"  # 可切換為 "easyocr" / "cnocr"
-
 _engine = None
 _engine_lock = threading.RLock()
 _ocr_executor = ThreadPoolExecutor(max_workers=1)
 _DEFAULT_DET_LIMIT_SIDE_LEN = 480
 _DEFAULT_MAX_SIDE_LEN = 480
-_DET_USE_V5: bool = False
-_DEBUG_OCR_TIMING: bool = False
+
 
 _OCR_FAILURE_COUNT = 0
 _OCR_FAILURE_LOCK = threading.Lock()
@@ -98,77 +95,64 @@ def init_engine() -> None:
     with _engine_lock:
         if _engine is not None:
             return
-        if OCR_BACKEND == "rapidocr":
-            if hasattr(sys, "_MEIPASS"):
-                custom_dir = Path(sys._MEIPASS) / "custom_models"
-            else:
-                custom_dir = Path(__file__).resolve().parent.parent / "custom_models"
-            rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
-            dict_path = custom_dir / "chinese_cht_dict.txt"
-            kwargs: dict = dict(
-                det_limit_type="max",
-                det_limit_side_len=_DEFAULT_DET_LIMIT_SIDE_LEN,
-                use_cls=False,
-                provider=["DmlExecutionProvider", "CPUExecutionProvider"],
-                rec_model_path=str(rec_path),
-                rec_img_shape=[3, 48, 320],
-                rec_batch_num=1,
+        if hasattr(sys, "_MEIPASS"):
+            custom_dir = Path(sys._MEIPASS) / "custom_models"
+        else:
+            custom_dir = Path(__file__).resolve().parent.parent / "custom_models"
+        rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
+        dict_path = custom_dir / "chinese_cht_dict.txt"
+        kwargs: dict = dict(
+            det_limit_type="max",
+            det_limit_side_len=_DEFAULT_DET_LIMIT_SIDE_LEN,
+            use_cls=False,
+            provider=["DmlExecutionProvider", "CPUExecutionProvider"],
+            rec_model_path=str(rec_path),
+            rec_img_shape=[3, 48, 320],
+            rec_batch_num=1,
+        )
+        if dict_path.exists():
+            kwargs["rec_keys_path"] = str(dict_path)
+
+        _engine = RapidOCR(**kwargs)
+
+        try:
+            assert rapidocr_onnxruntime.__version__ == "1.3.22", (
+                "RapidOCR 版本異動，請重新驗證 resize_norm_img patch"
             )
-            if _DET_USE_V5:
-                det_path = custom_dir / "ch_PP-OCRv5_server_det.onnx"
-                if det_path.exists():
-                    kwargs["det_model_path"] = str(det_path)
-            if dict_path.exists():
-                kwargs["rec_keys_path"] = str(dict_path)
+        except (AttributeError, AssertionError):
+            pass
 
-            _engine = RapidOCR(**kwargs)
+        # 修正：v5 mobile rec 模型的 input width 是靜態 320，但 RapidOCR 的 resize_norm_img
+        # 會根據 max_wh_ratio 動態計算 padding 寬度，導致寬度 >320 時模型 crash。
+        # 這裡 monkey-patch 把 width 限制在 rec_image_shape[2]（320）以內。
+        _orig_resize = type(_engine.text_rec).resize_norm_img
 
-            try:
-                assert rapidocr_onnxruntime.__version__ == "1.3.22", (
-                    "RapidOCR 版本異動，請重新驗證 resize_norm_img patch"
-                )
-            except (AttributeError, AssertionError):
-                pass
+        def _patched_resize(self, img, max_wh_ratio):
+            max_wh_ratio = min(max_wh_ratio, self.rec_image_shape[2] / self.rec_image_shape[1])
+            return _orig_resize(self, img, max_wh_ratio)
 
-            # 修正：v5 mobile rec 模型的 input width 是靜態 320，但 RapidOCR 的 resize_norm_img
-            # 會根據 max_wh_ratio 動態計算 padding 寬度，導致寬度 >320 時模型 crash。
-            # 這裡 monkey-patch 把 width 限制在 rec_image_shape[2]（320）以內。
-            _orig_resize = type(_engine.text_rec).resize_norm_img
+        _engine.text_rec.resize_norm_img = _patched_resize.__get__(
+            _engine.text_rec, type(_engine.text_rec)
+        )
 
-            def _patched_resize(self, img, max_wh_ratio):
-                max_wh_ratio = min(max_wh_ratio, self.rec_image_shape[2] / self.rec_image_shape[1])
-                return _orig_resize(self, img, max_wh_ratio)
+        # 預先跑一次極小測試圖，避免第一次正式 OCR 才做模型 warm-up。
+        warmup = np.full((96, 256, 3), 255, dtype=np.uint8)
+        cv2.putText(
+            warmup,
+            "warmup",
+            (12, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (0, 0, 0),
+            2,
+            cv2.LINE_AA,
+        )
+        try:
+            _engine(warmup, use_cls=False)
+        except Exception:
+            import traceback
 
-            _engine.text_rec.resize_norm_img = _patched_resize.__get__(
-                _engine.text_rec, type(_engine.text_rec)
-            )
-
-            # 預先跑一次極小測試圖，避免第一次正式 OCR 才做模型 warm-up。
-            warmup = np.full((96, 256, 3), 255, dtype=np.uint8)
-            cv2.putText(
-                warmup,
-                "warmup",
-                (12, 60),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1.0,
-                (0, 0, 0),
-                2,
-                cv2.LINE_AA,
-            )
-            try:
-                _engine(warmup, use_cls=False)
-            except Exception:
-                import traceback
-
-                traceback.print_exc()
-        elif OCR_BACKEND == "easyocr":
-            import easyocr
-
-            _engine = easyocr.Reader(["ch_tra", "en"], gpu=False)
-        elif OCR_BACKEND == "cnocr":
-            from cnocr import CnOcr
-
-            _engine = CnOcr(rec_model_name="densenet_lite_136-gru")
+            traceback.print_exc()
 
 
 def _prepare_image(
@@ -214,27 +198,8 @@ def _run_engine(img, use_cls):
     with _engine_lock:
         if _engine is None:
             init_engine()
-        if OCR_BACKEND == "rapidocr":
-            result = _engine(img, use_cls=use_cls)
-            if result and len(result) == 2 and result[1]:
-                timings = result[1]
-                det_ms = timings[0] * 1000
-                rec_ms = timings[2] * 1000
-                if _DEBUG_OCR_TIMING:
-                    print(f"[OCR] {det_ms:.0f}ms + {rec_ms:.0f}ms")
-            return result
-        elif OCR_BACKEND == "easyocr":
-            results = _engine.readtext(img)
-            return [([r[0][0], r[0][1], r[0][2], r[0][3]], r[1], r[2]) for r in results]
-        elif OCR_BACKEND == "cnocr":
-            results = _engine.ocr(img)
-            out = []
-            for r in results:
-                box = r["position"]
-                text = r["text"]
-                conf = r["score"]
-                out.append(([box[0], box[1], box[2], box[3]], text, conf))
-            return out
+        result = _engine(img, use_cls=use_cls)
+        return result
 
 
 _OCR_TIMEOUT = 30
@@ -266,8 +231,7 @@ def recognize(
 
     if result is None:
         return []
-    # rapidocr 回傳 (boxes, elapse)；其他引擎直接回傳 list (box, text, score)
-    rows = result[0] if OCR_BACKEND == "rapidocr" else result
+    rows = result[0]
     if rows is None:
         return []
     _reset_ocr_failures()

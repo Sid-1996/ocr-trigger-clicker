@@ -338,19 +338,10 @@ def _validate_coords(x: int, y: int) -> bool:
     return True
 
 
-_last_sent_coords: tuple[int, int] | None = None
-
-
 def send_click(x: int, y: int, button: str = "left") -> bool:
     if not _validate_coords(x, y):
         return False
-    global _last_sent_coords
-    _last_sent_coords = (x, y)
     return _send_cmd(f"CLICK,{x},{y},{button}")
-
-
-def send_move(x: int, y: int) -> bool:
-    return _send_cmd(f"MOVE,{x},{y}")
 
 
 def send_key(key: str) -> bool:
