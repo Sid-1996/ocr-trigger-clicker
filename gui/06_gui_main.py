@@ -547,7 +547,13 @@ class _StepListWidget(QWidget):
             return _WaitRuleStepForm(self, step, idx, self._rules_provider, self._rule_id)
         if t == "collect_rounds":
             return _CollectRoundsStepForm(
-                self, step, idx, self._roi_callback, self._click_pick_callback
+                self,
+                step,
+                idx,
+                self._roi_callback,
+                self._click_pick_callback,
+                self._rules_provider,
+                self._rule_id,
             )
         if t == "jump":
             return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
@@ -1088,14 +1094,102 @@ class _JumpStepForm(QWidget):
         self._step.params["rule_id"] = self._combo.currentData() or ""
 
 
+class _InlineActionEditor(QWidget):
+    changed = pyqtSignal()
+
+    def __init__(self, action: dict, pick_cb=None):
+        super().__init__()
+        self._pick_cb = pick_cb
+        action = action if isinstance(action, dict) else {}
+        self._x = int(action.get("x", 0) or 0)
+        self._y = int(action.get("y", 0) or 0)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._type = _NoWheelCombo()
+        self._type.addItem("按鍵", "key")
+        self._type.addItem("點擊", "click")
+        idx = self._type.findData(action.get("type", "key"))
+        if idx >= 0:
+            self._type.setCurrentIndex(idx)
+        self._type.currentIndexChanged.connect(self._sync_visible)
+        layout.addWidget(self._type)
+
+        self._key = _make_key_combo()
+        key = action.get("key", "")
+        key_idx = self._key.findData(key)
+        if key_idx >= 0:
+            self._key.setCurrentIndex(key_idx)
+        layout.addWidget(self._key)
+
+        self._click_row = QWidget()
+        click_layout = QHBoxLayout(self._click_row)
+        click_layout.setContentsMargins(0, 0, 0, 0)
+        self._coord_label = QLabel(self._coord_text())
+        self._pick_btn = QPushButton("選取座標")
+        self._pick_btn.setEnabled(bool(pick_cb))
+        self._pick_btn.clicked.connect(self._pick_coord)
+        self._button = _NoWheelCombo()
+        self._button.addItem("左鍵", "left")
+        self._button.addItem("右鍵", "right")
+        btn_idx = self._button.findData(action.get("button", "left"))
+        if btn_idx >= 0:
+            self._button.setCurrentIndex(btn_idx)
+        click_layout.addWidget(self._coord_label)
+        click_layout.addWidget(self._pick_btn)
+        click_layout.addWidget(self._button)
+        layout.addWidget(self._click_row)
+        self._sync_visible()
+
+    def _coord_text(self) -> str:
+        return f"X: {self._x}, Y: {self._y}"
+
+    def _sync_visible(self):
+        is_key = self._type.currentData() == "key"
+        self._key.setVisible(is_key)
+        self._click_row.setVisible(not is_key)
+
+    def _pick_coord(self):
+        if not self._pick_cb:
+            return
+        result = self._pick_cb()
+        if result:
+            self._x, self._y = result
+            self._coord_label.setText(self._coord_text())
+            self._type.setCurrentIndex(self._type.findData("click"))
+            self.changed.emit()
+
+    def value(self) -> dict:
+        if self._type.currentData() == "click":
+            return {
+                "type": "click",
+                "x": self._x,
+                "y": self._y,
+                "button": self._button.currentData() or "left",
+            }
+        return {"type": "key", "key": self._key.currentData() or self._key.currentText()}
+
+
 class _CollectRoundsStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb, pick_cb):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        roi_cb,
+        pick_cb,
+        rules_provider=None,
+        exclude_rule_id="",
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
         self._roi_cb = roi_cb
         self._pick_cb = pick_cb
+        self._rules_provider = rules_provider
+        self._exclude_rule_id = exclude_rule_id
         p = step.params
         self._rounds: list[dict] = p.get("rounds", [])
         self._round_widgets: list[dict] = []
@@ -1129,31 +1223,9 @@ class _CollectRoundsStepForm(QWidget):
         # Confirm action
         layout.addWidget(QLabel("<b>確認動作</b>"))
         ca = p.get("confirm_action", {})
-        self._ca_type = _NoWheelCombo()
-        self._ca_type.addItem("按鍵", "key")
-        self._ca_type.addItem("點擊", "click")
-        ca_idx = self._ca_type.findData(ca.get("type", "key"))
-        if ca_idx >= 0:
-            self._ca_type.setCurrentIndex(ca_idx)
-        self._ca_type.currentIndexChanged.connect(self._on_ca_type)
-        layout.addWidget(self._ca_type)
-
-        self._ca_key = _make_key_combo()
-        k = ca.get("key", "")
-        k_idx = self._ca_key.findData(k)
-        if k_idx >= 0:
-            self._ca_key.setCurrentIndex(k_idx)
-        self._ca_key.setVisible(ca.get("type", "key") == "key")
-        layout.addWidget(self._ca_key)
-
-        self._ca_coord_label = QLabel(f"X: {ca.get('x', 0)}, Y: {ca.get('y', 0)}")
-        self._ca_coord_label.setVisible(ca.get("type", "") == "click")
-        self._ca_pick_btn = QPushButton("選取確認座標")
-        self._ca_pick_btn.setVisible(ca.get("type", "") == "click")
-        if pick_cb:
-            self._ca_pick_btn.clicked.connect(self._pick_ca_coord)
-        layout.addWidget(self._ca_coord_label)
-        layout.addWidget(self._ca_pick_btn)
+        self._ca_editor = _InlineActionEditor(ca, self._pick_cb)
+        self._ca_editor.changed.connect(self._list.steps_changed.emit)
+        layout.addWidget(self._ca_editor)
 
         # On all fail
         layout.addWidget(QLabel("<b>全輪未達標</b>"))
@@ -1167,9 +1239,21 @@ class _CollectRoundsStepForm(QWidget):
         self._oaf_type.currentIndexChanged.connect(self._on_oaf_type)
         layout.addWidget(self._oaf_type)
 
-        self._oaf_rule_id = QLineEdit(oaf.get("rule_id", ""))
-        self._oaf_rule_id.setVisible(oaf.get("type", "jump") == "jump")
-        layout.addWidget(self._oaf_rule_id)
+        self._oaf_rule = _NoWheelCombo()
+        self._oaf_rule.addItem("不跳轉", "")
+        rules = self._rules_provider() if self._rules_provider else []
+        current_oaf_rule = oaf.get("rule_id", "")
+        for r in rules:
+            if r.id != self._exclude_rule_id:
+                self._oaf_rule.addItem(r.name, r.id)
+        idx_rule = self._oaf_rule.findData(current_oaf_rule)
+        if idx_rule >= 0:
+            self._oaf_rule.setCurrentIndex(idx_rule)
+        elif current_oaf_rule:
+            self._oaf_rule.addItem(f"(未知: {current_oaf_rule})", current_oaf_rule)
+            self._oaf_rule.setCurrentIndex(self._oaf_rule.count() - 1)
+        self._oaf_rule.setVisible(oaf.get("type", "jump") == "jump")
+        layout.addWidget(self._oaf_rule)
 
         self._oaf_key = _make_key_combo()
         ok = oaf.get("key", "")
@@ -1187,14 +1271,8 @@ class _CollectRoundsStepForm(QWidget):
         for ri, rw in enumerate(self._round_widgets):
             if ri < len(self._rounds):
                 rd = self._rounds[ri]
-                rd.setdefault("trigger_action", {})["type"] = rw["ta_type"].currentData()
-                rd.setdefault("trigger_action", {})["key"] = (
-                    rw["ta_key"].currentData() or rw["ta_key"].currentText()
-                )
-                rd.setdefault("result_action", {})["type"] = rw["ra_type"].currentData()
-                rd.setdefault("result_action", {})["key"] = (
-                    rw["ra_key"].currentData() or rw["ra_key"].currentText()
-                )
+                rd["trigger_action"] = rw["ta"].value()
+                rd["result_action"] = rw["ra"].value()
                 for mi, mw in enumerate(rw["metrics"]):
                     if mi < len(rd.get("metrics", [])):
                         rd["metrics"][mi]["direction"] = mw["direction"].currentData()
@@ -1224,47 +1302,19 @@ class _CollectRoundsStepForm(QWidget):
             hdr.addStretch()
             rl.addLayout(hdr)
 
-            # Trigger action
-            ta = rd.get("trigger_action", {})
-            ta_type = _NoWheelCombo()
-            ta_type.addItem("按鍵", "key")
-            ta_type.addItem("點擊", "click")
-            tai = ta_type.findData(ta.get("type", "key"))
-            if tai >= 0:
-                ta_type.setCurrentIndex(tai)
             rl.addWidget(QLabel("觸發動作:"))
-            rl.addWidget(ta_type)
+            ta_editor = _InlineActionEditor(rd.get("trigger_action", {}), self._pick_cb)
+            ta_editor.changed.connect(self._list.steps_changed.emit)
+            rl.addWidget(ta_editor)
 
-            ta_key = _make_key_combo()
-            tk = ta.get("key", "")
-            tki = ta_key.findData(tk)
-            if tki >= 0:
-                ta_key.setCurrentIndex(tki)
-            rl.addWidget(ta_key)
-
-            # Result action
-            ra = rd.get("result_action", {})
-            ra_type = _NoWheelCombo()
-            ra_type.addItem("按鍵", "key")
-            ra_type.addItem("點擊", "click")
-            rai = ra_type.findData(ra.get("type", "key"))
-            if rai >= 0:
-                ra_type.setCurrentIndex(rai)
             rl.addWidget(QLabel("結果動作:"))
-            rl.addWidget(ra_type)
-
-            ra_key = _make_key_combo()
-            rk = ra.get("key", "")
-            rki = ra_key.findData(rk)
-            if rki >= 0:
-                ra_key.setCurrentIndex(rki)
-            rl.addWidget(ra_key)
+            ra_editor = _InlineActionEditor(rd.get("result_action", {}), self._pick_cb)
+            ra_editor.changed.connect(self._list.steps_changed.emit)
+            rl.addWidget(ra_editor)
 
             round_w = {
-                "ta_type": ta_type,
-                "ta_key": ta_key,
-                "ra_type": ra_type,
-                "ra_key": ra_key,
+                "ta": ta_editor,
+                "ra": ra_editor,
                 "metrics": [],
             }
 
@@ -1394,29 +1444,14 @@ class _CollectRoundsStepForm(QWidget):
             self._list.steps_changed.emit()
             self._primary_idx_row.setVisible(self._max_metrics() >= 2)
 
-    def _on_ca_type(self, idx: int):
-        is_key = self._ca_type.currentData() == "key"
-        self._ca_key.setVisible(is_key)
-        self._ca_coord_label.setVisible(not is_key)
-        self._ca_pick_btn.setVisible(not is_key)
-
     def _on_oaf_type(self, idx: int):
         is_jump = self._oaf_type.currentData() == "jump"
-        self._oaf_rule_id.setVisible(is_jump)
+        self._oaf_rule.setVisible(is_jump)
         self._oaf_key.setVisible(not is_jump)
-
-    def _pick_ca_coord(self):
-        if self._pick_cb:
-            result = self._pick_cb()
-            if result:
-                self._ca_coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
-                self._list.steps_changed.emit()
 
     def save(self):
         rounds = []
         for ri, rw in enumerate(self._round_widgets):
-            ta_key_str = rw["ta_key"].currentData() or rw["ta_key"].currentText()
-            ra_key_str = rw["ra_key"].currentData() or rw["ra_key"].currentText()
             metrics = []
             for mi, mw in enumerate(rw["metrics"]):
                 roi = (
@@ -1435,40 +1470,19 @@ class _CollectRoundsStepForm(QWidget):
                 )
             rounds.append(
                 {
-                    "trigger_action": {"type": rw["ta_type"].currentData(), "key": ta_key_str},
-                    "result_action": {"type": rw["ra_type"].currentData(), "key": ra_key_str},
+                    "trigger_action": rw["ta"].value(),
+                    "result_action": rw["ra"].value(),
                     "metrics": metrics,
                 }
             )
         self._step.params["rounds"] = rounds
         self._step.params["primary_metric_index"] = self._primary_idx.value()
-        ca_type = self._ca_type.currentData()
-        if ca_type == "key":
-            self._step.params["confirm_action"] = {
-                "type": "key",
-                "key": self._ca_key.currentData() or self._ca_key.currentText(),
-            }
-        else:
-            txt = (
-                self._ca_coord_label.text()
-                .replace("X: ", "")
-                .replace(", Y:", "")
-                .replace(" Y:", "")
-            )
-            parts = txt.split(" ")
-            x = int(parts[0]) if parts else 0
-            y = int(parts[1]) if len(parts) > 1 else 0
-            self._step.params["confirm_action"] = {
-                "type": "click",
-                "x": x,
-                "y": y,
-                "button": "left",
-            }
+        self._step.params["confirm_action"] = self._ca_editor.value()
         oaf_type = self._oaf_type.currentData()
         if oaf_type == "jump":
             self._step.params["on_all_fail"] = {
                 "type": "jump",
-                "rule_id": self._oaf_rule_id.text().strip(),
+                "rule_id": self._oaf_rule.currentData() or "",
             }
         else:
             self._step.params["on_all_fail"] = {

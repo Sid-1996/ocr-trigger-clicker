@@ -824,4 +824,100 @@ if __name__ == "__main__":
     assert new_min["steps"][0]["type"] == "detect"
     print("  [OK] Minimal old-rule migration")
 
-    print("\n=== All 9 tests passed ===")
+    # ── Test 8: Step defaults and action normalization ──
+    raw_normalize = {
+        "id": "rule_norm",
+        "name": "正規化",
+        "enabled": True,
+        "steps": [
+            {"type": "click", "params": {"target": "custom", "x": "5", "y": "6"}},
+            {
+                "type": "collect_rounds",
+                "params": {
+                    "rounds": [
+                        {
+                            "trigger_action": {
+                                "type": "click",
+                                "x": "10",
+                                "y": "20",
+                                "button": "right",
+                            },
+                            "metrics": [{"timeout_ms": "500"}],
+                            "result_action": {"type": "key", "key": "Enter"},
+                        }
+                    ],
+                    "confirm_action": {"type": "click", "x": "30", "y": "40"},
+                },
+            },
+        ],
+    }
+    normalized = _dict_to_rule(raw_normalize)
+    assert normalized.steps[0].params["random_offset"] == 3
+    cr_params = normalized.steps[1].params
+    assert cr_params["rounds"][0]["trigger_action"]["x"] == 10
+    assert cr_params["confirm_action"]["type"] == "click"
+    assert cr_params["confirm_action"]["y"] == 40
+    print("  [OK] Step defaults and action normalization")
+
+    # ── Test 9: Import UUID remap covers nested jump references ──
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_dir_path = Path(tmp_dir)
+        src_path = tmp_dir_path / "import_me.json"
+        src_data = {
+            "rules": [
+                {
+                    "id": "source_a",
+                    "name": "來源 A",
+                    "enabled": True,
+                    "steps": [
+                        {
+                            "type": "detect",
+                            "params": {
+                                "text": "A",
+                                "on_fail": {"action": "jump", "jump_rule_id": "source_b"},
+                            },
+                        }
+                    ],
+                },
+                {
+                    "id": "source_b",
+                    "name": "來源 B",
+                    "enabled": True,
+                    "steps": [
+                        {
+                            "type": "collect_rounds",
+                            "params": {
+                                "rounds": [],
+                                "on_all_fail": {"type": "jump", "rule_id": "source_a"},
+                            },
+                        }
+                    ],
+                },
+            ]
+        }
+        src_path.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+        _orig_get_tasks_dir = get_tasks_dir
+
+        def _tmp_tasks_dir() -> Path:
+            p = tmp_dir_path / "tasks"
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+
+        globals()["get_tasks_dir"] = _tmp_tasks_dir
+        try:
+            imported_name = import_task(str(src_path), regenerate_uuids=True)
+            assert imported_name == "import_me"
+            imported = json.loads((tmp_dir_path / "tasks" / "import_me.json").read_text("utf-8"))
+        finally:
+            globals()["get_tasks_dir"] = _orig_get_tasks_dir
+
+        new_ids = {r["id"] for r in imported["rules"]}
+        assert "source_a" not in new_ids and "source_b" not in new_ids
+        detect_jump = imported["rules"][0]["steps"][0]["params"]["on_fail"]["jump_rule_id"]
+        collect_jump = imported["rules"][1]["steps"][0]["params"]["on_all_fail"]["rule_id"]
+        assert detect_jump in new_ids
+        assert collect_jump in new_ids
+    print("  [OK] Import UUID remaps nested jumps")
+
+    print("\n=== All 11 tests passed ===")

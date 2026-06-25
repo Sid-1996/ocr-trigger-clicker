@@ -1304,7 +1304,78 @@ if __name__ == "__main__":
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
     print("  [OK] _handle_on_fail")
 
+    # ── Test 12: collect_rounds evaluates all rounds before choosing best ──
+    collect_rule = Rule(
+        id="rule_collect",
+        name="多輪選最佳",
+        enabled=True,
+        steps=[
+            _rule.Step(type="detect", params={"text": "READY", "trigger_mode": "repeat"}),
+            _rule.Step(type="collect_rounds", params={}),
+        ],
+    )
+    values = iter([10, 30])
+    actions = []
+    _orig_poll_roi_value = globals()["poll_roi_value"]
+    _orig_inline_action = ml._execute_inline_action
+
+    def _mock_poll(*args, **kwargs):
+        return next(values)
+
+    def _mock_inline_action(action, action_ctx):
+        actions.append(action)
+        return True, action.get("x", 0), action.get("y", 0)
+
+    globals()["poll_roi_value"] = _mock_poll
+    ml._execute_inline_action = _mock_inline_action
+    try:
+        result = ml._handle_collect_rounds(
+            {
+                "rounds": [
+                    {
+                        "trigger_action": {"type": "key", "key": "1"},
+                        "metrics": [
+                            {
+                                "roi": {},
+                                "pick": "first",
+                                "direction": "higher_better",
+                                "threshold": 1,
+                                "timeout_ms": 100,
+                            }
+                        ],
+                        "result_action": {"type": "key", "key": "A"},
+                    },
+                    {
+                        "trigger_action": {"type": "key", "key": "2"},
+                        "metrics": [
+                            {
+                                "roi": {},
+                                "pick": "first",
+                                "direction": "higher_better",
+                                "threshold": 1,
+                                "timeout_ms": 100,
+                            }
+                        ],
+                        "result_action": {"type": "key", "key": "B"},
+                    },
+                ],
+                "primary_metric_index": 0,
+                "confirm_action": {"type": "key", "key": "Enter"},
+                "on_all_fail": {"type": "jump", "rule_id": ""},
+            },
+            ctx,
+            collect_rule,
+        )
+    finally:
+        globals()["poll_roi_value"] = _orig_poll_roi_value
+        ml._execute_inline_action = _orig_inline_action
+
+    assert result.action == "stop"
+    assert [a.get("key") for a in actions] == ["1", "2", "B", "Enter"]
+    assert collect_rule.trigger_count == 1
+    print("  [OK] collect_rounds chooses best after all rounds")
+
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 11 tests passed ===")
+    print("\n=== All 12 tests passed ===")
