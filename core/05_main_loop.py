@@ -250,6 +250,16 @@ class MainLoop:
         if self._wait_rule_deadlines:
             return True
         with self._rules_lock:
+            # chain propagating: a rule's wait_rule target has triggered but rule hasn't
+            triggered = {r.id for r in self._rules if r.trigger_count > 0}
+            for rule in self._rules:
+                if not rule.enabled or rule.id in self._rule_auto_disabled:
+                    continue
+                if rule.id in triggered:
+                    continue
+                for step in rule.steps:
+                    if step.type == "wait_rule" and step.params.get("rule_id", "") in triggered:
+                        return True
             if self._pending_forced_triggers:
                 return True
             now = time.monotonic()
@@ -584,12 +594,6 @@ class MainLoop:
             self._wait_rule_deadlines.pop(rule.id, None)
             self._wait_rule_done.discard(rule.id)
             return StepResult("continue")
-
-        timeout_ms = params.get("timeout_ms", 5000)
-        if rule.id not in self._wait_rule_deadlines:
-            self._wait_rule_deadlines[rule.id] = time.monotonic() + timeout_ms / 1000.0
-            if self._verbose:
-                self._log(f"wait_rule「{rule.name}」等待「{target.name}」最長 {timeout_ms}ms")
 
         return StepResult("stop")
 
