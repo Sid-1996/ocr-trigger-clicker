@@ -237,10 +237,6 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
     return ""
 
 
-def _rule_suffix_str(rule) -> str:
-    return ""
-
-
 def _make_key_combo(parent=None):
     cb = _KeyCombo(parent)
     for group in [
@@ -2199,7 +2195,7 @@ class MainWindow(QMainWindow):
             for rid in top_ids if parent_id is None else []:
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
-                text = f"[{'✓' if r.enabled else '✗'}] {r.name}{_rule_suffix_str(r)}"
+                text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
                 item.setText(0, text)
                 item.setData(0, Qt.ItemDataRole.UserRole, r.id)
                 item.setIcon(
@@ -2251,10 +2247,7 @@ class MainWindow(QMainWindow):
                 return
             enabled = st["enabled"]
             icon_color = (0, 180, 0) if enabled else (160, 160, 160)
-            rule = next((r for r in self._rules if r.id == sid), None)
-            base = (
-                f"[{'✓' if enabled else '✗'}] {st['name']}{_rule_suffix_str(rule) if rule else ''}"
-            )
+            base = f"[{'✓' if enabled else '✗'}] {st['name']}"
             if item.text(0) != base:
                 item.setText(0, base)
             item.setIcon(0, self._make_circle_icon(icon_color))
@@ -2318,7 +2311,7 @@ class MainWindow(QMainWindow):
                     self._flush_save()
                     previous.setText(
                         0,
-                        f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}{_rule_suffix_str(prev_rule)}",
+                        f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}",
                     )
                     if self._loop:
                         self._loop.reload_rules()
@@ -2377,7 +2370,7 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         item = self._rule_list.currentItem()
         if item:
-            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}{_rule_suffix_str(rule)}"
+            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
         if self._loop:
             self._loop.reload_rules()
@@ -2575,7 +2568,7 @@ class MainWindow(QMainWindow):
         self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
-            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}{_rule_suffix_str(rule)}")
+            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}")
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
