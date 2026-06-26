@@ -42,6 +42,9 @@ init_engine = _ocr.init_engine
 Rule = _rule.Rule
 load_rules = _rule.load_rules
 save_rules = _rule.save_rules
+_tmpl = load_sibling("template_matching", "core/11_template_matching.py")
+MatchResult = _tmpl.MatchResult
+match_template = _tmpl.match_template
 
 
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
@@ -271,6 +274,20 @@ class MainLoop:
         ctx.matched_text = matches[0]
         return StepResult("continue")
 
+    def _handle_match_image(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        template = params.get("template", "")
+        if not template.strip():
+            return StepResult("stop")
+
+        roi = params.get("roi")
+        threshold = params.get("threshold", 0.8)
+        results = match_template(ctx.img, template, roi, threshold)
+        if not results:
+            return StepResult("stop")
+
+        ctx.matched_text = results[0]
+        return StepResult("continue")
+
     def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         raw = params.get("on_fail", "stop")
 
@@ -454,6 +471,7 @@ class MainLoop:
             "jump": self._handle_jump,
             "drag": self._handle_drag,
             "scroll": self._handle_scroll,
+            "match_image": self._handle_match_image,
         }
         handler = handlers.get(step.type)
         if handler is None:
@@ -890,7 +908,39 @@ if __name__ == "__main__":
     assert result.action == "stop", "wait should be interrupted by stop event"
     print("  [OK] _handle_wait stop-event interrupt")
 
+    # ── Test 14: _handle_match_image ──
+    import tempfile as _tf
+
+    import cv2 as _cv2
+
+    _mi_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    _cv2.rectangle(_mi_img, (10, 10), (30, 30), (180, 200, 220), -1)
+    _cv2.rectangle(_mi_img, (15, 15), (25, 25), (50, 60, 70), -1)
+    _mi_tpl = _mi_img[10:31, 10:31].copy()
+    _mi_tmp = _tf.NamedTemporaryFile(suffix=".png", delete=False)
+    _mi_tmp.close()
+    _cv2.imwrite(_mi_tmp.name, _mi_tpl)
+    _mi_ctx = StepContext(img=_mi_img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+    result = ml._handle_match_image(
+        {"template": _mi_tmp.name, "threshold": 0.5}, _mi_ctx, test_rule
+    )
+    assert result.action == "continue", f"match_image should continue, got {result.action}"
+    assert _mi_ctx.matched_text is not None
+    assert _mi_ctx.matched_text.center_x == 10 + 21 // 2
+    # no match case
+    _blank = np.zeros((100, 100, 3), dtype=np.uint8)
+    _blank_ctx = StepContext(img=_blank, rect=_mi_ctx.rect)
+    result2 = ml._handle_match_image(
+        {"template": _mi_tmp.name, "threshold": 0.8}, _blank_ctx, test_rule
+    )
+    assert result2.action == "stop", "no match should stop"
+    # empty template
+    result3 = ml._handle_match_image({"template": ""}, _mi_ctx, test_rule)
+    assert result3.action == "stop", "empty template should stop"
+    Path(_mi_tmp.name).unlink(missing_ok=True)
+    print("  [OK] _handle_match_image")
+
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 13 tests passed ===")
+    print("\n=== All 14 tests passed ===")

@@ -79,6 +79,11 @@ _STEP_DEFAULTS = {
     "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
     "wait": {"ms": 1000},
     "jump": {"rule_id": ""},
+    "match_image": {
+        "template": "",
+        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+        "threshold": 0.8,
+    },
 }
 
 
@@ -167,6 +172,10 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["ms"] = max(0, _as_int(base.get("ms", 1000), 1000))
     elif step_type == "jump":
         base["rule_id"] = str(base.get("rule_id", ""))
+    elif step_type == "match_image":
+        base["template"] = str(base.get("template", "")).strip()
+        base["roi"] = _sanitize_roi(base.get("roi"))
+        base["threshold"] = max(0.0, min(1.0, _as_float(base.get("threshold", 0.8), 0.8)))
     return base
 
 
@@ -455,6 +464,7 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         "jump",
         "drag",
         "scroll",
+        "match_image",
     }
     for i, s in enumerate(steps):
         if not isinstance(s, dict):
