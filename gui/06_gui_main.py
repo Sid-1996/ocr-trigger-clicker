@@ -174,7 +174,7 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "click":
         target = p.get("target", "text_center")
         if target == "text_center":
-            return "點擊文字中心"
+            return "點擊辨識目標"
         if target == "custom":
             return f"點擊 ({p.get('x', 0)},{p.get('y', 0)})"
         if target == "click_text":
@@ -190,7 +190,7 @@ def _step_summary(step, rules_provider=None) -> str:
         target = p.get("target", "text_center")
         dx, dy = p.get("dx", 0), p.get("dy", 0)
         base = {
-            "text_center": "文字中心",
+            "text_center": "辨識目標",
             "custom": "座標",
             "click_text": f"文字「{p.get('text', '')}」",
         }.get(target, "?")
@@ -938,7 +938,7 @@ class _ClickStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._target = _NoWheelCombo()
-        self._target.addItem("文字中心", "text_center")
+        self._target.addItem("辨識目標", "text_center")
         self._target.addItem("自訂座標", "custom")
         self._target.addItem("點擊文字", "click_text")
         t_idx = self._target.findData(p.get("target", "text_center"))
@@ -1019,7 +1019,7 @@ class _DragStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._target = _NoWheelCombo()
-        self._target.addItem("文字中心", "text_center")
+        self._target.addItem("辨識目標", "text_center")
         self._target.addItem("自訂座標", "custom")
         self._target.addItem("點擊文字", "click_text")
         t_idx = self._target.findData(p.get("target", "text_center"))
@@ -2771,7 +2771,7 @@ class MainWindow(QMainWindow):
                         if last_center:
                             cx, cy = last_center
                         else:
-                            log.append(f"[{idx + 1}] ⚠ 目標「文字中心」但無前一步偵測結果")
+                            log.append(f"[{idx + 1}] ⚠ 目標「辨識目標」但無前一步偵測結果")
                             continue
                     elif target == "click_text":
                         ct = p.get("text", "").strip()
@@ -2809,7 +2809,7 @@ class MainWindow(QMainWindow):
                         if last_center:
                             sx, sy = last_center
                         else:
-                            log.append(f"[{idx + 1}] ⚠ 拖曳起點「文字中心」但無前一步偵測結果")
+                            log.append(f"[{idx + 1}] ⚠ 拖曳起點「辨識目標」但無前一步偵測結果")
                             continue
                     elif target == "click_text":
                         ct = p.get("text", "").strip()
