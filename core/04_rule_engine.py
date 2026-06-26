@@ -84,6 +84,7 @@ _STEP_DEFAULTS = {
         "template_data": "",
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
         "threshold": 0.8,
+        "on_fail": "stop",
     },
 }
 
@@ -130,6 +131,17 @@ def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
     return {"type": "key", "key": str(action.get("key", ""))}
 
 
+def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
+    if isinstance(raw, dict):
+        action = str(raw.get("action", "stop"))
+        if action == "key":
+            return {"action": "key", "key": str(raw.get("key", ""))}
+        if action == "skip" and allow_skip:
+            return {"action": "skip", "skip_to": max(0, int(raw.get("skip_to", 0)))}
+        return "stop"
+    return str(raw) if str(raw) in ("key", "stop") else "stop"
+
+
 def _normalize_step_params(step_type: str, params: dict | None) -> dict:
     base = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
     params = params if isinstance(params, dict) else {}
@@ -142,15 +154,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["fuzzy_threshold"] = max(
             0.0, min(1.0, _as_float(base.get("fuzzy_threshold", 0.8), 0.8))
         )
-        on_fail = base.get("on_fail", "stop")
-        if isinstance(on_fail, dict):
-            action = str(on_fail.get("action", "stop"))
-            if action == "key":
-                base["on_fail"] = {"action": "key", "key": str(on_fail.get("key", ""))}
-            else:
-                base["on_fail"] = "stop"
-        else:
-            base["on_fail"] = str(on_fail) if str(on_fail) in ("key", "stop") else "stop"
+        base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
     elif step_type in ("click", "drag"):
         base["target"] = str(base.get("target", "text_center"))
         base["x"] = _as_int(base.get("x", 0), 0)
@@ -178,6 +182,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["template_data"] = str(base.get("template_data", ""))
         base["roi"] = _sanitize_roi(base.get("roi"))
         base["threshold"] = max(0.0, min(1.0, _as_float(base.get("threshold", 0.8), 0.8)))
+        base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
         if base["template"] and not base["template_data"]:
             p = Path(base["template"])
             if p.exists():
@@ -825,7 +830,7 @@ if __name__ == "__main__":
         assert jump2 in new_ids
     print("  [OK] Import UUID remaps nested jumps")
 
-    # ── Test 9: on_fail normalization ──
+    # ── Test 9: on_fail normalization (detect) ──
     raw_on_fail = {
         "id": "rule_of",
         "name": "on_fail 測試",
@@ -841,6 +846,10 @@ if __name__ == "__main__":
                 "type": "detect",
                 "params": {"text": "hi4", "on_fail": {"action": "jump", "jump_rule_id": "x"}},
             },
+            {
+                "type": "detect",
+                "params": {"text": "hi5", "on_fail": {"action": "skip", "skip_to": 3}},
+            },
         ],
     }
     of_rule = _dict_to_rule(raw_on_fail)
@@ -849,6 +858,30 @@ if __name__ == "__main__":
     assert of_rule.steps[2].params["on_fail"] == {"action": "key", "key": "F5"}
     # jump on_fail → normalized to "stop"
     assert of_rule.steps[3].params["on_fail"] == "stop"
-    print("  [OK] on_fail normalization (jump → stop)")
+    assert of_rule.steps[4].params["on_fail"] == {"action": "skip", "skip_to": 3}
+    print("  [OK] on_fail normalization (detect)")
 
-    print("\n=== All 9 tests passed ===")
+    # ── Test 10: match_image on_fail normalization ──
+    raw_mi_of = {
+        "id": "rule_mi_of",
+        "name": "match_image on_fail 測試",
+        "enabled": True,
+        "steps": [
+            {"type": "match_image", "params": {"template_data": "a", "on_fail": "stop"}},
+            {
+                "type": "match_image",
+                "params": {"template_data": "b", "on_fail": {"action": "skip", "skip_to": 5}},
+            },
+            {
+                "type": "match_image",
+                "params": {"template_data": "c", "on_fail": {"action": "key", "key": "F5"}},
+            },
+        ],
+    }
+    mi_of_rule = _dict_to_rule(raw_mi_of)
+    assert mi_of_rule.steps[0].params["on_fail"] == "stop"
+    assert mi_of_rule.steps[1].params["on_fail"] == {"action": "skip", "skip_to": 5}
+    assert mi_of_rule.steps[2].params["on_fail"] == {"action": "key", "key": "F5"}
+    print("  [OK] match_image on_fail normalization")
+
+    print("\n=== All 10 tests passed ===")

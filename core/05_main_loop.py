@@ -109,7 +109,8 @@ class StepContext:
 
 @dataclass
 class StepResult:
-    action: str  # "continue" | "stop"
+    action: str  # "continue" | "stop" | "jump_step"
+    step_index: int = -1
 
 
 class MainLoop:
@@ -287,7 +288,7 @@ class MainLoop:
             ctx.img, template_path, roi, threshold, template_data=template_data or None
         )
         if not results:
-            return StepResult("stop")
+            return self._handle_on_fail(params, ctx)
 
         ctx.matched_text = results[0]
         return StepResult("continue")
@@ -310,6 +311,10 @@ class MainLoop:
                 activate_window(self._window_title)
                 self._send_key(fail_key)
             return StepResult("continue")
+
+        if action == "skip":
+            skip_to = int(raw.get("skip_to", 0)) if isinstance(raw, dict) else 0
+            return StepResult("jump_step", step_index=skip_to)
 
         return StepResult("stop")
 
@@ -484,10 +489,17 @@ class MainLoop:
 
     def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict) -> None:
         ctx = StepContext(img=img, rect=rect)
-        for step in rule.steps:
-            result = self._run_step(step, ctx, rule)
+        i = 0
+        while i < len(rule.steps):
+            result = self._run_step(rule.steps[i], ctx, rule)
             if result.action == "stop":
                 return
+            if result.action == "jump_step":
+                if result.step_index < 0 or result.step_index >= len(rule.steps):
+                    return
+                i = result.step_index
+                continue
+            i += 1
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         with self._rules_lock:
@@ -721,8 +733,12 @@ if __name__ == "__main__":
     # ── Test 1: StepResult dataclass ──
     sr = StepResult("continue")
     assert sr.action == "continue"
+    assert sr.step_index == -1
     sr2 = StepResult("stop")
     assert sr2.action == "stop"
+    sr3 = StepResult("jump_step", step_index=4)
+    assert sr3.action == "jump_step"
+    assert sr3.step_index == 4
     print("  [OK] StepResult dataclass")
 
     # ── Test 2: StepContext dataclass ──
@@ -953,10 +969,29 @@ if __name__ == "__main__":
     )
     assert result4.action == "continue", f"base64 match should continue, got {result4.action}"
     assert _mi_ctx2.matched_text.center_x == 10 + 21 // 2
+    # on_fail=skip (no match → jump_step)
+    _skip_ctx = StepContext(img=_blank, rect=_mi_ctx.rect)
+    result5 = ml._handle_match_image(
+        {"template": _mi_tmp.name, "threshold": 0.8, "on_fail": {"action": "skip", "skip_to": 5}},
+        _skip_ctx,
+        test_rule,
+    )
+    assert result5.action == "jump_step", f"on_fail skip should jump, got {result5.action}"
+    assert result5.step_index == 5
     Path(_mi_tmp.name).unlink(missing_ok=True)
     print("  [OK] _handle_match_image")
+
+    # ── Test 15: _handle_on_fail skip action ──
+    _skip_result = ml._handle_on_fail({"on_fail": {"action": "skip", "skip_to": 3}}, ctx)
+    assert _skip_result.action == "jump_step"
+    assert _skip_result.step_index == 3
+    _stop_result = ml._handle_on_fail({"on_fail": "stop"}, ctx)
+    assert _stop_result.action == "stop"
+    _key_result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "F5"}}, ctx)
+    assert _key_result.action == "continue"
+    print("  [OK] _handle_on_fail skip")
 
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 14 tests passed ===")
+    print("\n=== All 15 tests passed ===")

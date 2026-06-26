@@ -161,15 +161,22 @@ def _step_summary(step, rules_provider=None) -> str:
         roi_str = "全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}"
         parts = [f"「{text}」" if text else "未設定"]
         parts.append(roi_str)
+        of = _of_summary(p.get("on_fail", "stop"), rules_provider)
+        if of:
+            parts.append(f"| {of}")
         return " ".join(parts)
     if t == "match_image":
-        tmpl = Path(p.get("template", "")).stem or "未設定"
+        tmpl_data = p.get("template_data", "")
+        tmpl = Path(p.get("template", "")).stem or "內嵌" if tmpl_data.strip() else "未設定"
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         parts = [f"「{tmpl}」"]
         parts.append("全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}")
         th = p.get("threshold", 0.8)
         parts.append(f"閾值{th}")
+        of = _of_summary(p.get("on_fail", "stop"), rules_provider)
+        if of:
+            parts.append(f"| {of}")
         return " ".join(parts)
     if t == "click":
         target = p.get("target", "text_center")
@@ -206,6 +213,28 @@ def _step_summary(step, rules_provider=None) -> str:
         }.get(d, d)
         return f"滾輪 {dir_label} ×{a}"
     return t
+
+
+def _of_summary(raw: str | dict, rules_provider=None) -> str:
+    if isinstance(raw, str):
+        return "" if raw == "stop" else "→按鍵"  # bare "key"
+    if isinstance(raw, dict):
+        action = raw.get("action", "stop")
+        if action == "stop":
+            return ""
+        if action == "key":
+            return f"→按鍵{raw.get('key', '')}"
+        if action == "skip":
+            idx = raw.get("skip_to", -1)
+            if idx < 0:
+                return "→停止"
+            return f"→步驟{idx + 1}"
+        if action == "jump":
+            name = _resolve_rule_name(raw.get("jump_rule_id", ""), rules_provider)
+            return f"→規則「{name}」"
+        if action == "retry":
+            return "→重試"
+    return ""
 
 
 def _rule_suffix_str(rule) -> str:
@@ -586,7 +615,14 @@ class _StepListWidget(QWidget):
         if t == "jump":
             return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
         if t == "match_image":
-            return _MatchImageStepForm(self, step, idx, self._roi_callback, self._capture_callback)
+            return _MatchImageStepForm(
+                self,
+                step,
+                idx,
+                self._roi_callback,
+                self._capture_callback,
+                step_count=len(self._steps),
+            )
         if t == "drag":
             return _DragStepForm(self, step, idx, self._click_pick_callback)
         if t == "scroll":
@@ -598,13 +634,14 @@ class _StepListWidget(QWidget):
 
 
 class _MatchImageStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb, capture_cb=None):
+    def __init__(self, parent_list, step, idx, roi_cb, capture_cb=None, step_count=0):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
         self._roi_cb = roi_cb
         self._capture_cb = capture_cb
+        self._step_count = step_count
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
@@ -660,6 +697,78 @@ class _MatchImageStepForm(QWidget):
         self._threshold.setSingleStep(0.05)
         self._threshold.setValue(p.get("threshold", 0.8))
         form.addRow("相似度閾值:", self._threshold)
+
+        # ── on_fail collapsible section ──
+        self._on_fail_expanded = False
+        self._toggle_btn = QPushButton("▶ 進階：找不到圖示時…")
+        self._toggle_btn.setFlat(True)
+        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setStyleSheet(
+            "QPushButton { text-align: left; border: none; color: #888; }"
+        )
+        self._toggle_btn.clicked.connect(self._toggle_on_fail)
+        form.addRow(self._toggle_btn)
+
+        self._on_fail_container = QWidget()
+        self._on_fail_container.setVisible(False)
+        of_form = QFormLayout(self._on_fail_container)
+        of_form.setContentsMargins(0, 0, 0, 0)
+
+        self._of_action = _NoWheelCombo()
+        self._of_action.addItem("跳過本次（預設）", "stop")
+        self._of_action.addItem("跳至步驟", "skip")
+        self._of_action.addItem("按下按鍵後繼續", "key")
+        raw_of = p.get("on_fail", "stop")
+        if isinstance(raw_of, dict):
+            of_act = raw_of.get("action", "stop")
+        else:
+            of_act = raw_of
+        idx_of = self._of_action.findData(of_act)
+        if idx_of >= 0:
+            self._of_action.setCurrentIndex(idx_of)
+        self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
+        of_form.addRow("動作:", self._of_action)
+
+        # skip row (jump to step)
+        self._of_skip_row = QWidget()
+        sf = QHBoxLayout(self._of_skip_row)
+        sf.setContentsMargins(0, 0, 0, 0)
+        self._of_skip_combo = _NoWheelCombo()
+        self._populate_skip_combo(raw_of.get("skip_to", -1) if isinstance(raw_of, dict) else -1)
+        sf.addWidget(QLabel("跳至"))
+        sf.addWidget(self._of_skip_combo)
+        sf.addStretch()
+        of_form.addRow("", self._of_skip_row)
+
+        # key row
+        self._of_key = _make_key_combo()
+        if isinstance(raw_of, dict) and raw_of.get("action") == "key":
+            kv = raw_of.get("key", "")
+            k_idx = self._of_key.findData(kv)
+            if k_idx >= 0:
+                self._of_key.setCurrentIndex(k_idx)
+        self._of_key_row = QWidget()
+        kf = QHBoxLayout(self._of_key_row)
+        kf.setContentsMargins(0, 0, 0, 0)
+        kf.addWidget(QLabel("按下"))
+        kf.addWidget(self._of_key)
+        kf.addWidget(QLabel("後繼續"))
+        kf.addStretch()
+        of_form.addRow("", self._of_key_row)
+
+        form.addRow(self._on_fail_container)
+        self._on_of_action_changed()
+
+    def _populate_skip_combo(self, current_skip_to):
+        self._of_skip_combo.clear()
+        self._of_skip_combo.addItem("本規則結束", self._step_count)
+        start = self._idx + 2  # 1-based, after current
+        for i in range(start, self._step_count + 1):
+            self._of_skip_combo.addItem(f"步驟{i}", i - 1)
+        if current_skip_to >= 0:
+            idx_s = self._of_skip_combo.findData(current_skip_to)
+            if idx_s >= 0:
+                self._of_skip_combo.setCurrentIndex(idx_s)
 
     def _update_thumbnail(self):
         data = self._step.params.get("template_data", "")
@@ -730,8 +839,33 @@ class _MatchImageStepForm(QWidget):
                 self.save()
                 self._list.steps_changed.emit()
 
+    def _toggle_on_fail(self):
+        self._on_fail_expanded = not self._on_fail_expanded
+        self._on_fail_container.setVisible(self._on_fail_expanded)
+        self._toggle_btn.setText(
+            "▼ 進階：找不到圖示時…" if self._on_fail_expanded else "▶ 進階：找不到圖示時…"
+        )
+
+    def _on_of_action_changed(self, idx=None):
+        action = self._of_action.currentData()
+        self._of_skip_row.setVisible(action == "skip")
+        self._of_key_row.setVisible(action == "key")
+
     def save(self):
         p = self._step.params
+        action = self._of_action.currentData()
+        if action == "stop":
+            p["on_fail"] = "stop"
+        elif action == "skip":
+            p["on_fail"] = {
+                "action": "skip",
+                "skip_to": self._of_skip_combo.currentData() or 0,
+            }
+        elif action == "key":
+            p["on_fail"] = {
+                "action": "key",
+                "key": self._of_key.currentData() or self._of_key.currentText(),
+            }
         if p.get("template"):
             self._tmpl_label.setText(Path(p["template"]).stem)
             self._update_thumbnail()
@@ -1683,7 +1817,10 @@ class MainWindow(QMainWindow):
             "③ 設定觸發文字與點擊參數\n"
             "④ 點擊「儲存規則」\n"
             "⑤ 點擊「啟動」開始自動偵測\n\n"
-            "框選偵測區域可限制 OCR 範圍"
+            "框選偵測區域可限制 OCR 範圍\n\n"
+            "▸ 進階技巧：步驟依序執行。每個步驟可設定「找不到時」的動作，\n"
+            "  例如 match_image 沒找到就跳過 detect，直接執行 key。\n"
+            "  試試 match_image → detect → click 三層連鎖！"
         )
         guide_label.setStyleSheet("color: #666; font-size: 13px;")
         guide_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1718,7 +1855,9 @@ class MainWindow(QMainWindow):
 
         # Add step dropdown
         add_dropdown = QPushButton("+ 新增步驟 ▾")
-        add_dropdown.setToolTip("新增一個步驟至規則中")
+        add_dropdown.setToolTip(
+            "新增步驟至規則 — 步驟依序執行，可在進階設定中指定失敗時跳至後續步驟"
+        )
         add_menu = QMenu(self)
         step_types = [
             ("detect", "🔍 偵測文字"),
@@ -2920,7 +3059,11 @@ class MainWindow(QMainWindow):
                         rx, ry = roi.get("x", 0), roi.get("y", 0)
                         rw = roi.get("w", img.shape[1]) or img.shape[1]
                         rh = roi.get("h", img.shape[0]) or img.shape[0]
-                        log.append(f"[{idx + 1}] ❌ 未命中「{tmpl_name}」（閾值 {threshold}）")
+                        of_hint = _of_summary(p.get("on_fail", "stop"))
+                        of_suffix = f" → {of_hint}" if of_hint else ""
+                        log.append(
+                            f"[{idx + 1}] ❌ 未命中「{tmpl_name}」（閾值 {threshold}）{of_suffix}"
+                        )
                         markers.append(
                             {
                                 "step": idx + 1,
