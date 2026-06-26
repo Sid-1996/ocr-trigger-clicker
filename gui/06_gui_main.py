@@ -2833,6 +2833,60 @@ class MainWindow(QMainWindow):
                     name = _resolve_rule_name(rid, lambda: list(self._rules))
                     log.append(f"[{idx + 1}] ↩ 跳轉規則「{name}」")
 
+                elif step.type == "match_image":
+                    p = step.params
+                    tmpl_path = p.get("template", "")
+                    if not tmpl_path.strip():
+                        log.append(f"[{idx + 1}] ⚠ 未設定範本圖片")
+                        continue
+                    roi = p.get("roi", {})
+                    threshold = p.get("threshold", 0.8)
+                    results = _main_loop_mod.match_template(img, tmpl_path, roi, threshold)
+                    tmpl_name = Path(tmpl_path).stem
+                    if results:
+                        m = results[0]
+                        cx, cy = m.center_x, m.center_y
+                        last_center = (cx, cy)
+                        log.append(
+                            f"[{idx + 1}] 🖼 命中「{tmpl_name}」{m.confidence:.2f}  ({m.x},{m.y}) {m.w}×{m.h}"
+                        )
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "rect",
+                                "color": (0, 200, 0),
+                                "x": m.x,
+                                "y": m.y,
+                                "w": m.w,
+                                "h": m.h,
+                            }
+                        )
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "point",
+                                "color": (0, 200, 0),
+                                "x": cx,
+                                "y": cy,
+                            }
+                        )
+                    else:
+                        rx, ry = roi.get("x", 0), roi.get("y", 0)
+                        rw = roi.get("w", img.shape[1]) or img.shape[1]
+                        rh = roi.get("h", img.shape[0]) or img.shape[0]
+                        log.append(f"[{idx + 1}] ❌ 未命中「{tmpl_name}」（閾值 {threshold}）")
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "rect",
+                                "color": (0, 0, 200),
+                                "x": rx,
+                                "y": ry,
+                                "w": rw,
+                                "h": rh,
+                            }
+                        )
+
                 else:
                     log.append(f"[{idx + 1}] ? 未知步驟: {step.type}")
 
