@@ -50,10 +50,6 @@ class Rule:
     enabled: bool
     steps: list[Step]
 
-    # runtime only (not persisted)
-    trigger_count: int = 0
-    last_trigger_time: float = 0.0
-
 
 _STEP_DEFAULTS = {
     "detect": {
@@ -61,9 +57,6 @@ _STEP_DEFAULTS = {
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
         "match_mode": "fuzzy",
         "fuzzy_threshold": 0.8,
-        "cooldown_ms": 500,
-        "trigger_mode": "once",
-        "max_triggers": -1,
         "on_fail": "stop",
     },
     "click": {
@@ -85,13 +78,6 @@ _STEP_DEFAULTS = {
     },
     "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
     "wait": {"ms": 1000},
-    "wait_rule": {"rule_id": "", "timeout_ms": 5000},
-    "collect_rounds": {
-        "rounds": [],
-        "primary_metric_index": 0,
-        "confirm_action": {"type": "key", "key": ""},
-        "on_all_fail": {"type": "jump", "rule_id": ""},
-    },
     "jump": {"rule_id": ""},
 }
 
@@ -150,9 +136,15 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["fuzzy_threshold"] = max(
             0.0, min(1.0, _as_float(base.get("fuzzy_threshold", 0.8), 0.8))
         )
-        base["cooldown_ms"] = max(0, _as_int(base.get("cooldown_ms", 500), 500))
-        base["trigger_mode"] = str(base.get("trigger_mode", "once"))
-        base["max_triggers"] = _as_int(base.get("max_triggers", -1), -1)
+        on_fail = base.get("on_fail", "stop")
+        if isinstance(on_fail, dict):
+            action = str(on_fail.get("action", "stop"))
+            if action == "key":
+                base["on_fail"] = {"action": "key", "key": str(on_fail.get("key", ""))}
+            else:
+                base["on_fail"] = "stop"
+        else:
+            base["on_fail"] = str(on_fail) if str(on_fail) in ("key", "stop") else "stop"
     elif step_type in ("click", "drag"):
         base["target"] = str(base.get("target", "text_center"))
         base["x"] = _as_int(base.get("x", 0), 0)
@@ -173,37 +165,8 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["delay_ms"] = max(0, _as_int(base.get("delay_ms", 30), 30))
     elif step_type == "wait":
         base["ms"] = max(0, _as_int(base.get("ms", 1000), 1000))
-    elif step_type in ("wait_rule", "jump"):
+    elif step_type == "jump":
         base["rule_id"] = str(base.get("rule_id", ""))
-    elif step_type == "collect_rounds":
-        rounds = []
-        for rd in base.get("rounds", []):
-            if not isinstance(rd, dict):
-                continue
-            metrics = []
-            for m in rd.get("metrics", []):
-                if not isinstance(m, dict):
-                    continue
-                metrics.append(
-                    {
-                        "roi": _sanitize_roi(m.get("roi")),
-                        "pick": str(m.get("pick", "first")),
-                        "direction": str(m.get("direction", "higher_better")),
-                        "threshold": _as_float(m.get("threshold", 0.0), 0.0),
-                        "timeout_ms": max(100, _as_int(m.get("timeout_ms", 3000), 3000)),
-                    }
-                )
-            rounds.append(
-                {
-                    "trigger_action": _normalize_action(rd.get("trigger_action"), "key"),
-                    "metrics": metrics,
-                    "result_action": _normalize_action(rd.get("result_action"), "key"),
-                }
-            )
-        base["rounds"] = rounds
-        base["primary_metric_index"] = max(0, _as_int(base.get("primary_metric_index", 0), 0))
-        base["confirm_action"] = _normalize_action(base.get("confirm_action"), "key")
-        base["on_all_fail"] = _normalize_action(base.get("on_all_fail"), "jump")
     return base
 
 
@@ -226,15 +189,21 @@ def _build_detect_params(old: dict) -> dict:
         match_mode_ = "fuzzy" if bool(old["fuzzy"]) else "contains"
     else:
         match_mode_ = "contains"
+    on_fail = old.get("on_fail", "stop")
+    if isinstance(on_fail, dict):
+        action = str(on_fail.get("action", "stop"))
+        if action == "key":
+            on_fail = {"action": "key", "key": str(on_fail.get("key", ""))}
+        else:
+            on_fail = "stop"
+    else:
+        on_fail = str(on_fail) if str(on_fail) in ("key", "stop") else "stop"
     return {
         "text": str(old.get("target_text", "")).strip(),
         "roi": _sanitize_roi(old.get("roi")),
         "match_mode": match_mode_,
         "fuzzy_threshold": max(0.0, min(1.0, _as_float(old.get("fuzzy_threshold", 0.8), 0.8))),
-        "cooldown_ms": max(0, _as_int(old.get("cooldown_ms", 500), 500)),
-        "trigger_mode": str(old.get("trigger_mode", "once")),
-        "max_triggers": _as_int(old.get("max_triggers", -1), -1),
-        "on_fail": old.get("on_fail", "stop"),
+        "on_fail": on_fail,
     }
 
 
@@ -253,68 +222,16 @@ def _migrate_v1_to_v2(old: dict) -> dict:
     """Convert old-format rule dict to new-format dict with steps."""
     steps: list[dict] = []
 
-    # Correction 3: depends_on is list[str], each gets a wait_rule step
-    for dep_id in _parse_depends_on(old.get("depends_on")):
-        steps.append({"type": "wait_rule", "params": {"rule_id": dep_id}})
-
     if str(old.get("rule_type", "trigger")) == "compare":
-        # Compare rule
+        # Compare rule → convert to detect + click/key
         if str(old.get("target_text", "")).strip():
             steps.append({"type": "detect", "params": _build_detect_params(old)})
 
-        metrics: list[dict] = []
-        roi_a = _sanitize_roi(old.get("roi_a"))
-        round_wait = max(100, _as_int(old.get("round_wait_ms", 3000), 3000))
-        metrics.append(
-            {
-                "roi": roi_a,
-                "pick": str(old.get("roi_a_value_pick", "first")),
-                "direction": str(old.get("roi_a_compare", "higher_better")),
-                "threshold": _as_float(old.get("roi_a_threshold", 0.0), 0.0),
-                "timeout_ms": round_wait,
-            }
-        )
-        if max(1, min(2, _as_int(old.get("roi_count", 1), 1))) >= 2:
-            roi_b = _sanitize_roi(old.get("roi_b"))
-            metrics.append(
-                {
-                    "roi": roi_b,
-                    "pick": str(old.get("roi_b_value_pick", "first")),
-                    "direction": str(old.get("roi_b_compare", "lower_better")),
-                    "threshold": _as_float(old.get("roi_b_threshold", 50.0), 50.0),
-                    "timeout_ms": round_wait,
-                }
-            )
-
-        max_rounds = max(1, _as_int(old.get("max_rounds", 5), 5))
-        retry_key = str(old.get("retry_key", ""))
         confirm_action = _build_confirm_action(old)
-        rounds = [
-            {
-                "trigger_action": {"type": "key", "key": retry_key},
-                "metrics": deepcopy(metrics),
-                "result_action": deepcopy(confirm_action),
-            }
-            for _ in range(max_rounds)
-        ]
-
-        on_all_fail_str = str(old.get("on_all_fail", "")).strip()
-        # Correction 2: always {"type": "jump", "rule_id": on_all_fail}
-        steps.append(
-            {
-                "type": "collect_rounds",
-                "params": {
-                    "rounds": rounds,
-                    "primary_metric_index": 1 if len(metrics) >= 2 else 0,
-                    "confirm_action": confirm_action,
-                    "on_all_fail": (
-                        {"type": "jump", "rule_id": on_all_fail_str}
-                        if on_all_fail_str
-                        else {"type": "jump", "rule_id": ""}
-                    ),
-                },
-            }
-        )
+        if confirm_action["type"] == "click":
+            steps.append({"type": "click", "params": confirm_action})
+        elif confirm_action.get("key", ""):
+            steps.append({"type": "key", "params": confirm_action})
     else:
         # Trigger rule
         steps.append({"type": "detect", "params": _build_detect_params(old)})
@@ -351,6 +268,8 @@ def _migrate_v1_to_v2(old: dict) -> dict:
         post_delay = max(0, _as_int(old.get("post_delay_ms", 0), 0))
         if post_delay > 0:
             steps.append({"type": "wait", "params": {"ms": post_delay}})
+
+    # depends_on → skip (sequencing via rule ordering in new model)
 
     return {
         "id": str(old.get("id", "")),
@@ -533,12 +452,9 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         "click",
         "key",
         "wait",
-        "wait_rule",
-        "collect_rounds",
         "jump",
         "drag",
         "scroll",
-        "pause",
     }
     for i, s in enumerate(steps):
         if not isinstance(s, dict):
@@ -663,9 +579,9 @@ def migrate_old_rules():
 
 
 if __name__ == "__main__":
-    print("=== Phase 1 Self-Check ===\n")
+    print("=== Rule Engine Self-Check ===\n")
 
-    # ── Test 1: Trigger rule migration ──
+    # ── Test 1: Trigger rule migration (no more wait_rule/cooldown/trigger_mode/max_triggers) ──
     old_trigger = {
         "id": "rule_t1",
         "name": "觸發測試",
@@ -676,24 +592,22 @@ if __name__ == "__main__":
         "roi": {"x": 100, "y": 200, "w": 300, "h": 100},
         "click_position": "text_center",
         "click_button": "left",
-        "cooldown_ms": 500,
         "trigger_mode": "once",
-        "max_triggers": -1,
-        "random_offset": 3,
         "action_type": "click",
         "post_delay_ms": 500,
-        "depends_on": ["rule_other"],
     }
     new = _migrate_v1_to_v2(old_trigger)
     assert "steps" in new, "missing steps"
-    assert new["steps"][0]["type"] == "wait_rule", "depends_on should become wait_rule"
-    assert new["steps"][1]["type"] == "detect", "second step should be detect"
-    assert new["steps"][2]["type"] == "click", "third step should be click"
-    assert new["steps"][3]["type"] == "wait", "post_delay should become wait"
-    assert new["steps"][0]["params"]["rule_id"] == "rule_other"
-    assert new["steps"][1]["params"]["text"] == "確認"
-    assert new["steps"][1]["params"]["roi"]["x"] == 100
-    print("  [OK] Trigger rule migration")
+    assert new["steps"][0]["type"] == "detect", "first step should be detect"
+    assert new["steps"][1]["type"] == "click", "second step should be click"
+    assert new["steps"][2]["type"] == "wait", "post_delay should become wait"
+    assert new["steps"][0]["params"]["text"] == "確認"
+    assert new["steps"][0]["params"]["roi"]["x"] == 100
+    # cooldown_ms / trigger_mode / max_triggers should NOT be in output
+    assert "cooldown_ms" not in new["steps"][0]["params"], "cooldown_ms should be removed"
+    assert "trigger_mode" not in new["steps"][0]["params"], "trigger_mode should be removed"
+    assert "max_triggers" not in new["steps"][0]["params"], "max_triggers should be removed"
+    print("  [OK] Trigger rule migration (no cooldown/trigger_mode/max_triggers)")
 
     # ── Test 1b: Trigger with sub_target_text (Correction 1) ──
     old_with_sub = dict(old_trigger)
@@ -716,53 +630,33 @@ if __name__ == "__main__":
     assert sub_d2["params"]["roi"]["x"] == 100, "should inherit main roi"
     print("  [OK] Sub-target with zero roi inherits main roi")
 
-    # ── Test 2: Compare rule migration ──
+    # ── Test 2: Compare rule migration (convert to detect + confirm action) ──
     old_compare = {
         "id": "rule_c1",
         "name": "比較測試",
         "enabled": True,
         "rule_type": "compare",
         "target_text": "訓練畫面",
-        "retry_key": "1",
-        "max_rounds": 3,
-        "round_wait_ms": 2000,
-        "roi_count": 2,
-        "roi_a": {"x": 10, "y": 10, "w": 100, "h": 20},
-        "roi_a_compare": "higher_better",
-        "roi_a_threshold": 50.0,
-        "roi_a_value_pick": "first",
-        "roi_b": {"x": 10, "y": 40, "w": 100, "h": 20},
-        "roi_b_compare": "lower_better",
-        "roi_b_threshold": 30.0,
-        "roi_b_value_pick": "last",
-        "confirm_action_type": "key",
-        "confirm_key": " ",
-        "on_all_fail": "rule_escape",
+        "confirm_action_type": "click",
+        "confirm_x": 100,
+        "confirm_y": 200,
     }
     new_c = _migrate_v1_to_v2(old_compare)
     assert "steps" in new_c
     assert new_c["steps"][0]["type"] == "detect", "compare should have pre-detect"
-    assert new_c["steps"][1]["type"] == "collect_rounds"
-    cr = new_c["steps"][1]["params"]
-    assert len(cr["rounds"]) == 3, f"expected 3 rounds, got {len(cr['rounds'])}"
-    assert cr["rounds"][0]["trigger_action"]["key"] == "1"
-    assert len(cr["rounds"][0]["metrics"]) == 2
-    assert cr["rounds"][0]["metrics"][0]["direction"] == "higher_better"
-    assert cr["rounds"][0]["metrics"][1]["pick"] == "last"
-    # Correction 2: on_all_fail is {"type": "jump", "rule_id": "rule_escape"}
-    assert cr["on_all_fail"]["type"] == "jump"
-    assert cr["on_all_fail"]["rule_id"] == "rule_escape"
-    assert cr["confirm_action"]["type"] == "key"
-    assert cr["confirm_action"]["key"] == " "
-    print("  [OK] Compare rule migration")
+    assert new_c["steps"][1]["type"] == "click", "compare should convert to click"
+    assert new_c["steps"][1]["params"]["x"] == 100
+    assert new_c["steps"][1]["params"]["y"] == 200
+    print("  [OK] Compare rule migration → detect + click")
 
-    # ── Test 2b: Compare with on_all_fail empty ──
-    old_c_empty = dict(old_compare)
-    old_c_empty["on_all_fail"] = ""
-    new_c_empty = _migrate_v1_to_v2(old_c_empty)
-    cr_e = [s for s in new_c_empty["steps"] if s["type"] == "collect_rounds"][0]
-    assert cr_e["params"]["on_all_fail"]["rule_id"] == ""
-    print("  [OK] Compare with empty on_all_fail")
+    # ── Test 2b: Compare with key confirm action ──
+    old_compare_key = dict(old_compare)
+    old_compare_key["confirm_action_type"] = "key"
+    old_compare_key["confirm_key"] = " "
+    new_ck = _migrate_v1_to_v2(old_compare_key)
+    assert new_ck["steps"][1]["type"] == "key"
+    assert new_ck["steps"][1]["params"]["key"] == " "
+    print("  [OK] Compare rule → detect + key")
 
     # ── Test 3: Round-trip serialization ──
     rule = Rule(
@@ -775,11 +669,8 @@ if __name__ == "__main__":
                 params={
                     "text": "測試",
                     "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                    "fuzzy": False,
+                    "match_mode": "fuzzy",
                     "fuzzy_threshold": 0.8,
-                    "cooldown_ms": 500,
-                    "trigger_mode": "once",
-                    "max_triggers": -1,
                 },
             ),
             Step(
@@ -793,11 +684,8 @@ if __name__ == "__main__":
                 },
             ),
         ],
-        trigger_count=5,
-        last_trigger_time=123.456,
     )
     serialized = _rule_to_dict(rule)
-    assert "trigger_count" not in serialized, "trigger_count should not be serialized"
     assert "steps" in serialized
     assert len(serialized["steps"]) == 2
     assert serialized["steps"][0]["type"] == "detect"
@@ -805,7 +693,6 @@ if __name__ == "__main__":
 
     deserialized = _dict_to_rule(serialized)
     assert deserialized.id == "rule_rt1"
-    assert deserialized.trigger_count == 0, "runtime field should reset"
     assert len(deserialized.steps) == 2
     assert deserialized.steps[0].type == "detect"
     print("  [OK] Round-trip serialization")
@@ -819,12 +706,18 @@ if __name__ == "__main__":
     loaded = load_rules(tmp_path)
     assert len(loaded) == 2
     assert isinstance(loaded[0], Rule)
-    assert len(loaded[0].steps) == 4  # wait_rule + detect + click + wait
-    assert loaded[1].steps[1].type == "collect_rounds"
+    # trigger rule: detect + click + wait
+    assert len(loaded[0].steps) == 3
+    assert loaded[0].steps[0].type == "detect"
+    assert loaded[0].steps[1].type == "click"
+    assert loaded[0].steps[2].type == "wait"
+    # compare rule: detect + click
+    assert loaded[1].steps[0].type == "detect"
+    assert loaded[1].steps[1].type == "click"
     Path(tmp_path).unlink()
     print("  [OK] Old-format load with auto-migration")
 
-    # ── Test 6: Step with key action ──
+    # ── Test 5: Step with key action ──
     old_key_rule = {
         "id": "rule_key",
         "name": "按鍵規則",
@@ -833,7 +726,6 @@ if __name__ == "__main__":
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
         "action_type": "key",
         "key": "Enter",
-        "trigger_mode": "once",
     }
     new_key = _migrate_v1_to_v2(old_key_rule)
     assert new_key["steps"][0]["type"] == "detect"
@@ -841,49 +733,29 @@ if __name__ == "__main__":
     assert new_key["steps"][1]["params"]["key"] == "Enter"
     print("  [OK] Key action migration")
 
-    # ── Test 7: No steps in old data with defaults ──
+    # ── Test 6: No steps in old data with defaults ──
     old_minimal = {"id": "rule_min", "name": "最小規則", "enabled": True}
     new_min = _migrate_v1_to_v2(old_minimal)
     assert len(new_min["steps"]) >= 1
     assert new_min["steps"][0]["type"] == "detect"
     print("  [OK] Minimal old-rule migration")
 
-    # ── Test 8: Step defaults and action normalization ──
+    # ── Test 7: Step defaults and normalization (no collect_rounds) ──
     raw_normalize = {
         "id": "rule_norm",
         "name": "正規化",
         "enabled": True,
         "steps": [
             {"type": "click", "params": {"target": "custom", "x": "5", "y": "6"}},
-            {
-                "type": "collect_rounds",
-                "params": {
-                    "rounds": [
-                        {
-                            "trigger_action": {
-                                "type": "click",
-                                "x": "10",
-                                "y": "20",
-                                "button": "right",
-                            },
-                            "metrics": [{"timeout_ms": "500"}],
-                            "result_action": {"type": "key", "key": "Enter"},
-                        }
-                    ],
-                    "confirm_action": {"type": "click", "x": "30", "y": "40"},
-                },
-            },
+            {"type": "detect", "params": {"on_fail": {"action": "key", "key": "Escape"}}},
         ],
     }
     normalized = _dict_to_rule(raw_normalize)
     assert normalized.steps[0].params["random_offset"] == 3
-    cr_params = normalized.steps[1].params
-    assert cr_params["rounds"][0]["trigger_action"]["x"] == 10
-    assert cr_params["confirm_action"]["type"] == "click"
-    assert cr_params["confirm_action"]["y"] == 40
-    print("  [OK] Step defaults and action normalization")
+    assert normalized.steps[1].params["on_fail"] == {"action": "key", "key": "Escape"}
+    print("  [OK] Step defaults and normalization")
 
-    # ── Test 9: Import UUID remap covers nested jump references ──
+    # ── Test 8: Import UUID remap covers nested jump references ──
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_dir_path = Path(tmp_dir)
         src_path = tmp_dir_path / "import_me.json"
@@ -900,7 +772,11 @@ if __name__ == "__main__":
                                 "text": "A",
                                 "on_fail": {"action": "jump", "jump_rule_id": "source_b"},
                             },
-                        }
+                        },
+                        {
+                            "type": "jump",
+                            "params": {"rule_id": "source_b"},
+                        },
                     ],
                 },
                 {
@@ -909,11 +785,8 @@ if __name__ == "__main__":
                     "enabled": True,
                     "steps": [
                         {
-                            "type": "collect_rounds",
-                            "params": {
-                                "rounds": [],
-                                "on_all_fail": {"type": "jump", "rule_id": "source_a"},
-                            },
+                            "type": "jump",
+                            "params": {"rule_id": "source_a"},
                         }
                     ],
                 },
@@ -938,10 +811,36 @@ if __name__ == "__main__":
 
         new_ids = {r["id"] for r in imported["rules"]}
         assert "source_a" not in new_ids and "source_b" not in new_ids
-        detect_jump = imported["rules"][0]["steps"][0]["params"]["on_fail"]["jump_rule_id"]
-        collect_jump = imported["rules"][1]["steps"][0]["params"]["on_all_fail"]["rule_id"]
-        assert detect_jump in new_ids
-        assert collect_jump in new_ids
+        jump1 = imported["rules"][0]["steps"][1]["params"]["rule_id"]
+        jump2 = imported["rules"][1]["steps"][0]["params"]["rule_id"]
+        assert jump1 in new_ids
+        assert jump2 in new_ids
     print("  [OK] Import UUID remaps nested jumps")
 
-    print("\n=== All 11 tests passed ===")
+    # ── Test 9: on_fail normalization ──
+    raw_on_fail = {
+        "id": "rule_of",
+        "name": "on_fail 測試",
+        "enabled": True,
+        "steps": [
+            {"type": "detect", "params": {"text": "hi", "on_fail": "stop"}},
+            {"type": "detect", "params": {"text": "hi2", "on_fail": "key"}},
+            {
+                "type": "detect",
+                "params": {"text": "hi3", "on_fail": {"action": "key", "key": "F5"}},
+            },
+            {
+                "type": "detect",
+                "params": {"text": "hi4", "on_fail": {"action": "jump", "jump_rule_id": "x"}},
+            },
+        ],
+    }
+    of_rule = _dict_to_rule(raw_on_fail)
+    assert of_rule.steps[0].params["on_fail"] == "stop"
+    assert of_rule.steps[1].params["on_fail"] == "key"
+    assert of_rule.steps[2].params["on_fail"] == {"action": "key", "key": "F5"}
+    # jump on_fail → normalized to "stop"
+    assert of_rule.steps[3].params["on_fail"] == "stop"
+    print("  [OK] on_fail normalization (jump → stop)")
+
+    print("\n=== All 9 tests passed ===")
