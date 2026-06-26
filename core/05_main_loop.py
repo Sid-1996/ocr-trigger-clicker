@@ -247,6 +247,8 @@ class MainLoop:
             self._rules_dirty = True
 
     def _should_process_static_frame(self) -> bool:
+        if self._wait_rule_deadlines:
+            return True
         with self._rules_lock:
             if self._pending_forced_triggers:
                 return True
@@ -917,7 +919,7 @@ class MainLoop:
                 del self._wait_rule_deadlines[rule.id]
                 self._wait_rule_done.add(rule.id)
                 if self._verbose:
-                    self._log(f"wait_rule「{rule.name}」等待超時，已永久跳過")
+                    self._log(f"wait_rule「{rule.name}」等待超時 (已過期 {now - wr_deadline:.1f}s)")
                 continue
             if rule.id in self._wait_rule_done:
                 continue
@@ -1009,7 +1011,9 @@ class MainLoop:
                     self._frame_diff_ratio = change_ratio
                     if change_ratio < 0.02 and not self._should_process_static_frame():
                         if self._verbose and iteration % 30 == 0:
-                            self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR")
+                            wc = len(self._wait_rule_deadlines)
+                            suffix = f" wait_rule={wc}" if wc else ""
+                            self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR{suffix}")
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
