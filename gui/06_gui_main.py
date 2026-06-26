@@ -713,6 +713,7 @@ class _MatchImageStepForm(QWidget):
         p = self._step.params
         if p.get("template"):
             self._tmpl_label.setText(Path(p["template"]).stem)
+            self._update_thumbnail()
 
 
 class _DetectStepForm(QWidget):
