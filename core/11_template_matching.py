@@ -1,3 +1,4 @@
+import base64
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,20 @@ class MatchResult:
     @property
     def text(self) -> str:
         return self.template_name
+
+
+def img_to_b64(img: np.ndarray) -> str:
+    _, buf = cv2.imencode(".png", img)
+    return base64.b64encode(buf).decode("ascii")
+
+
+def b64_to_img(data: str) -> Optional[np.ndarray]:
+    try:
+        buf = base64.b64decode(data)
+        arr = np.frombuffer(buf, dtype=np.uint8)
+        return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    except Exception:
+        return None
 
 
 def _resolve_template(template_path: str) -> Optional[Path]:
@@ -55,14 +70,21 @@ def match_template(
     max_results: int = 5,
     scale_range: Optional[tuple[float, float]] = (0.8, 1.2),
     scale_step: float = 0.1,
+    template_data: Optional[str] = None,
 ) -> list[MatchResult]:
-    resolved = _resolve_template(template_path)
-    if resolved is None:
-        return []
-
-    template = cv2.imread(str(resolved), cv2.IMREAD_COLOR)
-    if template is None:
-        return []
+    if template_data:
+        template = b64_to_img(template_data)
+        tmpl_name = "inline"
+        if template is None:
+            return []
+    else:
+        resolved = _resolve_template(template_path)
+        if resolved is None:
+            return []
+        template = cv2.imread(str(resolved), cv2.IMREAD_COLOR)
+        if template is None:
+            return []
+        tmpl_name = Path(template_path).stem
 
     if roi is not None and any(roi.get(k, 0) != 0 for k in ("w", "h")):
         h, w = img.shape[:2]
@@ -111,7 +133,7 @@ def match_template(
                     w=sw,
                     h=sh,
                     confidence=float(result_map[pt[1], pt[0]]),
-                    template_name=Path(template_path).stem,
+                    template_name=tmpl_name,
                 )
             )
 

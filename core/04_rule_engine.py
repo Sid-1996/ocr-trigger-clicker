@@ -81,6 +81,7 @@ _STEP_DEFAULTS = {
     "jump": {"rule_id": ""},
     "match_image": {
         "template": "",
+        "template_data": "",
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
         "threshold": 0.8,
     },
@@ -174,8 +175,20 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["rule_id"] = str(base.get("rule_id", ""))
     elif step_type == "match_image":
         base["template"] = str(base.get("template", "")).strip()
+        base["template_data"] = str(base.get("template_data", ""))
         base["roi"] = _sanitize_roi(base.get("roi"))
         base["threshold"] = max(0.0, min(1.0, _as_float(base.get("threshold", 0.8), 0.8)))
+        if base["template"] and not base["template_data"]:
+            p = Path(base["template"])
+            if p.exists():
+                import base64 as _b64
+
+                import cv2 as _cv2
+
+                _tmp_img = _cv2.imread(str(p), _cv2.IMREAD_COLOR)
+                if _tmp_img is not None:
+                    _, _buf = _cv2.imencode(".png", _tmp_img)
+                    base["template_data"] = _b64.b64encode(_buf).decode("ascii")
     return base
 
 

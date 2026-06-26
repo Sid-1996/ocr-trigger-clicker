@@ -275,13 +275,16 @@ class MainLoop:
         return StepResult("continue")
 
     def _handle_match_image(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
-        template = params.get("template", "")
-        if not template.strip():
+        template_data = params.get("template_data", "")
+        template_path = params.get("template", "")
+        if not template_data.strip() and not template_path.strip():
             return StepResult("stop")
 
         roi = params.get("roi")
         threshold = params.get("threshold", 0.8)
-        results = match_template(ctx.img, template, roi, threshold)
+        results = match_template(
+            ctx.img, template_path, roi, threshold, template_data=template_data or None
+        )
         if not results:
             return StepResult("stop")
 

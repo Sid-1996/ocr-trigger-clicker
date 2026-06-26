@@ -1,9 +1,9 @@
+import base64
 import json
 import sys
 import threading
 import time
 from copy import deepcopy
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -620,7 +620,14 @@ class _MatchImageStepForm(QWidget):
         )
         self._thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tmpl_layout.addWidget(self._thumb)
-        self._tmpl_label = QLabel(Path(p.get("template", "")).stem or "未選擇")
+        tmpl_path = p.get("template", "")
+        tmpl_data = p.get("template_data", "")
+        label_text = (
+            Path(tmpl_path).stem
+            if tmpl_path.strip()
+            else ("內嵌圖片" if tmpl_data.strip() else "未選擇")
+        )
+        self._tmpl_label = QLabel(label_text)
         self._tmpl_btn = QPushButton("選擇圖片")
         self._tmpl_btn.clicked.connect(self._pick_template)
         self._capture_btn = QPushButton("截取區域")
@@ -655,6 +662,19 @@ class _MatchImageStepForm(QWidget):
         form.addRow("相似度閾值:", self._threshold)
 
     def _update_thumbnail(self):
+        data = self._step.params.get("template_data", "")
+        if data.strip():
+            pix = QPixmap()
+            if pix.loadFromData(base64.b64decode(data)):
+                self._thumb.setPixmap(
+                    pix.scaled(
+                        64,
+                        64,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+                return
         path = self._step.params.get("template", "")
         if path and Path(path).exists():
             pix = QPixmap(path)
@@ -673,10 +693,11 @@ class _MatchImageStepForm(QWidget):
     def _capture_template(self):
         if not self._capture_cb:
             return
-        path = self._capture_cb()
-        if path:
-            self._step.params["template"] = path
-            self._tmpl_label.setText(Path(path).stem)
+        data = self._capture_cb()
+        if data:
+            self._step.params["template_data"] = data
+            self._step.params.pop("template", None)
+            self._tmpl_label.setText("內嵌圖片")
             self._update_thumbnail()
             self._list.steps_changed.emit()
 
@@ -685,16 +706,15 @@ class _MatchImageStepForm(QWidget):
             self, "選擇範本圖片", "", "圖片 (*.png *.jpg *.jpeg *.bmp)"
         )
         if path:
-            images_dir = _get_images_dir()
-            images_dir.mkdir(exist_ok=True)
-            dst = images_dir / Path(path).name
-            import shutil
+            import cv2 as _cv2
 
-            shutil.copy2(path, dst)
-            self._step.params["template"] = str(dst)
-            self._tmpl_label.setText(dst.stem)
-            self._update_thumbnail()
-            self._list.steps_changed.emit()
+            _img = _cv2.imread(path, _cv2.IMREAD_COLOR)
+            if _img is not None:
+                self._step.params["template_data"] = img_to_b64(_img)
+                self._step.params.pop("template", None)
+                self._tmpl_label.setText(Path(path).stem)
+                self._update_thumbnail()
+                self._list.steps_changed.emit()
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -1308,6 +1328,9 @@ OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
+_tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
+img_to_b64 = _tmpl_mod.img_to_b64
+b64_to_img = _tmpl_mod.b64_to_img
 
 # ── Helpers ──
 
@@ -2409,20 +2432,22 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
-        # 清理被刪規則的孤兒範本圖片
+        # 清理被刪規則的孤兒範本圖片（僅限舊版檔案路徑殘留）
         images_dir = _get_images_dir()
         for step in rule.steps:
             if step.type == "match_image":
-                tmpl = Path(step.params.get("template", ""))
-                if tmpl.exists() and tmpl.parent.resolve() == images_dir.resolve():
-                    still_used = any(
-                        s.params.get("template", "") == str(tmpl)
-                        for r in self._rules
-                        for s in r.steps
-                        if s.type == "match_image"
-                    )
-                    if not still_used:
-                        tmpl.unlink(missing_ok=True)
+                tmpl_path = step.params.get("template", "")
+                if tmpl_path:
+                    tmpl = Path(tmpl_path)
+                    if tmpl.exists() and tmpl.parent.resolve() == images_dir.resolve():
+                        still_used = any(
+                            s.params.get("template", "") == tmpl_path
+                            for r in self._rules
+                            for s in r.steps
+                            if s.type == "match_image"
+                        )
+                        if not still_used:
+                            tmpl.unlink(missing_ok=True)
         # 自動清理其他規則指向被刪規則的參照
         for r in self._rules:
             for s in r.steps:
@@ -2595,16 +2620,10 @@ class MainWindow(QMainWindow):
             img = capture(title)
             if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
                 crop = img[ry : ry + rh, rx : rx + rw]
-                images_dir = _get_images_dir()
-                images_dir.mkdir(exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                dst = images_dir / f"capture_{timestamp}.png"
-                import cv2
-
-                cv2.imwrite(str(dst), crop)
-                self._status_bar.showMessage(f"已截取範本: {dst.name}")
+                b64 = img_to_b64(crop)
+                self._status_bar.showMessage(f"已截取範本 ({len(crop)}px)")
                 self._edit_stack.setCurrentIndex(1)
-                return str(dst)
+                return b64
         return None
 
     # === Test rule ===
@@ -2859,14 +2878,17 @@ class MainWindow(QMainWindow):
 
                 elif step.type == "match_image":
                     p = step.params
+                    tmpl_data = p.get("template_data", "")
                     tmpl_path = p.get("template", "")
-                    if not tmpl_path.strip():
+                    if not tmpl_data.strip() and not tmpl_path.strip():
                         log.append(f"[{idx + 1}] ⚠ 未設定範本圖片")
                         continue
                     roi = p.get("roi", {})
                     threshold = p.get("threshold", 0.8)
-                    results = _main_loop_mod.match_template(img, tmpl_path, roi, threshold)
-                    tmpl_name = Path(tmpl_path).stem
+                    results = _main_loop_mod.match_template(
+                        img, tmpl_path, roi, threshold, template_data=tmpl_data or None
+                    )
+                    tmpl_name = "內嵌" if tmpl_data.strip() else Path(tmpl_path).stem
                     if results:
                         m = results[0]
                         cx, cy = m.center_x, m.center_y
