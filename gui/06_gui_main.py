@@ -1404,7 +1404,6 @@ class MainWindow(QMainWindow):
             self._refresh_window_list()
             self._restore_last_state()
             self._refresh_task_list()
-            self._refresh_template_menu()
             self._maybe_show_startup_guide()
 
             if not _ahk_mod.is_ahk_available():
@@ -1633,12 +1632,6 @@ class MainWindow(QMainWindow):
         self._del_rule_btn.setToolTip("刪除目前選取的規則 (Del)")
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
-        self._template_btn = QPushButton("從模板建立 ▾")
-        self._template_btn.setToolTip("從內建模板快速建立規則")
-        self._template_menu = QMenu(self)
-        self._template_btn.setMenu(self._template_menu)
-        self._template_btn.setVisible(False)
-        rule_btn_bar.addWidget(self._template_btn)
         left_layout.addLayout(rule_btn_bar)
 
         rules_layout.addWidget(left_widget, 1)
@@ -2361,38 +2354,6 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
-
-    def _refresh_template_menu(self):
-        self._template_menu.clear()
-        names = _rule_mod.list_templates()
-        if names:
-            self._template_btn.setVisible(True)
-            for name in names:
-                action = self._template_menu.addAction(name)
-                action.setData(name)
-                action.triggered.connect(lambda checked, n=name: self._apply_template(n))
-        else:
-            self._template_btn.setVisible(False)
-
-    def _apply_template(self, template_name: str):
-        import uuid
-
-        if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再從模板建立規則")
-            return
-        rules = _rule_mod.load_template(template_name)
-        if not rules:
-            self._status_bar.showMessage(f"⚠ 模板「{template_name}」載入失敗", 5000)
-            return
-        for r in rules:
-            r.id = f"rule_{uuid.uuid4().hex[:8]}"
-            r.name = f"{template_name}-{r.name}"
-            self._rules.append(r)
-        save_task(self._current_task, self._rules)
-        self._refresh_rule_list()
-        if self._loop:
-            self._loop.reload_rules()
-        self._status_bar.showMessage(f"✓ 已從模板「{template_name}」建立 {len(rules)} 條規則", 5000)
 
     def _add_step(self, step_type: str):
         step = Step(type=step_type, params={})
