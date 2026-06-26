@@ -331,7 +331,7 @@ class OcrDebugPanel(QWidget):
         for i, r in enumerate(self._ocr_results):
             self._result_table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
             self._result_table.setItem(i, 1, QTableWidgetItem(r.text))
-            item = QTableWidgetItem(f"{r.confidence:.2f}")
+            item = QTableWidgetItem(f"{int(r.confidence * 100)}%")
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if r.confidence >= 0.8:
                 bg = QColor(220, 255, 220)
@@ -571,7 +571,7 @@ class OcrDebugPanel(QWidget):
                     painter.setPen(QPen(QColor(255, 80, 80), 3))
                 painter.drawRect(r.x, r.y, r.w, r.h)
 
-                label = f"{i + 1}  {r.text}  {r.confidence:.2f}"
+                label = f"{i + 1}  {r.text}  {int(r.confidence * 100)}%"
                 tw = fm.horizontalAdvance(label)
 
                 label_x = r.x
@@ -643,7 +643,7 @@ class OcrDebugPanel(QWidget):
                 f"#{self._selected_index + 1}\n"
                 f"文字：{r.text}\n"
                 f"座標：x={r.x}, y={r.y}, w={r.w}, h={r.h}\n"
-                f"信心度：{r.confidence:.2f}"
+                f"信心度：{int(r.confidence * 100)}%"
             )
         except Exception as e:
             print(f"[_update_crop_preview] {e}")
