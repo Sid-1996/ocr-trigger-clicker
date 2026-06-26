@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 cd /d "%~dp0"
 python gui/06_gui_main.py
 if errorlevel 1 (
