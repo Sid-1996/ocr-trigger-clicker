@@ -685,7 +685,7 @@ class _MatchImageStepForm(QWidget):
             self, "選擇範本圖片", "", "圖片 (*.png *.jpg *.jpeg *.bmp)"
         )
         if path:
-            images_dir = Path(__file__).resolve().parent.parent / "images"
+            images_dir = _get_images_dir()
             images_dir.mkdir(exist_ok=True)
             dst = images_dir / Path(path).name
             import shutil
@@ -1315,6 +1315,18 @@ _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py"
 def _tasks_dir() -> str:
     mod = load_sibling("rule_engine", "core/04_rule_engine.py")
     return str(mod.get_tasks_dir())
+
+
+def _get_images_dir() -> Path:
+    """Return writable images directory — project root in dev, %APPDATA% when packaged."""
+    if hasattr(sys, "_MEIPASS"):
+        try:
+            from build import get_data_path
+
+            return Path(get_data_path("images"))
+        except ImportError:
+            pass
+    return Path(__file__).resolve().parent.parent / "images"
 
 
 class WorkerSignals(QObject):
@@ -2571,7 +2583,7 @@ class MainWindow(QMainWindow):
             img = capture(title)
             if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
                 crop = img[ry : ry + rh, rx : rx + rw]
-                images_dir = Path(__file__).resolve().parent.parent / "images"
+                images_dir = _get_images_dir()
                 images_dir.mkdir(exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 dst = images_dir / f"capture_{timestamp}.png"
