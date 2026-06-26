@@ -2621,7 +2621,7 @@ class MainWindow(QMainWindow):
             if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
                 crop = img[ry : ry + rh, rx : rx + rw]
                 b64 = img_to_b64(crop)
-                self._status_bar.showMessage(f"已截取範本 ({len(crop)}px)")
+                self._status_bar.showMessage(f"已截取範本 ({crop.shape[1]}×{crop.shape[0]})")
                 self._edit_stack.setCurrentIndex(1)
                 return b64
         return None

@@ -45,6 +45,7 @@ save_rules = _rule.save_rules
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
+img_to_b64 = _tmpl.img_to_b64
 
 
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
@@ -944,6 +945,14 @@ if __name__ == "__main__":
     # empty template
     result3 = ml._handle_match_image({"template": ""}, _mi_ctx, test_rule)
     assert result3.action == "stop", "empty template should stop"
+    # template_data path (base64)
+    _mi_ctx2 = StepContext(img=_mi_img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+    _b64_data = img_to_b64(_mi_tpl)
+    result4 = ml._handle_match_image(
+        {"template_data": _b64_data, "threshold": 0.5}, _mi_ctx2, test_rule
+    )
+    assert result4.action == "continue", f"base64 match should continue, got {result4.action}"
+    assert _mi_ctx2.matched_text.center_x == 10 + 21 // 2
     Path(_mi_tmp.name).unlink(missing_ok=True)
     print("  [OK] _handle_match_image")
 
