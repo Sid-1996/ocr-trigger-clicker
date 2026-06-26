@@ -32,7 +32,7 @@ list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
-capture_window_full = getattr(_screenshot, "capture_window_content", lambda title: None)
+capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 activate_window = _screenshot.activate_window
 is_window_foreground = _perf.is_window_foreground
 OcrResult = _ocr.OcrResult
@@ -75,7 +75,7 @@ def poll_roi_value(
             return None
         img = capture(title)
         if img is None:
-            img = capture_window_full(title)
+            img = capture_window_content(title)
         if img is not None:
             roi_img = crop_roi(img, roi)
             if roi_img is not None:
@@ -214,7 +214,7 @@ class MainLoop:
         with self._rules_lock:
             if self._rule_pointer < len(self._rules):
                 rule = self._rules[self._rule_pointer]
-                if rule.enabled and any(s.type == "detect" for s in rule.steps):
+                if rule.enabled and any(s.type in ("detect", "match_image") for s in rule.steps):
                     return True
         return False
 
@@ -530,7 +530,7 @@ class MainLoop:
                         self.on_window_lost()
                     self._pause_event.set()
                     while not self._stop_event.is_set() and not self._emergency_event.is_set():
-                        if self._pause_event.wait(timeout=0.5):
+                        if not self._pause_event.is_set():
                             break
                         rect = get_window_rect(title)
                         if rect is not None:
@@ -538,9 +538,13 @@ class MainLoop:
                             if self._verbose:
                                 self._log("視窗已重新出現，恢復偵測")
                             break
+                        time.sleep(0.5)
                     self._perf.record_frame()
                     continue
 
+                if self._window_hwnd is None:
+                    with self._window_lock:
+                        self._window_hwnd = get_window_hwnd_orig(self._window_title)
                 if self._foreground_only and not is_window_foreground(self._window_hwnd):
                     self._stop_event.wait(0.2)
                     self._perf.record_frame()
@@ -549,7 +553,7 @@ class MainLoop:
                 t0 = time.monotonic()
                 img = capture(self._window_title)
                 if img is None:
-                    img = capture_window_full(self._window_title)
+                    img = capture_window_content(self._window_title)
                 t1 = time.monotonic()
                 if img is None:
                     if self._verbose and iteration % 30 == 0:

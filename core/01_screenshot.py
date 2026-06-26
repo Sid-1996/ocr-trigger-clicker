@@ -228,7 +228,7 @@ def capture_window_content(title: str) -> np.ndarray | None:
     return _gdi_capture(hwnd, _bitblt_render)
 
 
-capture_window_full = capture_window_content
+capture_window_full = capture_window_content  # backward compat alias
 
 
 if __name__ == "__main__":

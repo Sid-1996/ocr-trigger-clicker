@@ -1,3 +1,4 @@
+import logging
 import sys
 import threading
 import time
@@ -150,9 +151,7 @@ def init_engine() -> None:
         try:
             _engine(warmup, use_cls=False)
         except Exception:
-            import traceback
-
-            traceback.print_exc()
+            logging.warning("OCR warmup 失敗", exc_info=True)
 
 
 def _prepare_image(

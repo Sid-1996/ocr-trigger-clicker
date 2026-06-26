@@ -1287,7 +1287,7 @@ recognize = _main_loop_mod.recognize
 find_text = _main_loop_mod.find_text
 poll_roi_value = _main_loop_mod.poll_roi_value
 crop_roi = _main_loop_mod.crop_roi
-capture_window_full = getattr(_main_loop_mod, "capture_window_full", lambda title: None)
+capture_window_content = getattr(_main_loop_mod, "capture_window_content", lambda title: None)
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -1336,7 +1336,6 @@ class WorkerSignals(QObject):
     info_signal = pyqtSignal(str)
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
-    compare_round_signal = pyqtSignal(dict)
     test_done_signal = pyqtSignal(dict)
 
 
@@ -1370,7 +1369,6 @@ class InitWorker(QThread):
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
             loop.on_emergency = lambda: self._signals.emergency_signal.emit()
-            loop.on_compare_round = lambda d: self._signals.compare_round_signal.emit(d)
             loop.start()
             self.loop = loop
             self.finished.emit(True, "")
@@ -2616,7 +2614,7 @@ class MainWindow(QMainWindow):
         time.sleep(0.12)
         img = capture(title)
         if img is None:
-            img = capture_window_full(title)
+            img = capture_window_content(title)
         self.showNormal()
         self.activateWindow()
         self._edit_stack.setCurrentIndex(1)
@@ -3191,6 +3189,7 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.stop()
             self._loop = None
+        self._window_lost = False
         self._btn_toggle.setText("啟動")
         self._update_edit_enabled(True)
         self._status_bar.showMessage("已停止")

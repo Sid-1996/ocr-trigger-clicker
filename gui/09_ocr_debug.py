@@ -29,7 +29,7 @@ _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 
 activate_window = _screenshot.activate_window
 capture = _screenshot.capture
-capture_window_full = getattr(_screenshot, "capture_window_content", lambda title: None)
+capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 recognize = _ocr.recognize
 
 
@@ -235,7 +235,7 @@ class OcrDebugPanel(QWidget):
                 img = img[:, :, ::-1].copy()
 
             if img is None:
-                img = capture_window_full(self._window_title)
+                img = capture_window_content(self._window_title)
                 source = "GDI 截圖"
 
             return img, source
