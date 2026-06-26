@@ -43,6 +43,8 @@ def match_template(
     roi: Optional[dict] = None,
     threshold: float = 0.8,
     max_results: int = 5,
+    scale_range: Optional[tuple[float, float]] = (0.8, 1.2),
+    scale_step: float = 0.1,
 ) -> list[MatchResult]:
     resolved = _resolve_template(template_path)
     if resolved is None:
@@ -69,22 +71,44 @@ def match_template(
         offset_x = offset_y = 0
 
     th, tw = template.shape[:2]
-    result_map = cv2.matchTemplate(search_img, template, cv2.TM_CCOEFF_NORMED)
-    locations = np.where(result_map >= threshold)
-    matches = []
-    for pt in zip(*locations[::-1]):
-        matches.append(
-            MatchResult(
-                x=int(pt[0]) + offset_x,
-                y=int(pt[1]) + offset_y,
-                w=tw,
-                h=th,
-                confidence=float(result_map[pt[1], pt[0]]),
-                template_name=Path(template_path).stem,
-            )
-        )
+    min_side = 8
 
-    # non-maximum suppression
+    if scale_range is None:
+        scales = [1.0]
+    else:
+        num = int((scale_range[1] - scale_range[0]) / scale_step) + 1
+        scales = [round(scale_range[0] + i * scale_step, 4) for i in range(num)]
+
+    matches = []
+    for scale in scales:
+        sw = max(min_side, int(tw * scale))
+        sh = max(min_side, int(th * scale))
+        if sw > search_img.shape[1] or sh > search_img.shape[0]:
+            continue
+        if scale == 1.0:
+            scaled = template
+        else:
+            interpolation = cv2.INTER_LINEAR if scale > 1.0 else cv2.INTER_AREA
+            scaled = cv2.resize(template, (sw, sh), interpolation=interpolation)
+
+        result_map = cv2.matchTemplate(search_img, scaled, cv2.TM_CCOEFF_NORMED)
+        locations = np.where(result_map >= threshold)
+        for pt in zip(*locations[::-1]):
+            matches.append(
+                MatchResult(
+                    x=int(pt[0]) + offset_x,
+                    y=int(pt[1]) + offset_y,
+                    w=sw,
+                    h=sh,
+                    confidence=float(result_map[pt[1], pt[0]]),
+                    template_name=Path(template_path).stem,
+                )
+            )
+
+    if not matches:
+        return []
+
+    # non-maximum suppression across all scales
     matches.sort(key=lambda m: m.confidence, reverse=True)
     kept = []
     for m in matches:
@@ -189,5 +213,42 @@ if __name__ == "__main__":
     assert mr.text == "btn_ok"
     print("  [OK] MatchResult center_x/center_y/text compatibility")
 
-    Path(tmp_path).unlink(missing_ok=True)
-    print("\n=== All 5 tests passed ===")
+    # ── Multi-scale matching ──
+    # create a 48x48 template (with inner variance), place at 20x20
+    # then 2x larger (96x96) at 80x80 — same pattern, scaled
+    big_img = np.zeros((200, 200, 3), dtype=np.uint8)
+    cv2.rectangle(big_img, (20, 20), (68, 68), (120, 140, 160), -1)
+    cv2.rectangle(big_img, (30, 30), (58, 58), (50, 60, 70), -1)  # inner variance
+    cv2.rectangle(big_img, (80, 80), (176, 176), (120, 140, 160), -1)  # 96x96
+    cv2.rectangle(big_img, (100, 100), (156, 156), (50, 60, 70), -1)  # inner variance
+    tiny_tpl = big_img[20:68, 20:68].copy()
+    tmp2 = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp2.close()
+    cv2.imwrite(tmp2.name, tiny_tpl)
+    tmp2_path = Path(tmp2.name)
+
+    # single-scale should only find the exact-size match
+    single = match_template(big_img, tmp2_path, threshold=0.5, scale_range=None)
+    assert len(single) >= 1, "single-scale should find the 48x48 match"
+    assert single[0].w == 48 and single[0].h == 48
+    print(f"  [OK] single-scale finds 48x48 (confidence={single[0].confidence:.3f})")
+
+    # multi-scale should find both sizes
+    multi = match_template(
+        big_img, tmp2_path, threshold=0.5, scale_range=(0.5, 2.0), scale_step=0.1
+    )
+    assert len(multi) >= 2, f"multi-scale should find both, got {len(multi)}"
+    sizes = {(m.w, m.h) for m in multi}
+    assert (48, 48) in sizes, "should include 48x48 match"
+    has_larger = any(w >= 80 and h >= 80 for w, h in sizes)
+    assert has_larger, f"should include larger match, sizes={sizes}"
+    print(f"  [OK] multi-scale finds both sizes: {sizes}")
+
+    # scale_range defaults work
+    default = match_template(big_img, tmp2_path, threshold=0.5)
+    assert len(default) >= 1
+    print("  [OK] default scale_range=(0.8,1.2) finds match")
+
+    Path(tmp2_path).unlink(missing_ok=True)
+
+    print("\n=== All 8 tests passed ===")
