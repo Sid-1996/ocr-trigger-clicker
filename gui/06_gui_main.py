@@ -2087,7 +2087,6 @@ class MainWindow(QMainWindow):
         p.end()
         return QIcon(pix)
 
-    @staticmethod
     def _refresh_rule_list(self):
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
