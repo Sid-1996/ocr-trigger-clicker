@@ -951,9 +951,7 @@ class _DetectStepForm(QWidget):
         form.addRow(self._advanced_container)
 
         self._of_action.addItem("跳過本次（預設）", "stop")
-        self._of_action.addItem("重試偵測", "retry")
         self._of_action.addItem("按下按鍵後繼續", "key")
-        self._of_action.addItem("跳轉至規則", "jump")
         raw = p.get("on_fail", "stop")
         if isinstance(raw, dict):
             act = raw.get("action", "stop")
@@ -964,26 +962,6 @@ class _DetectStepForm(QWidget):
             self._of_action.setCurrentIndex(idx_of)
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         of_form.addRow("動作:", self._of_action)
-
-        # retry row
-        self._of_retry_row = QWidget()
-        rf = QHBoxLayout(self._of_retry_row)
-        rf.setContentsMargins(0, 0, 0, 0)
-        self._of_retries = _NoWheelSpin()
-        self._of_retries.setRange(1, 999)
-        self._of_retries.setValue(int(raw.get("retries", 5)) if isinstance(raw, dict) else 5)
-        rf.addWidget(QLabel("重試"))
-        rf.addWidget(self._of_retries)
-        rf.addWidget(QLabel("次，間隔"))
-        self._of_retry_delay = _NoWheelSpin()
-        self._of_retry_delay.setRange(100, 60000)
-        self._of_retry_delay.setSuffix(" ms")
-        self._of_retry_delay.setSingleStep(500)
-        self._of_retry_delay.setValue(
-            int(raw.get("retry_delay_ms", 1000)) if isinstance(raw, dict) else 1000
-        )
-        rf.addWidget(self._of_retry_delay)
-        of_form.addRow("", self._of_retry_row)
 
         # key row
         self._of_key = _make_key_combo()
@@ -1001,27 +979,6 @@ class _DetectStepForm(QWidget):
         kf.addStretch()
         of_form.addRow("", self._of_key_row)
 
-        # jump row
-        self._of_jump = _NoWheelCombo()
-        rules = rules_provider() if rules_provider else []
-        current_jump_id = raw.get("jump_rule_id", "") if isinstance(raw, dict) else ""
-        for r in rules:
-            if r.id != exclude_rule_id:
-                self._of_jump.addItem(r.name, r.id)
-        idx_j = self._of_jump.findData(current_jump_id)
-        if idx_j >= 0:
-            self._of_jump.setCurrentIndex(idx_j)
-        elif current_jump_id:
-            self._of_jump.addItem(f"(未知: {current_jump_id})", current_jump_id)
-            self._of_jump.setCurrentIndex(self._of_jump.count() - 1)
-        self._of_jump_row = QWidget()
-        jf = QHBoxLayout(self._of_jump_row)
-        jf.setContentsMargins(0, 0, 0, 0)
-        jf.addWidget(QLabel("跳至"))
-        jf.addWidget(self._of_jump)
-        jf.addStretch()
-        of_form.addRow("", self._of_jump_row)
-
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
 
@@ -1036,10 +993,7 @@ class _DetectStepForm(QWidget):
         )
 
     def _on_of_action_changed(self, idx=None):
-        action = self._of_action.currentData()
-        self._of_retry_row.setVisible(action == "retry")
-        self._of_key_row.setVisible(action == "key")
-        self._of_jump_row.setVisible(action == "jump")
+        self._of_key_row.setVisible(self._of_action.currentData() == "key")
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -1062,21 +1016,10 @@ class _DetectStepForm(QWidget):
         action = self._of_action.currentData()
         if action == "stop":
             self._step.params["on_fail"] = "stop"
-        elif action == "retry":
-            self._step.params["on_fail"] = {
-                "action": "retry",
-                "retries": self._of_retries.value(),
-                "retry_delay_ms": self._of_retry_delay.value(),
-            }
         elif action == "key":
             self._step.params["on_fail"] = {
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
-            }
-        elif action == "jump":
-            self._step.params["on_fail"] = {
-                "action": "jump",
-                "jump_rule_id": self._of_jump.currentData() or "",
             }
 
 
