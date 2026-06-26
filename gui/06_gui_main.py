@@ -2409,6 +2409,20 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
+        # 清理被刪規則的孤兒範本圖片
+        images_dir = _get_images_dir()
+        for step in rule.steps:
+            if step.type == "match_image":
+                tmpl = Path(step.params.get("template", ""))
+                if tmpl.exists() and tmpl.parent.resolve() == images_dir.resolve():
+                    still_used = any(
+                        s.params.get("template", "") == str(tmpl)
+                        for r in self._rules
+                        for s in r.steps
+                        if s.type == "match_image"
+                    )
+                    if not still_used:
+                        tmpl.unlink(missing_ok=True)
         # 自動清理其他規則指向被刪規則的參照
         for r in self._rules:
             for s in r.steps:
@@ -2587,7 +2601,7 @@ class MainWindow(QMainWindow):
                 dst = images_dir / f"capture_{timestamp}.png"
                 import cv2
 
-                cv2.imwrite(str(dst), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                cv2.imwrite(str(dst), crop)
                 self._status_bar.showMessage(f"已截取範本: {dst.name}")
                 self._edit_stack.setCurrentIndex(1)
                 return str(dst)
