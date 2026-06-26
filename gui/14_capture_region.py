@@ -1,6 +1,4 @@
 import sys
-from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, pyqtSignal
@@ -16,7 +14,7 @@ class CaptureRegionSelector(QWidget):
         self._start = QPoint()
         self._end = QPoint()
         self._selecting = False
-        self._result: Optional[str] = None
+        self._result: Optional[dict] = None
         self._bg_pixmaps: list[tuple[QPixmap, QRect]] = []
 
         all_geometry = QRect()
@@ -50,24 +48,15 @@ class CaptureRegionSelector(QWidget):
             return None
         return QRect(x, y, w, h)
 
-    def _save_region(self):
+    def _set_result_from_rect(self):
         rect = self._get_rect()
-        if not rect:
-            return None
-        images_dir = Path(__file__).resolve().parent.parent / "images"
-        images_dir.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dst = images_dir / f"capture_{timestamp}.png"
-
-        full_pixmap = QPixmap(self.size())
-        painter = QPainter(full_pixmap)
-        for pixmap, geom in self._bg_pixmaps:
-            painter.drawPixmap(geom.topLeft(), pixmap)
-        painter.end()
-
-        region = full_pixmap.copy(rect)
-        region.save(str(dst), "PNG")
-        self._result = str(dst)
+        if rect:
+            self._result = {
+                "x": rect.x(),
+                "y": rect.y(),
+                "w": rect.width(),
+                "h": rect.height(),
+            }
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -101,7 +90,7 @@ class CaptureRegionSelector(QWidget):
         painter.drawText(
             16,
             self.rect().height() - 32,
-            f"拖拉選取截圖範本{dim}  |  放開滑鼠自動存檔  |  Esc 取消",
+            f"拖拉選取截圖範本{dim}  |  放開滑鼠自動確認  |  Esc 取消",
         )
 
     def mousePressEvent(self, event):
@@ -121,7 +110,7 @@ class CaptureRegionSelector(QWidget):
             self._end = event.position().toPoint()
             self._selecting = False
             self.update()
-            self._save_region()
+            self._set_result_from_rect()
             if self._result:
                 self.finished.emit()
                 self.close()
@@ -133,16 +122,10 @@ class CaptureRegionSelector(QWidget):
             self.close()
 
 
-def capture_region(parent_window=None, target_title: str = "") -> Optional[str]:
+def capture_region(parent_window=None) -> Optional[dict]:
     if parent_window:
         parent_window.showMinimized()
         QApplication.processEvents()
-
-    if target_title:
-        from _loader import load_sibling
-
-        ss = load_sibling("screenshot", "core/01_screenshot.py")
-        ss.activate_window(target_title)
 
     selector = CaptureRegionSelector()
     selector.setFocus()
@@ -171,9 +154,9 @@ def capture_region(parent_window=None, target_title: str = "") -> Optional[str]:
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    path = capture_region()
-    if path:
-        print(f"已儲存範本: {path}")
+    result = capture_region()
+    if result:
+        print(f"選取區域：x={result['x']} y={result['y']} w={result['w']} h={result['h']}")
     else:
         print("已取消")
     sys.exit(0)

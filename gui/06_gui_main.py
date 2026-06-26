@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -2587,14 +2588,39 @@ class MainWindow(QMainWindow):
         return result
 
     def _open_capture_region(self):
-        """Open overlay to capture a screen region as template image."""
+        """Capture a screen region from the target window as template image."""
         title = self._window_combo.currentText()
+        if title:
+            activate_window(title)
         mod = load_sibling("capture_region", "gui/14_capture_region.py")
-        path = mod.capture_region(parent_window=self, target_title=title)
-        if path:
-            self._status_bar.showMessage(f"已截取範本: {Path(path).name}")
-            self._edit_stack.setCurrentIndex(1)
-        return path
+        rect = mod.capture_region(parent_window=self)
+        if not rect:
+            return None
+        if title:
+            screen = QApplication.primaryScreen()
+            ratio = screen.devicePixelRatio()
+            rx = int(rect["x"] * ratio)
+            ry = int(rect["y"] * ratio)
+            rw = int(rect["w"] * ratio)
+            rh = int(rect["h"] * ratio)
+            wr = get_window_rect(title)
+            if wr:
+                rx -= wr["x"]
+                ry -= wr["y"]
+            img = capture(title)
+            if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
+                crop = img[ry : ry + rh, rx : rx + rw]
+                images_dir = Path(__file__).resolve().parent.parent / "images"
+                images_dir.mkdir(exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                dst = images_dir / f"capture_{timestamp}.png"
+                import cv2
+
+                cv2.imwrite(str(dst), cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
+                self._status_bar.showMessage(f"已截取範本: {dst.name}")
+                self._edit_stack.setCurrentIndex(1)
+                return str(dst)
+        return None
 
     # === Test rule ===
     def _on_test_rule(self):
