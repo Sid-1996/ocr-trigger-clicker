@@ -138,6 +138,83 @@ step[?] = wait N ms
 | Window foreground check | 保留。安全機制。 |
 | Static frame detection | 保留但簡化。不需要再檢查 wait_rule deadlines。只需保留基本的「畫面無變化時跳過 OCR」。 |
 
+## 未來 Step Type: `match_image`
+
+圖示辨識是自動化腳本的必要功能，目前專案完全沒有此能力。
+
+### 基礎建設（Phase 1 時就要預留）
+
+在設計新 step 分派器時，確保 `match_image` 能以最小改動加入：
+
+| 項目 | 說明 |
+|---|---|
+| **模板圖片目錄** | `images/`（共用，與 tasks 平行），每個 template 一個 `.png` 檔 |
+| **`cv2.matchTemplate` wrapper** | 統一函式：`match_template(img, template, roi, threshold) → list[MatchResult]` |
+| **Step type** | `match_image`：`{template, roi, threshold, match_mode}` |
+| **Result 資料結構** | `MatchResult(x, y, w, h, confidence)`（仿 `OcrResult`） |
+| **Handler** | `_handle_match_image` — 行為與 `_handle_detect` 相同，但使用 template matching |
+| **Step form** | 圖片預覽、ROI 框選、threshold slider、match_mode 選擇 |
+
+### 檔案組織
+
+```
+project_root/
+├── images/                      ← 共用模板圖片庫（Phase 3 後建立）
+│   ├── btn_33.png
+│   ├── btn_scan_battle.png
+│   └── icon_close.png
+├── tasks/
+│   └── 每日任務.json
+└── core/
+    └── 11_template_matching.py   ← (Phase 3 新增)
+```
+
+### 實作時機
+
+```
+Phase 1: 引擎改造 (rule pointer)       ← 現在
+Phase 2: match_image 基礎建設 + step type  ← 全新加入
+Phase 3: 基礎 GUI Step 調整              ← Phase 1 對應
+Phase 4: match_image GUI (圖片選取器 + preview + ROI)  ← Phase 2 對應
+Phase 5: 測試、文件、清理
+```
+
+### 與 detect 的差異
+
+| 面向 | `detect` (OCR) | `match_image` |
+|---|---|---|
+| 匹配方式 | 文字 OCR → `find_text` | Template matching → `cv2.matchTemplate` |
+| 預先準備 | 無（直接 OCR 任何文字） | 需要先截圖存成 `.png` template |
+| 強項 | 動態文字（如數值、名稱） | 固定 icon、按鈕圖案 |
+| ROI 支援 | 同現有裁切 | 同現有裁切 |
+| 回傳 | `OcrResult` (text + box) | `MatchResult` (box + confidence) |
+| Step params | `text, roi, match_mode, fuzzy_threshold` | `template, roi, threshold` (0-1) |
+
+### 與 AHK ImageSearch 對照
+
+AHK:
+```ahk
+ImageSearch, x, y, 0, 0, A_ScreenWidth, A_ScreenHeight, *50 btn_33.png
+if ErrorLevel = 0
+    Click %x%, %y%
+```
+
+新模型:
+```
+step: match_image  →  {template: "btn_33.png", roi: {...}, threshold: 0.8}
+step: click        →  {target: "match_center"}
+```
+
+### 建議的 match_mode 選項
+
+| mode | 方法 | 使用時機 |
+|---|---|---|
+| `exact` | `cv2.TM_CCOEFF_NORMED` | 按鈕、固定圖示 |
+| `masked` | `cv2.TM_CCORR_NORMED` + mask | 有透明背景的圖示 |
+| `scale` | 多尺度縮放匹配 | 不同解析度下的按鈕 |
+
+之後可擴充，但 Phase 3 先只實作 `exact`。 |
+
 ## Phase 劃分
 
 ### Phase 1: Core 引擎改造
@@ -192,7 +269,32 @@ step[?] = wait N ms
 5. 更新 `_migrate_v1_to_v2`：不需要遷移 wait_rule/trigger_mode
 6. `StepResult.action` 移除 `"jump"` action type（pointer 直接設定，不需要透過 StepResult）
 
-### Phase 2: GUI Step 編輯器調整
+### Phase 2: match_image 基礎建設 + Step Type
+
+**目標：** 新增 `match_image` step type（handler + 基礎資料結構 + 相關的 `_STEP_DEFAULTS`）。
+
+**安裝依賴：** `opencv-python` 已在 `pyproject.toml`，不需額外安裝。
+
+**檔案：`core/05_main_loop.py`**
+
+1. 新增 `_handle_match_image` handler（行為與 `_handle_detect` 對稱）
+2. 在 `_run_step` 的 handlers dict 加入 `"match_image": self._handle_match_image`
+3. 新增 `MatchResult` dataclass（仿 `OcrResult`，無 text 欄位）
+
+**檔案：`core/11_template_matching.py`**（新增）
+
+1. `match_template(img: np.ndarray, template_path: str, roi: dict, threshold: float) → list[MatchResult]`
+2. 支援 `images/` 目錄作為 template 查找路徑
+3. 回傳多個匹配結果 + confidence 排序
+
+**檔案：`core/04_rule_engine.py`**
+
+1. 在 `_STEP_DEFAULTS` 加入 `"match_image"` 預設值：`{template: "", roi: {"x":0,"y":0,"w":0,"h":0}, threshold: 0.8, match_mode: "exact"}`
+2. 加入 valid step types 清單
+
+### Phase 3: GUI Step 編輯器調整（Phase 1 相關）
+
+**目標：** 對應 Phase 1 的改動，調整既有 step forms。
 
 **檔案：`gui/06_gui_main.py`**
 
@@ -213,17 +315,41 @@ step[?] = wait N ms
 
 1. 更新 `_on_add_rule`：移除 `TriggerModeDialog`（不再需要選擇觸發模式）
 
-### Phase 3: 測試與驗證
+### Phase 4: match_image GUI（對應 Phase 2）
+
+**目標：** 新增 `match_image` 的編輯器表單、圖片選取器、template 管理介面。
+
+**檔案：`gui/06_gui_main.py`**
+
+1. 新增 `_MatchImageStepForm`（比照 `_DetectStepForm`）：
+   - template 選取器（從 `images/` 目錄）
+   - ROI 框選按鈕（重複使用現有的 `_select_roi`）
+   - threshold slider（0.5 ~ 1.0，預設 0.8）
+   - match_mode 選擇（exact / masked / scale）
+   - 預覽縮圖
+2. 在 `_STEP_TYPE_ICONS` / `_STEP_TYPE_LABELS` 加入 `match_image` 類型
+3. 更新 `_step_summary` 處理 `match_image` 類型
+4. 在「加入步驟」選單加入 `match_image` 選項
+
+**檔案：`gui/XX_image_picker.py`**（新增，或併入既有 editor）
+
+1. 圖片選取對話框：列出 `images/` 下所有 `.png` 檔案
+2. 支援直接在對話框內截圖當前視窗來建立 template
+3. 建立 template 時自動命名、存入 `images/`
+
+### Phase 5: 測試與驗證
 
 1. 更新 `core/05_main_loop.py` 的 `__main__` self-check tests
 2. 手動測試鏈循環（每日重新派遣 → ... → 0/3 → 回到 3/3 → 再跑一次）
 3. 測試 jump 不存在的 rule（應 log warning, 不 crash）
 4. 測試 detect 永遠沒命中（應持續重試不 timeout）
+5. **新增 match_image test**：載入已知 template，比對截圖，驗證回傳正確的 match result
+6. 測試 match_image + detect 混合規則
 
-### Phase 4: 清理
+### Phase 6: 清理
 
 1. 移除 `tasks/` 目錄下的舊格式 `.json` 檔案（格式改變了）
-2. 更新 `templates/` 下的範例 JSON
+2. 更新 `templates/` 下的範例 JSON（若使用 match_image，加入對應的 template 路徑）
 3. 更新 `ARCHITECTURE.md` 反映新架構
 4. 更新 `AGENTS.md` 反映新原則
 
@@ -313,9 +439,11 @@ def _should_process_static_frame(self) -> bool:
 ## 風險評估
 
 | 風險 | 可能性 | 影響 | 緩解措施 |
-|---|---|---|---|
+|---|---|---|---|---|
 | 現有使用者的 rules.json 不相容 | 高 | 無法載入 | Phase 1 加入 migrate 邏輯，自動轉換舊格式 |
-| Step forms 大幅改動後 UI 有 bug | 中 | 編輯器異常 | Phase 2 後手動測試每種 step type |
+| Step forms 大幅改動後 UI 有 bug | 中 | 編輯器異常 | Phase 3 後手動測試每種 step type |
 | 移除 wait_rule 後某些 sequencing 無法表達 | 中 | 使用者 workflow 改變 | 用 detect+jump 取代，編輯器內提供 migrate guide |
 | Pointer 模型不支援「同時監控多個文字」 | 低 | 功能受限 | 先發版，後續評估是否加 background rules |
 | 移除 collect_rounds 影響現有使用者 | 低 | 功能遺失 | 舊 task 載入時自動跳過未知 step type |
+| `cv2.matchTemplate` 不同解析度下失效 | 低 | match_image 無法運作 | 先支援 `exact` mode，後續加 `scale` mode |
+| Template 圖片遺失或不存在 | 低 | match_image step 錯誤 | 載入時驗證 template 存在，不存在時 skip + log warning |
