@@ -11,10 +11,7 @@
             "text": "確認",
             "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
             "match_mode": "contains",
-            "fuzzy_threshold": 0.8,
-            "cooldown_ms": 500,
-            "trigger_mode": "once",
-            "max_triggers": -1
+            "fuzzy_threshold": 0.8
           }
         },
         {
