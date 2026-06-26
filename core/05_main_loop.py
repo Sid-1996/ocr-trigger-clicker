@@ -288,7 +288,7 @@ class MainLoop:
         ctx.matched_text = results[0]
         return StepResult("continue")
 
-    def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+    def _handle_on_fail(self, params: dict, ctx: StepContext) -> StepResult:
         raw = params.get("on_fail", "stop")
 
         if isinstance(raw, dict):
@@ -810,13 +810,13 @@ if __name__ == "__main__":
     print("  [OK] _handle_click text_center without match")
 
     # ── Test 8: _handle_on_fail actions ──
-    result = ml._handle_on_fail({"on_fail": "stop"}, ctx, test_rule)
+    result = ml._handle_on_fail({"on_fail": "stop"}, ctx)
     assert result.action == "stop", "on_fail stop should return stop"
 
     mock_called = []
     _orig_k = _ahk.send_key
     _ahk.send_key = lambda k: mock_called.append(k) or True
-    result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
+    result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx)
     _ahk.send_key = _orig_k
     assert result.action == "continue", "on_fail key should return continue"
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
