@@ -352,6 +352,7 @@ class _StepListWidget(QWidget):
         self._expanded_idx: Optional[int] = None
         self._expanded_form: Optional[QWidget] = None
         self._roi_callback: Optional[callable] = None
+        self._capture_callback: Optional[callable] = None
         self._click_pick_callback: Optional[callable] = None
         self._rules_provider: Optional[callable] = None  # () -> list[Rule]
         self._rule_id: str = ""
@@ -360,6 +361,9 @@ class _StepListWidget(QWidget):
 
     def set_roi_callback(self, cb):
         self._roi_callback = cb
+
+    def set_capture_callback(self, cb):
+        self._capture_callback = cb
 
     def set_click_pick_callback(self, cb):
         self._click_pick_callback = cb
@@ -581,7 +585,7 @@ class _StepListWidget(QWidget):
         if t == "jump":
             return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
         if t == "match_image":
-            return _MatchImageStepForm(self, step, idx, self._roi_callback)
+            return _MatchImageStepForm(self, step, idx, self._roi_callback, self._capture_callback)
         if t == "drag":
             return _DragStepForm(self, step, idx, self._click_pick_callback)
         if t == "scroll":
@@ -593,12 +597,13 @@ class _StepListWidget(QWidget):
 
 
 class _MatchImageStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb):
+    def __init__(self, parent_list, step, idx, roi_cb, capture_cb=None):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
         self._roi_cb = roi_cb
+        self._capture_cb = capture_cb
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
@@ -607,12 +612,23 @@ class _MatchImageStepForm(QWidget):
         tmpl_row = QWidget()
         tmpl_layout = QHBoxLayout(tmpl_row)
         tmpl_layout.setContentsMargins(0, 0, 0, 0)
+        self._thumb = QLabel()
+        self._thumb.setFixedSize(64, 64)
+        self._thumb.setStyleSheet(
+            "border: 1px solid #888; border-radius: 4px; background: #2a2a2a;"
+        )
+        self._thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tmpl_layout.addWidget(self._thumb)
         self._tmpl_label = QLabel(Path(p.get("template", "")).stem or "未選擇")
         self._tmpl_btn = QPushButton("選擇圖片")
         self._tmpl_btn.clicked.connect(self._pick_template)
-        tmpl_layout.addWidget(self._tmpl_label)
+        self._capture_btn = QPushButton("截取區域")
+        self._capture_btn.clicked.connect(self._capture_template)
+        tmpl_layout.addWidget(self._tmpl_label, 1)
         tmpl_layout.addWidget(self._tmpl_btn)
+        tmpl_layout.addWidget(self._capture_btn)
         form.addRow("範本圖片:", tmpl_row)
+        self._update_thumbnail()
 
         # ROI
         roi = p.get("roi", {})
@@ -637,12 +653,37 @@ class _MatchImageStepForm(QWidget):
         self._threshold.setValue(p.get("threshold", 0.8))
         form.addRow("相似度閾值:", self._threshold)
 
+    def _update_thumbnail(self):
+        path = self._step.params.get("template", "")
+        if path and Path(path).exists():
+            pix = QPixmap(path)
+            if not pix.isNull():
+                self._thumb.setPixmap(
+                    pix.scaled(
+                        64,
+                        64,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+                return
+        self._thumb.clear()
+
+    def _capture_template(self):
+        if not self._capture_cb:
+            return
+        path = self._capture_cb()
+        if path:
+            self._step.params["template"] = path
+            self._tmpl_label.setText(Path(path).stem)
+            self._update_thumbnail()
+            self._list.steps_changed.emit()
+
     def _pick_template(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "選擇範本圖片", "", "圖片 (*.png *.jpg *.jpeg *.bmp)"
         )
         if path:
-            # Copy to images/ directory
             images_dir = Path(__file__).resolve().parent.parent / "images"
             images_dir.mkdir(exist_ok=True)
             dst = images_dir / Path(path).name
@@ -651,7 +692,7 @@ class _MatchImageStepForm(QWidget):
             shutil.copy2(path, dst)
             self._step.params["template"] = str(dst)
             self._tmpl_label.setText(dst.stem)
-            self.save()
+            self._update_thumbnail()
             self._list.steps_changed.emit()
 
     def _pick_roi(self):
@@ -1642,6 +1683,7 @@ class MainWindow(QMainWindow):
 
         self._step_list = _StepListWidget()
         self._step_list.set_roi_callback(self._open_roi_selector)
+        self._step_list.set_capture_callback(self._open_capture_region)
         self._step_list.set_click_pick_callback(self._on_pick_coord)
         self._step_list.set_rules_provider(lambda: list(self._rules))
         edit_layout.addWidget(self._step_list, 1)
@@ -2542,6 +2584,16 @@ class MainWindow(QMainWindow):
             f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
         return result
+
+    def _open_capture_region(self):
+        """Open overlay to capture a screen region as template image."""
+        title = self._window_combo.currentText()
+        mod = load_sibling("capture_region", "gui/14_capture_region.py")
+        path = mod.capture_region(parent_window=self, target_title=title)
+        if path:
+            self._status_bar.showMessage(f"已截取範本: {Path(path).name}")
+            self._edit_stack.setCurrentIndex(1)
+        return path
 
     # === Test rule ===
     def _on_test_rule(self):
