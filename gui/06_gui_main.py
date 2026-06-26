@@ -120,11 +120,10 @@ class _RuleTreeWidget(QTreeWidget):
 
 _STEP_TYPE_ICONS = {
     "detect": "🔍",
+    "match_image": "🖼",
     "click": "🖱",
     "key": "⌨",
     "wait": "⏱",
-    "wait_rule": "🔗",
-    "collect_rounds": "🔄",
     "jump": "↩",
     "drag": "↗",
     "scroll": "↕",
@@ -132,11 +131,10 @@ _STEP_TYPE_ICONS = {
 
 _STEP_TYPE_LABELS = {
     "detect": "偵測文字",
+    "match_image": "圖示辨識",
     "click": "點擊",
     "key": "按鍵",
     "wait": "等待",
-    "wait_rule": "等待規則",
-    "collect_rounds": "多輪比較",
     "jump": "跳轉規則",
     "drag": "拖曳",
     "scroll": "滾輪",
@@ -160,14 +158,17 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         roi_str = "全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}"
-        cd = p.get("cooldown_ms", 0)
         parts = [f"「{text}」" if text else "未設定"]
         parts.append(roi_str)
-        if cd:
-            parts.append(f"冷卻{cd}ms")
-        tm = p.get("trigger_mode", "once")
-        if tm == "repeat":
-            parts.append("[重複]")
+        return " ".join(parts)
+    if t == "match_image":
+        tmpl = Path(p.get("template", "")).stem or "未設定"
+        roi = p.get("roi", {})
+        zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        parts = [f"「{tmpl}」"]
+        parts.append("全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}")
+        th = p.get("threshold", 0.8)
+        parts.append(f"閾值{th}")
         return " ".join(parts)
     if t == "click":
         target = p.get("target", "text_center")
@@ -181,14 +182,6 @@ def _step_summary(step, rules_provider=None) -> str:
         return f"按鍵 {p.get('key', '')}"
     if t == "wait":
         return f"等待 {p.get('ms', 500)}ms"
-    if t == "wait_rule":
-        name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
-        timeout = p.get("timeout_ms", 5000)
-        return f"等待規則「{name}」超時{timeout}ms"
-    if t == "collect_rounds":
-        rds = p.get("rounds", [])
-        mcount = len(rds[0].get("metrics", [])) if rds else 0
-        return f"{len(rds)}輪 {mcount}指標"
     if t == "jump":
         name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
         return f"跳轉規則「{name}」"
@@ -214,17 +207,8 @@ def _step_summary(step, rules_provider=None) -> str:
     return t
 
 
-def _has_repeat_step(rule) -> bool:
-    return any(s.type == "detect" and s.params.get("trigger_mode") == "repeat" for s in rule.steps)
-
-
 def _rule_suffix_str(rule) -> str:
-    suffixes = []
-    if any(s.type == "collect_rounds" for s in rule.steps):
-        suffixes.append("🎯")
-    if _has_repeat_step(rule):
-        suffixes.append("🔁")
-    return " " + " ".join(suffixes) if suffixes else ""
+    return ""
 
 
 def _make_key_combo(parent=None):
@@ -594,20 +578,10 @@ class _StepListWidget(QWidget):
             return _KeyStepForm(self, step, idx)
         if t == "wait":
             return _WaitStepForm(self, step, idx)
-        if t == "wait_rule":
-            return _WaitRuleStepForm(self, step, idx, self._rules_provider, self._rule_id)
-        if t == "collect_rounds":
-            return _CollectRoundsStepForm(
-                self,
-                step,
-                idx,
-                self._roi_callback,
-                self._click_pick_callback,
-                self._rules_provider,
-                self._rule_id,
-            )
         if t == "jump":
             return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
+        if t == "match_image":
+            return _MatchImageStepForm(self, step, idx, self._roi_callback)
         if t == "drag":
             return _DragStepForm(self, step, idx, self._click_pick_callback)
         if t == "scroll":
@@ -616,6 +590,88 @@ class _StepListWidget(QWidget):
 
 
 # ── Step inline forms ──
+
+
+class _MatchImageStepForm(QWidget):
+    def __init__(self, parent_list, step, idx, roi_cb):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        self._idx = idx
+        self._roi_cb = roi_cb
+        p = step.params
+        form = QFormLayout(self)
+        form.setContentsMargins(12, 6, 12, 6)
+
+        # Template file
+        tmpl_row = QWidget()
+        tmpl_layout = QHBoxLayout(tmpl_row)
+        tmpl_layout.setContentsMargins(0, 0, 0, 0)
+        self._tmpl_label = QLabel(Path(p.get("template", "")).stem or "未選擇")
+        self._tmpl_btn = QPushButton("選擇圖片")
+        self._tmpl_btn.clicked.connect(self._pick_template)
+        tmpl_layout.addWidget(self._tmpl_label)
+        tmpl_layout.addWidget(self._tmpl_btn)
+        form.addRow("範本圖片:", tmpl_row)
+
+        # ROI
+        roi = p.get("roi", {})
+        z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        self._roi_label = QLabel(
+            "全視窗" if z else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
+        )
+        self._roi_btn = QPushButton("框選搜尋區域")
+        self._roi_btn.clicked.connect(self._pick_roi)
+        roi_row = QWidget()
+        rr_layout = QHBoxLayout(roi_row)
+        rr_layout.setContentsMargins(0, 0, 0, 0)
+        rr_layout.addWidget(self._roi_label)
+        rr_layout.addWidget(self._roi_btn)
+        form.addRow("搜尋區域:", roi_row)
+
+        # Threshold
+        self._threshold = _NoWheelDoubleSpin()
+        self._threshold.setRange(0.01, 1.0)
+        self._threshold.setDecimals(2)
+        self._threshold.setSingleStep(0.05)
+        self._threshold.setValue(p.get("threshold", 0.8))
+        form.addRow("相似度閾值:", self._threshold)
+
+    def _pick_template(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "選擇範本圖片", "", "圖片 (*.png *.jpg *.jpeg *.bmp)"
+        )
+        if path:
+            # Copy to images/ directory
+            images_dir = Path(__file__).resolve().parent.parent / "images"
+            images_dir.mkdir(exist_ok=True)
+            dst = images_dir / Path(path).name
+            import shutil
+
+            shutil.copy2(path, dst)
+            self._step.params["template"] = str(dst)
+            self._tmpl_label.setText(dst.stem)
+            self.save()
+            self._list.steps_changed.emit()
+
+    def _pick_roi(self):
+        if self._roi_cb:
+            result = self._roi_cb()
+            if result:
+                self._step.params["roi"] = result
+                z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+                self._roi_label.setText(
+                    "全視窗"
+                    if z
+                    else f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
+                )
+                self.save()
+                self._list.steps_changed.emit()
+
+    def save(self):
+        p = self._step.params
+        if p.get("template"):
+            self._tmpl_label.setText(Path(p["template"]).stem)
 
 
 class _DetectStepForm(QWidget):
@@ -676,18 +732,6 @@ class _DetectStepForm(QWidget):
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
         adv_form.addRow("精準度:", self._fuzzy_th)
 
-        self._cooldown = _NoWheelSpin()
-        self._cooldown.setRange(0, 60000)
-        self._cooldown.setSuffix(" ms")
-        self._cooldown.setValue(p.get("cooldown_ms", 500))
-        adv_form.addRow("冷卻時間:", self._cooldown)
-
-        self._max_triggers = _NoWheelSpin()
-        self._max_triggers.setRange(-1, 9999)
-        self._max_triggers.setSpecialValueText("無限")
-        self._max_triggers.setValue(p.get("max_triggers", -1))
-        adv_form.addRow("最大觸發:", self._max_triggers)
-
         # ── on_fail collapsible section (in advanced) ──
         self._on_fail_expanded = False
         self._toggle_btn = QPushButton("▶ 進階：找不到文字時…")
@@ -709,18 +753,10 @@ class _DetectStepForm(QWidget):
         self._advanced_container.setVisible(not simplified)
         form.addRow(self._advanced_container)
 
-        self._mode = _NoWheelCombo()
-        self._mode.addItem("觸發一次", "once")
-        self._mode.addItem("重複觸發", "repeat")
-        idx_m = self._mode.findData(p.get("trigger_mode", "once"))
-        if idx_m >= 0:
-            self._mode.setCurrentIndex(idx_m)
-        form.addRow("觸發模式:", self._mode)
         self._of_action.addItem("跳過本次（預設）", "stop")
         self._of_action.addItem("重試偵測", "retry")
         self._of_action.addItem("按下按鍵後繼續", "key")
         self._of_action.addItem("跳轉至規則", "jump")
-        self._of_action.addItem("重試從指定步驟", "retry_from")
         raw = p.get("on_fail", "stop")
         if isinstance(raw, dict):
             act = raw.get("action", "stop")
@@ -789,20 +825,6 @@ class _DetectStepForm(QWidget):
         jf.addStretch()
         of_form.addRow("", self._of_jump_row)
 
-        # retry_from step_index row
-        self._of_step_index_row = QWidget()
-        sif = QHBoxLayout(self._of_step_index_row)
-        sif.setContentsMargins(0, 0, 0, 0)
-        self._of_step_index = _NoWheelSpin()
-        max_step = max(0, idx - 1)
-        self._of_step_index.setRange(0, max_step)
-        self._of_step_index.setValue(int(raw.get("step_index", 0)) if isinstance(raw, dict) else 0)
-        sif.addWidget(QLabel("回到第"))
-        sif.addWidget(self._of_step_index)
-        sif.addWidget(QLabel("步（0=第一步，需小於當前步驟序號）"))
-        sif.addStretch()
-        of_form.addRow("", self._of_step_index_row)
-
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
 
@@ -818,10 +840,9 @@ class _DetectStepForm(QWidget):
 
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
-        self._of_retry_row.setVisible(action in ("retry", "retry_from"))
+        self._of_retry_row.setVisible(action == "retry")
         self._of_key_row.setVisible(action == "key")
         self._of_jump_row.setVisible(action == "jump")
-        self._of_step_index_row.setVisible(action == "retry_from")
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -841,9 +862,6 @@ class _DetectStepForm(QWidget):
         self._step.params["text"] = self._text.text().strip()
         self._step.params["match_mode"] = self._match_mode.currentData()
         self._step.params["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
-        self._step.params["cooldown_ms"] = self._cooldown.value()
-        self._step.params["trigger_mode"] = self._mode.currentData()
-        self._step.params["max_triggers"] = self._max_triggers.value()
         action = self._of_action.currentData()
         if action == "stop":
             self._step.params["on_fail"] = "stop"
@@ -862,13 +880,6 @@ class _DetectStepForm(QWidget):
             self._step.params["on_fail"] = {
                 "action": "jump",
                 "jump_rule_id": self._of_jump.currentData() or "",
-            }
-        elif action == "retry_from":
-            self._step.params["on_fail"] = {
-                "action": "retry_from",
-                "step_index": self._of_step_index.value(),
-                "retries": self._of_retries.value(),
-                "retry_delay_ms": self._of_retry_delay.value(),
             }
 
 
@@ -1115,39 +1126,6 @@ class _WaitStepForm(QWidget):
         self._step.params["ms"] = self._ms.value()
 
 
-class _WaitRuleStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, rules_provider=None, exclude_rule_id=""):
-        super().__init__()
-        self._list = parent_list
-        self._step = step
-        form = QFormLayout(self)
-        form.setContentsMargins(12, 6, 12, 6)
-
-        self._combo = _NoWheelCombo()
-        rules = rules_provider() if rules_provider else []
-        current_id = step.params.get("rule_id", "")
-        for r in rules:
-            if r.id != exclude_rule_id:
-                self._combo.addItem(r.name, r.id)
-        idx_r = self._combo.findData(current_id)
-        if idx_r >= 0:
-            self._combo.setCurrentIndex(idx_r)
-        elif current_id:
-            self._combo.addItem(f"(未知: {current_id})", current_id)
-            self._combo.setCurrentIndex(self._combo.count() - 1)
-        form.addRow("等待規則:", self._combo)
-
-        self._timeout_spin = _NoWheelSpin()
-        self._timeout_spin.setRange(100, 120000)
-        self._timeout_spin.setSuffix(" ms")
-        self._timeout_spin.setValue(step.params.get("timeout_ms", 5000))
-        form.addRow("超時:", self._timeout_spin)
-
-    def save(self):
-        self._step.params["rule_id"] = self._combo.currentData() or ""
-        self._step.params["timeout_ms"] = self._timeout_spin.value()
-
-
 class _JumpStepForm(QWidget):
     def __init__(self, parent_list, step, idx, rules_provider=None, exclude_rule_id=""):
         super().__init__()
@@ -1249,326 +1227,6 @@ class _InlineActionEditor(QWidget):
                 "button": self._button.currentData() or "left",
             }
         return {"type": "key", "key": self._key.currentData() or self._key.currentText()}
-
-
-class _CollectRoundsStepForm(QWidget):
-    def __init__(
-        self,
-        parent_list,
-        step,
-        idx,
-        roi_cb,
-        pick_cb,
-        rules_provider=None,
-        exclude_rule_id="",
-    ):
-        super().__init__()
-        self._list = parent_list
-        self._step = step
-        self._idx = idx
-        self._roi_cb = roi_cb
-        self._pick_cb = pick_cb
-        self._rules_provider = rules_provider
-        self._exclude_rule_id = exclude_rule_id
-        p = step.params
-        self._rounds: list[dict] = p.get("rounds", [])
-        self._round_widgets: list[dict] = []
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 6, 12, 6)
-
-        # Rounds section
-        layout.addWidget(QLabel("<b>輪次列表</b>"))
-        self._rounds_widget = QWidget()
-        self._rounds_layout = QVBoxLayout(self._rounds_widget)
-        self._rounds_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._rounds_widget)
-
-        add_round_btn = QPushButton("+ 新增輪次")
-        add_round_btn.clicked.connect(self._add_round)
-        layout.addWidget(add_round_btn)
-
-        # Primary metric index (only shown when any round has ≥2 metrics)
-        self._primary_idx_row = QWidget()
-        _pil = QVBoxLayout(self._primary_idx_row)
-        _pil.setContentsMargins(0, 0, 0, 0)
-        self._primary_idx = _NoWheelSpin()
-        self._primary_idx.setRange(0, 99)
-        self._primary_idx.setValue(p.get("primary_metric_index", 0))
-        _pil.addWidget(QLabel("最佳輪選取依據（第幾個指標，0=第一個）:"))
-        _pil.addWidget(self._primary_idx)
-        layout.addWidget(self._primary_idx_row)
-        self._primary_idx_row.setVisible(self._max_metrics() >= 2)
-        self._rebuild_rounds()
-
-        # Confirm action
-        layout.addWidget(QLabel("<b>確認動作</b>"))
-        ca = p.get("confirm_action", {})
-        self._ca_editor = _InlineActionEditor(ca, self._pick_cb)
-        self._ca_editor.changed.connect(self._list.steps_changed.emit)
-        layout.addWidget(self._ca_editor)
-
-        # On all fail
-        layout.addWidget(QLabel("<b>全輪未達標</b>"))
-        oaf = p.get("on_all_fail", {})
-        self._oaf_type = _NoWheelCombo()
-        self._oaf_type.addItem("跳轉規則", "jump")
-        self._oaf_type.addItem("按鍵", "key")
-        oaf_idx = self._oaf_type.findData(oaf.get("type", "jump"))
-        if oaf_idx >= 0:
-            self._oaf_type.setCurrentIndex(oaf_idx)
-        self._oaf_type.currentIndexChanged.connect(self._on_oaf_type)
-        layout.addWidget(self._oaf_type)
-
-        self._oaf_rule = _NoWheelCombo()
-        self._oaf_rule.addItem("不跳轉", "")
-        rules = self._rules_provider() if self._rules_provider else []
-        current_oaf_rule = oaf.get("rule_id", "")
-        for r in rules:
-            if r.id != self._exclude_rule_id:
-                self._oaf_rule.addItem(r.name, r.id)
-        idx_rule = self._oaf_rule.findData(current_oaf_rule)
-        if idx_rule >= 0:
-            self._oaf_rule.setCurrentIndex(idx_rule)
-        elif current_oaf_rule:
-            self._oaf_rule.addItem(f"(未知: {current_oaf_rule})", current_oaf_rule)
-            self._oaf_rule.setCurrentIndex(self._oaf_rule.count() - 1)
-        self._oaf_rule.setVisible(oaf.get("type", "jump") == "jump")
-        layout.addWidget(self._oaf_rule)
-
-        self._oaf_key = _make_key_combo()
-        ok = oaf.get("key", "")
-        ok_idx = self._oaf_key.findData(ok)
-        if ok_idx >= 0:
-            self._oaf_key.setCurrentIndex(ok_idx)
-        self._oaf_key.setVisible(oaf.get("type", "") == "key")
-        layout.addWidget(self._oaf_key)
-
-    def _max_metrics(self) -> int:
-        return max((len(rd.get("metrics", [])) for rd in self._rounds), default=0)
-
-    def _sync_widgets_to_rounds(self):
-        """將目前 widget 的值 flush 回 self._rounds（不觸碰不存在的 index）。"""
-        for ri, rw in enumerate(self._round_widgets):
-            if ri < len(self._rounds):
-                rd = self._rounds[ri]
-                rd["trigger_action"] = rw["ta"].value()
-                rd["result_action"] = rw["ra"].value()
-                for mi, mw in enumerate(rw["metrics"]):
-                    if mi < len(rd.get("metrics", [])):
-                        rd["metrics"][mi]["direction"] = mw["direction"].currentData()
-                        rd["metrics"][mi]["threshold"] = mw["threshold"].value()
-                        rd["metrics"][mi]["pick"] = mw["pick"].currentData()
-                        rd["metrics"][mi]["timeout_ms"] = mw["timeout"].value()
-
-    def _rebuild_rounds(self):
-        self._sync_widgets_to_rounds()
-        for i in reversed(range(self._rounds_layout.count())):
-            w = self._rounds_layout.itemAt(i).widget()
-            if w:
-                w.deleteLater()
-        self._round_widgets.clear()
-        for ri, rd in enumerate(self._rounds):
-            frame = QFrame()
-            frame.setFrameShape(QFrame.Shape.StyledPanel)
-            rl = QVBoxLayout(frame)
-
-            # Round header
-            hdr = QHBoxLayout()
-            hdr.addWidget(QLabel(f"<b>輪次 {ri + 1}</b>"))
-            del_btn = QPushButton("✕")
-            del_btn.setFixedWidth(24)
-            del_btn.clicked.connect(lambda checked, i=ri: self._del_round(i))
-            hdr.addWidget(del_btn)
-            hdr.addStretch()
-            rl.addLayout(hdr)
-
-            rl.addWidget(QLabel("觸發動作:"))
-            ta_editor = _InlineActionEditor(rd.get("trigger_action", {}), self._pick_cb)
-            ta_editor.changed.connect(self._list.steps_changed.emit)
-            rl.addWidget(ta_editor)
-
-            rl.addWidget(QLabel("結果動作:"))
-            ra_editor = _InlineActionEditor(rd.get("result_action", {}), self._pick_cb)
-            ra_editor.changed.connect(self._list.steps_changed.emit)
-            rl.addWidget(ra_editor)
-
-            round_w = {
-                "ta": ta_editor,
-                "ra": ra_editor,
-                "metrics": [],
-            }
-
-            # Metrics
-            rl.addWidget(QLabel("指標:"))
-            for mi, m in enumerate(rd.get("metrics", [])):
-                mw = self._build_metric_widget(m, ri, mi, round_w)
-                rl.addWidget(mw)
-
-            add_m_btn = QPushButton("+ 新增指標")
-            add_m_btn.clicked.connect(lambda checked, i=ri: self._add_metric(i))
-            rl.addWidget(add_m_btn)
-
-            self._round_widgets.append(round_w)
-            self._rounds_layout.addWidget(frame)
-        self._primary_idx_row.setVisible(self._max_metrics() >= 2)
-
-    def _build_metric_widget(self, m: dict, ri: int, mi: int, round_store: dict) -> QWidget:
-        w = QWidget()
-        form = QFormLayout(w)
-        form.setContentsMargins(6, 4, 6, 4)
-
-        roi = m.get("roi", {})
-        z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        roi_label = QLabel(
-            "全視窗" if z else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
-        )
-        roi_btn = QPushButton("框選")
-        if self._roi_cb:
-            roi_btn.clicked.connect(lambda: self._pick_metric_roi(ri, mi))
-        roi_row = QWidget()
-        rl = QHBoxLayout(roi_row)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.addWidget(roi_label)
-        rl.addWidget(roi_btn)
-        form.addRow("ROI:", roi_row)
-
-        direction = _NoWheelCombo()
-        direction.addItem("越高越好", "higher_better")
-        direction.addItem("越低越好", "lower_better")
-        di = direction.findData(m.get("direction", "higher_better"))
-        if di >= 0:
-            direction.setCurrentIndex(di)
-        form.addRow("方向:", direction)
-
-        threshold = _NoWheelDoubleSpin()
-        threshold.setRange(-999999.0, 999999.0)
-        threshold.setDecimals(2)
-        threshold.setValue(m.get("threshold", 0.0))
-        form.addRow("門檻:", threshold)
-
-        pick = _NoWheelCombo()
-        pick.addItem("第一個數字", "first")
-        pick.addItem("最後一個數字", "last")
-        pi = pick.findData(m.get("pick", "first"))
-        if pi >= 0:
-            pick.setCurrentIndex(pi)
-        form.addRow("取數字:", pick)
-
-        timeout = _NoWheelSpin()
-        timeout.setRange(100, 30000)
-        timeout.setSuffix(" ms")
-        timeout.setValue(m.get("timeout_ms", 3000))
-        form.addRow("超時:", timeout)
-
-        round_store["metrics"].append(
-            {
-                "direction": direction,
-                "threshold": threshold,
-                "pick": pick,
-                "timeout": timeout,
-            }
-        )
-
-        del_m = QPushButton("✕ 刪除指標")
-        del_m.clicked.connect(lambda: self._del_metric(ri, mi))
-        form.addRow(del_m)
-
-        form.addRow(QLabel("─" * 20))
-        return w
-
-    def _pick_metric_roi(self, ri: int, mi: int):
-        if self._roi_cb:
-            result = self._roi_cb()
-            if result and ri < len(self._rounds) and mi < len(self._rounds[ri].get("metrics", [])):
-                self._rounds[ri]["metrics"][mi]["roi"] = result
-                self._rebuild_rounds()
-                self._list.steps_changed.emit()
-
-    def _add_round(self):
-        self._rounds.append(
-            {
-                "trigger_action": {"type": "key", "key": ""},
-                "metrics": [],
-                "result_action": {"type": "key", "key": ""},
-            }
-        )
-        self._rebuild_rounds()
-        self._list.steps_changed.emit()
-
-    def _del_round(self, ri: int):
-        if ri < len(self._rounds):
-            self._rounds.pop(ri)
-            self._rebuild_rounds()
-            self._list.steps_changed.emit()
-
-    def _add_metric(self, ri: int):
-        if ri < len(self._rounds):
-            self._rounds[ri].setdefault("metrics", []).append(
-                {
-                    "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                    "pick": "first",
-                    "direction": "higher_better",
-                    "threshold": 0.0,
-                    "timeout_ms": 3000,
-                }
-            )
-            self._rebuild_rounds()
-            self._list.steps_changed.emit()
-            self._primary_idx_row.setVisible(self._max_metrics() >= 2)
-
-    def _del_metric(self, ri: int, mi: int):
-        if ri < len(self._rounds) and mi < len(self._rounds[ri].get("metrics", [])):
-            self._sync_widgets_to_rounds()  # flush 當前值，避免 pop 後 index 錯位覆蓋
-            self._rounds[ri]["metrics"].pop(mi)
-            self._rebuild_rounds()
-            self._list.steps_changed.emit()
-            self._primary_idx_row.setVisible(self._max_metrics() >= 2)
-
-    def _on_oaf_type(self, idx: int):
-        is_jump = self._oaf_type.currentData() == "jump"
-        self._oaf_rule.setVisible(is_jump)
-        self._oaf_key.setVisible(not is_jump)
-
-    def save(self):
-        rounds = []
-        for ri, rw in enumerate(self._round_widgets):
-            metrics = []
-            for mi, mw in enumerate(rw["metrics"]):
-                roi = (
-                    self._rounds[ri]["metrics"][mi]["roi"]
-                    if ri < len(self._rounds) and mi < len(self._rounds[ri].get("metrics", []))
-                    else {"x": 0, "y": 0, "w": 0, "h": 0}
-                )
-                metrics.append(
-                    {
-                        "roi": roi,
-                        "direction": mw["direction"].currentData(),
-                        "threshold": mw["threshold"].value(),
-                        "pick": mw["pick"].currentData(),
-                        "timeout_ms": mw["timeout"].value(),
-                    }
-                )
-            rounds.append(
-                {
-                    "trigger_action": rw["ta"].value(),
-                    "result_action": rw["ra"].value(),
-                    "metrics": metrics,
-                }
-            )
-        self._step.params["rounds"] = rounds
-        self._step.params["primary_metric_index"] = self._primary_idx.value()
-        self._step.params["confirm_action"] = self._ca_editor.value()
-        oaf_type = self._oaf_type.currentData()
-        if oaf_type == "jump":
-            self._step.params["on_all_fail"] = {
-                "type": "jump",
-                "rule_id": self._oaf_rule.currentData() or "",
-            }
-        else:
-            self._step.params["on_all_fail"] = {
-                "type": "key",
-                "key": self._oaf_key.currentData() or self._oaf_key.currentText(),
-            }
 
 
 _ahk_mod = load_sibling("ahk_socket", "core/03_ahk_socket.py")
@@ -1994,13 +1652,12 @@ class MainWindow(QMainWindow):
         add_menu = QMenu(self)
         step_types = [
             ("detect", "🔍 偵測文字"),
+            ("match_image", "🖼 圖示辨識"),
             ("click", "🖱 點擊"),
             ("key", "⌨ 按鍵"),
             ("drag", "↗ 拖曳"),
             ("scroll", "↕ 滾輪"),
             ("wait", "⏱ 等待"),
-            ("wait_rule", "🔗 等待規則"),
-            ("collect_rounds", "🔄 多輪比較"),
             ("jump", "↩ 跳轉規則"),
         ]
         for st, label in step_types:
@@ -2431,37 +2088,20 @@ class MainWindow(QMainWindow):
         return QIcon(pix)
 
     @staticmethod
-    def _get_wait_rule_ids(r) -> list[str]:
-        return [s.params.get("rule_id", "") for s in r.steps if s.type == "wait_rule"]
-
     def _refresh_rule_list(self):
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
 
-        existing_ids = {r.id for r in self._rules}
         rule_map = {r.id: r for r in self._rules}
 
-        child_map: dict[str, list[str]] = {}
-        assigned: set[str] = set()
-        for r in self._rules:
-            first_dep = next(
-                (
-                    dep_id
-                    for dep_id in self._get_wait_rule_ids(r)
-                    if dep_id in existing_ids and dep_id != r.id
-                ),
-                None,
-            )
-            if first_dep:
-                child_map.setdefault(first_dep, []).append(r.id)
-                assigned.add(r.id)
-        top_ids = [r.id for r in self._rules if r.id not in assigned]
+        # flat list — no wait_rule child/parent tree anymore
+        top_ids = [r.id for r in self._rules]
 
         selected_item = None
 
         def _build(parent_id: str | None) -> list[QTreeWidgetItem]:
             items = []
-            for rid in top_ids if parent_id is None else child_map.get(parent_id, []):
+            for rid in top_ids if parent_id is None else []:
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
                 text = f"[{'✓' if r.enabled else '✗'}] {r.name}{_rule_suffix_str(r)}"
@@ -2470,8 +2110,6 @@ class MainWindow(QMainWindow):
                 item.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
                 )
-                for child_item in _build(rid):
-                    item.addChild(child_item)
                 items.append(item)
                 if r.id == self._selected_rule_id:
                     nonlocal selected_item
@@ -2510,46 +2148,20 @@ class MainWindow(QMainWindow):
             return
         statuses = self._loop.get_rules_status()
         status_map = {s["id"]: s for s in statuses}
-        now = time.monotonic()
 
         def _set_text(item):
             sid = item.data(0, Qt.ItemDataRole.UserRole)
             st = status_map.get(sid)
             if st is None:
                 return
-            suffix = ""
-            disabled_reason = not st["enabled"] and (
-                st["auto_disabled"]
-                or (st["max_triggers"] > 0 and st["trigger_count"] >= st["max_triggers"])
-            )
-            if not st["enabled"] and disabled_reason:
-                icon_color = (200, 0, 0)
-                suffix = " ❌"
-            elif not st["enabled"]:
-                icon_color = (160, 160, 160)
-                suffix = ""
-            elif st["trigger_count"] > 0:
-                elapsed_ms = (now - st["last_trigger_time"]) * 1000
-                if elapsed_ms < st["cooldown_ms"]:
-                    icon_color = (200, 180, 0)
-                    suffix = " ⏳"
-                elif elapsed_ms < 2000:
-                    icon_color = (0, 180, 0)
-                    suffix = " ✅"
-                else:
-                    icon_color = (0, 180, 0)
-                    suffix = ""
-            else:
-                icon_color = (0, 180, 0)
-                suffix = ""
             enabled = st["enabled"]
+            icon_color = (0, 180, 0) if enabled else (160, 160, 160)
             rule = next((r for r in self._rules if r.id == sid), None)
             base = (
                 f"[{'✓' if enabled else '✗'}] {st['name']}{_rule_suffix_str(rule) if rule else ''}"
             )
-            new_text = base + suffix
-            if item.text(0) != new_text:
-                item.setText(0, new_text)
+            if item.text(0) != base:
+                item.setText(0, base)
             item.setIcon(0, self._make_circle_icon(icon_color))
 
         def _walk(item):
@@ -2696,9 +2308,6 @@ class MainWindow(QMainWindow):
                         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
                         "match_mode": "fuzzy",
                         "fuzzy_threshold": 0.8,
-                        "cooldown_ms": 500,
-                        "trigger_mode": "once",
-                        "max_triggers": -1,
                     },
                 )
             ],
@@ -2747,10 +2356,7 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
-        if step_type == "wait_rule":
-            rule.steps.insert(0, step)
-        else:
-            rule.steps.append(step)
+        rule.steps.append(step)
         self._step_list.set_steps(rule.steps)
         self._save_current_rule()
         self._refresh_rule_list()
@@ -2771,11 +2377,7 @@ class MainWindow(QMainWindow):
             r.name
             for r in self._rules
             if r.id != rule.id
-            and any(
-                s.params.get("rule_id", "") == rule.id
-                for s in r.steps
-                if s.type in ("jump", "wait_rule")
-            )
+            and any(s.params.get("rule_id", "") == rule.id for s in r.steps if s.type == "jump")
         ]
         msg = f"確定刪除規則「{rule.name}」？"
         if refs:
@@ -2796,7 +2398,7 @@ class MainWindow(QMainWindow):
         # 自動清理其他規則指向被刪規則的參照
         for r in self._rules:
             for s in r.steps:
-                if s.type in ("jump", "wait_rule") and s.params.get("rule_id", "") == rule.id:
+                if s.type == "jump" and s.params.get("rule_id", "") == rule.id:
                     s.params["rule_id"] = ""
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
@@ -2830,8 +2432,6 @@ class MainWindow(QMainWindow):
         new = deepcopy(src)
         new.id = f"rule_{uuid.uuid4().hex[:8]}"
         new.name = f"{src.name} (副本)"
-        new.trigger_count = 0
-        new.last_trigger_time = 0.0
         idx = self._rules.index(src) + 1
         self._rules.insert(idx, new)
         save_task(self._current_task, self._rules)
@@ -2886,10 +2486,10 @@ class MainWindow(QMainWindow):
                         f"步驟 {i + 1} (點擊)：自訂座標 (0,0) 可能未設定正確，請選取座標",
                     )
                     return
-        # 檢查 jump/wait_rule 參照的規則是否存在
+        # 檢查 jump 參照的規則是否存在
         valid_ids = {r.id for r in self._rules}
         for s in rule.steps:
-            if s.type in ("jump", "wait_rule"):
+            if s.type == "jump":
                 tid = s.params.get("rule_id", "")
                 if tid and tid not in valid_ids:
                     self._status_bar.showMessage(f"⚠ 步驟「{s.type}」參照的規則已不存在", 5000)
@@ -3189,18 +2789,10 @@ class MainWindow(QMainWindow):
                     p = step.params
                     log.append(f"[{idx + 1}] ⏱ 等待 {p.get('ms', 500)}ms")
 
-                elif step.type == "wait_rule":
-                    rid = step.params.get("rule_id", "")
-                    name = _resolve_rule_name(rid, lambda: list(self._rules))
-                    log.append(f"[{idx + 1}] 🔗 等待規則「{name}」")
-
                 elif step.type == "jump":
                     rid = step.params.get("rule_id", "")
                     name = _resolve_rule_name(rid, lambda: list(self._rules))
                     log.append(f"[{idx + 1}] ↩ 跳轉規則「{name}」")
-
-                elif step.type == "collect_rounds":
-                    log.append(f"[{idx + 1}] 🔄 多輪比較（請直接執行觀看效果）")
 
                 else:
                     log.append(f"[{idx + 1}] ? 未知步驟: {step.type}")
@@ -3401,9 +2993,6 @@ class MainWindow(QMainWindow):
                         "roi": rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                         "match_mode": "fuzzy",
                         "fuzzy_threshold": 0.8,
-                        "cooldown_ms": int(rule_data.get("cooldown", 1.0) * 1000),
-                        "trigger_mode": rule_data.get("trigger_mode", "once"),
-                        "max_triggers": -1,
                     },
                 ),
                 Step(
@@ -3427,10 +3016,7 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._show_rule_detail(rule)
-        self._status_bar.showMessage(
-            f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」"
-            f"  觸發模式: {rule_data.get('trigger_mode', 'once')}"
-        )
+        self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
 
     def _on_debug_step_requested(self, data: dict):
         rule = self._get_current_rule()
@@ -3444,9 +3030,6 @@ class MainWindow(QMainWindow):
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "match_mode": "fuzzy",
                     "fuzzy_threshold": 0.8,
-                    "cooldown_ms": 500,
-                    "trigger_mode": "once",
-                    "max_triggers": -1,
                 },
             )
         )
