@@ -1842,6 +1842,7 @@ class InitWorker(QThread):
         mode: str = "loop",
         repeat_times: int = 1,
         between_rounds_sec: int = 0,
+        active_group_ids: Optional[list[str]] = None,
     ):
         super().__init__()
         self._rules_path = rules_path
@@ -1851,6 +1852,7 @@ class InitWorker(QThread):
         self._mode = mode
         self._repeat_times = repeat_times
         self._between_rounds_sec = between_rounds_sec
+        self._active_group_ids = active_group_ids or []
         self.loop: Optional[MainLoop] = None
 
     def run(self):
@@ -1863,6 +1865,8 @@ class InitWorker(QThread):
                 repeat_times=self._repeat_times,
                 between_rounds_sec=self._between_rounds_sec,
             )
+            if self._active_group_ids:
+                loop.set_active_groups(self._active_group_ids)
             loop.on_trigger = lambda log: self._signals.trigger_signal.emit(log)
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
             loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
@@ -3886,6 +3890,30 @@ class MainWindow(QMainWindow):
         self._repeat_spin.setVisible(idx == 1)
         self._round_interval_spin.setVisible(idx == 2)
 
+    def _show_group_selection_dialog(self) -> Optional[list[str]]:
+        if len(self._groups) <= 1:
+            return [g.id for g in self._groups] if self._groups else []
+        dialog = QDialog(self)
+        dialog.setWindowTitle("選擇要執行的群組")
+        layout = QVBoxLayout(dialog)
+        checks = []
+        for g in self._groups:
+            cb = QCheckBox(g.name)
+            cb.setChecked(True)
+            cb.setData(g.id)
+            checks.append(cb)
+            layout.addWidget(cb)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("啟動")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return [cb.data() for cb in checks if cb.isChecked()]
+
     def _toggle_start(self):
         if self._window_lost:
             self._stop_loop()
@@ -3917,6 +3945,12 @@ class MainWindow(QMainWindow):
                 f"以下啟用的規則沒有任何步驟，請先新增步驟：\n{names}{suffix}",
             )
             return
+        group_ids = self._show_group_selection_dialog()
+        if group_ids is None:
+            return
+        if not group_ids:
+            QMessageBox.warning(self, "警告", "請至少選取一個群組。")
+            return
         activate_window(title)
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
@@ -3934,6 +3968,7 @@ class MainWindow(QMainWindow):
             mode=mode,
             repeat_times=repeat_times,
             between_rounds_sec=between_rounds_sec,
+            active_group_ids=group_ids,
         )
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
