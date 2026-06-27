@@ -1543,6 +1543,8 @@ list_tasks = _rule_mod.list_tasks
 load_task = _rule_mod.load_task
 save_task = _rule_mod.save_task
 delete_task = _rule_mod.delete_task
+get_task_window = _rule_mod.get_task_window
+set_task_window = _rule_mod.set_task_window
 rename_task = _rule_mod.rename_task
 export_task = _rule_mod.export_task
 import_task = _rule_mod.import_task
@@ -2033,6 +2035,7 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self):
         self._window_combo.currentTextChanged.connect(self._on_window_changed)
+        self._window_combo.currentTextChanged.connect(self._on_window_selected)
         self._btn_toggle.clicked.connect(self._toggle_start)
         self._add_rule_btn.clicked.connect(self._add_rule)
         self._del_rule_btn.clicked.connect(self._delete_rule)
@@ -2085,6 +2088,11 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
 
     # === Window list ===
+    def _on_window_selected(self, title: str):
+        if title and self._current_task:
+            task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
+            set_task_window(task_path, title)
+
     def _refresh_window_list(self):
         self._window_combo.clear()
         windows = list_windows()
@@ -2170,6 +2178,13 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel.clear_results()
         self._status_bar.showMessage(f"任務「{name}」— {len(self._rules)} 條規則")
+        # 自動選取任務綁定的視窗
+        task_path = str(Path(_tasks_dir()) / f"{name}.json")
+        saved_window = get_task_window(task_path)
+        if saved_window:
+            idx = self._window_combo.findText(saved_window)
+            if idx >= 0:
+                self._window_combo.setCurrentIndex(idx)
 
     def _on_task_new(self):
         from PyQt6.QtWidgets import QInputDialog

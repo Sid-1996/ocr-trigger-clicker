@@ -583,6 +583,42 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
         return None
 
 
+def get_task_window(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        title = data.get("window_title", "")
+        return title if title else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def set_task_window(path: str, title: str) -> bool:
+    tmp_path: str = ""
+    try:
+        p = Path(path)
+        if p.exists():
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {}
+        data["window_title"] = title
+        with tempfile.NamedTemporaryFile(
+            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp_path = f.name
+        os.replace(tmp_path, p)
+        return True
+    except (OSError, json.JSONDecodeError):
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
 def get_capture_size(path: str) -> list | None:
     try:
         with open(path, encoding="utf-8") as f:
