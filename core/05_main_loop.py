@@ -40,7 +40,9 @@ recognize = _ocr.recognize
 find_text = _ocr.find_text
 init_engine = _ocr.init_engine
 Rule = _rule.Rule
+RuleGroup = _rule.RuleGroup
 load_rules = _rule.load_rules
+load_groups = _rule.load_groups
 save_rules = _rule.save_rules
 get_capture_size = _rule.get_capture_size
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
@@ -133,8 +135,6 @@ class MainLoop:
         self._mode = mode
         self._repeat_times = repeat_times
         self._between_rounds_sec = between_rounds_sec
-        self._rounds_completed = 0
-        self._max_pointer_reached = -1
         self._window_hwnd = get_window_hwnd_orig(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
 
@@ -153,6 +153,12 @@ class MainLoop:
         self._frame_diff_ratio: float = 0.0
 
         self._rule_pointer: int = 0
+        self._groups: list[RuleGroup] = load_groups(rules_path)
+        self._active_group_ids: list[str] = []
+        self._group_queue_idx: int = 0
+        self._rule_in_group_ptr: int = 0
+        self._rule_map: dict[str, Rule] = {}
+        self._group_rounds_completed: dict[str, int] = {}
         self._rules_dirty: bool = False
         self._save_period_counter: int = 0
         self._process_counter: int = 0
@@ -198,15 +204,16 @@ class MainLoop:
     def _load_rules(self):
         with self._rules_lock:
             self._rules = load_rules(self._rules_path)
+            self._rule_map = {r.id: r for r in self._rules}
+            self._groups = load_groups(self._rules_path)
             self._rule_pointer = 0
-            self._rounds_completed = 0
-            self._max_pointer_reached = -1
-            # skip past initial background rules
-            while self._rule_pointer < len(self._rules) and (
-                not self._rules[self._rule_pointer].enabled
-                or self._rules[self._rule_pointer].background
-            ):
-                self._rule_pointer += 1
+            self._group_rounds_completed.clear()
+
+    def _current_group(self) -> RuleGroup | None:
+        if not self._active_group_ids or self._group_queue_idx >= len(self._active_group_ids):
+            return None
+        gid = self._active_group_ids[self._group_queue_idx]
+        return next((g for g in self._groups if g.id == gid), None)
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -233,10 +240,15 @@ class MainLoop:
 
     def _should_process_static_frame(self) -> bool:
         with self._rules_lock:
-            # check the pointer rule
-            if self._rule_pointer < len(self._rules):
-                rule = self._rules[self._rule_pointer]
-                if rule.enabled and any(s.type in ("detect", "match_image") for s in rule.steps):
+            # check the current group's current rule
+            group = self._current_group()
+            if group and self._rule_in_group_ptr < len(group.rule_ids):
+                rule = self._rule_map.get(group.rule_ids[self._rule_in_group_ptr])
+                if (
+                    rule
+                    and rule.enabled
+                    and any(s.type in ("detect", "match_image") for s in rule.steps)
+                ):
                     return True
             # also check background rules (they run every frame)
             for rule in self._rules:
@@ -397,11 +409,9 @@ class MainLoop:
 
         if action == "jump":
             rule_id = raw.get("rule_id", "") if isinstance(raw, dict) else ""
-            with self._rules_lock:
-                for i, r in enumerate(self._rules):
-                    if r.id == rule_id:
-                        self._rule_pointer = i
-                        break
+            group = self._current_group()
+            if group and rule_id in group.rule_ids:
+                self._rule_in_group_ptr = group.rule_ids.index(rule_id)
             return StepResult("stop")
 
         return StepResult("stop")
@@ -548,15 +558,15 @@ class MainLoop:
         target_id = params.get("rule_id", "")
         if not target_id:
             return StepResult("stop")
-        with self._rules_lock:
-            for i, r in enumerate(self._rules):
-                if r.id == target_id:
-                    self._rule_pointer = i
-                    if self._verbose:
-                        self._log(f"跳轉至規則 「{r.name}」 (index {i})")
-                    return StepResult("stop")
+        group = self._current_group()
+        if group is None or target_id not in group.rule_ids:
+            if self._verbose:
+                self._log(f"jump 目標「{target_id}」不在當前群組內，忽略")
+            return StepResult("stop")
+        self._rule_in_group_ptr = group.rule_ids.index(target_id)
         if self._verbose:
-            self._log(f"jump 目標「{target_id}」不存在")
+            target_name = getattr(self._rule_map.get(target_id), "name", target_id)
+            self._log(f"跳轉至規則 「{target_name}」 (group ptr {self._rule_in_group_ptr})")
         return StepResult("stop")
 
     def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
@@ -610,17 +620,23 @@ class MainLoop:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
                 self._rule_pointer = saved_ptr
 
-        if self._rule_pointer >= len(rules_snapshot):
-            self._rule_pointer = self._advance_pointer(rules_snapshot)
+        # ── Group-based rule pointer ──
+        group = self._current_group()
+        if group is None:
             return
 
-        rule = rules_snapshot[self._rule_pointer]
-        if not rule.enabled or rule.background:
-            self._rule_pointer = self._advance_pointer(rules_snapshot)
+        if self._rule_in_group_ptr >= len(group.rule_ids):
+            self._advance_group_queue()
+            return
+
+        rule_id = group.rule_ids[self._rule_in_group_ptr]
+        rule = self._rule_map.get(rule_id)
+        if rule is None or not rule.enabled:
+            self._advance_rule_in_group()
             return
 
         self._process_counter += 1
-        old_ptr = self._rule_pointer
+        old_ptr = self._rule_in_group_ptr
 
         try:
             self._run_rule(rule, img, rect)
@@ -630,37 +646,46 @@ class MainLoop:
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
-        self._max_pointer_reached = max(self._max_pointer_reached, self._rule_pointer)
+        if self._rule_in_group_ptr == old_ptr:
+            self._advance_rule_in_group()
 
-        if self._rule_pointer == old_ptr:
-            self._rule_pointer = self._advance_pointer(rules_snapshot)
+    def _advance_rule_in_group(self):
+        group = self._current_group()
+        if group is None:
+            return
+        nxt = self._rule_in_group_ptr + 1
+        while nxt < len(group.rule_ids):
+            r = self._rule_map.get(group.rule_ids[nxt])
+            if r and r.enabled:
+                self._rule_in_group_ptr = nxt
+                return
+            nxt += 1
+        self._on_group_complete(group)
 
-    def _advance_pointer(self, rules: list[Rule]) -> int:
-        ptr = self._rule_pointer + 1
-        while ptr < len(rules) and (not rules[ptr].enabled or rules[ptr].background):
-            ptr += 1
-        if ptr >= len(rules):
-            ptr = 0
-            self._on_round_complete()
-        return ptr
-
-    def _on_round_complete(self) -> None:
-        self._rounds_completed += 1
-        self._max_pointer_reached = -1
-        msg = f"第 {self._rounds_completed} 輪完成"
-        if self._mode == "once":
-            self._log(f"{msg}，執行模式：一次，停止")
-            self._stop_event.set()
-        elif self._mode == "repeat":
-            if self._rounds_completed >= self._repeat_times:
-                self._log(f"{msg}，執行模式：重複 {self._repeat_times} 次，停止")
-                self._stop_event.set()
+    def _on_group_complete(self, group: RuleGroup):
+        completed = self._group_rounds_completed.get(group.id, 0) + 1
+        self._group_rounds_completed[group.id] = completed
+        self._log(f"群組「{group.name}」第 {completed} 輪完成")
+        if group.mode == "once":
+            self._advance_group_queue()
+        elif group.mode == "repeat":
+            if completed >= group.repeat_times:
+                self._advance_group_queue()
             else:
-                self._log(f"{msg}，剩餘 {self._repeat_times - self._rounds_completed} 次")
-        if self._between_rounds_sec > 0 and not self._stop_event.is_set():
-            if self._verbose:
-                self._log(f"每輪間隔 {self._between_rounds_sec}s")
-            self._stop_event.wait(self._between_rounds_sec)
+                self._rule_in_group_ptr = 0
+                if self._between_rounds_sec > 0:
+                    if self._verbose:
+                        self._log(f"每輪間隔 {self._between_rounds_sec}s")
+                    self._stop_event.wait(self._between_rounds_sec)
+        else:
+            self._rule_in_group_ptr = 0
+
+    def _advance_group_queue(self):
+        self._group_queue_idx += 1
+        self._rule_in_group_ptr = 0
+        if self._group_queue_idx >= len(self._active_group_ids):
+            self._log("所有選中群組執行完畢，停止")
+            self._stop_event.set()
 
     def _loop(self):
         iteration = 0
@@ -817,6 +842,11 @@ class MainLoop:
         with self._rules_lock:
             self._load_rules()
 
+    def set_active_groups(self, group_ids: list[str]):
+        self._active_group_ids = group_ids
+        self._group_queue_idx = 0
+        self._rule_in_group_ptr = 0
+
     def set_window(self, title: str) -> bool:
         with self._window_lock:
             if get_window_rect(title) is None:
@@ -860,15 +890,19 @@ class MainLoop:
 
     def get_rules_status(self) -> list[dict]:
         with self._rules_lock:
+            current_rule_id = None
+            group = self._current_group()
+            if group and self._rule_in_group_ptr < len(group.rule_ids):
+                current_rule_id = group.rule_ids[self._rule_in_group_ptr]
             return [
                 {
                     "id": r.id,
                     "name": r.name,
                     "enabled": r.enabled,
                     "background": r.background,
-                    "pointer": i == self._rule_pointer,
+                    "pointer": r.id == current_rule_id,
                 }
-                for i, r in enumerate(self._rules)
+                for r in self._rules
             ]
 
 
@@ -905,6 +939,12 @@ if __name__ == "__main__":
     ml._interval = 0.5
     ml._rule_pointer = 0
     ml._rules = []
+    ml._groups = []
+    ml._active_group_ids = []
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._rule_map = {}
+    ml._group_rounds_completed = {}
     ml._rules_lock = threading.RLock()
     ml._window_lock = threading.RLock()
     ml._process_counter = 0
@@ -935,11 +975,7 @@ if __name__ == "__main__":
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None
-    ml._mode = "loop"
-    ml._repeat_times = 1
     ml._between_rounds_sec = 0
-    ml._rounds_completed = 0
-    ml._max_pointer_reached = -1
 
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
@@ -967,20 +1003,32 @@ if __name__ == "__main__":
     assert result.action == "stop", "unknown step type should return stop"
     print("  [OK] _run_step dispatcher covers all types")
 
-    # ── Test 5: _handle_jump ──
+    # ── Test 5: _handle_jump with group restriction ──
     ml._rules = [
         Rule(id="rule_a", name="A", enabled=True, steps=[]),
         Rule(id="rule_b", name="B", enabled=True, steps=[]),
+        Rule(id="rule_c", name="C", enabled=True, steps=[]),
     ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [
+        RuleGroup(id="g1", name="G1", rule_ids=["rule_a", "rule_b"]),
+    ]
+    ml.set_active_groups(["g1"])
+    ml._rule_in_group_ptr = 0
+    # jump to rule_b within same group → success
     result = ml._handle_jump({"rule_id": "rule_b"}, ctx, test_rule)
     assert result.action == "stop"
-    assert ml._rule_pointer == 1
-    ml._rule_pointer = 0
-    # jump to nonexistent target → pointer unchanged
+    assert ml._rule_in_group_ptr == 1
+    # jump to rule_c outside group → rejected
+    ml._rule_in_group_ptr = 0
+    result = ml._handle_jump({"rule_id": "rule_c"}, ctx, test_rule)
+    assert result.action == "stop"
+    assert ml._rule_in_group_ptr == 0, "cross-group jump should be rejected"
+    # jump to nonexistent → rejected
     result = ml._handle_jump({"rule_id": "ghost"}, ctx, test_rule)
     assert result.action == "stop"
-    assert ml._rule_pointer == 0
-    print("  [OK] _handle_jump sets pointer directly")
+    assert ml._rule_in_group_ptr == 0
+    print("  [OK] _handle_jump with group restriction")
 
     # ── Test 6: _handle_detect returns stop when text empty ──
     result = ml._handle_detect({"text": "", "roi": None}, ctx, test_rule)
@@ -1006,7 +1054,7 @@ if __name__ == "__main__":
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
     print("  [OK] _handle_on_fail (stop/key)")
 
-    # ── Test 9: _process_rules with pointer ──
+    # ── Test 9: _process_rules advances through group ──
     ml._rules = [
         Rule(
             id="r0",
@@ -1014,25 +1062,64 @@ if __name__ == "__main__":
             enabled=True,
             steps=[
                 _rule.Step(type="wait", params={"ms": 0}),
-                _rule.Step(type="jump", params={"rule_id": "r1"}),
             ],
         ),
-        Rule(id="r1", name="規則1", enabled=True, steps=[]),
+        Rule(
+            id="r1",
+            name="規則1",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+        Rule(
+            id="r_bg",
+            name="背景",
+            enabled=True,
+            background=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
     ]
-    ml._rule_pointer = 0
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r0", "r1"])]
+    ml.set_active_groups(["g1"])
+    ml._rule_in_group_ptr = 0
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     rect = {"x": 0, "y": 0, "w": 100, "h": 100}
     ml._process_rules(img, rect)
-    assert ml._rule_pointer == 1, f"pointer should be 1 after jump, got {ml._rule_pointer}"
-    print("  [OK] _process_rules pointer advances via jump")
+    assert ml._rule_in_group_ptr == 1, f"should advance to r1, got {ml._rule_in_group_ptr}"
+    print("  [OK] _process_rules advances through group")
 
-    # ── Test 10: _process_rules pointer out of range → reset to 0 ──
-    ml._rule_pointer = 5
+    # ── Test 10: _process_rules skipping disabled rule ──
+    ml._rules = [
+        Rule(
+            id="r0",
+            name="規則0",
+            enabled=False,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+        Rule(
+            id="r1",
+            name="規則1",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r0", "r1"])]
+    ml.set_active_groups(["g1"])
+    ml._rule_in_group_ptr = 0
     ml._process_rules(img, rect)
-    assert ml._rule_pointer == 0, f"pointer should reset to 0, got {ml._rule_pointer}"
-    print("  [OK] _process_rules pointer out-of-range reset")
+    assert ml._rule_in_group_ptr == 1, "should skip disabled r0"
+    print("  [OK] _process_rules skips disabled rule")
 
-    # ── Test 11: _should_process_static_frame ──
+    # ── Test 11: _should_process_static_frame (group-based) ──
     ml._rules = [
         Rule(
             id="r_detect",
@@ -1043,7 +1130,10 @@ if __name__ == "__main__":
             ],
         ),
     ]
-    ml._rule_pointer = 0
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r_detect"])]
+    ml.set_active_groups(["g1"])
+    ml._rule_in_group_ptr = 0
     assert ml._should_process_static_frame(), "rule with detect should process static frame"
 
     ml._rules = [
@@ -1056,6 +1146,10 @@ if __name__ == "__main__":
             ],
         ),
     ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r_no_detect"])]
+    ml.set_active_groups(["g1"])
+    ml._rule_in_group_ptr = 0
     assert not ml._should_process_static_frame(), (
         "rule without detect should NOT process static frame"
     )
@@ -1070,8 +1164,12 @@ if __name__ == "__main__":
             ],
         ),
     ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r_disabled"])]
+    ml.set_active_groups(["g1"])
+    ml._rule_in_group_ptr = 0
     assert not ml._should_process_static_frame(), "disabled rule should NOT process static frame"
-    print("  [OK] _should_process_static_frame logic")
+    print("  [OK] _should_process_static_frame logic (group-based)")
 
     # ── Test 12: _emit_trigger_log ──
     trigger_events = []
@@ -1151,7 +1249,134 @@ if __name__ == "__main__":
     assert _key_result.action == "continue"
     print("  [OK] _handle_on_fail skip")
 
+    # ── Test 16: Single group once mode finishes and stops ──
+    ml._rules = [
+        Rule(
+            id="r1",
+            name="R1",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+        Rule(
+            id="r2",
+            name="R2",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", mode="once", rule_ids=["r1", "r2"])]
+    ml.set_active_groups(["g1"])
+    ml._group_rounds_completed.clear()
+    ml._stop_event.clear()
+    ml._rule_in_group_ptr = 0
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    # r1 → advances
+    ml._process_rules(img, rect)
+    assert ml._rule_in_group_ptr == 1
+    assert not ml._stop_event.is_set()
+    # r2 → group complete → advance_group_queue → stop
+    ml._process_rules(img, rect)
+    assert ml._group_queue_idx == 1
+    assert ml._stop_event.is_set(), "once mode should stop after group done"
+    print("  [OK] Single group once mode stops after completion")
+
+    # ── Test 17: Multiple groups execute sequentially ──
+    ml._rules = [
+        Rule(
+            id="a1",
+            name="A1",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+        Rule(
+            id="b1",
+            name="B1",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [
+        RuleGroup(id="ga", name="Group A", mode="once", rule_ids=["a1"]),
+        RuleGroup(id="gb", name="Group B", mode="once", rule_ids=["b1"]),
+    ]
+    ml.set_active_groups(["ga", "gb"])
+    ml._group_rounds_completed.clear()
+    ml._stop_event.clear()
+    assert ml._current_group() is not None
+    assert ml._current_group().id == "ga"
+    ml._process_rules(img, rect)
+    assert ml._group_queue_idx == 1, "ga done → should advance to gb"
+    assert ml._current_group().id == "gb"
+    assert not ml._stop_event.is_set()
+    ml._process_rules(img, rect)
+    assert ml._group_queue_idx == 2
+    assert ml._stop_event.is_set(), "all groups done → stop"
+    print("  [OK] Multiple groups execute sequentially")
+
+    # ── Test 18: Jump within same group succeeds ──
+    ml._rules = [
+        Rule(
+            id="j1",
+            name="J1",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+        Rule(
+            id="j2",
+            name="J2",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="gj", name="GJ", rule_ids=["j1", "j2"])]
+    ml.set_active_groups(["gj"])
+    ml._rule_in_group_ptr = 0
+    result = ml._handle_jump({"rule_id": "j2"}, ctx, test_rule)
+    assert result.action == "stop"
+    assert ml._rule_in_group_ptr == 1, "jump within group should advance ptr"
+    print("  [OK] Jump within same group succeeds")
+
+    # ── Test 19: Jump across groups returns stop ──
+    ml._rules = [
+        Rule(
+            id="xa",
+            name="XA",
+            enabled=True,
+            steps=[
+                _rule.Step(type="wait", params={"ms": 0}),
+            ],
+        ),
+        Rule(id="xb", name="XB", enabled=True, steps=[]),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [
+        RuleGroup(id="gxa", name="GXA", rule_ids=["xa"]),
+        RuleGroup(id="gxb", name="GXB", rule_ids=["xb"]),
+    ]
+    ml.set_active_groups(["gxa"])
+    ml._rule_in_group_ptr = 0
+    result = ml._handle_jump({"rule_id": "xb"}, ctx, test_rule)
+    assert result.action == "stop"
+    assert ml._rule_in_group_ptr == 0, "cross-group jump should be rejected"
+    print("  [OK] Jump across groups returns stop")
+
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 15 tests passed ===")
+    print("\n=== All 19 tests passed ===")
