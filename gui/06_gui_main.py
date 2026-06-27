@@ -692,6 +692,7 @@ class _MatchImageStepForm(QWidget):
             "全視窗" if z else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
         )
         self._roi_btn = QPushButton("框選搜尋區域")
+        self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
         self._roi_btn.clicked.connect(self._pick_roi)
         roi_row = QWidget()
         rr_layout = QHBoxLayout(roi_row)
@@ -945,6 +946,7 @@ class _DetectStepForm(QWidget):
             "全視窗" if zero else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
         )
         self._roi_btn = QPushButton("框選偵測區域")
+        self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
         if roi_cb:
             self._roi_btn.clicked.connect(self._pick_roi)
         adv_form.addRow("偵測區域:", self._roi_label)
