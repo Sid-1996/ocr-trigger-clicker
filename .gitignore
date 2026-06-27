@@ -6,7 +6,7 @@ build/
 test_*.png
 *.log
 logs/
-_test_*
+_test_tmp_*
 _diag_*
 *.exe
 .ruff_cache/
