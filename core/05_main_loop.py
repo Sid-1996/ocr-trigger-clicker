@@ -930,6 +930,11 @@ if __name__ == "__main__":
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None
+    ml._mode = "loop"
+    ml._repeat_times = 1
+    ml._between_rounds_sec = 0
+    ml._rounds_completed = 0
+    ml._max_pointer_reached = -1
 
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
@@ -937,7 +942,7 @@ if __name__ == "__main__":
 
     # ── Test 4: _run_step dispatcher coverage ──
     test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
-    for hn in ["detect", "click", "key", "wait", "jump", "drag", "scroll"]:
+    for hn in ["detect", "click", "key", "wait", "jump", "drag", "scroll", "match_image", "compare"]:
         step = _rule.Step(type=hn, params={})
         result = ml._run_step(step, ctx, test_rule)
         assert isinstance(result, StepResult), f"{hn} should return StepResult"
