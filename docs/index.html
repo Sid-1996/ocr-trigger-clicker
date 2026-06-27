@@ -132,13 +132,12 @@
   <h2>核心功能</h2>
   <ul>
     <li><strong>OCR 文字辨識</strong> — 基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI（感興趣區域）精確比對，避免全螢幕干擾。</li>
-    <li><strong>六種比對模式</strong> — 完全相符、開頭相符、結尾相符、包含、不包含、正則表達式，涵蓋絕大多數觸發邏輯需求。</li>
-    <li><strong>滑鼠點擊與鍵盤操作</strong> — 透過 AutoHotkey v2 執行左鍵／中鍵／右鍵／雙擊，以及鍵盤文字輸入。點擊座標可手動選取或相對位移。</li>
-    <li><strong>進階條件（二次確認）</strong> — 第一組文字符合後，等候第二組文字出現才觸發，避免 UI 過渡狀態造成誤判。</li>
-    <li><strong>等待規則</strong> — 觸發動作前可設定等待某文字出現或消失，支援倒數超時與超時處理。</li>
+    <li><strong>群組系統</strong> — 規則依群組執行，支援循環執行／執行一次／重複 N 次，可獨立停用。</li>
+    <li><strong>Steps 步驟系統</strong> — 每條規則由有序步驟組成：偵測（detect）、點擊（click）、按鍵（key）、等待（wait）、跳轉（jump）、數值比對（compare）、圖像比對（match_image）、滾輪（scroll）、拖曳（drag）。</li>
+    <li><strong>常駐監控</strong> — 不受群組流程影響，每幀獨立執行，適合錯誤攔截。</li>
     <li><strong>多任務管理</strong> — 不同場景（不同遊戲、不同表單）可建立獨立任務，規則完全隔離，快速切換。</li>
     <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字及其位置與信心度，大幅降低 ROI 設定難度。</li>
-    <li><strong>僅前景點擊</strong> — 安全模式，只在目標視窗位於前景時才執行點擊，避免干擾其他操作。</li>
+    <li><strong>可選前景保護</strong> — 安全模式，開啟後只在目標視窗位於前景時才執行點擊，避免干擾其他操作。</li>
     <li><strong>規則匯入／匯出</strong> — 任務可匯出為 JSON 檔，分享給他人或備份。</li>
   </ul>
 </section>
@@ -163,21 +162,20 @@
   <h3>快速入門</h3>
   <ol>
     <li>從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
-    <li>在工具列選取目標視窗（例如遊戲、ERP 系統、瀏覽器），按下「重新整理」掃描可見視窗。</li>
-    <li>點擊「＋新增規則」開始設定觸發條件。</li>
-    <li>設定規則名稱、選擇比對模式、輸入要偵測的文字。</li>
-    <li>框選 ROI（偵測區域）：點擊「框選區域」按鈕，在目標視窗上拖曳選取範圍。</li>
-    <li>設定觸發動作為滑鼠點擊或鍵盤輸入，必要時選取點擊座標。</li>
-    <li>按下工具列的「啟動」開始自動偵測。</li>
+    <li>在工具列選取目標視窗（例如遊戲、ERP 系統、瀏覽器）。</li>
+    <li>建立群組（右鍵 → 新增群組，設定執行模式）。</li>
+    <li>在群組內新增規則，設定 steps（detect → click）。</li>
+    <li>若需要隨時監控的條件，勾選「常駐監控」。</li>
+    <li>點擊「啟動」→ 選擇群組 → 開始偵測。</li>
   </ol>
 
   <h3>進階技巧</h3>
   <ul>
     <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快，建議只框選包含目標文字的最小範圍。</li>
-    <li><strong>使用二次確認</strong>：若目標文字在 UI 動畫過程中短暫出現又消失，可設定第二組確認文字再觸發。</li>
-    <li><strong>任務分割</strong>：不同遊戲角色或不同表單頁面建議拆成不同任務，方便管理與除錯。</li>
+    <li><strong>使用 jump 步驟</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
+    <li><strong>使用 compare 步驟</strong>：對 ROI 內的數字做數值條件判斷（大於／小於／等於）。</li>
+    <li><strong>常駐監控</strong>：適合用於錯誤攔截，不受群組順序影響，每幀獨立執行。</li>
     <li><strong>OCR 診斷模式</strong>：按下「OCR 診斷」可即時看到視窗中所有文字，幫助確認 ROI 位置是否正確。</li>
-    <li><strong>等待規則</strong>：若點擊後會跳出新視窗或對話框，使用「等待文字出現」確保畫面準備好再進行下一步。</li>
   </ul>
 </section>
 
@@ -211,7 +209,7 @@
   <p>不行。本工具為純文字 OCR，不支援圖形比對。若需要圖形辨識，建議搭配其他工具使用。</p>
 
   <h3>多個規則可以同時執行嗎？</h3>
-  <p>可以。同一個任務下的所有規則會依序比對，只要符合條件的規則都會觸發其對應動作。</p>
+  <p>群組內的規則依序執行，一次只執行一條，觸發成功後才推進到下一條。常駐監控規則則每幀都會執行，不受群組順序影響。</p>
 
   <h3>規則設定檔存在哪裡？</h3>
   <p>設定檔與任務資料儲存在 <code>%APPDATA%\ocr-trigger-clicker\</code>，解除安裝或刪除 exe 後設定仍會保留。</p>
@@ -240,7 +238,7 @@
 <hr>
 
 <footer>
-  <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 MIT 授權釋出</p>
+  <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
   <p style="margin-top:4px;">發現問題？請到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues">Issues</a> 回報</p>
 </footer>
 
