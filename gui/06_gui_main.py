@@ -1469,6 +1469,7 @@ ImportPreview = _rule_mod.ImportPreview
 migrate_old_rules = _rule_mod.migrate_old_rules
 Step = _rule_mod.Step
 _STEP_DEFAULTS = _rule_mod._STEP_DEFAULTS
+_MAX_IMPORT_SIZE = _rule_mod._MAX_IMPORT_SIZE
 
 _ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
@@ -2199,7 +2200,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         try:
-            if Path(path).stat().st_size > 10 * 1024 * 1024:
+            if Path(path).stat().st_size > _MAX_IMPORT_SIZE:
                 QMessageBox.warning(
                     self, "匯入失敗", "檔案過大（超過 10 MB），請確認是否為正確的任務檔案。"
                 )
