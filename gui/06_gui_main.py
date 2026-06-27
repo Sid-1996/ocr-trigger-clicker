@@ -133,6 +133,9 @@ class _RuleTreeWidget(QTreeWidget):
         if indicator == QAbstractItemView.DropIndicatorPosition.OnItem:
             if src_data and src_data[0] == "rule" and target_item:
                 tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
+                if tgt_data and tgt_data[0] == "bg_group":
+                    event.ignore()
+                    return
                 if tgt_data and tgt_data[0] == "group":
                     super().dropEvent(event)
                     return
@@ -2677,6 +2680,29 @@ class MainWindow(QMainWindow):
                     selected_item = child
             self._rule_list.addTopLevelItem(group_item)
 
+        # 常駐監控固定節點
+        bg_rules = [r for r in self._rules if r.background]
+        if bg_rules:
+            bg_item = QTreeWidgetItem()
+            bg_item.setText(0, "📡 常駐監控")
+            bg_item.setData(0, Qt.ItemDataRole.UserRole, ("bg_group", "__background__"))
+            bg_item.setFlags(
+                bg_item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled & ~Qt.ItemFlag.ItemIsEditable
+            )
+            bg_item.setForeground(0, QColor("#aaaaaa"))
+            for r in bg_rules:
+                child = QTreeWidgetItem()
+                child.setText(0, f"[{'✓' if r.enabled else '✗'}] {r.name}")
+                child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
+                child.setIcon(
+                    0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
+                )
+                bg_item.addChild(child)
+                if r.id == self._selected_rule_id:
+                    selected_item = child
+            self._rule_list.addTopLevelItem(bg_item)
+            bg_item.setExpanded("__background__" not in self._collapsed_groups)
+
         self._rule_list.expandAll()
         for i in range(self._rule_list.topLevelItemCount()):
             item = self._rule_list.topLevelItem(i)
@@ -2812,30 +2838,24 @@ class MainWindow(QMainWindow):
         for i in range(self._rule_list.topLevelItemCount()):
             group_item = self._rule_list.topLevelItem(i)
             gdata = group_item.data(0, Qt.ItemDataRole.UserRole)
-            if gdata and gdata[0] == "group":
-                gid = gdata[1]
-                group = next((g for g in self._groups if g.id == gid), None)
-                if group:
-                    group.rule_ids = []
-                    for j in range(group_item.childCount()):
-                        child = group_item.child(j)
-                        cdata = child.data(0, Qt.ItemDataRole.UserRole)
-                        if cdata and cdata[0] == "rule":
-                            rid = cdata[1]
-                            if rid not in seen:
-                                seen.add(rid)
-                                group.rule_ids.append(rid)
-                                rule = next((r for r in self._rules if r.id == rid), None)
-                                if rule:
-                                    new_order.append(rule)
+            if not gdata or gdata[0] != "group":  # 跳過 bg_group 節點
+                continue
+            gid = gdata[1]
+            group = next((g for g in self._groups if g.id == gid), None)
+            if group:
+                group.rule_ids = []
+                for j in range(group_item.childCount()):
+                    child = group_item.child(j)
+                    cdata = child.data(0, Qt.ItemDataRole.UserRole)
+                    if cdata and cdata[0] == "rule":
+                        rid = cdata[1]
+                        if rid not in seen:
+                            seen.add(rid)
+                            group.rule_ids.append(rid)
+                            rule = next((r for r in self._rules if r.id == rid), None)
+                            if rule:
+                                new_order.append(rule)
         self._rules = new_order
-        # 事後檢查：移除誤入群組的常駐監控規則
-        rule_map = {r.id: r for r in self._rules}
-        for g in self._groups:
-            before = len(g.rule_ids)
-            g.rule_ids = [rid for rid in g.rule_ids if not rule_map.get(rid, Rule()).background]
-            if len(g.rule_ids) < before:
-                self._status_bar.showMessage("常駐監控規則不能加入群組流程，已自動移除", 4000)
         self._flush_save()
 
     def _show_rule_detail(self, rule: Optional[Rule]):
@@ -2876,15 +2896,14 @@ class MainWindow(QMainWindow):
             return
         rule.background = bool(state)
         if rule.background:
-            removed = False
             for g in self._groups:
                 if rule.id in g.rule_ids:
                     g.rule_ids.remove(rule.id)
-                    removed = True
-            if removed:
-                self._status_bar.showMessage(
-                    f"「{rule.name}」已設為常駐監控，已從群組流程中移除", 4000
-                )
+        else:
+            target = next((g for g in self._groups if g.enabled), None)
+            if target and rule.id not in target.rule_ids:
+                target.rule_ids.append(rule.id)
+                self._status_bar.showMessage(f"「{rule.name}」已加回群組「{target.name}」", 4000)
         self._flush_save()
         self._refresh_rule_list()
 
