@@ -2198,6 +2198,14 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "匯入任務", str(_here), "JSON (*.json)")
         if not path:
             return
+        try:
+            if Path(path).stat().st_size > 10 * 1024 * 1024:
+                QMessageBox.warning(
+                    self, "匯入失敗", "檔案過大（超過 10 MB），請確認是否為正確的任務檔案。"
+                )
+                return
+        except OSError:
+            pass
         preview = preview_import_task(path)
         if preview is None or preview.rule_count == 0:
             QMessageBox.warning(

@@ -492,10 +492,18 @@ def export_task(name: str, dest_path: str) -> bool:
         return False
 
 
+_MAX_IMPORT_SIZE = 10 * 1024 * 1024
+
+
 def preview_import_task(src_path: str) -> Optional[ImportPreview]:
     """Read & validate a task file, return preview info without writing anything."""
     src = Path(src_path)
     if not src.exists():
+        return None
+    try:
+        if src.stat().st_size > _MAX_IMPORT_SIZE:
+            return None
+    except OSError:
         return None
     try:
         data = json.loads(src.read_text(encoding="utf-8"))
