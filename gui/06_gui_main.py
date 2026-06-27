@@ -230,7 +230,7 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
                 return "→停止"
             return f"→步驟{idx + 1}"
         if action == "jump":
-            name = _resolve_rule_name(raw.get("jump_rule_id", ""), rules_provider)
+            name = _resolve_rule_name(raw.get("rule_id", ""), rules_provider)
             return f"→規則「{name}」"
         if action == "retry":
             return "→重試"
@@ -617,6 +617,8 @@ class _StepListWidget(QWidget):
                 idx,
                 self._roi_callback,
                 self._capture_callback,
+                self._rules_provider,
+                self._rule_id,
                 step_count=len(self._steps),
             )
         if t == "drag":
@@ -630,13 +632,25 @@ class _StepListWidget(QWidget):
 
 
 class _MatchImageStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb, capture_cb=None, step_count=0):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        roi_cb,
+        capture_cb=None,
+        rules_provider=None,
+        exclude_rule_id="",
+        step_count=0,
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
         self._roi_cb = roi_cb
         self._capture_cb = capture_cb
+        self._rules_provider = rules_provider
+        self._exclude_rule_id = exclude_rule_id
         self._step_count = step_count
         p = step.params
         form = QFormLayout(self)
@@ -713,6 +727,7 @@ class _MatchImageStepForm(QWidget):
         self._of_action = _NoWheelCombo()
         self._of_action.addItem("跳過本次（預設）", "stop")
         self._of_action.addItem("跳至步驟", "skip")
+        self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
         raw_of = p.get("on_fail", "stop")
         if isinstance(raw_of, dict):
@@ -735,6 +750,28 @@ class _MatchImageStepForm(QWidget):
         sf.addWidget(self._of_skip_combo)
         sf.addStretch()
         of_form.addRow("", self._of_skip_row)
+
+        # jump row (jump to rule)
+        self._of_jump_row = QWidget()
+        jf = QHBoxLayout(self._of_jump_row)
+        jf.setContentsMargins(0, 0, 0, 0)
+        self._of_jump_combo = _NoWheelCombo()
+        rules = rules_provider() if rules_provider else []
+        for r in rules:
+            if r.id != self._exclude_rule_id:
+                self._of_jump_combo.addItem(r.name, r.id)
+        if isinstance(raw_of, dict) and raw_of.get("action") == "jump":
+            target_id = raw_of.get("rule_id", "")
+            j_idx = self._of_jump_combo.findData(target_id)
+            if j_idx < 0 and target_id:
+                # keep unknown by adding placeholder; jump combo will show it
+                self._of_jump_combo.addItem(f"(未知: {target_id})", target_id)
+                j_idx = self._of_jump_combo.count() - 1
+            self._of_jump_combo.setCurrentIndex(max(j_idx, 0))
+        jf.addWidget(QLabel("跳至"))
+        jf.addWidget(self._of_jump_combo)
+        jf.addStretch()
+        of_form.addRow("", self._of_jump_row)
 
         # key row
         self._of_key = _make_key_combo()
@@ -845,6 +882,7 @@ class _MatchImageStepForm(QWidget):
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
         self._of_skip_row.setVisible(action == "skip")
+        self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
 
     def save(self):
@@ -856,6 +894,11 @@ class _MatchImageStepForm(QWidget):
             p["on_fail"] = {
                 "action": "skip",
                 "skip_to": self._of_skip_combo.currentData() or 0,
+            }
+        elif action == "jump":
+            p["on_fail"] = {
+                "action": "jump",
+                "rule_id": self._of_jump_combo.currentData() or "",
             }
         elif action == "key":
             p["on_fail"] = {
@@ -947,6 +990,7 @@ class _DetectStepForm(QWidget):
         form.addRow(self._advanced_container)
 
         self._of_action.addItem("跳過本次（預設）", "stop")
+        self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
         raw = p.get("on_fail", "stop")
         if isinstance(raw, dict):
@@ -958,6 +1002,27 @@ class _DetectStepForm(QWidget):
             self._of_action.setCurrentIndex(idx_of)
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         of_form.addRow("動作:", self._of_action)
+
+        # jump row (jump to rule)
+        self._of_jump_row = QWidget()
+        jf = QHBoxLayout(self._of_jump_row)
+        jf.setContentsMargins(0, 0, 0, 0)
+        self._of_jump_combo = _NoWheelCombo()
+        rules = self._rules_provider() if self._rules_provider else []
+        for r in rules:
+            if r.id != self._exclude_rule_id:
+                self._of_jump_combo.addItem(r.name, r.id)
+        if isinstance(raw, dict) and raw.get("action") == "jump":
+            target_id = raw.get("rule_id", "")
+            j_idx = self._of_jump_combo.findData(target_id)
+            if j_idx < 0 and target_id:
+                self._of_jump_combo.addItem(f"(未知: {target_id})", target_id)
+                j_idx = self._of_jump_combo.count() - 1
+            self._of_jump_combo.setCurrentIndex(max(j_idx, 0))
+        jf.addWidget(QLabel("跳至"))
+        jf.addWidget(self._of_jump_combo)
+        jf.addStretch()
+        of_form.addRow("", self._of_jump_row)
 
         # key row
         self._of_key = _make_key_combo()
@@ -989,7 +1054,9 @@ class _DetectStepForm(QWidget):
         )
 
     def _on_of_action_changed(self, idx=None):
-        self._of_key_row.setVisible(self._of_action.currentData() == "key")
+        action = self._of_action.currentData()
+        self._of_jump_row.setVisible(action == "jump")
+        self._of_key_row.setVisible(action == "key")
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -1012,6 +1079,11 @@ class _DetectStepForm(QWidget):
         action = self._of_action.currentData()
         if action == "stop":
             self._step.params["on_fail"] = "stop"
+        elif action == "jump":
+            self._step.params["on_fail"] = {
+                "action": "jump",
+                "rule_id": self._of_jump_combo.currentData() or "",
+            }
         elif action == "key":
             self._step.params["on_fail"] = {
                 "action": "key",

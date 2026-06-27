@@ -550,10 +550,11 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
                     rid = p.get("rule_id", "")
                     if rid in id_map:
                         p["rule_id"] = id_map[rid]
-                if s["type"] == "detect" and isinstance(p.get("on_fail"), dict):
-                    rid = p["on_fail"].get("jump_rule_id", "")
+                if s["type"] in ("detect", "match_image") and isinstance(p.get("on_fail"), dict):
+                    rid = p["on_fail"].get("rule_id", "") or p["on_fail"].get("jump_rule_id", "")
                     if rid in id_map:
-                        p["on_fail"]["jump_rule_id"] = id_map[rid]
+                        p["on_fail"]["rule_id"] = id_map[rid]
+                    p["on_fail"].pop("jump_rule_id", None)
                 if s["type"] == "collect_rounds":
                     oaf = p.get("on_all_fail", {})
                     if isinstance(oaf, dict):
@@ -780,7 +781,7 @@ if __name__ == "__main__":
                             "type": "detect",
                             "params": {
                                 "text": "A",
-                                "on_fail": {"action": "jump", "jump_rule_id": "source_b"},
+                                "on_fail": {"action": "jump", "rule_id": "source_b"},
                             },
                         },
                         {
@@ -841,7 +842,7 @@ if __name__ == "__main__":
             },
             {
                 "type": "detect",
-                "params": {"text": "hi4", "on_fail": {"action": "jump", "jump_rule_id": "x"}},
+                "params": {"text": "hi4", "on_fail": {"action": "jump", "rule_id": "x"}},
             },
             {
                 "type": "detect",

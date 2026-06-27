@@ -316,6 +316,15 @@ class MainLoop:
             skip_to = int(raw.get("skip_to", 0)) if isinstance(raw, dict) else 0
             return StepResult("jump_step", step_index=skip_to)
 
+        if action == "jump":
+            rule_id = raw.get("rule_id", "") if isinstance(raw, dict) else ""
+            with self._rules_lock:
+                for i, r in enumerate(self._rules):
+                    if r.id == rule_id:
+                        self._rule_pointer = i
+                        break
+            return StepResult("stop")
+
         return StepResult("stop")
 
     def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
