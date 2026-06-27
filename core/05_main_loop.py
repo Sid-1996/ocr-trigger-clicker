@@ -283,7 +283,12 @@ class MainLoop:
         if not template_data.strip() and not template_path.strip():
             return StepResult("stop")
 
-        roi = params.get("roi")
+        roi = params.get("roi", {})
+        roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        if roi_is_empty and ctx.img.shape[1] > 800:
+            self._log("⚠ match_image 未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
+            if self.on_warning:
+                self.on_warning("圖示辨識未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域")
         threshold = params.get("threshold", 0.8)
         capture_size = get_capture_size(self._rules_path)
         results = match_template(
