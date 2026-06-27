@@ -3495,7 +3495,7 @@ class MainWindow(QMainWindow):
     # === Start / Pause ===
     def _on_mode_changed(self, idx: int):
         self._repeat_spin.setVisible(idx == 1)
-        self._round_interval_spin.setVisible(idx != 0)
+        self._round_interval_spin.setVisible(idx == 2)
 
     def _toggle_start(self):
         if self._window_lost:
@@ -3589,6 +3589,9 @@ class MainWindow(QMainWindow):
         self._edit_enabled.setEnabled(enabled)
         self._edit_background.setEnabled(enabled)
         self._step_list.setEnabled(enabled)
+        self._mode_combo.setEnabled(enabled)
+        self._repeat_spin.setEnabled(enabled)
+        self._round_interval_spin.setEnabled(enabled)
         if enabled:
             self._show_rule_detail(self._get_current_rule())
 
