@@ -1545,6 +1545,8 @@ save_task = _rule_mod.save_task
 delete_task = _rule_mod.delete_task
 get_task_window = _rule_mod.get_task_window
 set_task_window = _rule_mod.set_task_window
+get_run_mode = _rule_mod.get_run_mode
+set_run_mode = _rule_mod.set_run_mode
 rename_task = _rule_mod.rename_task
 export_task = _rule_mod.export_task
 import_task = _rule_mod.import_task
@@ -1603,12 +1605,18 @@ class InitWorker(QThread):
         window_title: str,
         signals: WorkerSignals,
         verbose: bool = True,
+        mode: str = "loop",
+        repeat_times: int = 1,
+        between_rounds_sec: int = 0,
     ):
         super().__init__()
         self._rules_path = rules_path
         self._window_title = window_title
         self._signals = signals
         self._verbose = verbose
+        self._mode = mode
+        self._repeat_times = repeat_times
+        self._between_rounds_sec = between_rounds_sec
         self.loop: Optional[MainLoop] = None
 
     def run(self):
@@ -1617,6 +1625,9 @@ class InitWorker(QThread):
                 self._rules_path,
                 self._window_title,
                 verbose=self._verbose,
+                mode=self._mode,
+                repeat_times=self._repeat_times,
+                between_rounds_sec=self._between_rounds_sec,
             )
             loop.on_trigger = lambda log: self._signals.trigger_signal.emit(log)
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
@@ -1825,6 +1836,27 @@ class MainWindow(QMainWindow):
         self._debug_btn = QPushButton("🔍OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
         toolbar.addWidget(self._btn_toggle)
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItems(["執行一次", "重複N次", "持續執行"])
+        self._mode_combo.setToolTip("執行模式：一次結束 / 重複N次 / 持續循環")
+        self._mode_combo.setMinimumWidth(100)
+        toolbar.addWidget(self._mode_combo)
+        self._repeat_spin = QSpinBox()
+        self._repeat_spin.setRange(1, 9999)
+        self._repeat_spin.setValue(1)
+        self._repeat_spin.setToolTip("重複次數")
+        self._repeat_spin.setMinimumWidth(60)
+        self._repeat_spin.setVisible(False)
+        toolbar.addWidget(self._repeat_spin)
+        self._round_interval_spin = QSpinBox()
+        self._round_interval_spin.setRange(0, 9999)
+        self._round_interval_spin.setValue(0)
+        self._round_interval_spin.setSuffix("s")
+        self._round_interval_spin.setToolTip("每輪間隔秒數")
+        self._round_interval_spin.setMinimumWidth(60)
+        self._round_interval_spin.setVisible(False)
+        toolbar.addWidget(self._round_interval_spin)
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         toolbar.addWidget(self._debug_btn)
         toolbar.addStretch()
         self._about_btn = QPushButton("關於")
@@ -2185,6 +2217,12 @@ class MainWindow(QMainWindow):
             idx = self._window_combo.findText(saved_window)
             if idx >= 0:
                 self._window_combo.setCurrentIndex(idx)
+        # 還原執行模式
+        mode_data = get_run_mode(task_path)
+        mode_map_rev = {"once": 0, "repeat": 1, "loop": 2}
+        self._mode_combo.setCurrentIndex(mode_map_rev.get(mode_data["mode"], 2))
+        self._repeat_spin.setValue(mode_data["repeat_times"])
+        self._round_interval_spin.setValue(mode_data["between_rounds_sec"])
 
     def _on_task_new(self):
         from PyQt6.QtWidgets import QInputDialog
@@ -3430,6 +3468,10 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     # === Start / Pause ===
+    def _on_mode_changed(self, idx: int):
+        self._repeat_spin.setVisible(idx == 1)
+        self._round_interval_spin.setVisible(idx != 0)
+
     def _toggle_start(self):
         if self._window_lost:
             self._stop_loop()
@@ -3466,7 +3508,19 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setText("初始化中...")
         self._status_bar.showMessage("正在初始化 OCR 引擎…")
         task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
-        self._init_worker = InitWorker(str(task_path), title, self._signals)
+        mode_map = {0: "once", 1: "repeat", 2: "loop"}
+        mode = mode_map[self._mode_combo.currentIndex()]
+        repeat_times = self._repeat_spin.value()
+        between_rounds_sec = self._round_interval_spin.value()
+        set_run_mode(task_path, mode, repeat_times, between_rounds_sec)
+        self._init_worker = InitWorker(
+            str(task_path),
+            title,
+            self._signals,
+            mode=mode,
+            repeat_times=repeat_times,
+            between_rounds_sec=between_rounds_sec,
+        )
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
 

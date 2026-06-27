@@ -121,11 +121,19 @@ class MainLoop:
         window_title: str,
         interval_ms: int = 500,
         verbose: bool = True,
+        mode: str = "loop",
+        repeat_times: int = 1,
+        between_rounds_sec: int = 0,
     ):
         self._rules_path = rules_path
         self._window_title = window_title
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
         self._verbose = verbose
+        self._mode = mode
+        self._repeat_times = repeat_times
+        self._between_rounds_sec = between_rounds_sec
+        self._rounds_completed = 0
+        self._max_pointer_reached = -1
         self._window_hwnd = get_window_hwnd_orig(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
 
@@ -189,6 +197,8 @@ class MainLoop:
         with self._rules_lock:
             self._rules = load_rules(self._rules_path)
             self._rule_pointer = 0
+            self._rounds_completed = 0
+            self._max_pointer_reached = -1
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -530,14 +540,16 @@ class MainLoop:
             return
 
         if self._rule_pointer >= len(rules_snapshot):
-            self._rule_pointer = 0
+            self._rule_pointer = self._advance_pointer(rules_snapshot)
             return
 
         rule = rules_snapshot[self._rule_pointer]
         if not rule.enabled:
+            self._rule_pointer = self._advance_pointer(rules_snapshot)
             return
 
         self._process_counter += 1
+        old_ptr = self._rule_pointer
 
         try:
             self._run_rule(rule, img, rect)
@@ -546,6 +558,38 @@ class MainLoop:
                 self._log(f"規則「{rule.name}」處理異常: {e}")
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
+
+        self._max_pointer_reached = max(self._max_pointer_reached, self._rule_pointer)
+
+        if self._rule_pointer == old_ptr:
+            self._rule_pointer = self._advance_pointer(rules_snapshot)
+
+    def _advance_pointer(self, rules: list[Rule]) -> int:
+        ptr = self._rule_pointer + 1
+        while ptr < len(rules) and not rules[ptr].enabled:
+            ptr += 1
+        if ptr >= len(rules):
+            ptr = 0
+            self._on_round_complete()
+        return ptr
+
+    def _on_round_complete(self) -> None:
+        self._rounds_completed += 1
+        self._max_pointer_reached = -1
+        msg = f"第 {self._rounds_completed} 輪完成"
+        if self._mode == "once":
+            self._log(f"{msg}，執行模式：一次，停止")
+            self._stop_event.set()
+        elif self._mode == "repeat":
+            if self._rounds_completed >= self._repeat_times:
+                self._log(f"{msg}，執行模式：重複 {self._repeat_times} 次，停止")
+                self._stop_event.set()
+            else:
+                self._log(f"{msg}，剩餘 {self._repeat_times - self._rounds_completed} 次")
+        if self._between_rounds_sec > 0 and not self._stop_event.is_set():
+            if self._verbose:
+                self._log(f"每輪間隔 {self._between_rounds_sec}s")
+            self._stop_event.wait(self._between_rounds_sec)
 
     def _loop(self):
         iteration = 0
