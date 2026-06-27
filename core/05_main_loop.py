@@ -187,7 +187,7 @@ class MainLoop:
     def _load_rules(self):
         with self._rules_lock:
             self._rules = load_rules(self._rules_path)
-        self._rule_pointer = 0
+            self._rule_pointer = 0
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -597,6 +597,8 @@ class MainLoop:
                     if change_ratio < 0.02 and not self._should_process_static_frame():
                         if self._verbose and iteration % 30 == 0:
                             self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR")
+                        if iteration % 10 == 0 and self.on_info:
+                            self.on_info("畫面靜止，等待變化")
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
