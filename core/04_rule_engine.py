@@ -5,7 +5,7 @@ import sys
 import tempfile
 import uuid
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -50,6 +50,16 @@ class Rule:
     enabled: bool
     steps: list[Step]
     background: bool = False
+
+
+@dataclass
+class RuleGroup:
+    id: str
+    name: str
+    mode: str = "loop"
+    repeat_times: int = 1
+    between_rounds_sec: int = 0
+    rule_ids: list[str] = field(default_factory=list)
 
 
 _STEP_DEFAULTS = {
@@ -349,6 +359,89 @@ def _rule_to_dict(r: Rule) -> dict:
     return d
 
 
+def _dict_to_group(d: dict) -> RuleGroup:
+    return RuleGroup(
+        id=str(d.get("id", "")),
+        name=str(d.get("name", "")),
+        mode=str(d.get("mode", "loop")),
+        repeat_times=int(d.get("repeat_times", 1)),
+        between_rounds_sec=int(d.get("between_rounds_sec", 0)),
+        rule_ids=[str(r) for r in d.get("rule_ids", []) if r],
+    )
+
+
+def _group_to_dict(g: RuleGroup) -> dict:
+    return asdict(g)
+
+
+def load_groups(path: str) -> list[RuleGroup]:
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+    groups = data.get("groups", [])
+    if not isinstance(groups, list):
+        return []
+    return [_dict_to_group(g) for g in groups]
+
+
+def save_groups(groups: list[RuleGroup], path: str) -> bool:
+    tmp_path: str = ""
+    try:
+        data = {"groups": [_group_to_dict(g) for g in groups]}
+        p = Path(path)
+        if p.exists():
+            try:
+                with open(p, encoding="utf-8") as f:
+                    existing = json.load(f)
+                for k, v in existing.items():
+                    if k != "groups":
+                        data[k] = v
+            except (json.JSONDecodeError, OSError):
+                pass
+        with tempfile.NamedTemporaryFile(
+            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp_path = f.name
+        os.replace(tmp_path, p)
+        return True
+    except OSError:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        return False
+
+
+def migrate_v2_to_v3(data: dict) -> dict:
+    mode = str(data.get("run_mode", "loop"))
+    repeat_times = int(data.get("repeat_times", 1))
+    between_rounds_sec = int(data.get("between_rounds_sec", 0))
+
+    normal_ids = []
+    for r in data.get("rules", []):
+        if isinstance(r, dict) and not r.get("background", False):
+            normal_ids.append(str(r.get("id", "")))
+
+    data["groups"] = [
+        {
+            "id": "__default__",
+            "name": "Default",
+            "mode": mode,
+            "repeat_times": repeat_times,
+            "between_rounds_sec": between_rounds_sec,
+            "rule_ids": normal_ids,
+        }
+    ]
+    data.pop("run_mode", None)
+    data.pop("repeat_times", None)
+    data.pop("between_rounds_sec", None)
+    return data
+
+
 def load_rules(path: str) -> list[Rule]:
     p = Path(path)
     if not p.exists():
@@ -359,6 +452,21 @@ def load_rules(path: str) -> list[Rule]:
     except (json.JSONDecodeError, OSError, KeyError) as e:
         logging.warning("規則檔案載入失敗 (%s): %s", path, e)
         return []
+
+    if "groups" not in data:
+        data = migrate_v2_to_v3(data)
+        tmp_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+            ) as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                tmp_path = f.name
+            os.replace(tmp_path, p)
+        except OSError:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+
     rules: list[Rule] = []
     for raw in data.get("rules", []):
         try:
@@ -1018,4 +1126,153 @@ if __name__ == "__main__":
     assert mi_of_rule.steps[2].params["on_fail"] == {"action": "key", "key": "F5"}
     print("  [OK] match_image on_fail normalization")
 
-    print("\n=== All 10 tests passed ===")
+    # ── Test 11: RuleGroup creation and defaults ──
+    g1 = RuleGroup(id="g1", name="Group One")
+    assert g1.mode == "loop"
+    assert g1.repeat_times == 1
+    assert g1.between_rounds_sec == 0
+    assert g1.rule_ids == []
+    assert g1.id == "g1"
+    assert g1.name == "Group One"
+    g2 = RuleGroup(id="g2", name="Repeat Five", mode="repeat", repeat_times=5, rule_ids=["a", "b"])
+    assert g2.mode == "repeat"
+    assert g2.repeat_times == 5
+    assert g2.rule_ids == ["a", "b"]
+    print("  [OK] RuleGroup creation and defaults")
+
+    # ── Test 12: _dict_to_group / _group_to_dict round-trip ──
+    g_orig = RuleGroup(
+        id="rt1", name="Round Trip", mode="repeat", repeat_times=3, rule_ids=["r1", "r2"]
+    )
+    g_dict = _group_to_dict(g_orig)
+    assert g_dict["id"] == "rt1"
+    assert g_dict["mode"] == "repeat"
+    assert g_dict["rule_ids"] == ["r1", "r2"]
+    g_restored = _dict_to_group(g_dict)
+    assert g_restored.id == g_orig.id
+    assert g_restored.name == g_orig.name
+    assert g_restored.mode == g_orig.mode
+    assert g_restored.repeat_times == g_orig.repeat_times
+    assert g_restored.rule_ids == g_orig.rule_ids
+    # integer→str coercion for rule_ids
+    g_num = _dict_to_group({"id": "gn", "name": "N", "rule_ids": [1, 2]})
+    assert g_num.rule_ids == ["1", "2"]
+    print("  [OK] _dict_to_group / _group_to_dict round-trip")
+
+    # ── Test 13: migrate_v2_to_v3 creates __default__ group ──
+    data_v2 = {
+        "run_mode": "repeat",
+        "repeat_times": 5,
+        "between_rounds_sec": 2,
+        "rules": [
+            {
+                "id": "r1",
+                "name": "Rule 1",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+            {
+                "id": "r2",
+                "name": "Rule 2",
+                "enabled": True,
+                "background": False,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+        ],
+    }
+    data_v3 = migrate_v2_to_v3(dict(data_v2))
+    assert "groups" in data_v3
+    assert len(data_v3["groups"]) == 1
+    g_def = data_v3["groups"][0]
+    assert g_def["id"] == "__default__"
+    assert g_def["mode"] == "repeat"
+    assert g_def["repeat_times"] == 5
+    assert g_def["between_rounds_sec"] == 2
+    assert set(g_def["rule_ids"]) == {"r1", "r2"}
+    # old top-level fields removed
+    assert "run_mode" not in data_v3
+    assert "repeat_times" not in data_v3
+    assert "between_rounds_sec" not in data_v3
+    # rules untouched
+    assert len(data_v3["rules"]) == 2
+    print("  [OK] migrate_v2_to_v3 creates __default__ group")
+
+    # ── Test 14: migrate_v2_to_v3 excludes background rules ──
+    data_bg = {
+        "rules": [
+            {
+                "id": "bg",
+                "name": "Background",
+                "enabled": True,
+                "background": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+            {
+                "id": "fg",
+                "name": "Foreground",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+        ],
+    }
+    data_bg_v3 = migrate_v2_to_v3(dict(data_bg))
+    assert len(data_bg_v3["groups"]) == 1
+    assert "bg" not in data_bg_v3["groups"][0]["rule_ids"]
+    assert "fg" in data_bg_v3["groups"][0]["rule_ids"]
+    print("  [OK] migrate_v2_to_v3 excludes background rules")
+
+    # ── Test 15: save_groups / load_groups round-trip (atomic write) ──
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        task_file = Path(tmp_dir) / "test_task.json"
+        # pre-write rules + window_title to test top-level preservation
+        task_file.write_text(
+            json.dumps({"rules": [], "window_title": "My Window"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        groups_in = [
+            RuleGroup(id="g1", name="G1", mode="loop", rule_ids=["r1"]),
+            RuleGroup(id="g2", name="G2", mode="once", rule_ids=["r2", "r3"]),
+        ]
+        ok = save_groups(groups_in, str(task_file))
+        assert ok
+        groups_out = load_groups(str(task_file))
+        assert len(groups_out) == 2
+        assert groups_out[0].id == "g1"
+        assert groups_out[1].rule_ids == ["r2", "r3"]
+        # other top-level fields preserved
+        saved = json.loads(task_file.read_text(encoding="utf-8"))
+        assert saved["window_title"] == "My Window"
+    print("  [OK] save_groups / load_groups round-trip")
+
+    # ── Test 16: load_rules auto-migration (no groups in file) ──
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        task_file = Path(tmp_dir) / "auto_migrate.json"
+        task_file.write_text(
+            json.dumps(
+                {
+                    "run_mode": "once",
+                    "repeat_times": 1,
+                    "rules": [
+                        {
+                            "id": "r1",
+                            "name": "R1",
+                            "enabled": True,
+                            "steps": [{"type": "wait", "params": {"ms": 100}}],
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        rules = load_rules(str(task_file))
+        assert len(rules) == 1
+        # file was rewritten with groups
+        final = json.loads(task_file.read_text(encoding="utf-8"))
+        assert "groups" in final
+        assert "run_mode" not in final
+        assert final["groups"][0]["id"] == "__default__"
+        assert final["groups"][0]["mode"] == "once"
+    print("  [OK] load_rules auto-migration on missing groups")
+
+    print("\n=== All 16 tests passed ===")
