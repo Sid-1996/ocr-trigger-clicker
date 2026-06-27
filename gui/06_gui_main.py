@@ -121,37 +121,28 @@ class _NoWheelDoubleSpin(QDoubleSpinBox):
 
 class _RuleTreeWidget(QTreeWidget):
     def dropEvent(self, event):
-        if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
-            event.ignore()
-            return
         src = self.currentItem()
         if src is None:
             event.ignore()
             return
         src_data = src.data(0, Qt.ItemDataRole.UserRole)
-        if src_data and src_data[0] == "rule":
-            target_item = self.itemAt(event.position().toPoint())
-            if target_item:
+        pos = event.position().toPoint()
+        indicator = self.dropIndicatorPosition()
+        target_item = self.itemAt(pos)
+
+        if indicator == QAbstractItemView.DropIndicatorPosition.OnItem:
+            if src_data and src_data[0] == "rule" and target_item:
                 tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
-                src_parent = src.parent()
-                if src_parent:
-                    src_gid = src_parent.data(0, Qt.ItemDataRole.UserRole)[1]
-                else:
-                    src_gid = None
-                if tgt_data:
-                    if tgt_data[0] == "group":
-                        tgt_gid = tgt_data[1]
-                    else:
-                        tgt_parent = target_item.parent()
-                        if tgt_parent:
-                            tgt_gid = tgt_parent.data(0, Qt.ItemDataRole.UserRole)[1]
-                        else:
-                            tgt_gid = None
-                else:
-                    tgt_gid = src_gid
-                if src_gid is not None and tgt_gid is not None and src_gid != tgt_gid:
-                    event.ignore()
+                if tgt_data and tgt_data[0] == "group":
+                    super().dropEvent(event)
                     return
+            event.ignore()
+            return
+
+        if not src_data or src_data[0] != "rule":
+            super().dropEvent(event)
+            return
+
         super().dropEvent(event)
 
 
@@ -3856,8 +3847,26 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
-        if self._groups:
-            self._groups[0].rule_ids.append(rule.id)
+        target_group = None
+        item = self._rule_list.currentItem()
+        if item:
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data:
+                if data[0] == "group":
+                    gid = data[1]
+                else:
+                    parent = item.parent()
+                    if parent:
+                        pdata = parent.data(0, Qt.ItemDataRole.UserRole)
+                        gid = pdata[1] if pdata and pdata[0] == "group" else None
+                    else:
+                        gid = None
+                if gid:
+                    target_group = next((g for g in self._groups if g.id == gid), None)
+        if target_group is None and self._groups:
+            target_group = self._groups[0]
+        if target_group:
+            target_group.rule_ids.append(rule.id)
         self._flush_save()
         self._selected_rule_id = rule.id
         self._refresh_rule_list()

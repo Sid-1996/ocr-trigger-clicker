@@ -109,6 +109,7 @@ class StepContext:
     rect: dict
     matched_text: Optional[OcrResult] = None
     matched_box: Optional[dict] = None
+    triggered: bool = False
 
 
 @dataclass
@@ -457,6 +458,7 @@ class MainLoop:
         ok = self._send_click(sx, sy, button)
         if ok:
             self._perf.record_click()
+            ctx.triggered = True
             self._emit_trigger_log(rule, matched_text, sx, sy)
 
         return StepResult("continue")
@@ -478,6 +480,7 @@ class MainLoop:
             ok = self._send_key(key)
         if ok:
             self._perf.record_click()
+            ctx.triggered = True
             self._emit_trigger_log(rule)
 
         return StepResult("continue")
@@ -519,6 +522,7 @@ class MainLoop:
         ok = _ahk.send_drag(ssx, ssy, sex, sey, button)
         if ok:
             self._perf.record_click()
+            ctx.triggered = True
             self._emit_trigger_log(rule, "", ssx, ssy)
 
         return StepResult("continue")
@@ -541,6 +545,7 @@ class MainLoop:
                     return StepResult("stop")
 
         self._perf.record_click()
+        ctx.triggered = True
         self._emit_trigger_log(rule)
         return StepResult("continue")
 
@@ -586,8 +591,11 @@ class MainLoop:
             return StepResult("stop")
         return handler(step.params, ctx, rule)
 
-    def _run_rule(self, rule: Rule, img: np.ndarray, rect: dict) -> None:
-        ctx = StepContext(img=img, rect=rect)
+    def _run_rule(
+        self, rule: Rule, img: np.ndarray, rect: dict, ctx: StepContext | None = None
+    ) -> None:
+        if ctx is None:
+            ctx = StepContext(img=img, rect=rect)
         i = 0
         while i < len(rule.steps):
             result = self._run_step(rule.steps[i], ctx, rule)
@@ -636,17 +644,17 @@ class MainLoop:
             return
 
         self._process_counter += 1
-        old_ptr = self._rule_in_group_ptr
+        ctx = StepContext(img=img, rect=rect)
 
         try:
-            self._run_rule(rule, img, rect)
+            self._run_rule(rule, img, rect, ctx)
         except Exception as e:
             if self._verbose:
                 self._log(f"規則「{rule.name}」處理異常: {e}")
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
-        if self._rule_in_group_ptr == old_ptr:
+        if ctx.triggered:
             self._advance_rule_in_group()
 
     def _advance_rule_in_group(self):
@@ -1089,10 +1097,12 @@ if __name__ == "__main__":
     img = np.zeros((100, 100, 3), dtype=np.uint8)
     rect = {"x": 0, "y": 0, "w": 100, "h": 100}
     ml._process_rules(img, rect)
-    assert ml._rule_in_group_ptr == 1, f"should advance to r1, got {ml._rule_in_group_ptr}"
-    print("  [OK] _process_rules advances through group")
+    assert ml._rule_in_group_ptr == 0, (
+        f"wait-only rule should NOT advance (trigger=False), got {ml._rule_in_group_ptr}"
+    )
+    print("  [OK] wait-only rule does not advance without trigger")
 
-    # ── Test 10: _process_rules skipping disabled rule ──
+    # ── Test 10: disabled rule is skipped via _advance_rule_in_group ──
     ml._rules = [
         Rule(
             id="r0",
@@ -1249,24 +1259,10 @@ if __name__ == "__main__":
     assert _key_result.action == "continue"
     print("  [OK] _handle_on_fail skip")
 
-    # ── Test 16: Single group once mode finishes and stops ──
+    # ── Test 16: Single group once mode finishes and stops (via _advance_rule_in_group) ──
     ml._rules = [
-        Rule(
-            id="r1",
-            name="R1",
-            enabled=True,
-            steps=[
-                _rule.Step(type="wait", params={"ms": 0}),
-            ],
-        ),
-        Rule(
-            id="r2",
-            name="R2",
-            enabled=True,
-            steps=[
-                _rule.Step(type="wait", params={"ms": 0}),
-            ],
-        ),
+        Rule(id="r1", name="R1", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
+        Rule(id="r2", name="R2", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
     ]
     ml._rule_map = {r.id: r for r in ml._rules}
     ml._groups = [RuleGroup(id="g1", name="G1", mode="once", rule_ids=["r1", "r2"])]
@@ -1274,52 +1270,34 @@ if __name__ == "__main__":
     ml._group_rounds_completed.clear()
     ml._stop_event.clear()
     ml._rule_in_group_ptr = 0
-    img = np.zeros((100, 100, 3), dtype=np.uint8)
-    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
-    # r1 → advances
-    ml._process_rules(img, rect)
-    assert ml._rule_in_group_ptr == 1
+    # simulate r1 triggered → advance
+    ml._advance_rule_in_group()
+    assert ml._rule_in_group_ptr == 1, f"expected ptr 1, got {ml._rule_in_group_ptr}"
     assert not ml._stop_event.is_set()
-    # r2 → group complete → advance_group_queue → stop
-    ml._process_rules(img, rect)
-    assert ml._group_queue_idx == 1
+    # simulate r2 triggered → group complete → advance_group_queue → stop
+    ml._advance_rule_in_group()
+    assert ml._group_queue_idx == 1, f"expected queue idx 1, got {ml._group_queue_idx}"
     assert ml._stop_event.is_set(), "once mode should stop after group done"
     print("  [OK] Single group once mode stops after completion")
 
     # ── Test 17: Multiple groups execute sequentially ──
-    ml._rules = [
-        Rule(
-            id="a1",
-            name="A1",
-            enabled=True,
-            steps=[
-                _rule.Step(type="wait", params={"ms": 0}),
-            ],
-        ),
-        Rule(
-            id="b1",
-            name="B1",
-            enabled=True,
-            steps=[
-                _rule.Step(type="wait", params={"ms": 0}),
-            ],
-        ),
-    ]
-    ml._rule_map = {r.id: r for r in ml._rules}
     ml._groups = [
-        RuleGroup(id="ga", name="Group A", mode="once", rule_ids=["a1"]),
-        RuleGroup(id="gb", name="Group B", mode="once", rule_ids=["b1"]),
+        RuleGroup(id="ga", name="Group A", mode="once", rule_ids=["r1"]),
+        RuleGroup(id="gb", name="Group B", mode="once", rule_ids=["r2"]),
     ]
     ml.set_active_groups(["ga", "gb"])
     ml._group_rounds_completed.clear()
     ml._stop_event.clear()
+    ml._rule_in_group_ptr = 0
     assert ml._current_group() is not None
     assert ml._current_group().id == "ga"
-    ml._process_rules(img, rect)
+    # ga done → advance_group_queue → gb
+    ml._advance_group_queue()
     assert ml._group_queue_idx == 1, "ga done → should advance to gb"
     assert ml._current_group().id == "gb"
     assert not ml._stop_event.is_set()
-    ml._process_rules(img, rect)
+    # gb done → advance_group_queue → stop
+    ml._advance_group_queue()
     assert ml._group_queue_idx == 2
     assert ml._stop_event.is_set(), "all groups done → stop"
     print("  [OK] Multiple groups execute sequentially")
