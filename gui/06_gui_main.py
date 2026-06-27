@@ -1796,6 +1796,7 @@ class WorkerSignals(QObject):
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
     test_done_signal = pyqtSignal(dict)
+    finished = pyqtSignal(bool, str)
 
 
 class InitWorker(QThread):
@@ -1837,6 +1838,7 @@ class InitWorker(QThread):
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
             loop.on_emergency = lambda: self._signals.emergency_signal.emit()
+            loop.on_finished = lambda: self._signals.finished.emit(True, "")
             loop.start()
             self.loop = loop
             self.finished.emit(True, "")
@@ -2307,6 +2309,7 @@ class MainWindow(QMainWindow):
         )
         self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
         self._signals.trigger_signal.connect(self._on_trigger_log_received)
+        self._signals.finished.connect(self._on_loop_finished)
 
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
@@ -2678,6 +2681,9 @@ class MainWindow(QMainWindow):
 
     def _update_rule_status(self):
         if not self._loop or not self._loop.is_running:
+            if self._loop is not None:
+                self._stop_loop()
+                return
             for i in range(self._rule_list.topLevelItemCount()):
                 item = self._rule_list.topLevelItem(i)
                 item.setForeground(0, QColor())
@@ -3789,6 +3795,10 @@ class MainWindow(QMainWindow):
         self._update_edit_enabled(True)
         self._status_bar.showMessage("已停止")
         self._update_rule_status()
+
+    def _on_loop_finished(self, success: bool, msg: str):
+        if self._loop is not None:
+            self._stop_loop()
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)

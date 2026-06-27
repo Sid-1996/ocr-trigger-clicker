@@ -165,6 +165,7 @@ class MainLoop:
         self.on_info: Optional[Callable[[str], None]] = None
         self.on_window_lost: Optional[Callable[[], None]] = None
         self.on_emergency: Optional[Callable[[], None]] = None
+        self.on_finished: Optional[Callable[[], None]] = None
 
         self._perf = PerformanceMonitor()
         self._perf.on_rate_limit_exceeded = self._on_rate_limit_exceeded
@@ -663,111 +664,115 @@ class MainLoop:
 
     def _loop(self):
         iteration = 0
-        while not self._stop_event.is_set():
-            if self._emergency_event.is_set():
-                break
-            iteration += 1
-            loop_start = time.monotonic()
-            try:
-                if self._pause_event.is_set():
-                    self._stop_event.wait(0.1)
-                    self._perf.record_frame()
-                    continue
-
-                with self._window_lock:
-                    title = self._window_title
-                rect = get_window_rect(title)
-                if rect is None:
-                    if self.on_window_lost:
-                        self.on_window_lost()
-                    self._pause_event.set()
-                    while not self._stop_event.is_set() and not self._emergency_event.is_set():
-                        if not self._pause_event.is_set():
-                            break
-                        rect = get_window_rect(title)
-                        if rect is not None:
-                            self._pause_event.clear()
-                            if self._verbose:
-                                self._log("視窗已重新出現，恢復偵測")
-                            break
-                        time.sleep(0.5)
-                    self._perf.record_frame()
-                    continue
-
-                if self._window_hwnd is None:
-                    with self._window_lock:
-                        self._window_hwnd = get_window_hwnd_orig(self._window_title)
-                if self._foreground_only and not is_window_foreground(self._window_hwnd):
-                    self._stop_event.wait(0.2)
-                    self._perf.record_frame()
-                    continue
-
-                t0 = time.monotonic()
-                img = capture(self._window_title)
-                if img is None:
-                    img = capture_window_content(self._window_title)
-                t1 = time.monotonic()
-                if img is None:
-                    if self._verbose and iteration % 30 == 0:
-                        self._log(f"所有截圖方式皆失敗: {title}")
-                    self._perf.record_frame()
-                    continue
-
-                with self._frame_lock:
-                    prev = self._prev_frame
-                    self._prev_frame = img
-
-                if prev is not None and prev.shape == img.shape:
-                    diff = cv2.absdiff(prev, img)
-                    change_ratio = np.mean(diff) / 255.0
-                    self._frame_diff_ratio = change_ratio
-                    if change_ratio < 0.02 and not self._should_process_static_frame():
-                        if self._verbose and iteration % 30 == 0:
-                            self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR")
-                        if iteration % 10 == 0 and self.on_info:
-                            self.on_info("畫面靜止，等待變化")
+        try:
+            while not self._stop_event.is_set():
+                if self._emergency_event.is_set():
+                    break
+                iteration += 1
+                loop_start = time.monotonic()
+                try:
+                    if self._pause_event.is_set():
+                        self._stop_event.wait(0.1)
                         self._perf.record_frame()
-                        self._stop_event.wait(self._interval)
                         continue
-                else:
-                    self._frame_diff_ratio = 1.0
 
-                if self._verbose and iteration % 30 == 0:
-                    self._log(
-                        f"視窗位置=({rect['x']},{rect['y']}) 尺寸=({rect['w']}×{rect['h']}) img={img.shape}"
-                    )
+                    with self._window_lock:
+                        title = self._window_title
+                    rect = get_window_rect(title)
+                    if rect is None:
+                        if self.on_window_lost:
+                            self.on_window_lost()
+                        self._pause_event.set()
+                        while not self._stop_event.is_set() and not self._emergency_event.is_set():
+                            if not self._pause_event.is_set():
+                                break
+                            rect = get_window_rect(title)
+                            if rect is not None:
+                                self._pause_event.clear()
+                                if self._verbose:
+                                    self._log("視窗已重新出現，恢復偵測")
+                                break
+                            time.sleep(0.5)
+                        self._perf.record_frame()
+                        continue
 
-                t2 = time.monotonic()
-                self._process_rules(img, rect)
-                t3 = time.monotonic()
+                    if self._window_hwnd is None:
+                        with self._window_lock:
+                            self._window_hwnd = get_window_hwnd_orig(self._window_title)
+                    if self._foreground_only and not is_window_foreground(self._window_hwnd):
+                        self._stop_event.wait(0.2)
+                        self._perf.record_frame()
+                        continue
 
-                ocr_ms = (t3 - t2) * 1000
-                loop_elapsed = (time.monotonic() - loop_start) * 1000
-                self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
+                    t0 = time.monotonic()
+                    img = capture(self._window_title)
+                    if img is None:
+                        img = capture_window_content(self._window_title)
+                    t1 = time.monotonic()
+                    if img is None:
+                        if self._verbose and iteration % 30 == 0:
+                            self._log(f"所有截圖方式皆失敗: {title}")
+                        self._perf.record_frame()
+                        continue
 
-                self._save_period_counter += 1
-                if self._save_period_counter >= 20:
-                    self._save_period_counter = 0
-                    with self._rules_lock:
-                        if self._rules_dirty:
-                            save_rules(self._rules, self._rules_path)
-                            self._rules_dirty = False
+                    with self._frame_lock:
+                        prev = self._prev_frame
+                        self._prev_frame = img
 
-                if loop_elapsed > 2000 and self.on_warning:
-                    self.on_warning(
-                        f"慢循環: {loop_elapsed:.0f}ms "
-                        f"(截圖={(t1 - t0) * 1000:.0f}ms "
-                        f"OCR={ocr_ms:.0f}ms)"
-                    )
+                    if prev is not None and prev.shape == img.shape:
+                        diff = cv2.absdiff(prev, img)
+                        change_ratio = np.mean(diff) / 255.0
+                        self._frame_diff_ratio = change_ratio
+                        if change_ratio < 0.02 and not self._should_process_static_frame():
+                            if self._verbose and iteration % 30 == 0:
+                                self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR")
+                            if iteration % 10 == 0 and self.on_info:
+                                self.on_info("畫面靜止，等待變化")
+                            self._perf.record_frame()
+                            self._stop_event.wait(self._interval)
+                            continue
+                    else:
+                        self._frame_diff_ratio = 1.0
 
-            except Exception as e:
-                if self.on_error:
-                    self.on_error(f"主循環異常: {e}")
+                    if self._verbose and iteration % 30 == 0:
+                        self._log(
+                            f"視窗位置=({rect['x']},{rect['y']}) 尺寸=({rect['w']}×{rect['h']}) img={img.shape}"
+                        )
 
-            if self._pause_event.is_set() or self._emergency_event.is_set():
-                continue
+                    t2 = time.monotonic()
+                    self._process_rules(img, rect)
+                    t3 = time.monotonic()
 
-            self._stop_event.wait(self._interval)
+                    ocr_ms = (t3 - t2) * 1000
+                    loop_elapsed = (time.monotonic() - loop_start) * 1000
+                    self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
+
+                    self._save_period_counter += 1
+                    if self._save_period_counter >= 20:
+                        self._save_period_counter = 0
+                        with self._rules_lock:
+                            if self._rules_dirty:
+                                save_rules(self._rules, self._rules_path)
+                                self._rules_dirty = False
+
+                    if loop_elapsed > 2000 and self.on_warning:
+                        self.on_warning(
+                            f"慢循環: {loop_elapsed:.0f}ms "
+                            f"(截圖={(t1 - t0) * 1000:.0f}ms "
+                            f"OCR={ocr_ms:.0f}ms)"
+                        )
+
+                except Exception as e:
+                    if self.on_error:
+                        self.on_error(f"主循環異常: {e}")
+
+                if self._pause_event.is_set() or self._emergency_event.is_set():
+                    continue
+
+                self._stop_event.wait(self._interval)
+        finally:
+            if self.on_finished:
+                self.on_finished()
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -942,7 +947,17 @@ if __name__ == "__main__":
 
     # ── Test 4: _run_step dispatcher coverage ──
     test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
-    for hn in ["detect", "click", "key", "wait", "jump", "drag", "scroll", "match_image", "compare"]:
+    for hn in [
+        "detect",
+        "click",
+        "key",
+        "wait",
+        "jump",
+        "drag",
+        "scroll",
+        "match_image",
+        "compare",
+    ]:
         step = _rule.Step(type=hn, params={})
         result = ml._run_step(step, ctx, test_rule)
         assert isinstance(result, StepResult), f"{hn} should return StepResult"
