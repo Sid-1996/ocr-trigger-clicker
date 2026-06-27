@@ -185,6 +185,19 @@ def _resolve_rule_name(rule_id: str, rules_provider=None) -> str:
     return rule_id
 
 
+def _fmt_roi(roi: dict) -> str:
+    x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
+    if w <= 1.0 and h <= 1.0 and not (x == 0 and y == 0 and w == 0 and h == 0):
+        return f"({x:.0%},{y:.0%}) {w:.0%}×{h:.0%}"
+    return f"({int(x)},{int(y)}) {int(w)}×{int(h)}"
+
+
+def _fmt_point(px, py) -> str:
+    if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
+        return f"({px:.0%},{py:.0%})"
+    return f"({int(px)},{int(py)})"
+
+
 def _step_summary(step, rules_provider=None) -> str:
     p = step.params
     t = step.type
@@ -192,7 +205,7 @@ def _step_summary(step, rules_provider=None) -> str:
         text = p.get("text", "")
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        roi_str = "全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}"
+        roi_str = "全視窗" if zero_roi else _fmt_roi(roi)
         parts = [f"「{text}」" if text else "未設定"]
         parts.append(roi_str)
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
@@ -205,7 +218,7 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         parts = [f"「{tmpl}」"]
-        parts.append("全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}")
+        parts.append("全視窗" if zero_roi else _fmt_roi(roi))
         th = p.get("threshold", 0.8)
         parts.append(f"閾值{th}")
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
@@ -218,7 +231,7 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         parts = [f"{op} {val}"]
-        parts.append("全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}")
+        parts.append("全視窗" if zero_roi else _fmt_roi(roi))
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
@@ -228,7 +241,7 @@ def _step_summary(step, rules_provider=None) -> str:
         if target == "text_center":
             return "點擊辨識目標"
         if target == "custom":
-            return f"點擊 ({p.get('x', 0)},{p.get('y', 0)})"
+            return f"點擊 {_fmt_point(p.get('x', 0), p.get('y', 0))}"
         if target == "click_text":
             return f"點擊文字「{p.get('text', '')}」"
     if t == "key":
