@@ -231,9 +231,18 @@ class MainLoop:
 
     def _should_process_static_frame(self) -> bool:
         with self._rules_lock:
+            # check the pointer rule
             if self._rule_pointer < len(self._rules):
                 rule = self._rules[self._rule_pointer]
                 if rule.enabled and any(s.type in ("detect", "match_image") for s in rule.steps):
+                    return True
+            # also check background rules (they run every frame)
+            for rule in self._rules:
+                if (
+                    rule.enabled
+                    and rule.background
+                    and any(s.type in ("detect", "match_image") for s in rule.steps)
+                ):
                     return True
         return False
 
