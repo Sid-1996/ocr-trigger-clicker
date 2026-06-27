@@ -691,8 +691,12 @@ class MainLoop:
                 return
             self._group_queue_idx += 1
         if self._group_queue_idx >= len(self._active_group_ids):
-            self._log("所有選中群組執行完畢，停止")
-            self._stop_event.set()
+            has_background = any(r.background and r.enabled for r in self._rules)
+            if has_background:
+                self._log("所有群組執行完畢，常駐監控持續運行中")
+            else:
+                self._log("所有選中群組執行完畢，停止")
+                self._stop_event.set()
 
     def _loop(self):
         iteration = 0
@@ -1359,4 +1363,39 @@ if __name__ == "__main__":
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    print("\n=== All 19 tests passed ===")
+    # ── Test 20: Background rules prevent stop when groups are done ──
+    ml._rules = [
+        Rule(
+            id="bg1",
+            name="常駐",
+            enabled=True,
+            background=True,
+            steps=[_rule.Step(type="wait", params={"ms": 0})],
+        ),
+        Rule(id="r1", name="R1", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g1", name="G1", mode="once", rule_ids=["r1"])]
+    ml.set_active_groups(["g1"])
+    ml._group_rounds_completed.clear()
+    ml._stop_event.clear()
+    # point to last rule → advance will exhaust group queue
+    ml._rule_in_group_ptr = 0
+    ml._group_queue_idx = 0
+    ml._advance_rule_in_group()
+    assert not ml._stop_event.is_set(), "background rule should prevent stop"
+    print("  [OK] Background rule prevents stop after group completion")
+
+    # disable background rule, reset, run again → should stop
+    ml._rules[0].enabled = False
+    ml._groups = [RuleGroup(id="g1", name="G1", mode="once", rule_ids=["r1"])]
+    ml.set_active_groups(["g1"])
+    ml._group_rounds_completed.clear()
+    ml._stop_event.clear()
+    ml._rule_in_group_ptr = 0
+    ml._group_queue_idx = 0
+    ml._advance_rule_in_group()
+    assert ml._stop_event.is_set(), "no background → should stop after group done"
+    print("  [OK] No background → stops normally")
+
+    print("\n=== All 20 tests passed ===")

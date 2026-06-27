@@ -2647,16 +2647,16 @@ class MainWindow(QMainWindow):
             group_item = QTreeWidgetItem()
             if g.enabled:
                 if g.mode == "once":
-                    prefix = "1️⃣"
+                    prefix = "[1]"
                 elif g.mode == "repeat":
-                    prefix = "🔢"
+                    prefix = "[N]"
                 else:
-                    prefix = "🔁"
+                    prefix = "[∞]"
                 text = f"{prefix} {g.name}"
                 if g.mode == "repeat":
                     text += f" ×{g.repeat_times}"
             else:
-                prefix = "⏸"
+                prefix = "[■]"
                 text = f"{prefix} {g.name}"
                 group_item.setForeground(0, QColor("#888888"))
             group_item.setText(0, text)
