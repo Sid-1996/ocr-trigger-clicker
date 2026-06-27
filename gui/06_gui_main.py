@@ -132,6 +132,7 @@ class _RuleTreeWidget(QTreeWidget):
 _STEP_TYPE_ICONS = {
     "detect": "🔍",
     "match_image": "🖼",
+    "compare": "🔢",
     "click": "🖱",
     "key": "⌨",
     "wait": "⏱",
@@ -143,6 +144,7 @@ _STEP_TYPE_ICONS = {
 _STEP_TYPE_LABELS = {
     "detect": "偵測文字",
     "match_image": "圖示辨識",
+    "compare": "數字比較",
     "click": "點擊",
     "key": "按鍵",
     "wait": "等待",
@@ -184,6 +186,17 @@ def _step_summary(step, rules_provider=None) -> str:
         parts.append("全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}")
         th = p.get("threshold", 0.8)
         parts.append(f"閾值{th}")
+        of = _of_summary(p.get("on_fail", "stop"), rules_provider)
+        if of:
+            parts.append(f"| {of}")
+        return " ".join(parts)
+    if t == "compare":
+        op = p.get("operator", ">=")
+        val = p.get("value", 0.0)
+        roi = p.get("roi", {})
+        zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        parts = [f"{op} {val}"]
+        parts.append("全視窗" if zero_roi else f"({roi['x']},{roi['y']}){roi['w']}×{roi['h']}")
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
@@ -650,6 +663,16 @@ class _StepListWidget(QWidget):
             return _DragStepForm(self, step, idx, self._click_pick_callback)
         if t == "scroll":
             return _ScrollStepForm(self, step, idx)
+        if t == "compare":
+            return _CompareStepForm(
+                self,
+                step,
+                idx,
+                self._roi_callback,
+                self._rules_provider,
+                self._rule_id,
+                simplified=self._simplified_mode,
+            )
         return None
 
 
@@ -1372,6 +1395,185 @@ class _ScrollStepForm(QWidget):
         self._step.params["delay_ms"] = self._delay.value()
 
 
+class _CompareStepForm(QWidget):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        roi_cb,
+        rules_provider=None,
+        exclude_rule_id="",
+        simplified=False,
+    ):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        self._idx = idx
+        self._roi_cb = roi_cb
+        self._rules_provider = rules_provider
+        self._exclude_rule_id = exclude_rule_id
+        self._on_fail_expanded = False
+        p = step.params
+        form = QFormLayout(self)
+        form.setContentsMargins(12, 6, 12, 6)
+
+        # ROI
+        roi = p.get("roi", {})
+        self._roi = {
+            "x": roi.get("x", 0),
+            "y": roi.get("y", 0),
+            "w": roi.get("w", 0),
+            "h": roi.get("h", 0),
+        }
+        z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        self._roi_label = QLabel(
+            "全視窗" if z else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
+        )
+        self._roi_btn = QPushButton("框選偵測區域")
+        self._roi_btn.setToolTip("框選要進行 OCR 的區域，不設定時掃描整個視窗")
+        self._roi_btn.clicked.connect(self._pick_roi)
+        roi_row = QWidget()
+        rr = QHBoxLayout(roi_row)
+        rr.setContentsMargins(0, 0, 0, 0)
+        rr.addWidget(self._roi_label)
+        rr.addWidget(self._roi_btn)
+        form.addRow("偵測區域:", roi_row)
+
+        # Operator
+        self._operator = _NoWheelCombo()
+        for op in (">", "<", ">=", "<=", "==", "!="):
+            self._operator.addItem(op, op)
+        op_idx = self._operator.findData(p.get("operator", ">="))
+        if op_idx >= 0:
+            self._operator.setCurrentIndex(op_idx)
+        form.addRow("運算子:", self._operator)
+
+        # Value
+        self._value = _NoWheelDoubleSpin()
+        self._value.setRange(-999999.0, 999999.0)
+        self._value.setDecimals(3)
+        self._value.setValue(p.get("value", 0.0))
+        form.addRow("數值:", self._value)
+
+        # ── Advanced collapsible section ──
+        self._toggle_btn = QPushButton("▶ 進階：比對規則與失敗處理")
+        self._toggle_btn.setFlat(True)
+        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setStyleSheet(
+            "QPushButton { text-align: left; border: none; color: #888; }"
+        )
+        self._toggle_btn.clicked.connect(self._toggle_advanced)
+        form.addRow(self._toggle_btn)
+
+        self._adv_container = QWidget()
+        self._adv_container.setVisible(False)
+        adv = QFormLayout(self._adv_container)
+        adv.setContentsMargins(0, 0, 0, 0)
+
+        self._pattern = QLineEdit()
+        self._pattern.setText(p.get("pattern", r"-?\d+\.?\d*"))
+        self._pattern.setToolTip("正則表達式，用於從 OCR 文字中擷取數字")
+        adv.addRow("比對規則 (regex):", self._pattern)
+
+        # on_fail section (same as detect/match_image)
+        self._of_action = _NoWheelCombo()
+        self._of_action.addItem("跳過本次（預設）", "stop")
+        self._of_action.addItem("跳至步驟", "skip")
+        self._of_action.addItem("跳轉至規則", "jump")
+        self._of_action.addItem("按下按鍵後繼續", "key")
+        raw_of = p.get("on_fail", "stop")
+        of_act = raw_of.get("action", "stop") if isinstance(raw_of, dict) else raw_of
+        of_idx = self._of_action.findData(of_act)
+        if of_idx >= 0:
+            self._of_action.setCurrentIndex(of_idx)
+        self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
+        adv.addRow("失敗動作:", self._of_action)
+
+        self._of_jump_combo = _NoWheelCombo()
+        self._of_jump_combo.setMinimumWidth(200)
+        rules = rules_provider() if rules_provider else []
+        target_id = raw_of.get("rule_id", "") if isinstance(raw_of, dict) else ""
+        for r in rules:
+            if r.id != exclude_rule_id:
+                self._of_jump_combo.addItem(r.name, r.id)
+        j_idx = self._of_jump_combo.findData(target_id)
+        if j_idx >= 0:
+            self._of_jump_combo.setCurrentIndex(j_idx)
+        elif target_id:
+            self._of_jump_combo.addItem(f"(遺失: {target_id})", target_id)
+            j_idx = self._of_jump_combo.count() - 1
+            self._of_jump_combo.setCurrentIndex(max(j_idx, 0))
+        jf = QWidget()
+        jl = QHBoxLayout(jf)
+        jl.setContentsMargins(0, 0, 0, 0)
+        jl.addWidget(self._of_jump_combo)
+        self._of_jump_row = jf
+        adv.addRow("", self._of_jump_row)
+
+        self._of_key = _make_key_combo()
+        kv = raw_of.get("key", "") if isinstance(raw_of, dict) else ""
+        k_idx = self._of_key.findData(kv)
+        if k_idx >= 0:
+            self._of_key.setCurrentIndex(k_idx)
+        self._of_key_row = QWidget()
+        kf = QHBoxLayout(self._of_key_row)
+        kf.setContentsMargins(0, 0, 0, 0)
+        kf.addWidget(self._of_key)
+        adv.addRow("", self._of_key_row)
+
+        form.addRow(self._adv_container)
+
+        self._on_of_action_changed()
+        self._adv_container.setVisible(not simplified)
+
+    def save(self):
+        self._step.params["roi"] = {
+            "x": self._roi.get("x", 0),
+            "y": self._roi.get("y", 0),
+            "w": self._roi.get("w", 0),
+            "h": self._roi.get("h", 0),
+        }
+        self._step.params["operator"] = self._operator.currentData()
+        self._step.params["value"] = self._value.value()
+        self._step.params["pattern"] = self._pattern.text().strip()
+        action = self._of_action.currentData()
+        if action == "stop":
+            self._step.params["on_fail"] = "stop"
+        elif action == "jump":
+            self._step.params["on_fail"] = {
+                "action": "jump",
+                "rule_id": self._of_jump_combo.currentData() or "",
+            }
+        elif action == "key":
+            self._step.params["on_fail"] = {
+                "action": "key",
+                "key": self._of_key.currentData() or self._of_key.currentText(),
+            }
+
+    def _pick_roi(self):
+        if not self._roi_cb:
+            return
+        result = self._roi_cb()
+        if result:
+            self._roi = {"x": result[0], "y": result[1], "w": result[2], "h": result[3]}
+            self._roi_label.setText(f"x={result[0]} y={result[1]} w={result[2]} h={result[3]}")
+            self.save()
+            self._list.steps_changed.emit()
+
+    def _toggle_advanced(self):
+        expanded = self._adv_container.isVisible()
+        self._adv_container.setVisible(not expanded)
+        self._toggle_btn.setText(
+            "▼ 進階：比對規則與失敗處理" if not expanded else "▶ 進階：比對規則與失敗處理"
+        )
+
+    def _on_of_action_changed(self, idx=None):
+        action = self._of_action.currentData()
+        self._of_jump_row.setVisible(action == "jump")
+        self._of_key_row.setVisible(action == "key")
+
+
 class _KeyStepForm(QWidget):
     def __init__(self, parent_list, step, idx):
         super().__init__()
@@ -1980,6 +2182,7 @@ class MainWindow(QMainWindow):
         step_types = [
             ("detect", "🔍 偵測文字"),
             ("match_image", "🖼 圖示辨識"),
+            ("compare", "🔢 數字比較"),
             ("click", "🖱 點擊"),
             ("key", "⌨ 按鍵"),
             ("drag", "↗ 拖曳"),
@@ -3171,6 +3374,20 @@ class MainWindow(QMainWindow):
                     }
                     d = dirs.get(p.get("direction", "WheelDown"), p.get("direction", ""))
                     log.append(f"[{idx + 1}] ↕ 滾輪 {d} ×{p.get('amount', 1)}")
+
+                elif step.type == "compare":
+                    p = step.params
+                    op = p.get("operator", ">=")
+                    val = p.get("value", 0.0)
+                    pattern = p.get("pattern", "")
+                    roi = p.get("roi", {})
+                    z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+                    roi_str = (
+                        "全視窗"
+                        if z
+                        else f"({roi.get('x', 0)},{roi.get('y', 0)}){roi.get('w', 0)}×{roi.get('h', 0)}"
+                    )
+                    log.append(f"[{idx + 1}] 🔢 {op} {val} {roi_str} regex=「{pattern}」")
 
                 elif step.type == "key":
                     p = step.params

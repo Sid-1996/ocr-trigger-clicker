@@ -80,6 +80,13 @@ _STEP_DEFAULTS = {
     "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
     "wait": {"ms": 1000},
     "jump": {"rule_id": ""},
+    "compare": {
+        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+        "pattern": r"-?\d+\.?\d*",
+        "operator": ">=",
+        "value": 0.0,
+        "on_fail": "stop",
+    },
     "match_image": {
         "template": "",
         "template_data": "",
@@ -178,6 +185,12 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["ms"] = max(0, _as_int(base.get("ms", 1000), 1000))
     elif step_type == "jump":
         base["rule_id"] = str(base.get("rule_id", ""))
+    elif step_type == "compare":
+        base["roi"] = _sanitize_roi(base.get("roi"))
+        base["pattern"] = str(base.get("pattern", r"-?\d+\.?\d*"))
+        base["operator"] = str(base.get("operator", ">="))
+        base["value"] = _as_float(base.get("value", 0.0), 0.0)
+        base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
     elif step_type == "match_image":
         base["template"] = str(base.get("template", "")).strip()
         base["template_data"] = str(base.get("template_data", ""))
@@ -470,6 +483,7 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         "drag",
         "scroll",
         "match_image",
+        "compare",
     }
     for i, s in enumerate(steps):
         if not isinstance(s, dict):

@@ -106,6 +106,7 @@ class StepContext:
     img: np.ndarray
     rect: dict
     matched_text: Optional[OcrResult] = None
+    matched_box: Optional[dict] = None
 
 
 @dataclass
@@ -331,6 +332,45 @@ class MainLoop:
         ctx.matched_text = results[0]
         return StepResult("continue")
 
+    def _handle_compare(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        roi = params.get("roi", {})
+        results = self._ocr_region(ctx.img, roi)
+        combined = " ".join(r.text for r in results)
+        pattern = params.get("pattern", r"-?\d+\.?\d*")
+        m = re.search(pattern, combined)
+        if not m:
+            return self._handle_on_fail(params, ctx)
+        try:
+            num = float(m.group())
+        except (ValueError, TypeError):
+            return self._handle_on_fail(params, ctx)
+        op = params.get("operator", ">=")
+        val = params.get("value", 0.0)
+        ops = {
+            ">": lambda a, b: a > b,
+            "<": lambda a, b: a < b,
+            ">=": lambda a, b: a >= b,
+            "<=": lambda a, b: a <= b,
+            "==": lambda a, b: a == b,
+            "!=": lambda a, b: a != b,
+        }
+        if op not in ops:
+            return self._handle_on_fail(params, ctx)
+        if not ops[op](num, val):
+            return self._handle_on_fail(params, ctx)
+        ctx.matched_text = results[0]
+        ctx.matched_box = {
+            "x": roi.get("x", 0),
+            "y": roi.get("y", 0),
+            "w": roi.get("w", 0),
+            "h": roi.get("h", 0),
+            "number": num,
+            "text": combined[:64],
+        }
+        if self._verbose:
+            self._log(f"比較：{num} {op} {val} → 成立")
+        return StepResult("continue")
+
     def _handle_on_fail(self, params: dict, ctx: StepContext) -> StepResult:
         raw = params.get("on_fail", "stop")
 
@@ -528,6 +568,7 @@ class MainLoop:
             "drag": self._handle_drag,
             "scroll": self._handle_scroll,
             "match_image": self._handle_match_image,
+            "compare": self._handle_compare,
         }
         handler = handlers.get(step.type)
         if handler is None:
