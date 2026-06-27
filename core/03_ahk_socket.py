@@ -277,6 +277,10 @@ def init_ahk(ahk_path: str | None = None, port: int = 12345) -> bool:
     _launch_ahk.ahk_path = ahk_path
     _launch_ahk.port = port
 
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        if probe.connect_ex(("127.0.0.1", port)) == 0:
+            raise RuntimeError(f"Port {port} 已被佔用，請確認沒有其他執行中的實例")
+
     _server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     _server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     _server.bind(("127.0.0.1", port))
