@@ -1,3 +1,5 @@
+import io
+import logging
 import shutil
 import socket
 import subprocess
@@ -7,7 +9,7 @@ import urllib.request
 import winreg
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 _server: Optional[socket.socket] = None
 _conn: Optional[socket.socket] = None
@@ -193,29 +195,54 @@ def is_ahk_available() -> bool:
     return _find_ahk_executable() is not None
 
 
+_health_callback: Optional[Callable[[str], None]] = None
+
+
+def set_ahk_health_callback(cb: Optional[Callable[[str], None]]):
+    global _health_callback
+    _health_callback = cb
+
+
 def download_ahk() -> bool:
     dest_dir = _ahk_data_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
     exe_path = dest_dir / "AutoHotkey64.exe"
     if exe_path.exists():
         return True
-    zip_path = dest_dir / "ahk_download.zip"
     try:
-        print("正在下載 AutoHotkey v2 ...")
-        urllib.request.urlretrieve(_AHK_DOWNLOAD_URL, zip_path)
-        print("下載完成，正在解壓縮...")
-        with zipfile.ZipFile(zip_path, "r") as zf:
+        logging.info("正在下載 AutoHotkey v2（%s）...", _AHK_DOWNLOAD_URL)
+        resp = urllib.request.urlopen(_AHK_DOWNLOAD_URL, timeout=30)
+        total = int(resp.headers.get("Content-Length", 0))
+        buf = io.BytesIO()
+        chunk_size = 64 * 1024
+        downloaded = 0
+        while True:
+            chunk = resp.read(chunk_size)
+            if not chunk:
+                break
+            buf.write(chunk)
+            downloaded += len(chunk)
+            if total > 0:
+                pct = downloaded * 100 // total
+                logging.info(
+                    "AHK 下載進度: %d%% (%d/%d KB)", pct, downloaded // 1024, total // 1024
+                )
+        logging.info("下載完成（%d bytes），正在解壓縮...", downloaded)
+        with zipfile.ZipFile(buf) as zf:
             zf.extractall(dest_dir)
-        zip_path.unlink()
         if exe_path.exists():
-            print(f"AutoHotkey 已安裝至 {dest_dir}")
+            logging.info("AutoHotkey 已安裝至 %s", dest_dir)
             return True
-        print("解壓縮後找不到 AutoHotkey64.exe")
+        msg = "解壓縮後找不到 AutoHotkey64.exe"
+        logging.error(msg)
+        if _health_callback:
+            _health_callback(msg)
         return False
     except Exception as e:
-        print(f"下載 AutoHotkey 失敗：{e}")
-        if zip_path.exists():
-            zip_path.unlink()
+        msg = f"下載 AutoHotkey 失敗：{e}"
+        logging.error(msg)
+        if _health_callback:
+            _health_callback(msg)
         return False
 
 

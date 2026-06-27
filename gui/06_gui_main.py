@@ -1660,11 +1660,18 @@ class MainWindow(QMainWindow):
                 if reply == QMessageBox.StandardButton.Yes:
                     self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
                     QApplication.processEvents()
+                    _ahk_mod.set_ahk_health_callback(
+                        lambda msg: self._status_bar.showMessage(f"⚠ {msg}")
+                    )
                     if _ahk_mod.download_ahk():
                         self._status_bar.showMessage("AutoHotkey 下載完成")
                     else:
-                        self._status_bar.showMessage(
-                            "⚠ AutoHotkey 下載失敗，請手動安裝至 https://autohotkey.com"
+                        QMessageBox.critical(
+                            self,
+                            "AutoHotkey 下載失敗",
+                            "AutoHotkey 下載失敗，請手動下載並安裝：\n"
+                            "https://www.autohotkey.com\n\n"
+                            "安裝後重新啟動工具即可自動偵測。",
                         )
 
             self._ahk_ready = _ahk_mod.init_ahk()
