@@ -2049,6 +2049,9 @@ class MainWindow(QMainWindow):
         self._on_task_changed(self._task_combo.currentText())
 
     def _on_task_changed(self, name: str):
+        if self._save_timer.isActive():
+            self._save_timer.stop()
+            self._save_current_rule()
         if not name:
             self._rules = []
             self._current_task = ""
@@ -2521,13 +2524,28 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
+
         # 檢查是否有其他規則參照此規則
-        refs = [
-            r.name
-            for r in self._rules
-            if r.id != rule.id
-            and any(s.params.get("rule_id", "") == rule.id for s in r.steps if s.type == "jump")
-        ]
+        def _refs_to(rid: str) -> list[str]:
+            result = []
+            for r in self._rules:
+                if r.id == rid:
+                    continue
+                for s in r.steps:
+                    if s.type == "jump" and s.params.get("rule_id", "") == rid:
+                        result.append(r.name)
+                        break
+                    of = s.params.get("on_fail", {})
+                    if (
+                        isinstance(of, dict)
+                        and of.get("action") == "jump"
+                        and of.get("rule_id", "") == rid
+                    ):
+                        if r.name not in result:
+                            result.append(r.name)
+            return result
+
+        refs = _refs_to(rule.id)
         msg = f"確定刪除規則「{rule.name}」？"
         if refs:
             msg += "\n\n⚠ 以下規則依賴此規則，刪除後將失效：\n" + "\n".join(
@@ -2560,11 +2578,18 @@ class MainWindow(QMainWindow):
                         )
                         if not still_used:
                             tmpl.unlink(missing_ok=True)
-        # 自動清理其他規則指向被刪規則的參照
+        # 自動清理其他規則指向被刪規則的參照（含 on_fail: jump）
         for r in self._rules:
             for s in r.steps:
                 if s.type == "jump" and s.params.get("rule_id", "") == rule.id:
                     s.params["rule_id"] = ""
+                of = s.params.get("on_fail", {})
+                if (
+                    isinstance(of, dict)
+                    and of.get("action") == "jump"
+                    and of.get("rule_id", "") == rule.id
+                ):
+                    of["rule_id"] = ""
         save_task(self._current_task, self._rules)
         self._refresh_rule_list()
         cur = self._get_current_rule()
@@ -3314,6 +3339,16 @@ class MainWindow(QMainWindow):
         if not self._rules:
             QMessageBox.warning(self, "警告", "尚未建立任何規則！\n請先新增至少一條規則。")
             return
+        empty_steps = [r.name for r in self._rules if r.enabled and not r.steps]
+        if empty_steps:
+            names = "\n".join(f"  • {n}" for n in empty_steps[:5])
+            suffix = f"\n  …及其他 {len(empty_steps) - 5} 條" if len(empty_steps) > 5 else ""
+            QMessageBox.warning(
+                self,
+                "警告",
+                f"以下啟用的規則沒有任何步驟，請先新增步驟：\n{names}{suffix}",
+            )
+            return
         activate_window(title)
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
@@ -3354,6 +3389,7 @@ class MainWindow(QMainWindow):
         self._refresh_btn.setEnabled(enabled)
         self._debug_btn.setEnabled(enabled)
 
+        self._task_combo.setEnabled(enabled)
         self._task_new_btn.setEnabled(enabled)
         self._task_del_btn.setEnabled(enabled)
         self._task_import_btn.setEnabled(enabled)
