@@ -1,9 +1,18 @@
 import sys
+from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
+
+if hasattr(sys, "_MEIPASS"):
+    _base = Path(sys._MEIPASS)
+else:
+    _base = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_base))
+
+from _loader import load_sibling  # noqa: E402
 
 
 class CaptureRegionSelector(QWidget):
@@ -122,7 +131,7 @@ class CaptureRegionSelector(QWidget):
             self.close()
 
 
-def capture_region(parent_window=None) -> Optional[dict]:
+def capture_region(parent_window=None, task_path="", window_title="") -> Optional[dict]:
     if parent_window:
         parent_window.showMinimized()
         QApplication.processEvents()
@@ -147,6 +156,12 @@ def capture_region(parent_window=None) -> Optional[dict]:
         QApplication.processEvents()
 
     result = selector._result
+    if result and task_path and window_title:
+        _screenshot_mod = load_sibling("screenshot", "core/01_screenshot.py")
+        _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
+        rect = _screenshot_mod.get_window_rect(window_title)
+        if rect:
+            _rule_mod.set_capture_size(task_path, rect["w"], rect["h"])
     selector.close()
     selector.deleteLater()
     return result

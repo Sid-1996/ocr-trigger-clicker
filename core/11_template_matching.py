@@ -71,20 +71,24 @@ def match_template(
     scale_range: Optional[tuple[float, float]] = (0.8, 1.2),
     scale_step: float = 0.1,
     template_data: Optional[str] = None,
+    capture_size: Optional[list] = None,
 ) -> list[MatchResult]:
     if template_data:
-        template = b64_to_img(template_data)
+        template_bgr = b64_to_img(template_data)
         tmpl_name = "inline"
-        if template is None:
+        if template_bgr is None:
             return []
     else:
         resolved = _resolve_template(template_path)
         if resolved is None:
             return []
-        template = cv2.imread(str(resolved), cv2.IMREAD_COLOR)
-        if template is None:
+        template_bgr = cv2.imread(str(resolved), cv2.IMREAD_COLOR)
+        if template_bgr is None:
             return []
         tmpl_name = Path(template_path).stem
+
+    template = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
+    th, tw = template.shape[:2]
 
     if roi is not None and any(roi.get(k, 0) != 0 for k in ("w", "h")):
         h, w = img.shape[:2]
@@ -93,19 +97,23 @@ def match_template(
         x2 = min(w, roi["x"] + roi["w"])
         y2 = min(h, roi["y"] + roi["h"])
         if x2 > x1 and y2 > y1:
-            search_img = img[y1:y2, x1:x2]
+            search_bgr = img[y1:y2, x1:x2]
             offset_x, offset_y = x1, y1
         else:
-            search_img = img
+            search_bgr = img
             offset_x = offset_y = 0
     else:
-        search_img = img
+        search_bgr = img
         offset_x = offset_y = 0
 
-    th, tw = template.shape[:2]
+    search_img = cv2.cvtColor(search_bgr, cv2.COLOR_BGR2GRAY)
     min_side = 8
 
-    if scale_range is None:
+    if capture_size is not None and len(capture_size) == 2 and capture_size[0] > 0:
+        current_w = search_bgr.shape[1]
+        scale = current_w / capture_size[0]
+        scales = [max(0.5, min(2.0, scale))]
+    elif scale_range is None:
         scales = [1.0]
     else:
         num = int((scale_range[1] - scale_range[0]) / scale_step) + 1

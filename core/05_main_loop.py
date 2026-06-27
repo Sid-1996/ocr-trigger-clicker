@@ -42,6 +42,7 @@ init_engine = _ocr.init_engine
 Rule = _rule.Rule
 load_rules = _rule.load_rules
 save_rules = _rule.save_rules
+get_capture_size = _rule.get_capture_size
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
@@ -284,8 +285,14 @@ class MainLoop:
 
         roi = params.get("roi")
         threshold = params.get("threshold", 0.8)
+        capture_size = get_capture_size(self._rules_path)
         results = match_template(
-            ctx.img, template_path, roi, threshold, template_data=template_data or None
+            ctx.img,
+            template_path,
+            roi,
+            threshold,
+            template_data=template_data or None,
+            capture_size=capture_size,
         )
         if not results:
             return self._handle_on_fail(params, ctx)

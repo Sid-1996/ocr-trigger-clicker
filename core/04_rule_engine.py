@@ -583,6 +583,41 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
         return None
 
 
+def get_capture_size(path: str) -> list | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        cs = data.get("capture_size")
+        if isinstance(cs, list) and len(cs) == 2:
+            return [int(cs[0]), int(cs[1])]
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
+def set_capture_size(path: str, w: int, h: int) -> bool:
+    tmp_path: str = ""
+    try:
+        p = Path(path)
+        if p.exists():
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {}
+        data["capture_size"] = [w, h]
+        with tempfile.NamedTemporaryFile(
+            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp_path = f.name
+        os.replace(tmp_path, p)
+        return True
+    except (OSError, json.JSONDecodeError):
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        return False
+
+
 def migrate_old_rules():
     if any(get_tasks_dir().iterdir()):
         return

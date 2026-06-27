@@ -2740,7 +2740,10 @@ class MainWindow(QMainWindow):
         if title:
             activate_window(title)
         mod = load_sibling("capture_region", "gui/14_capture_region.py")
-        rect = mod.capture_region(parent_window=self)
+        task_path = (
+            str(Path(_tasks_dir()) / f"{self._current_task}.json") if self._current_task else ""
+        )
+        rect = mod.capture_region(parent_window=self, task_path=task_path, window_title=title)
         if not rect:
             return None
         if title:
