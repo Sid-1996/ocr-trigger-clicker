@@ -588,9 +588,6 @@ def migrate_old_rules():
         save_task("預設任務", rules)
 
 
-# ── Compat wrappers (TODO Phase 2: remove) ──
-
-
 if __name__ == "__main__":
     print("=== Rule Engine Self-Check ===\n")
 
