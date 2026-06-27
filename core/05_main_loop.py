@@ -722,8 +722,9 @@ class MainLoop:
                     "id": r.id,
                     "name": r.name,
                     "enabled": r.enabled,
+                    "pointer": i == self._rule_pointer,
                 }
-                for r in self._rules
+                for i, r in enumerate(self._rules)
             ]
 
 

@@ -2235,10 +2235,16 @@ class MainWindow(QMainWindow):
 
     def _update_rule_status(self):
         if not self._loop or not self._loop.is_running:
+            for i in range(self._rule_list.topLevelItemCount()):
+                item = self._rule_list.topLevelItem(i)
+                item.setForeground(0, QColor())
+                for j in range(item.childCount()):
+                    item.child(j).setForeground(0, QColor())
             self._refresh_rule_list()
             return
         statuses = self._loop.get_rules_status()
         status_map = {s["id"]: s for s in statuses}
+        pointer_id = next((s["id"] for s in statuses if s.get("pointer")), None)
 
         def _set_text(item):
             sid = item.data(0, Qt.ItemDataRole.UserRole)
@@ -2251,6 +2257,10 @@ class MainWindow(QMainWindow):
             if item.text(0) != base:
                 item.setText(0, base)
             item.setIcon(0, self._make_circle_icon(icon_color))
+            if sid == pointer_id:
+                item.setForeground(0, QColor("#4fc3f7"))
+            else:
+                item.setForeground(0, QColor())
 
         def _walk(item):
             _set_text(item)
