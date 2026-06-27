@@ -500,6 +500,14 @@ class _StepListWidget(QWidget):
         row.mousePressEvent = lambda e, i=idx: self._toggle_expand(i)
         return row
 
+    def _expand_advanced(self, form):
+        if hasattr(form, "_on_fail_expanded"):
+            form._on_fail_expanded = True
+            form._on_fail_container.setVisible(True)
+            if hasattr(form, "_toggle_btn"):
+                text = form._toggle_btn.text()
+                form._toggle_btn.setText(text.replace("▶", "▼"))
+
     def _toggle_expand(self, idx: int):
         if self._expanded_idx == idx:
             self._collapse()
@@ -510,6 +518,8 @@ class _StepListWidget(QWidget):
             self._expanded_idx = idx
             self._expanded_form = form
             self._layout.insertWidget(self._rows.index(self._rows[idx]) + 1, form)
+            if not self._simplified_mode:
+                self._expand_advanced(form)
 
     def _collapse(self):
         if self._expanded_form:
@@ -1742,6 +1752,8 @@ class MainWindow(QMainWindow):
         simplified = config.get("simplified_mode", False)
         if simplified:
             self._simplified_btn.setChecked(True)
+            self._simplified_btn.setText("簡易")
+            self._simplified_btn.setToolTip("目前為簡易模式，點擊切換至進階模式")
             self._simplified_mode = True
             self._step_list.set_simplified_mode(True)
             self._step_list._rebuild()
@@ -1814,10 +1826,10 @@ class MainWindow(QMainWindow):
         self._guide_btn.setToolTip("開啟 GitHub Pages 的互動式使用指引")
         self._guide_btn.clicked.connect(self._open_guide)
         toolbar.addWidget(self._guide_btn)
-        self._simplified_btn = QPushButton("簡易")
+        self._simplified_btn = QPushButton("進階")
         self._simplified_btn.setCheckable(True)
         self._simplified_btn.setChecked(False)
-        self._simplified_btn.setToolTip("切換至簡易模式（僅顯示核心欄位）")
+        self._simplified_btn.setToolTip("目前為進階模式，點擊切換至簡易模式")
         self._simplified_btn.clicked.connect(self._toggle_simplified_mode)
         toolbar.addWidget(self._simplified_btn)
         layout.addLayout(toolbar)
@@ -2053,6 +2065,12 @@ class MainWindow(QMainWindow):
         self._simplified_mode = self._simplified_btn.isChecked()
         self._step_list.set_simplified_mode(self._simplified_mode)
         self._step_list._rebuild()
+        if self._simplified_mode:
+            self._simplified_btn.setText("簡易")
+            self._simplified_btn.setToolTip("目前為簡易模式，點擊切換至進階模式")
+        else:
+            self._simplified_btn.setText("進階")
+            self._simplified_btn.setToolTip("目前為進階模式，點擊切換至簡易模式")
         config = self._load_config()
         config["simplified_mode"] = self._simplified_mode
         self._save_config(config)
