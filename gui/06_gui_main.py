@@ -778,15 +778,14 @@ class _MatchImageStepForm(QWidget):
         # ROI
         roi = p.get("roi", {})
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel(
-            "全視窗" if z else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
-        )
+        self._roi_label = QLabel("全視窗" if z else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選搜尋區域")
         self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
         self._roi_btn.clicked.connect(self._pick_roi)
         roi_row = QWidget()
         rr_layout = QHBoxLayout(roi_row)
         rr_layout.setContentsMargins(0, 0, 0, 0)
+
         rr_layout.addWidget(self._roi_label)
         rr_layout.addWidget(self._roi_btn)
         form.addRow("搜尋區域:", roi_row)
@@ -1005,11 +1004,7 @@ class _MatchImageStepForm(QWidget):
             if result:
                 self._step.params["roi"] = result
                 z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                self._roi_label.setText(
-                    "全視窗"
-                    if z
-                    else f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
-                )
+                self._roi_label.setText("全視窗" if z else _fmt_roi(result))
                 self.save()
                 self._list.steps_changed.emit()
 
@@ -1082,9 +1077,7 @@ class _DetectStepForm(QWidget):
 
         roi = p.get("roi", {})
         zero = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel(
-            "全視窗" if zero else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
-        )
+        self._roi_label = QLabel("全視窗" if zero else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選偵測區域")
         self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
         if roi_cb:
@@ -1206,11 +1199,7 @@ class _DetectStepForm(QWidget):
             if result:
                 self._step.params["roi"] = result
                 z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                self._roi_label.setText(
-                    "全視窗"
-                    if z
-                    else f"x={result['x']} y={result['y']} w={result['w']} h={result['h']}"
-                )
+                self._roi_label.setText("全視窗" if z else _fmt_roi(result))
                 self.save()
                 self._list.steps_changed.emit()
 
@@ -1462,9 +1451,7 @@ class _CompareStepForm(QWidget):
             "h": roi.get("h", 0),
         }
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel(
-            "全視窗" if z else f"x={roi['x']} y={roi['y']} w={roi['w']} h={roi['h']}"
-        )
+        self._roi_label = QLabel("全視窗" if z else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選偵測區域")
         self._roi_btn.setToolTip("框選要進行 OCR 的區域，不設定時掃描整個視窗")
         self._roi_btn.clicked.connect(self._pick_roi)
@@ -1592,7 +1579,8 @@ class _CompareStepForm(QWidget):
         result = self._roi_cb()
         if result:
             self._roi = {"x": result[0], "y": result[1], "w": result[2], "h": result[3]}
-            self._roi_label.setText(f"x={result[0]} y={result[1]} w={result[2]} h={result[3]}")
+            z = all(v == 0 for v in result)
+            self._roi_label.setText("全視窗" if z else _fmt_roi(self._roi))
             self.save()
             self._list.steps_changed.emit()
 
@@ -3473,6 +3461,16 @@ class MainWindow(QMainWindow):
 
     def _run_dry_run(self, rule: Rule, img: np.ndarray):
         """Execute all steps in dry-run mode, collect visual markers + log."""
+
+        def _resolve(roi):
+            W, H = img.shape[1], img.shape[0]
+            x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
+            if x == 0 and y == 0 and w == 0 and h == 0:
+                return roi
+            if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
+                return {"x": int(x * W), "y": int(y * H), "w": int(w * W), "h": int(h * H)}
+            return roi
+
         markers = []
         log = []
         log.append(f"規則「{rule.name}」— {len(rule.steps)} 個步驟")
@@ -3488,7 +3486,7 @@ class MainWindow(QMainWindow):
                     if not text:
                         log.append(f"[{idx + 1}] ⚠ 偵測文字為空白")
                         continue
-                    roi = p.get("roi", {})
+                    roi = _resolve(p.get("roi", {}))
                     use_roi = any(roi.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
                     if use_roi:
                         roi_img = crop_roi(img, roi)
@@ -3695,7 +3693,7 @@ class MainWindow(QMainWindow):
                     if not tmpl_data.strip() and not tmpl_path.strip():
                         log.append(f"[{idx + 1}] ⚠ 未設定範本圖片")
                         continue
-                    roi = p.get("roi", {})
+                    roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
                     results = _main_loop_mod.match_template(
                         img, tmpl_path, roi, threshold, template_data=tmpl_data or None
