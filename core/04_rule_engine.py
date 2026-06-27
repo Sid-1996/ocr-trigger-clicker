@@ -444,6 +444,36 @@ def migrate_v2_to_v3(data: dict) -> dict:
     return data
 
 
+def _migrate_roi_to_ratio(data: dict) -> dict:
+    cap = data.get("capture_size")
+    if not cap or len(cap) < 2:
+        return data
+    W, H = cap[0], cap[1]
+    if W <= 0 or H <= 0:
+        return data
+
+    for rule in data.get("rules", []):
+        for step in rule.get("steps", []):
+            if step.get("type") in ("detect", "compare", "match_image"):
+                if "roi" in step.get("params", {}):
+                    roi = step["params"]["roi"]
+                    x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
+                    if not (x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0):
+                        step["params"]["roi"] = {"x": x / W, "y": y / H, "w": w / W, "h": h / H}
+            elif step.get("type") == "click":
+                p = step.get("params", {})
+                px, py = p.get("x", 0), p.get("y", 0)
+                if not (px <= 1.0 and py <= 1.0):
+                    step["params"] = {**p, "x": px / W, "y": py / H}
+            elif step.get("type") == "drag":
+                p = step.get("params", {})
+                px, py = p.get("x", 0), p.get("y", 0)
+                if px > 1.0 or py > 1.0:
+                    step["params"] = {**p, "x": px / W, "y": py / H}
+    data["ratio_coords"] = True
+    return data
+
+
 def load_rules(path: str) -> list[Rule]:
     p = Path(path)
     if not p.exists():
@@ -457,6 +487,20 @@ def load_rules(path: str) -> list[Rule]:
 
     if "groups" not in data:
         data = migrate_v2_to_v3(data)
+        tmp_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+            ) as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                tmp_path = f.name
+            os.replace(tmp_path, p)
+        except OSError:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+
+    if not data.get("ratio_coords"):
+        data = _migrate_roi_to_ratio(data)
         tmp_path = ""
         try:
             with tempfile.NamedTemporaryFile(

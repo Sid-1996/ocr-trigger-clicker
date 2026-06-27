@@ -3341,6 +3341,9 @@ class MainWindow(QMainWindow):
                 result = (result[0] - wr["x"], result[1] - wr["y"])
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(f"已選取點擊座標: X={result[0]}, Y={result[1]}")
+        # Convert to ratio before storing
+        if title and wr and wr["w"] > 0 and wr["h"] > 0:
+            result = (result[0] / wr["w"], result[1] / wr["h"])
         return result
 
     # === ROI selector ===
@@ -3366,6 +3369,14 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(
             f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
+        # Convert to ratio before storing
+        if wr and wr["w"] > 0 and wr["h"] > 0:
+            result = {
+                "x": result["x"] / wr["w"],
+                "y": result["y"] / wr["h"],
+                "w": result["w"] / wr["w"],
+                "h": result["h"] / wr["h"],
+            }
         return result
 
     def _open_capture_region(self):

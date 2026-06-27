@@ -274,6 +274,30 @@ class MainLoop:
             r.center_y = r.y + r.h // 2
         return results
 
+    def _resolve_roi(self, roi: dict, rect: dict) -> dict:
+        x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
+        if x == 0 and y == 0 and w == 0 and h == 0:
+            return roi
+        W, H = rect["w"], rect["h"]
+        if W <= 0 or H <= 0:
+            return roi
+        if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
+            return {
+                "x": int(round(x * W)),
+                "y": int(round(y * H)),
+                "w": int(round(w * W)),
+                "h": int(round(h * H)),
+            }
+        return roi
+
+    def _resolve_point(self, px: float, py: float, rect: dict) -> tuple[int, int]:
+        W, H = rect["w"], rect["h"]
+        if W <= 0 or H <= 0:
+            return int(px), int(py)
+        if px <= 1.0 and py <= 1.0:
+            return int(round(px * W)), int(round(py * H))
+        return int(px), int(py)
+
     def _make_trigger_log(self, rule, text: str, x: int, y: int) -> TriggerLog:
         return TriggerLog(
             timestamp=time.time(),
@@ -297,7 +321,7 @@ class MainLoop:
         if not text.strip():
             return StepResult("stop")
 
-        roi = params.get("roi")
+        roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         if not results:
             return self._handle_on_fail(params, ctx)
@@ -317,7 +341,7 @@ class MainLoop:
         if not template_data.strip() and not template_path.strip():
             return StepResult("stop")
 
-        roi = params.get("roi", {})
+        roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         if roi_is_empty and ctx.img.shape[1] > 800:
             self._log("⚠ match_image 未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
@@ -341,7 +365,7 @@ class MainLoop:
         return StepResult("continue")
 
     def _handle_compare(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
-        roi = params.get("roi", {})
+        roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         combined = " ".join(r.text for r in results)
         pattern = params.get("pattern", r"-?\d+\.?\d*")
@@ -424,8 +448,9 @@ class MainLoop:
             cy = ctx.matched_text.center_y + dy
             matched_text = ctx.matched_text.text
         elif target == "custom":
-            cx = params.get("x", 0) + dx
-            cy = params.get("y", 0) + dy
+            cx, cy = self._resolve_point(params.get("x", 0), params.get("y", 0), ctx.rect)
+            cx += dx
+            cy += dy
             matched_text = ""
         elif target == "click_text":
             click_text = params.get("text", "")
@@ -487,8 +512,7 @@ class MainLoop:
             sx = ctx.matched_text.center_x
             sy = ctx.matched_text.center_y
         elif target == "custom":
-            sx = params.get("x", 0)
-            sy = params.get("y", 0)
+            sx, sy = self._resolve_point(params.get("x", 0), params.get("y", 0), ctx.rect)
         elif target == "click_text":
             click_text = params.get("text", "")
             if not click_text:
@@ -1398,4 +1422,31 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "no background → should stop after group done"
     print("  [OK] No background → stops normally")
 
-    print("\n=== All 20 tests passed ===")
+    # ── Test 21: _resolve_roi ratio conversion ──
+    rect = {"w": 1920, "h": 1080}
+    # ratio input → pixel output
+    r = ml._resolve_roi({"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.3}, rect)
+    assert r == {"x": 192, "y": 216, "w": 960, "h": 324}, f"{r}"
+    print("  [OK] _resolve_roi ratio → pixels")
+
+    # all zeros → passthrough
+    r = ml._resolve_roi({"x": 0, "y": 0, "w": 0, "h": 0}, rect)
+    assert r == {"x": 0, "y": 0, "w": 0, "h": 0}
+    print("  [OK] _resolve_roi zero → passthrough")
+
+    # old format pixels → passthrough
+    r = ml._resolve_roi({"x": 100, "y": 200, "w": 300, "h": 400}, rect)
+    assert r == {"x": 100, "y": 200, "w": 300, "h": 400}
+    print("  [OK] _resolve_roi absolute pixels → passthrough")
+
+    # ── Test 22: _resolve_point ratio conversion ──
+    px, py = ml._resolve_point(0.5, 0.25, rect)
+    assert (px, py) == (960, 270), f"{(px, py)}"
+    print("  [OK] _resolve_point ratio → pixels")
+
+    # old format pixels → passthrough
+    px, py = ml._resolve_point(123, 456, rect)
+    assert (px, py) == (123, 456)
+    print("  [OK] _resolve_point absolute → passthrough")
+
+    print("\n=== All 22 tests passed ===")
