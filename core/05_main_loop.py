@@ -199,6 +199,12 @@ class MainLoop:
             self._rule_pointer = 0
             self._rounds_completed = 0
             self._max_pointer_reached = -1
+            # skip past initial background rules
+            while self._rule_pointer < len(self._rules) and (
+                not self._rules[self._rule_pointer].enabled
+                or self._rules[self._rule_pointer].background
+            ):
+                self._rule_pointer += 1
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -539,12 +545,26 @@ class MainLoop:
         if not rules_snapshot:
             return
 
+        # ponytail: run all background rules each frame; jumps are cancelled
+        for rule in rules_snapshot:
+            if rule.enabled and rule.background:
+                self._process_counter += 1
+                saved_ptr = self._rule_pointer
+                try:
+                    self._run_rule(rule, img, rect)
+                except Exception as e:
+                    if self._verbose:
+                        self._log(f"背景規則「{rule.name}」異常: {e}")
+                    if self.on_warning:
+                        self.on_warning(f"背景規則「{rule.name}」異常: {e}")
+                self._rule_pointer = saved_ptr
+
         if self._rule_pointer >= len(rules_snapshot):
             self._rule_pointer = self._advance_pointer(rules_snapshot)
             return
 
         rule = rules_snapshot[self._rule_pointer]
-        if not rule.enabled:
+        if not rule.enabled or rule.background:
             self._rule_pointer = self._advance_pointer(rules_snapshot)
             return
 
@@ -566,7 +586,7 @@ class MainLoop:
 
     def _advance_pointer(self, rules: list[Rule]) -> int:
         ptr = self._rule_pointer + 1
-        while ptr < len(rules) and not rules[ptr].enabled:
+        while ptr < len(rules) and (not rules[ptr].enabled or rules[ptr].background):
             ptr += 1
         if ptr >= len(rules):
             ptr = 0
@@ -790,6 +810,7 @@ class MainLoop:
                     "id": r.id,
                     "name": r.name,
                     "enabled": r.enabled,
+                    "background": r.background,
                     "pointer": i == self._rule_pointer,
                 }
                 for i, r in enumerate(self._rules)

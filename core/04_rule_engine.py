@@ -49,6 +49,7 @@ class Rule:
     name: str
     enabled: bool
     steps: list[Step]
+    background: bool = False
 
 
 _STEP_DEFAULTS = {
@@ -324,6 +325,7 @@ def _dict_to_rule(d: dict) -> Rule:
         name=str(d.get("name", "")),
         enabled=bool(d.get("enabled", True)),
         steps=steps,
+        background=bool(d.get("background", False)),
     )
 
 

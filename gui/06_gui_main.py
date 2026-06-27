@@ -1953,6 +1953,12 @@ class MainWindow(QMainWindow):
         name_row.addWidget(QLabel("啟用:"))
         self._edit_enabled = QCheckBox()
         name_row.addWidget(self._edit_enabled)
+        name_row.addWidget(QLabel("背景:"))
+        self._edit_background = QCheckBox()
+        self._edit_background.setToolTip(
+            "背景規則：每幀持續偵測，不受主流程順序影響，不能使用跳轉動作"
+        )
+        name_row.addWidget(self._edit_background)
         edit_layout.addLayout(name_row)
 
         edit_layout.addWidget(QLabel("步驟列表:"))
@@ -2078,6 +2084,7 @@ class MainWindow(QMainWindow):
         self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
+        self._edit_background.stateChanged.connect(self._on_background_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
         self._debug_back_btn.clicked.connect(self._switch_to_rules)
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
@@ -2428,7 +2435,7 @@ class MainWindow(QMainWindow):
             for rid in top_ids if parent_id is None else []:
                 r = rule_map[rid]
                 item = QTreeWidgetItem()
-                text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
+                text = f"{'🔄 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
                 item.setText(0, text)
                 item.setData(0, Qt.ItemDataRole.UserRole, r.id)
                 item.setIcon(
@@ -2486,7 +2493,9 @@ class MainWindow(QMainWindow):
                 return
             enabled = st["enabled"]
             icon_color = (0, 180, 0) if enabled else (160, 160, 160)
-            base = f"[{'✓' if enabled else '✗'}] {st['name']}"
+            base = (
+                f"{'🔄 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
+            )
             if item.text(0) != base:
                 item.setText(0, base)
             item.setIcon(0, self._make_circle_icon(icon_color))
@@ -2550,12 +2559,12 @@ class MainWindow(QMainWindow):
                 if prev_rule:
                     prev_rule.name = self._edit_name.text()
                     prev_rule.enabled = self._edit_enabled.isChecked()
+                    prev_rule.background = self._edit_background.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
                     self._flush_save()
-                    previous.setText(
-                        0,
-                        f"[{'✓' if prev_rule.enabled else '✗'}] {prev_rule.name}",
-                    )
+                    prefix = "🔄 " if prev_rule.background else ""
+                    status = "✓" if prev_rule.enabled else "✗"
+                    previous.setText(0, f"{prefix}[{status}] {prev_rule.name}")
                     if self._loop:
                         self._loop.reload_rules()
         if current:
@@ -2602,6 +2611,7 @@ class MainWindow(QMainWindow):
         self._edit_enabled.setEnabled(True)
         self._edit_name.setText(rule.name)
         self._edit_enabled.setChecked(rule.enabled)
+        self._edit_background.setChecked(getattr(rule, "background", False))
         self._step_list.set_rule_id(rule.id)
         self._step_list.set_steps(rule.steps)
 
@@ -2613,7 +2623,22 @@ class MainWindow(QMainWindow):
         save_task(self._current_task, self._rules)
         item = self._rule_list.currentItem()
         if item:
-            text = f"[{'✓' if rule.enabled else '✗'}] {rule.name}"
+            prefix = "🔄 " if rule.background else ""
+            text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
+            item.setText(0, text)
+        if self._loop:
+            self._loop.reload_rules()
+
+    def _on_background_changed(self, state):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.background = bool(state)
+        save_task(self._current_task, self._rules)
+        item = self._rule_list.currentItem()
+        if item:
+            prefix = "🔄 " if rule.background else ""
+            text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
         if self._loop:
             self._loop.reload_rules()
@@ -3562,6 +3587,7 @@ class MainWindow(QMainWindow):
         self._edit_test_btn.setEnabled(enabled)
         self._edit_name.setEnabled(enabled)
         self._edit_enabled.setEnabled(enabled)
+        self._edit_background.setEnabled(enabled)
         self._step_list.setEnabled(enabled)
         if enabled:
             self._show_rule_detail(self._get_current_rule())
