@@ -73,6 +73,16 @@ class _NoWheelCombo(QComboBox):
         e.ignore()
 
 
+class _WindowCombo(_NoWheelCombo):
+    def __init__(self, refresh_fn, parent=None):
+        super().__init__(parent)
+        self._refresh_fn = refresh_fn
+
+    def showPopup(self):
+        self._refresh_fn()
+        super().showPopup()
+
+
 class _KeyCombo(_NoWheelCombo):
     def keyPressEvent(self, event):
         text = event.text()
@@ -1768,14 +1778,11 @@ class MainWindow(QMainWindow):
         toolbar = QHBoxLayout()
 
         # -- Window section --
-        self._window_combo = _NoWheelCombo()
+        self._window_combo = _WindowCombo(self._refresh_window_list)
         self._window_combo.setMinimumWidth(250)
-        self._window_combo.setPlaceholderText("← 點擊「重新整理」載入視窗")
-        self._refresh_btn = QPushButton("重新整理")
-        self._refresh_btn.setToolTip("重新掃描所有可見視窗")
+        self._window_combo.setPlaceholderText("請選擇目標視窗")
         toolbar.addWidget(QLabel("視窗:"))
         toolbar.addWidget(self._window_combo)
-        toolbar.addWidget(self._refresh_btn)
 
         toolbar.addSpacing(8)
         sep = QFrame()
@@ -2025,7 +2032,6 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(3000, self._check_version)
 
     def _connect_signals(self):
-        self._refresh_btn.clicked.connect(self._refresh_window_list)
         self._window_combo.currentTextChanged.connect(self._on_window_changed)
         self._btn_toggle.clicked.connect(self._toggle_start)
         self._add_rule_btn.clicked.connect(self._add_rule)
@@ -2085,7 +2091,7 @@ class MainWindow(QMainWindow):
         if not windows:
             self._window_combo.setPlaceholderText("⚠ 未發現任何視窗，請先開啟目標程式")
         else:
-            self._window_combo.setPlaceholderText("← 請選擇目標視窗")
+            self._window_combo.setPlaceholderText("請選擇目標視窗")
             for w in windows:
                 self._window_combo.addItem(w)
 
@@ -3477,7 +3483,6 @@ class MainWindow(QMainWindow):
         self._rule_list.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
-        self._refresh_btn.setEnabled(enabled)
         self._debug_btn.setEnabled(enabled)
 
         self._task_combo.setEnabled(enabled)
