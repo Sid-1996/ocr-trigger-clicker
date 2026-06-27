@@ -124,6 +124,34 @@ class _RuleTreeWidget(QTreeWidget):
         if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
             event.ignore()
             return
+        src = self.currentItem()
+        if src is None:
+            event.ignore()
+            return
+        src_data = src.data(0, Qt.ItemDataRole.UserRole)
+        if src_data and src_data[0] == "rule":
+            target_item = self.itemAt(event.position().toPoint())
+            if target_item:
+                tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
+                src_parent = src.parent()
+                if src_parent:
+                    src_gid = src_parent.data(0, Qt.ItemDataRole.UserRole)[1]
+                else:
+                    src_gid = None
+                if tgt_data:
+                    if tgt_data[0] == "group":
+                        tgt_gid = tgt_data[1]
+                    else:
+                        tgt_parent = target_item.parent()
+                        if tgt_parent:
+                            tgt_gid = tgt_parent.data(0, Qt.ItemDataRole.UserRole)[1]
+                        else:
+                            tgt_gid = None
+                else:
+                    tgt_gid = src_gid
+                if src_gid is not None and tgt_gid is not None and src_gid != tgt_gid:
+                    event.ignore()
+                    return
         super().dropEvent(event)
 
 
@@ -1756,6 +1784,9 @@ preview_import_task = _rule_mod.preview_import_task
 ImportPreview = _rule_mod.ImportPreview
 migrate_old_rules = _rule_mod.migrate_old_rules
 Step = _rule_mod.Step
+RuleGroup = _rule_mod.RuleGroup
+load_groups = _rule_mod.load_groups
+save_groups = _rule_mod.save_groups
 _STEP_DEFAULTS = _rule_mod._STEP_DEFAULTS
 _MAX_IMPORT_SIZE = _rule_mod._MAX_IMPORT_SIZE
 
@@ -1868,7 +1899,8 @@ class MainWindow(QMainWindow):
             self._selected_rule_id: Optional[str] = None
             self._window_lost = False
             self._current_task: str = ""
-            self._collapsed_ids: set[str] = set()
+            self._groups: list[RuleGroup] = []
+            self._collapsed_groups: set[str] = set()
             self._simplified_mode = False
 
             self._setup_ui()
@@ -2406,14 +2438,16 @@ class MainWindow(QMainWindow):
             return
         self._current_task = name
         self._rules = load_task(name)
+        task_path = str(Path(_tasks_dir()) / f"{name}.json")
+        self._groups = load_groups(task_path)
         # load collapsed state from task file
-        self._collapsed_ids = set()
+        self._collapsed_groups = set()
         try:
-            task_path = Path(_tasks_dir()) / f"{name}.json"
-            if task_path.exists():
-                with open(task_path, encoding="utf-8") as f:
+            p = Path(task_path)
+            if p.exists():
+                with open(p, encoding="utf-8") as f:
                     data = json.load(f)
-                self._collapsed_ids = set(data.get("_collapsed", []))
+                self._collapsed_groups = set(data.get("_collapsed", []))
         except Exception:
             pass
         config = self._load_config()
@@ -2448,7 +2482,9 @@ class MainWindow(QMainWindow):
         if name in existing:
             QMessageBox.warning(self, "任務已存在", f"任務「{name}」已經存在。")
             return
+        self._groups = [RuleGroup(id="__default__", name="所有規則")]
         save_task(name, [])
+        save_groups(self._groups, str(Path(_tasks_dir()) / f"{name}.json"))
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
         if idx >= 0:
@@ -2471,7 +2507,7 @@ class MainWindow(QMainWindow):
         if name in existing:
             QMessageBox.warning(self, "任務已存在", f"任務「{name}」已經存在。")
             return
-        save_task(self._current_task, self._rules)
+        self._flush_save()
         if not rename_task(old_name, name):
             QMessageBox.warning(self, "重新命名失敗", "無法重新命名任務。")
             return
@@ -2628,53 +2664,55 @@ class MainWindow(QMainWindow):
     def _refresh_rule_list(self):
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
-
         rule_map = {r.id: r for r in self._rules}
 
-        # flat list — no wait_rule child/parent tree anymore
-        top_ids = [r.id for r in self._rules]
+        if not self._groups:
+            all_ids = [r.id for r in self._rules]
+            if all_ids:
+                default = RuleGroup(id="__default__", name="所有規則", rule_ids=list(all_ids))
+                self._groups = [default]
+            else:
+                self._groups = [RuleGroup(id="__default__", name="所有規則")]
 
         selected_item = None
-
-        def _build(parent_id: str | None) -> list[QTreeWidgetItem]:
-            items = []
-            for rid in top_ids if parent_id is None else []:
-                r = rule_map[rid]
-                item = QTreeWidgetItem()
+        for g in self._groups:
+            group_item = QTreeWidgetItem()
+            group_item.setText(0, f"📁 {g.name}")
+            group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
+            group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
+            for rid in g.rule_ids:
+                r = rule_map.get(rid)
+                if r is None:
+                    continue
+                child = QTreeWidgetItem()
                 text = f"{'🔄 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
-                item.setText(0, text)
-                item.setData(0, Qt.ItemDataRole.UserRole, r.id)
-                item.setIcon(
+                child.setText(0, text)
+                child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
+                child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
                 )
-                items.append(item)
+                group_item.addChild(child)
                 if r.id == self._selected_rule_id:
-                    nonlocal selected_item
-                    selected_item = item
-            return items
-
-        for item in _build(None):
-            self._rule_list.addTopLevelItem(item)
+                    selected_item = child
+            self._rule_list.addTopLevelItem(group_item)
 
         self._rule_list.expandAll()
-
-        # collapse items the user previously collapsed
-        def _collapse_items(item):
-            rid = item.data(0, Qt.ItemDataRole.UserRole)
-            if rid and rid in self._collapsed_ids:
-                item.setExpanded(False)
-            for j in range(item.childCount()):
-                _collapse_items(item.child(j))
-
         for i in range(self._rule_list.topLevelItemCount()):
-            _collapse_items(self._rule_list.topLevelItem(i))
+            item = self._rule_list.topLevelItem(i)
+            gid = item.data(0, Qt.ItemDataRole.UserRole)[1]
+            if gid in self._collapsed_groups:
+                item.setExpanded(False)
         self._rule_list.blockSignals(False)
         self._rule_hint.setVisible(len(self._rules) == 0)
 
         if selected_item:
             self._rule_list.setCurrentItem(selected_item)
         elif self._rule_list.topLevelItemCount() > 0:
-            self._rule_list.setCurrentItem(self._rule_list.topLevelItem(0))
+            self._rule_list.topLevelItem(0).setExpanded(True)
+            if self._rule_list.topLevelItem(0).childCount() > 0:
+                self._rule_list.setCurrentItem(self._rule_list.topLevelItem(0).child(0))
+            else:
+                self._rule_list.setCurrentItem(self._rule_list.topLevelItem(0))
         else:
             self._selected_rule_id = None
             self._show_rule_detail(None)
@@ -2696,7 +2734,10 @@ class MainWindow(QMainWindow):
         pointer_id = next((s["id"] for s in statuses if s.get("pointer")), None)
 
         def _set_text(item):
-            sid = item.data(0, Qt.ItemDataRole.UserRole)
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data and data[0] == "group":
+                return
+            sid = data[1] if data else None
             st = status_map.get(sid)
             if st is None:
                 return
@@ -2718,22 +2759,19 @@ class MainWindow(QMainWindow):
             for j in range(item.childCount()):
                 _walk(item.child(j))
 
-        try:
-            for i in range(self._rule_list.topLevelItemCount()):
-                _walk(self._rule_list.topLevelItem(i))
-        finally:
-            pass
+        for i in range(self._rule_list.topLevelItemCount()):
+            _walk(self._rule_list.topLevelItem(i))
 
     def _on_rule_item_collapsed(self, item):
-        rid = item.data(0, Qt.ItemDataRole.UserRole)
-        if rid:
-            self._collapsed_ids.add(rid)
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data and data[0] == "group":
+            self._collapsed_groups.add(data[1])
             self._persist_collapsed()
 
     def _on_rule_item_expanded(self, item):
-        rid = item.data(0, Qt.ItemDataRole.UserRole)
-        if rid:
-            self._collapsed_ids.discard(rid)
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data and data[0] == "group":
+            self._collapsed_groups.discard(data[1])
             self._persist_collapsed()
 
     def _persist_collapsed(self):
@@ -2746,7 +2784,7 @@ class MainWindow(QMainWindow):
                     data = json.load(f)
             else:
                 data = {}
-            data["_collapsed"] = list(self._collapsed_ids)
+            data["_collapsed"] = list(self._collapsed_groups)
             tmp = task_path.with_suffix(".tmp")
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -2762,8 +2800,9 @@ class MainWindow(QMainWindow):
 
     def _on_rule_selected(self, current: QTreeWidgetItem, previous: QTreeWidgetItem):
         if previous:
-            prev_id = previous.data(0, Qt.ItemDataRole.UserRole)
-            if prev_id:
+            prev_data = previous.data(0, Qt.ItemDataRole.UserRole)
+            if prev_data and prev_data[0] == "rule":
+                prev_id = prev_data[1]
                 prev_rule = next((r for r in self._rules if r.id == prev_id), None)
                 if prev_rule:
                     prev_rule.name = self._edit_name.text()
@@ -2777,32 +2816,41 @@ class MainWindow(QMainWindow):
                     if self._loop:
                         self._loop.reload_rules()
         if current:
-            rule_id = current.data(0, Qt.ItemDataRole.UserRole)
-            rule = next((r for r in self._rules if r.id == rule_id), None)
-            if rule:
-                self._selected_rule_id = rule.id
-                self._show_rule_detail(rule)
-                return
+            data = current.data(0, Qt.ItemDataRole.UserRole)
+            if data and data[0] == "rule":
+                rule_id = data[1]
+                rule = next((r for r in self._rules if r.id == rule_id), None)
+                if rule:
+                    self._selected_rule_id = rule.id
+                    self._show_rule_detail(rule)
+                    return
         self._selected_rule_id = None
         self._show_rule_detail(None)
 
     def _on_rules_reordered(self):
         new_order = []
-
-        def _walk(item):
-            rid = item.data(0, Qt.ItemDataRole.UserRole)
-            rule = next((r for r in self._rules if r.id == rid), None)
-            if rule:
-                new_order.append(rule)
-            for j in range(item.childCount()):
-                _walk(item.child(j))
-
+        seen = set()
         for i in range(self._rule_list.topLevelItemCount()):
-            _walk(self._rule_list.topLevelItem(i))
+            group_item = self._rule_list.topLevelItem(i)
+            gdata = group_item.data(0, Qt.ItemDataRole.UserRole)
+            if gdata and gdata[0] == "group":
+                gid = gdata[1]
+                group = next((g for g in self._groups if g.id == gid), None)
+                if group:
+                    group.rule_ids = []
+                    for j in range(group_item.childCount()):
+                        child = group_item.child(j)
+                        cdata = child.data(0, Qt.ItemDataRole.UserRole)
+                        if cdata and cdata[0] == "rule":
+                            rid = cdata[1]
+                            if rid not in seen:
+                                seen.add(rid)
+                                group.rule_ids.append(rid)
+                                rule = next((r for r in self._rules if r.id == rid), None)
+                                if rule:
+                                    new_order.append(rule)
         self._rules = new_order
-        save_task(self._current_task, self._rules)
-        if self._loop:
-            self._loop.reload_rules()
+        self._flush_save()
 
     def _show_rule_detail(self, rule: Optional[Rule]):
         if rule is None:
@@ -2829,28 +2877,24 @@ class MainWindow(QMainWindow):
         if rule is None:
             return
         rule.enabled = state == 2
-        save_task(self._current_task, self._rules)
+        self._flush_save()
         item = self._rule_list.currentItem()
         if item:
             prefix = "🔄 " if rule.background else ""
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
-        if self._loop:
-            self._loop.reload_rules()
 
     def _on_background_changed(self, state):
         rule = self._get_current_rule()
         if rule is None:
             return
         rule.background = bool(state)
-        save_task(self._current_task, self._rules)
+        self._flush_save()
         item = self._rule_list.currentItem()
         if item:
             prefix = "🔄 " if rule.background else ""
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
-        if self._loop:
-            self._loop.reload_rules()
 
     def _add_rule(self):
         if self._loop and self._loop.is_running:
@@ -2859,6 +2903,27 @@ class MainWindow(QMainWindow):
         cur = self._get_current_rule()
         if cur is not None:
             cur.steps = self._step_list.get_steps()
+
+        # find target group from current selection
+        target_group = None
+        item = self._rule_list.currentItem()
+        if item:
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data:
+                if data[0] == "group":
+                    gid = data[1]
+                else:
+                    parent = item.parent()
+                    if parent:
+                        pdata = parent.data(0, Qt.ItemDataRole.UserRole)
+                        gid = pdata[1] if pdata and pdata[0] == "group" else None
+                    else:
+                        gid = None
+                if gid:
+                    target_group = next((g for g in self._groups if g.id == gid), None)
+        if target_group is None and self._groups:
+            target_group = self._groups[0]
+
         import uuid
 
         rule = Rule(
@@ -2878,7 +2943,9 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
-        save_task(self._current_task, self._rules)
+        if target_group:
+            target_group.rule_ids.append(rule.id)
+        self._flush_save()
         self._selected_rule_id = rule.id
         self._refresh_rule_list()
         if self._loop:
@@ -2943,6 +3010,8 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
+        for g in self._groups:
+            g.rule_ids = [rid for rid in g.rule_ids if rid != rule.id]
         # 清理被刪規則的孤兒範本圖片（僅限舊版檔案路徑殘留）
         images_dir = _get_images_dir()
         for step in rule.steps:
@@ -2971,21 +3040,21 @@ class MainWindow(QMainWindow):
                     and of.get("rule_id", "") == rule.id
                 ):
                     of["rule_id"] = ""
-        save_task(self._current_task, self._rules)
+        self._flush_save()
         self._refresh_rule_list()
         cur = self._get_current_rule()
         if cur is not None:
             self._step_list.set_steps(cur.steps)
-        if self._loop:
-            self._loop.reload_rules()
 
     def _on_rule_context_menu(self, pos):
         item = self._rule_list.itemAt(pos)
         if item is None:
             return
+        data = item.data(0, Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
-        act = menu.addAction("複製規則")
-        act.triggered.connect(self._duplicate_rule)
+        if data and data[0] == "rule":
+            act = menu.addAction("複製規則")
+            act.triggered.connect(self._duplicate_rule)
         menu.exec(self._rule_list.viewport().mapToGlobal(pos))
 
     def _duplicate_rule(self):
@@ -3005,7 +3074,12 @@ class MainWindow(QMainWindow):
         new.name = f"{src.name} (副本)"
         idx = self._rules.index(src) + 1
         self._rules.insert(idx, new)
-        save_task(self._current_task, self._rules)
+        for g in self._groups:
+            if src.id in g.rule_ids:
+                pos = g.rule_ids.index(src.id) + 1
+                g.rule_ids.insert(pos, new.id)
+                break
+        self._flush_save()
         self._selected_rule_id = new.id
         self._refresh_rule_list()
         if self._loop:
@@ -3025,7 +3099,9 @@ class MainWindow(QMainWindow):
     def _do_debounced_save(self):
         if not self._current_task:
             return
+        task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
         save_task(self._current_task, self._rules)
+        save_groups(self._groups, task_path)
         if self._loop:
             self._loop.reload_rules()
 
@@ -3686,11 +3762,11 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
-        save_task(self._current_task, self._rules)
+        if self._groups:
+            self._groups[0].rule_ids.append(rule.id)
+        self._flush_save()
         self._selected_rule_id = rule.id
         self._refresh_rule_list()
-        if self._loop:
-            self._loop.reload_rules()
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._show_rule_detail(rule)
@@ -3711,7 +3787,7 @@ class MainWindow(QMainWindow):
                 },
             )
         )
-        save_task(self._current_task, self._rules)
+        self._flush_save()
         self._step_list.set_steps(rule.steps)
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
