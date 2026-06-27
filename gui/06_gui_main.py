@@ -2457,7 +2457,7 @@ class MainWindow(QMainWindow):
             if p.exists():
                 with open(p, encoding="utf-8") as f:
                     data = json.load(f)
-                self._collapsed_groups = set(data.get("_collapsed", []))
+                self._collapsed_groups = set(data.get("_collapsed_groups", []))
         except Exception:
             pass
         config = self._load_config()
@@ -2796,7 +2796,7 @@ class MainWindow(QMainWindow):
                     data = json.load(f)
             else:
                 data = {}
-            data["_collapsed"] = list(self._collapsed_groups)
+            data["_collapsed_groups"] = list(self._collapsed_groups)
             tmp = task_path.with_suffix(".tmp")
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
