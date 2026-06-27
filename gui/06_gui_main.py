@@ -2140,10 +2140,13 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self._rule_hint)
 
         rule_btn_bar = QHBoxLayout()
-        self._add_rule_btn = QPushButton("新增")
+        self._add_group_btn = QPushButton("+ 群組")
+        self._add_group_btn.setToolTip("新增一個群組")
+        self._add_rule_btn = QPushButton("+ 規則")
         self._add_rule_btn.setToolTip("新增一條空白規則 (Ctrl+N)")
         self._del_rule_btn = QPushButton("刪除 (Del)")
-        self._del_rule_btn.setToolTip("刪除目前選取的規則 (Del)")
+        self._del_rule_btn.setToolTip("刪除目前選取的項目 (Del)")
+        rule_btn_bar.addWidget(self._add_group_btn)
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
         left_layout.addLayout(rule_btn_bar)
@@ -2312,11 +2315,14 @@ class MainWindow(QMainWindow):
         self._window_combo.currentTextChanged.connect(self._on_window_changed)
         self._window_combo.currentTextChanged.connect(self._on_window_selected)
         self._btn_toggle.clicked.connect(self._toggle_start)
+        self._add_group_btn.clicked.connect(self._add_group)
         self._add_rule_btn.clicked.connect(self._add_rule)
         self._del_rule_btn.clicked.connect(self._delete_rule)
         self._rule_list.currentItemChanged.connect(self._on_rule_selected)
         self._rule_list.itemCollapsed.connect(self._on_rule_item_collapsed)
         self._rule_list.itemExpanded.connect(self._on_rule_item_expanded)
+        self._rule_list.itemDoubleClicked.connect(self._on_item_double_clicked)
+        self._rule_list.itemChanged.connect(self._on_item_changed)
         self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
         self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
@@ -2679,7 +2685,9 @@ class MainWindow(QMainWindow):
             group_item = QTreeWidgetItem()
             group_item.setText(0, f"📁 {g.name}")
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
-            group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
+            group_item.setFlags(
+                group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsEditable
+            )
             for rid in g.rule_ids:
                 r = rule_map.get(rid)
                 if r is None:
@@ -2896,6 +2904,79 @@ class MainWindow(QMainWindow):
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
 
+    def _add_group(self):
+        import uuid
+
+        g = RuleGroup(id=f"group_{uuid.uuid4().hex[:8]}", name="新群組")
+        self._groups.append(g)
+        self._flush_save()
+        self._refresh_rule_list()
+        # find and select the new group item, start editing
+        for i in range(self._rule_list.topLevelItemCount()):
+            item = self._rule_list.topLevelItem(i)
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data and data[0] == "group" and data[1] == g.id:
+                self._rule_list.setCurrentItem(item)
+                self._rule_list.editItem(item)
+                break
+
+    def _delete_group(self):
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再刪除群組")
+            return
+        item = self._rule_list.currentItem()
+        if item is None:
+            return
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not data or data[0] != "group":
+            return
+        gid = data[1]
+        group = next((g for g in self._groups if g.id == gid), None)
+        if group is None:
+            return
+        rule_count = len([rid for rid in group.rule_ids if any(r.id == rid for r in self._rules)])
+        msg = f"確定刪除群組「{group.name}」？"
+        if rule_count > 0:
+            msg += f"\n群組內有 {rule_count} 條規則，這些規則也將一併刪除。"
+        if (
+            QMessageBox.question(
+                self,
+                "刪除群組",
+                msg,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        # remove rules in this group
+        self._rules = [r for r in self._rules if r.id not in group.rule_ids]
+        self._groups = [g for g in self._groups if g.id != gid]
+        self._flush_save()
+        self._selected_rule_id = None
+        self._refresh_rule_list()
+
+    def _on_item_double_clicked(self, item, column):
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data and data[0] == "group":
+            self._rule_list.editItem(item)
+
+    def _on_item_changed(self, item, column):
+        if column != 0:
+            return
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data and data[0] == "group":
+            new_name = item.text(0).strip()
+            if new_name.startswith("📁 "):
+                new_name = new_name[2:].strip()
+            gid = data[1]
+            group = next((g for g in self._groups if g.id == gid), None)
+            if group and new_name:
+                group.name = new_name
+                self._rule_list.blockSignals(True)
+                item.setText(0, f"📁 {group.name}")
+                self._rule_list.blockSignals(False)
+                self._flush_save()
+
     def _add_rule(self):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再新增規則")
@@ -2969,6 +3050,12 @@ class MainWindow(QMainWindow):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再刪除規則")
             return
+        item = self._rule_list.currentItem()
+        if item:
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data and data[0] == "group":
+                self._delete_group()
+                return
         rule = self._get_current_rule()
         if rule is None:
             return
@@ -3055,6 +3142,9 @@ class MainWindow(QMainWindow):
         if data and data[0] == "rule":
             act = menu.addAction("複製規則")
             act.triggered.connect(self._duplicate_rule)
+        elif data and data[0] == "group":
+            act = menu.addAction("刪除群組")
+            act.triggered.connect(self._delete_group)
         menu.exec(self._rule_list.viewport().mapToGlobal(pos))
 
     def _duplicate_rule(self):
@@ -3878,6 +3968,7 @@ class MainWindow(QMainWindow):
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)
+        self._add_group_btn.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
         self._debug_btn.setEnabled(enabled)
