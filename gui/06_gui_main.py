@@ -2158,9 +2158,9 @@ class MainWindow(QMainWindow):
         self._edit_enabled = QCheckBox()
         name_row.addWidget(self._edit_enabled)
         name_row.addWidget(QLabel("背景:"))
-        self._edit_background = QCheckBox()
+        self._edit_background = QCheckBox("常駐監控")
         self._edit_background.setToolTip(
-            "背景規則：每幀持續偵測，不受主流程順序影響，不能使用跳轉動作"
+            "常駐監控：每幀獨立偵測，不參與群組流程順序。\n適合隨時需要攔截的條件（如錯誤提示、緊急中斷）"
         )
         name_row.addWidget(self._edit_background)
         edit_layout.addLayout(name_row)
@@ -2666,7 +2666,7 @@ class MainWindow(QMainWindow):
                 if r is None:
                     continue
                 child = QTreeWidgetItem()
-                text = f"{'🔄 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
+                text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
                 child.setText(0, text)
                 child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
                 child.setIcon(
@@ -2724,9 +2724,7 @@ class MainWindow(QMainWindow):
                 return
             enabled = st["enabled"]
             icon_color = (0, 180, 0) if enabled else (160, 160, 160)
-            base = (
-                f"{'🔄 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
-            )
+            base = f"{'👁 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
             if item.text(0) != base:
                 item.setText(0, base)
             item.setIcon(0, self._make_circle_icon(icon_color))
@@ -2791,7 +2789,7 @@ class MainWindow(QMainWindow):
                     prev_rule.background = self._edit_background.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
                     self._flush_save()
-                    prefix = "🔄 " if prev_rule.background else ""
+                    prefix = "👁 " if prev_rule.background else ""
                     status = "✓" if prev_rule.enabled else "✗"
                     previous.setText(0, f"{prefix}[{status}] {prev_rule.name}")
                     if self._loop:
@@ -2861,7 +2859,7 @@ class MainWindow(QMainWindow):
         self._flush_save()
         item = self._rule_list.currentItem()
         if item:
-            prefix = "🔄 " if rule.background else ""
+            prefix = "👁 " if rule.background else ""
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
 
@@ -2873,7 +2871,7 @@ class MainWindow(QMainWindow):
         self._flush_save()
         item = self._rule_list.currentItem()
         if item:
-            prefix = "🔄 " if rule.background else ""
+            prefix = "👁 " if rule.background else ""
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
 
@@ -2951,7 +2949,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(QLabel("執行模式"))
         mode_combo = QComboBox()
-        mode_combo.addItem("持續執行", "loop")
+        mode_combo.addItem("循環執行", "loop")
         mode_combo.addItem("執行一次", "once")
         mode_combo.addItem("重複 N 次", "repeat")
         idx = mode_combo.findData(group.mode)
