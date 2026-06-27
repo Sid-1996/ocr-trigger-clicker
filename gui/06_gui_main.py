@@ -859,21 +859,21 @@ class _MatchImageStepForm(QWidget):
             return
         roi = self._step.params.get("roi", {})
         threshold = self._step.params.get("threshold", 0.8)
-        capture_size = (
-            self._step.params.get("capture_size") if hasattr(self, "_capture_size") else None
-        )
         img = capture(title)
         if img is None:
             self._test_result.setText("⚠️ 無法截取視窗畫面")
             self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
+        wr = get_window_rect(title)
+        current_size = [wr["w"], wr["h"]] if wr else None
         results = _tmpl_mod.match_template(
             img,
             tmpl_path,
             roi,
             threshold,
             template_data=tmpl_data or None,
-            capture_size=capture_size,
+            capture_size=None,
+            current_size=current_size,
         )
         if results:
             best = results[0]
@@ -887,7 +887,8 @@ class _MatchImageStepForm(QWidget):
                 roi,
                 0.01,
                 template_data=tmpl_data or None,
-                capture_size=capture_size,
+                capture_size=None,
+                current_size=current_size,
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)

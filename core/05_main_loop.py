@@ -293,6 +293,7 @@ class MainLoop:
             threshold,
             template_data=template_data or None,
             capture_size=capture_size,
+            current_size=[ctx.rect["w"], ctx.rect["h"]],
         )
         if not results:
             return self._handle_on_fail(params, ctx)

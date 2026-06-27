@@ -72,6 +72,7 @@ def match_template(
     scale_step: float = 0.1,
     template_data: Optional[str] = None,
     capture_size: Optional[list] = None,
+    current_size: Optional[list] = None,
 ) -> list[MatchResult]:
     if template_data:
         template_bgr = b64_to_img(template_data)
@@ -110,7 +111,7 @@ def match_template(
     min_side = 8
 
     if capture_size is not None and len(capture_size) == 2 and capture_size[0] > 0:
-        current_w = search_bgr.shape[1]
+        current_w = current_size[0] if current_size else search_bgr.shape[1]
         scale = current_w / capture_size[0]
         scales = [max(0.5, min(2.0, scale))]
     elif scale_range is None:
