@@ -125,17 +125,11 @@ class MainLoop:
         window_title: str,
         interval_ms: int = 500,
         verbose: bool = True,
-        mode: str = "loop",
-        repeat_times: int = 1,
-        between_rounds_sec: int = 0,
     ):
         self._rules_path = rules_path
         self._window_title = window_title
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
         self._verbose = verbose
-        self._mode = mode
-        self._repeat_times = repeat_times
-        self._between_rounds_sec = between_rounds_sec
         self._window_hwnd = get_window_hwnd_orig(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
 
@@ -681,16 +675,21 @@ class MainLoop:
                 self._advance_group_queue()
             else:
                 self._rule_in_group_ptr = 0
-                if self._between_rounds_sec > 0:
+                if group.between_rounds_sec > 0:
                     if self._verbose:
-                        self._log(f"每輪間隔 {self._between_rounds_sec}s")
-                    self._stop_event.wait(self._between_rounds_sec)
+                        self._log(f"每輪間隔 {group.between_rounds_sec}s")
+                    self._stop_event.wait(group.between_rounds_sec)
         else:
             self._rule_in_group_ptr = 0
 
     def _advance_group_queue(self):
         self._group_queue_idx += 1
         self._rule_in_group_ptr = 0
+        while self._group_queue_idx < len(self._active_group_ids):
+            g = self._current_group()
+            if g and g.enabled:
+                return
+            self._group_queue_idx += 1
         if self._group_queue_idx >= len(self._active_group_ids):
             self._log("所有選中群組執行完畢，停止")
             self._stop_event.set()
@@ -854,6 +853,11 @@ class MainLoop:
         self._active_group_ids = group_ids
         self._group_queue_idx = 0
         self._rule_in_group_ptr = 0
+        while self._group_queue_idx < len(self._active_group_ids):
+            g = self._current_group()
+            if g and g.enabled:
+                return
+            self._group_queue_idx += 1
 
     def set_window(self, title: str) -> bool:
         with self._window_lock:
@@ -983,8 +987,6 @@ if __name__ == "__main__":
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None
-    ml._between_rounds_sec = 0
-
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
     print("  [OK] _to_screen_coords")

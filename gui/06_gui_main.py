@@ -1830,9 +1830,6 @@ class InitWorker(QThread):
         window_title: str,
         signals: WorkerSignals,
         verbose: bool = True,
-        mode: str = "loop",
-        repeat_times: int = 1,
-        between_rounds_sec: int = 0,
         active_group_ids: Optional[list[str]] = None,
     ):
         super().__init__()
@@ -1840,9 +1837,6 @@ class InitWorker(QThread):
         self._window_title = window_title
         self._signals = signals
         self._verbose = verbose
-        self._mode = mode
-        self._repeat_times = repeat_times
-        self._between_rounds_sec = between_rounds_sec
         self._active_group_ids = active_group_ids or []
         self.loop: Optional[MainLoop] = None
 
@@ -1852,9 +1846,6 @@ class InitWorker(QThread):
                 self._rules_path,
                 self._window_title,
                 verbose=self._verbose,
-                mode=self._mode,
-                repeat_times=self._repeat_times,
-                between_rounds_sec=self._between_rounds_sec,
             )
             if self._active_group_ids:
                 loop.set_active_groups(self._active_group_ids)
@@ -2067,27 +2058,6 @@ class MainWindow(QMainWindow):
         self._debug_btn = QPushButton("🔍OCR 診斷")
         self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
         toolbar.addWidget(self._btn_toggle)
-        self._mode_combo = QComboBox()
-        self._mode_combo.addItems(["執行一次", "重複N次", "持續執行"])
-        self._mode_combo.setToolTip("執行模式：一次結束 / 重複N次 / 持續循環")
-        self._mode_combo.setMinimumWidth(100)
-        toolbar.addWidget(self._mode_combo)
-        self._repeat_spin = QSpinBox()
-        self._repeat_spin.setRange(1, 9999)
-        self._repeat_spin.setValue(1)
-        self._repeat_spin.setToolTip("重複次數")
-        self._repeat_spin.setMinimumWidth(60)
-        self._repeat_spin.setVisible(False)
-        toolbar.addWidget(self._repeat_spin)
-        self._round_interval_spin = QSpinBox()
-        self._round_interval_spin.setRange(0, 9999)
-        self._round_interval_spin.setValue(0)
-        self._round_interval_spin.setSuffix("s")
-        self._round_interval_spin.setToolTip("每輪間隔秒數")
-        self._round_interval_spin.setMinimumWidth(60)
-        self._round_interval_spin.setVisible(False)
-        toolbar.addWidget(self._round_interval_spin)
-        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         toolbar.addWidget(self._debug_btn)
         toolbar.addStretch()
         self._about_btn = QPushButton("關於")
@@ -2465,12 +2435,6 @@ class MainWindow(QMainWindow):
             idx = self._window_combo.findText(saved_window)
             if idx >= 0:
                 self._window_combo.setCurrentIndex(idx)
-        # 還原執行模式
-        mode_data = get_run_mode(task_path)
-        mode_map_rev = {"once": 0, "repeat": 1, "loop": 2}
-        self._mode_combo.setCurrentIndex(mode_map_rev.get(mode_data["mode"], 2))
-        self._repeat_spin.setValue(mode_data["repeat_times"])
-        self._round_interval_spin.setValue(mode_data["between_rounds_sec"])
 
     def _on_task_new(self):
         from PyQt6.QtWidgets import QInputDialog
@@ -2678,7 +2642,21 @@ class MainWindow(QMainWindow):
         selected_item = None
         for g in self._groups:
             group_item = QTreeWidgetItem()
-            group_item.setText(0, f"📁 {g.name}")
+            if g.enabled:
+                if g.mode == "once":
+                    prefix = "1️⃣"
+                elif g.mode == "repeat":
+                    prefix = "🔢"
+                else:
+                    prefix = "🔁"
+                text = f"{prefix} {g.name}"
+                if g.mode == "repeat":
+                    text += f" ×{g.repeat_times}"
+            else:
+                prefix = "⏸"
+                text = f"{prefix} {g.name}"
+                group_item.setForeground(0, QColor("#888888"))
+            group_item.setText(0, text)
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
             group_item.setFlags(
                 group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsEditable
@@ -2950,6 +2928,85 @@ class MainWindow(QMainWindow):
         self._selected_rule_id = None
         self._refresh_rule_list()
 
+    def _show_group_settings(self):
+        item = self._rule_list.currentItem()
+        if item is None:
+            return
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not data or data[0] != "group":
+            return
+        gid = data[1]
+        group = next((g for g in self._groups if g.id == gid), None)
+        if group is None:
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"群組設定 — {group.name}")
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(8)
+
+        layout.addWidget(QLabel("群組名稱"))
+        name_edit = QLineEdit(group.name)
+        layout.addWidget(name_edit)
+
+        layout.addWidget(QLabel("執行模式"))
+        mode_combo = QComboBox()
+        mode_combo.addItem("持續執行", "loop")
+        mode_combo.addItem("執行一次", "once")
+        mode_combo.addItem("重複 N 次", "repeat")
+        idx = mode_combo.findData(group.mode)
+        if idx >= 0:
+            mode_combo.setCurrentIndex(idx)
+        layout.addWidget(mode_combo)
+
+        repeat_widget = QWidget()
+        repeat_layout = QVBoxLayout(repeat_widget)
+        repeat_layout.setContentsMargins(0, 0, 0, 0)
+        repeat_layout.addWidget(QLabel("重複次數"))
+        repeat_spin = QSpinBox()
+        repeat_spin.setRange(1, 9999)
+        repeat_spin.setValue(group.repeat_times)
+        repeat_layout.addWidget(repeat_spin)
+        layout.addWidget(repeat_widget)
+
+        interval_widget = QWidget()
+        interval_layout = QVBoxLayout(interval_widget)
+        interval_layout.setContentsMargins(0, 0, 0, 0)
+        interval_layout.addWidget(QLabel("每輪間隔 (秒)"))
+        interval_spin = QSpinBox()
+        interval_spin.setRange(0, 99999)
+        interval_spin.setValue(group.between_rounds_sec)
+        interval_layout.addWidget(interval_spin)
+        layout.addWidget(interval_widget)
+
+        def _on_mode_changed(idx):
+            mode = mode_combo.currentData()
+            repeat_widget.setVisible(mode == "repeat")
+            interval_widget.setVisible(mode in ("loop", "repeat"))
+
+        mode_combo.currentIndexChanged.connect(_on_mode_changed)
+        _on_mode_changed(mode_combo.currentIndex())
+
+        enabled_cb = QCheckBox("啟用群組")
+        enabled_cb.setChecked(group.enabled)
+        layout.addWidget(enabled_cb)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            group.name = name_edit.text().strip() or group.name
+            group.mode = mode_combo.currentData()
+            group.repeat_times = repeat_spin.value()
+            group.between_rounds_sec = interval_spin.value()
+            group.enabled = enabled_cb.isChecked()
+            self._flush_save()
+            self._refresh_rule_list()
+
     def _on_item_double_clicked(self, item, column):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
@@ -2961,8 +3018,10 @@ class MainWindow(QMainWindow):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
             new_name = item.text(0).strip()
-            if new_name.startswith("📁 "):
-                new_name = new_name[2:].strip()
+            import re
+
+            new_name = re.sub(r"^.\s*", "", new_name).strip()
+            new_name = re.sub(r"\s*×\d+$", "", new_name).strip()
             gid = data[1]
             group = next((g for g in self._groups if g.id == gid), None)
             if group and new_name:
@@ -3138,6 +3197,9 @@ class MainWindow(QMainWindow):
             act = menu.addAction("複製規則")
             act.triggered.connect(self._duplicate_rule)
         elif data and data[0] == "group":
+            act = menu.addAction("⚙ 群組設定")
+            act.triggered.connect(self._show_group_settings)
+            menu.addSeparator()
             act = menu.addAction("刪除群組")
             act.triggered.connect(self._delete_group)
         menu.exec(self._rule_list.viewport().mapToGlobal(pos))
@@ -3895,21 +3957,18 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     # === Start / Pause ===
-    def _on_mode_changed(self, idx: int):
-        self._repeat_spin.setVisible(idx == 1)
-        self._round_interval_spin.setVisible(idx == 2)
-
     def _show_group_selection_dialog(self) -> Optional[list[str]]:
-        if len(self._groups) <= 1:
-            return [g.id for g in self._groups] if self._groups else []
+        enabled = [g for g in self._groups if g.enabled]
+        if len(enabled) <= 1:
+            return [g.id for g in enabled] if enabled else []
         dialog = QDialog(self)
         dialog.setWindowTitle("選擇要執行的群組")
         layout = QVBoxLayout(dialog)
         checks = []
-        for g in self._groups:
+        for g in enabled:
             cb = QCheckBox(g.name)
             cb.setChecked(True)
-            cb.setData(g.id)
+            cb.setProperty("gid", g.id)
             checks.append(cb)
             layout.addWidget(cb)
         buttons = QDialogButtonBox(
@@ -3921,7 +3980,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
-        return [cb.data() for cb in checks if cb.isChecked()]
+        return [cb.property("gid") for cb in checks if cb.isChecked()]
 
     def _toggle_start(self):
         if self._window_lost:
@@ -3965,18 +4024,10 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setText("初始化中...")
         self._status_bar.showMessage("正在初始化 OCR 引擎…")
         task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
-        mode_map = {0: "once", 1: "repeat", 2: "loop"}
-        mode = mode_map[self._mode_combo.currentIndex()]
-        repeat_times = self._repeat_spin.value()
-        between_rounds_sec = self._round_interval_spin.value()
-        set_run_mode(task_path, mode, repeat_times, between_rounds_sec)
         self._init_worker = InitWorker(
             str(task_path),
             title,
             self._signals,
-            mode=mode,
-            repeat_times=repeat_times,
-            between_rounds_sec=between_rounds_sec,
             active_group_ids=group_ids,
         )
         self._init_worker.finished.connect(self._on_init_finished)
@@ -4027,9 +4078,7 @@ class MainWindow(QMainWindow):
         self._edit_enabled.setEnabled(enabled)
         self._edit_background.setEnabled(enabled)
         self._step_list.setEnabled(enabled)
-        self._mode_combo.setEnabled(enabled)
-        self._repeat_spin.setEnabled(enabled)
-        self._round_interval_spin.setEnabled(enabled)
+
         if enabled:
             self._show_rule_detail(self._get_current_rule())
 

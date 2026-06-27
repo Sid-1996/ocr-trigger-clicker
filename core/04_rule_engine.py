@@ -56,6 +56,7 @@ class Rule:
 class RuleGroup:
     id: str
     name: str
+    enabled: bool = True
     mode: str = "loop"
     repeat_times: int = 1
     between_rounds_sec: int = 0
@@ -363,6 +364,7 @@ def _dict_to_group(d: dict) -> RuleGroup:
     return RuleGroup(
         id=str(d.get("id", "")),
         name=str(d.get("name", "")),
+        enabled=bool(d.get("enabled", True)),
         mode=str(d.get("mode", "loop")),
         repeat_times=int(d.get("repeat_times", 1)),
         between_rounds_sec=int(d.get("between_rounds_sec", 0)),
@@ -1142,15 +1144,22 @@ if __name__ == "__main__":
 
     # ── Test 12: _dict_to_group / _group_to_dict round-trip ──
     g_orig = RuleGroup(
-        id="rt1", name="Round Trip", mode="repeat", repeat_times=3, rule_ids=["r1", "r2"]
+        id="rt1",
+        name="Round Trip",
+        enabled=False,
+        mode="repeat",
+        repeat_times=3,
+        rule_ids=["r1", "r2"],
     )
     g_dict = _group_to_dict(g_orig)
     assert g_dict["id"] == "rt1"
+    assert g_dict["enabled"] is False
     assert g_dict["mode"] == "repeat"
     assert g_dict["rule_ids"] == ["r1", "r2"]
     g_restored = _dict_to_group(g_dict)
     assert g_restored.id == g_orig.id
     assert g_restored.name == g_orig.name
+    assert g_restored.enabled == g_orig.enabled
     assert g_restored.mode == g_orig.mode
     assert g_restored.repeat_times == g_orig.repeat_times
     assert g_restored.rule_ids == g_orig.rule_ids
