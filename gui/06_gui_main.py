@@ -381,6 +381,7 @@ class _StepListWidget(QWidget):
         self._capture_callback: Optional[callable] = None
         self._click_pick_callback: Optional[callable] = None
         self._rules_provider: Optional[callable] = None  # () -> list[Rule]
+        self._window_title_cb: Optional[callable] = None  # () -> str
         self._rule_id: str = ""
         self._drag_indicator_idx: int = -1
         self._simplified_mode: bool = False
@@ -396,6 +397,9 @@ class _StepListWidget(QWidget):
 
     def set_rules_provider(self, cb):
         self._rules_provider = cb
+
+    def set_window_title_callback(self, cb):
+        self._window_title_cb = cb
 
     def set_rule_id(self, rule_id: str):
         self._rule_id = rule_id
@@ -620,6 +624,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._rule_id,
                 step_count=len(self._steps),
+                window_title_cb=self._window_title_cb,
             )
         if t == "drag":
             return _DragStepForm(self, step, idx, self._click_pick_callback)
@@ -642,6 +647,7 @@ class _MatchImageStepForm(QWidget):
         rules_provider=None,
         exclude_rule_id="",
         step_count=0,
+        window_title_cb=None,
     ):
         super().__init__()
         self._list = parent_list
@@ -652,11 +658,12 @@ class _MatchImageStepForm(QWidget):
         self._rules_provider = rules_provider
         self._exclude_rule_id = exclude_rule_id
         self._step_count = step_count
+        self._window_title_cb = window_title_cb
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
-        # Template file
+        # Template file + test button
         tmpl_row = QWidget()
         tmpl_layout = QHBoxLayout(tmpl_row)
         tmpl_layout.setContentsMargins(0, 0, 0, 0)
@@ -679,9 +686,14 @@ class _MatchImageStepForm(QWidget):
         self._tmpl_btn.clicked.connect(self._pick_template)
         self._capture_btn = QPushButton("截取區域")
         self._capture_btn.clicked.connect(self._capture_template)
+        self._test_btn = QPushButton("測試比對")
+        self._test_btn.clicked.connect(self._test_match)
+        self._test_result = QLabel("")
         tmpl_layout.addWidget(self._tmpl_label, 1)
         tmpl_layout.addWidget(self._tmpl_btn)
         tmpl_layout.addWidget(self._capture_btn)
+        tmpl_layout.addWidget(self._test_btn)
+        tmpl_layout.addWidget(self._test_result)
         form.addRow("範本圖片:", tmpl_row)
         self._update_thumbnail()
 
@@ -832,6 +844,55 @@ class _MatchImageStepForm(QWidget):
                 )
                 return
         self._thumb.clear()
+
+    def _test_match(self):
+        title = self._window_title_cb() if self._window_title_cb else ""
+        if not title:
+            self._test_result.setText("⚠️ 請先選擇目標視窗")
+            self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            return
+        tmpl_data = self._step.params.get("template_data", "")
+        tmpl_path = self._step.params.get("template", "")
+        if not tmpl_data.strip() and not tmpl_path.strip():
+            self._test_result.setText("⚠️ 未設定範本圖片")
+            self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            return
+        roi = self._step.params.get("roi", {})
+        threshold = self._step.params.get("threshold", 0.8)
+        capture_size = (
+            self._step.params.get("capture_size") if hasattr(self, "_capture_size") else None
+        )
+        img = capture(title)
+        if img is None:
+            self._test_result.setText("⚠️ 無法截取視窗畫面")
+            self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            return
+        results = _tmpl_mod.match_template(
+            img,
+            tmpl_path,
+            roi,
+            threshold,
+            template_data=tmpl_data or None,
+            capture_size=capture_size,
+        )
+        if results:
+            best = results[0]
+            pct = int(best.confidence * 100)
+            self._test_result.setText(f"✅ 命中（相似度 {pct}%）")
+            self._test_result.setStyleSheet("color: #4caf50; font-weight: bold;")
+        else:
+            fallback = _tmpl_mod.match_template(
+                img,
+                tmpl_path,
+                roi,
+                0.01,
+                template_data=tmpl_data or None,
+                capture_size=capture_size,
+            )
+            top = max(m.confidence for m in fallback) if fallback else 0.0
+            top_pct = int(top * 100)
+            self._test_result.setText(f"❌ 未命中（最高 {top_pct}%）")
+            self._test_result.setStyleSheet("color: #e53935; font-weight: bold;")
 
     def _capture_template(self):
         if not self._capture_cb:
@@ -1840,6 +1901,7 @@ class MainWindow(QMainWindow):
         self._step_list.set_capture_callback(self._open_capture_region)
         self._step_list.set_click_pick_callback(self._on_pick_coord)
         self._step_list.set_rules_provider(lambda: list(self._rules))
+        self._step_list.set_window_title_callback(lambda: self._window_combo.currentText())
         edit_layout.addWidget(self._step_list, 1)
 
         # Add step dropdown
