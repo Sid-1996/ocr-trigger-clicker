@@ -2829,6 +2829,13 @@ class MainWindow(QMainWindow):
                                 if rule:
                                     new_order.append(rule)
         self._rules = new_order
+        # 事後檢查：移除誤入群組的常駐監控規則
+        rule_map = {r.id: r for r in self._rules}
+        for g in self._groups:
+            before = len(g.rule_ids)
+            g.rule_ids = [rid for rid in g.rule_ids if not rule_map.get(rid, Rule()).background]
+            if len(g.rule_ids) < before:
+                self._status_bar.showMessage("常駐監控規則不能加入群組流程，已自動移除", 4000)
         self._flush_save()
 
     def _show_rule_detail(self, rule: Optional[Rule]):
@@ -2868,12 +2875,18 @@ class MainWindow(QMainWindow):
         if rule is None:
             return
         rule.background = bool(state)
+        if rule.background:
+            removed = False
+            for g in self._groups:
+                if rule.id in g.rule_ids:
+                    g.rule_ids.remove(rule.id)
+                    removed = True
+            if removed:
+                self._status_bar.showMessage(
+                    f"「{rule.name}」已設為常駐監控，已從群組流程中移除", 4000
+                )
         self._flush_save()
-        item = self._rule_list.currentItem()
-        if item:
-            prefix = "👁 " if rule.background else ""
-            text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
-            item.setText(0, text)
+        self._refresh_rule_list()
 
     def _add_group(self):
         import uuid
