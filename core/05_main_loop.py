@@ -541,11 +541,11 @@ class MainLoop:
 
         activate_window(self._window_title)
         ok = _ahk.send_drag(ssx, ssy, sex, sey, button)
-        if ok:
-            self._perf.record_click()
-            ctx.triggered = True
-            self._emit_trigger_log(rule, "", ssx, ssy)
-
+        if not ok:
+            return StepResult("stop")
+        self._perf.record_click()
+        ctx.triggered = True
+        self._emit_trigger_log(rule, "", ssx, ssy)
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
