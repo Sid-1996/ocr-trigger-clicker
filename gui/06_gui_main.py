@@ -2724,9 +2724,7 @@ class MainWindow(QMainWindow):
                 group_item.setForeground(0, QColor("#888888"))
             group_item.setText(0, text)
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
-            group_item.setFlags(
-                group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsEditable
-            )
+            group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
             for rid in g.rule_ids:
                 r = rule_map.get(rid)
                 if r is None:
@@ -3021,6 +3019,22 @@ class MainWindow(QMainWindow):
         self._selected_rule_id = None
         self._refresh_rule_list()
 
+    def _rename_group(self, item):
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not data or data[0] != "group":
+            return
+        gid = data[1]
+        group = next((g for g in self._groups if g.id == gid), None)
+        if not group:
+            return
+        from PyQt6.QtWidgets import QInputDialog
+
+        new_name, ok = QInputDialog.getText(self, "重新命名群組", "新名稱:", text=group.name)
+        if ok and new_name.strip():
+            group.name = new_name.strip()
+            self._refresh_rule_list()
+            self._flush_save()
+
     def _show_group_settings(self):
         item = self._rule_list.currentItem()
         if item is None:
@@ -3146,15 +3160,13 @@ class MainWindow(QMainWindow):
             new_name = item.text(0).strip()
             import re
 
-            new_name = re.sub(r"^(?:\[[^\]]*\]|📁)\s*", "", new_name).strip()
+            new_name = re.sub(r"^(?:\[[^\]]*\]\s*[↻∥]*|📁)\s*", "", new_name).strip()
             new_name = re.sub(r"\s*×\d+$", "", new_name).strip()
             gid = data[1]
             group = next((g for g in self._groups if g.id == gid), None)
             if group and new_name:
                 group.name = new_name
-                self._rule_list.blockSignals(True)
-                item.setText(0, f"📁 {group.name}")
-                self._rule_list.blockSignals(False)
+                self._refresh_rule_list()
                 self._flush_save()
 
     def _add_rule(self):
@@ -3341,7 +3353,7 @@ class MainWindow(QMainWindow):
         elif data and data[0] == "group":
             self._rule_list.setCurrentItem(item)
             act = menu.addAction("✏ 重新命名")
-            act.triggered.connect(lambda: self._rule_list.editItem(item))
+            act.triggered.connect(lambda: self._rename_group(item))
             act = menu.addAction("⚙ 群組設定")
             act.triggered.connect(self._show_group_settings)
             menu.addSeparator()
