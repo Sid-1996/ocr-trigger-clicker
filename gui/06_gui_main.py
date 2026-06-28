@@ -3242,6 +3242,15 @@ class MainWindow(QMainWindow):
             menu.addSeparator()
             act = menu.addAction("刪除群組")
             act.triggered.connect(self._delete_group)
+        elif data and data[0] == "group":
+            self._rule_list.setCurrentItem(item)
+            act = menu.addAction("✏ 重新命名")
+            act.triggered.connect(lambda: self._rule_list.editItem(item))
+            act = menu.addAction("⚙ 群組設定")
+            act.triggered.connect(self._show_group_settings)
+            menu.addSeparator()
+            act = menu.addAction("刪除群組")
+            act.triggered.connect(self._delete_group)
         menu.exec(self._rule_list.viewport().mapToGlobal(pos))
 
     def _duplicate_rule(self):
