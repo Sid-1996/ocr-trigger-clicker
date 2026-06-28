@@ -707,6 +707,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._rule_id,
                 simplified=self._simplified_mode,
+                step_count=len(self._steps),
             )
         return None
 
@@ -1428,6 +1429,7 @@ class _CompareStepForm(QWidget):
         rules_provider=None,
         exclude_rule_id="",
         simplified=False,
+        step_count=0,
     ):
         super().__init__()
         self._list = parent_list
@@ -1436,6 +1438,7 @@ class _CompareStepForm(QWidget):
         self._roi_cb = roi_cb
         self._rules_provider = rules_provider
         self._exclude_rule_id = exclude_rule_id
+        self._step_count = step_count
         self._on_fail_expanded = False
         p = step.params
         form = QFormLayout(self)
@@ -1532,6 +1535,21 @@ class _CompareStepForm(QWidget):
         self._of_jump_row = jf
         adv.addRow("", self._of_jump_row)
 
+        skip_to = (
+            raw_of.get("skip_to", self._step_count)
+            if isinstance(raw_of, dict)
+            else self._step_count
+        )
+        self._of_skip_combo = _NoWheelCombo()
+        self._populate_skip_combo(skip_to)
+        self._of_skip_row = QWidget()
+        skf = QHBoxLayout(self._of_skip_row)
+        skf.setContentsMargins(0, 0, 0, 0)
+        skf.addWidget(QLabel("跳至"))
+        skf.addWidget(self._of_skip_combo)
+        skf.addStretch()
+        adv.addRow("", self._of_skip_row)
+
         self._of_key = _make_key_combo()
         kv = raw_of.get("key", "") if isinstance(raw_of, dict) else ""
         k_idx = self._of_key.findData(kv)
@@ -1549,6 +1567,17 @@ class _CompareStepForm(QWidget):
         self._adv_container.setVisible(not simplified)
         self._on_fail_container = self._adv_container
 
+    def _populate_skip_combo(self, current_skip_to: int):
+        self._of_skip_combo.clear()
+        self._of_skip_combo.addItem("本規則結束", self._step_count)
+        start = self._idx + 2
+        for i in range(start, self._step_count + 1):
+            self._of_skip_combo.addItem(f"步驟{i}", i - 1)
+        if current_skip_to >= 0:
+            idx_s = self._of_skip_combo.findData(current_skip_to)
+            if idx_s >= 0:
+                self._of_skip_combo.setCurrentIndex(idx_s)
+
     def save(self):
         self._step.params["roi"] = {
             "x": self._roi.get("x", 0),
@@ -1562,6 +1591,11 @@ class _CompareStepForm(QWidget):
         action = self._of_action.currentData()
         if action == "stop":
             self._step.params["on_fail"] = "stop"
+        elif action == "skip":
+            self._step.params["on_fail"] = {
+                "action": "skip",
+                "skip_to": self._of_skip_combo.currentData() or 0,
+            }
         elif action == "jump":
             self._step.params["on_fail"] = {
                 "action": "jump",
@@ -1598,6 +1632,7 @@ class _CompareStepForm(QWidget):
 
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
+        self._of_skip_row.setVisible(action == "skip")
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
 
