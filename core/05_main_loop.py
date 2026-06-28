@@ -255,7 +255,7 @@ class MainLoop:
             return cached
 
         if is_full:
-            results = recognize(img, preprocess=False, max_side_len=960, min_confidence=0.25)
+            results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
         else:
             h, w = img.shape[:2]
             x1 = max(0, roi["x"])
@@ -265,7 +265,7 @@ class MainLoop:
             if x2 <= x1 or y2 <= y1:
                 return []
             roi_img = img[y1:y2, x1:x2]
-            results = recognize(roi_img, preprocess=False, max_side_len=960, min_confidence=0.25)
+            results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
             for r in results:
                 r.x += x1
                 r.y += y1
@@ -760,11 +760,6 @@ class MainLoop:
                     if self._window_hwnd is None:
                         with self._window_lock:
                             self._window_hwnd = get_window_hwnd_orig(self._window_title)
-                    if self._foreground_only and not is_window_foreground(self._window_hwnd):
-                        self._stop_event.wait(0.2)
-                        self._perf.record_frame()
-                        continue
-
                     t0 = time.monotonic()
                     img = capture(self._window_title)
                     if img is None:
