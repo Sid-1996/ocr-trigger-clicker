@@ -154,6 +154,12 @@ def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
 def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
     if isinstance(raw, dict):
         action = str(raw.get("action", "stop"))
+        if action == "notify":
+            return {
+                "action": "notify",
+                "message": str(raw.get("message", "")).strip(),
+                "stop_groups": [str(g) for g in raw.get("stop_groups", []) if g],
+            }
         if action == "key":
             return {"action": "key", "key": str(raw.get("key", ""))}
         if action == "skip" and allow_skip:

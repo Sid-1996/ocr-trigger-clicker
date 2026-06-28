@@ -443,6 +443,26 @@ class MainLoop:
                 self._rule_in_group_ptr = group.rule_ids.index(rule_id)
             return StepResult("stop")
 
+        if action == "notify":
+            message = raw.get("message", "") if isinstance(raw, dict) else ""
+            stop_groups = raw.get("stop_groups", []) if isinstance(raw, dict) else []
+            if self.on_warning:
+                self.on_warning(f"[通知] {message}" if message else "[通知] 流程已停止")
+            group = self._current_group()
+            if stop_groups:
+                for gid in stop_groups:
+                    if gid in self._active_group_ids:
+                        self._active_group_ids.remove(gid)
+                if group and group.id not in self._active_group_ids:
+                    self._rule_in_group_ptr = 0
+                    self._advance_group_queue()
+            else:
+                if group and group.id in self._active_group_ids:
+                    self._active_group_ids.remove(group.id)
+                    self._rule_in_group_ptr = 0
+                    self._advance_group_queue()
+            return StepResult("stop")
+
         return StepResult("stop")
 
     def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
