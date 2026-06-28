@@ -387,6 +387,8 @@ def load_groups(path: str) -> list[RuleGroup]:
             data = json.load(f)
     except (json.JSONDecodeError, OSError):
         return []
+    if "groups" not in data:
+        data = migrate_v2_to_v3(data)
     groups = data.get("groups", [])
     if not isinstance(groups, list):
         return []
