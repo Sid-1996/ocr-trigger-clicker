@@ -146,6 +146,7 @@ class MainLoop:
         self._prev_frame: Optional[np.ndarray] = None
         self._frame_diff_ratio: float = 0.0
         self._has_detect_rules: bool = False
+        self._frame_ocr_cache: dict = {}
 
         self._rule_pointer: int = 0
         self._groups: list[RuleGroup] = load_groups(rules_path)
@@ -244,22 +245,33 @@ class MainLoop:
         return self._has_detect_rules
 
     def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:
-        if roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
-            return recognize(img, preprocess=False, max_side_len=960, min_confidence=0.25)
-        h, w = img.shape[:2]
-        x1 = max(0, roi["x"])
-        y1 = max(0, roi["y"])
-        x2 = min(w, roi["x"] + roi["w"])
-        y2 = min(h, roi["y"] + roi["h"])
-        if x2 <= x1 or y2 <= y1:
-            return []
-        roi_img = img[y1:y2, x1:x2]
-        results = recognize(roi_img, preprocess=False, max_side_len=960, min_confidence=0.25)
-        for r in results:
-            r.x += x1
-            r.y += y1
-            r.center_x = r.x + r.w // 2
-            r.center_y = r.y + r.h // 2
+        is_full = roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        if is_full:
+            cache_key = ("__full__",)
+        else:
+            cache_key = (roi["x"], roi["y"], roi["w"], roi["h"])
+        cached = self._frame_ocr_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        if is_full:
+            results = recognize(img, preprocess=False, max_side_len=960, min_confidence=0.25)
+        else:
+            h, w = img.shape[:2]
+            x1 = max(0, roi["x"])
+            y1 = max(0, roi["y"])
+            x2 = min(w, roi["x"] + roi["w"])
+            y2 = min(h, roi["y"] + roi["h"])
+            if x2 <= x1 or y2 <= y1:
+                return []
+            roi_img = img[y1:y2, x1:x2]
+            results = recognize(roi_img, preprocess=False, max_side_len=960, min_confidence=0.25)
+            for r in results:
+                r.x += x1
+                r.y += y1
+                r.center_x = r.x + r.w // 2
+                r.center_y = r.y + r.h // 2
+        self._frame_ocr_cache[cache_key] = results
         return results
 
     def _resolve_roi(self, roi: dict, rect: dict) -> dict:
@@ -615,6 +627,7 @@ class MainLoop:
             i += 1
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
+        self._frame_ocr_cache.clear()
         with self._rules_lock:
             rules_snapshot = list(self._rules)
         if not rules_snapshot:
@@ -982,6 +995,7 @@ if __name__ == "__main__":
     ml._prev_frame = None
     ml._frame_diff_ratio = 0.0
     ml._has_detect_rules = False
+    ml._frame_ocr_cache = {}
     ml._logger = logging.getLogger("main_loop_test")
     ml._logger.setLevel(logging.INFO)
     ml._logger.handlers.clear()
