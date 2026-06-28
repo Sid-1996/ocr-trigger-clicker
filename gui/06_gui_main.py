@@ -4258,6 +4258,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setEnabled(True)
         if success:
             self._loop = self._init_worker.loop
+            import ctypes
+            self._loop.set_tool_hwnd(int(self.winId()))
             self._btn_toggle.setText("暫停")
             self._update_edit_enabled(False)
             self._status_bar.showMessage(f"偵測中 — 目標: {self._window_combo.currentText()}")

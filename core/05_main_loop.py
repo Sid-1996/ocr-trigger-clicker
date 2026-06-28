@@ -161,6 +161,7 @@ class MainLoop:
         self._match_image_warn_counter: dict[str, int] = {}
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
+        self._tool_hwnd: Optional[int] = None
 
         self.on_trigger: Optional[Callable[[TriggerLog], None]] = None
         self.on_error: Optional[Callable[[str], None]] = None
@@ -477,6 +478,8 @@ class MainLoop:
 
         if not self._can_perform_action():
             return StepResult("stop")
+        if self._is_tool_foreground():
+            return StepResult("stop")
 
         button = params.get("button", "left")
         sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
@@ -497,6 +500,8 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
+            return StepResult("stop")
+        if self._is_tool_foreground():
             return StepResult("stop")
 
         activate_window(self._window_title)
@@ -537,6 +542,8 @@ class MainLoop:
 
         if not self._can_perform_action():
             return StepResult("stop")
+        if self._is_tool_foreground():
+            return StepResult("stop")
 
         dx = params.get("dx", 0)
         dy = params.get("dy", 0)
@@ -556,6 +563,8 @@ class MainLoop:
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         if not self._can_perform_action():
+            return StepResult("stop")
+        if self._is_tool_foreground():
             return StepResult("stop")
 
         direction = params.get("direction", "WheelDown")
@@ -928,6 +937,18 @@ class MainLoop:
             self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
             self._tracking_hwnd = self._window_hwnd
             return True
+
+    def set_tool_hwnd(self, hwnd: int) -> None:
+        self._tool_hwnd = hwnd
+
+    def _is_tool_foreground(self) -> bool:
+        if not self._tool_hwnd:
+            return False
+        try:
+            import ctypes
+            return ctypes.windll.user32.GetForegroundWindow() == self._tool_hwnd
+        except Exception:
+            return False
 
     @property
     def perf_monitor(self) -> PerformanceMonitor:
