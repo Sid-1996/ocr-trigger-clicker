@@ -2352,7 +2352,7 @@ class MainWindow(QMainWindow):
         self._rule_list.itemCollapsed.connect(self._on_rule_item_collapsed)
         self._rule_list.itemExpanded.connect(self._on_rule_item_expanded)
         self._rule_list.itemDoubleClicked.connect(self._on_item_double_clicked)
-        self._rule_list.itemChanged.connect(self._on_item_changed)
+
         self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
         self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
@@ -2791,12 +2791,14 @@ class MainWindow(QMainWindow):
                 self._stop_loop()
                 return
             self._rule_list.blockSignals(True)
-            for i in range(self._rule_list.topLevelItemCount()):
-                item = self._rule_list.topLevelItem(i)
-                item.setForeground(0, QColor())
-                for j in range(item.childCount()):
-                    item.child(j).setForeground(0, QColor())
-            self._rule_list.blockSignals(False)
+            try:
+                for i in range(self._rule_list.topLevelItemCount()):
+                    item = self._rule_list.topLevelItem(i)
+                    item.setForeground(0, QColor())
+                    for j in range(item.childCount()):
+                        item.child(j).setForeground(0, QColor())
+            finally:
+                self._rule_list.blockSignals(False)
             self._refresh_rule_list()
             return
         statuses = self._loop.get_rules_status()
@@ -3154,13 +3156,6 @@ class MainWindow(QMainWindow):
         if data and data[0] == "group":
             self._rename_group(item)
 
-    def _on_item_changed(self, item, column):
-        if column != 0:
-            return
-        data = item.data(0, Qt.ItemDataRole.UserRole)
-        if data and data[0] == "group":
-            pass  # groups renamed via dialog only
-
     def _add_rule(self):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再新增規則")
@@ -3337,11 +3332,6 @@ class MainWindow(QMainWindow):
                     )
             else:
                 copy_to_menu.setEnabled(False)
-            act = menu.addAction("⚙ 群組設定")
-            act.triggered.connect(self._show_group_settings)
-            menu.addSeparator()
-            act = menu.addAction("刪除群組")
-            act.triggered.connect(self._delete_group)
         elif data and data[0] == "group":
             self._rule_list.setCurrentItem(item)
             act = menu.addAction("✏ 重新命名")
