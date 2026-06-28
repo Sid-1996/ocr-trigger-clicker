@@ -159,7 +159,7 @@ def _prepare_image(
     max_side_len: int,
     preprocess: bool,
 ) -> tuple[np.ndarray, float]:
-    img = image.copy()
+    img = image if not preprocess else image.copy()
     scale = 1.0
 
     h, w = img.shape[:2]

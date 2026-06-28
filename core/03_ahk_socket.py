@@ -54,7 +54,7 @@ def _find_ahk() -> str:
     return str(candidates[0])
 
 
-def _recv_line(conn: socket.socket, timeout: float = 5.0) -> str:
+def _recv_line(conn: socket.socket, timeout: float = 1.0) -> str:
     conn.settimeout(timeout)
     buf = b""
     while True:
@@ -85,8 +85,6 @@ def _send_cmd(cmd: str) -> bool:
                     return True
             except (BrokenPipeError, ConnectionError, OSError):
                 _conn = None
-        if attempt == 0:
-            time.sleep(0.5)
     return False
 
 

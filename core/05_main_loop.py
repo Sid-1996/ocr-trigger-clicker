@@ -144,8 +144,8 @@ class MainLoop:
         self._logs_lock = threading.Lock()
 
         self._prev_frame: Optional[np.ndarray] = None
-        self._frame_lock = threading.Lock()
         self._frame_diff_ratio: float = 0.0
+        self._has_detect_rules: bool = False
 
         self._rule_pointer: int = 0
         self._groups: list[RuleGroup] = load_groups(rules_path)
@@ -203,6 +203,7 @@ class MainLoop:
             self._groups = load_groups(self._rules_path)
             self._rule_pointer = 0
             self._group_rounds_completed.clear()
+            self._update_has_detect()
 
     def _current_group(self) -> RuleGroup | None:
         if not self._active_group_ids or self._group_queue_idx >= len(self._active_group_ids):
@@ -233,31 +234,18 @@ class MainLoop:
         with self._rules_lock:
             self._rules_dirty = True
 
+    def _update_has_detect(self):
+        self._has_detect_rules = any(
+            r.enabled and any(s.type in ("detect", "match_image") for s in r.steps)
+            for r in self._rules
+        )
+
     def _should_process_static_frame(self) -> bool:
-        with self._rules_lock:
-            # check the current group's current rule
-            group = self._current_group()
-            if group and self._rule_in_group_ptr < len(group.rule_ids):
-                rule = self._rule_map.get(group.rule_ids[self._rule_in_group_ptr])
-                if (
-                    rule
-                    and rule.enabled
-                    and any(s.type in ("detect", "match_image") for s in rule.steps)
-                ):
-                    return True
-            # also check background rules (they run every frame)
-            for rule in self._rules:
-                if (
-                    rule.enabled
-                    and rule.background
-                    and any(s.type in ("detect", "match_image") for s in rule.steps)
-                ):
-                    return True
-        return False
+        return self._has_detect_rules
 
     def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:
         if roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
-            return recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            return recognize(img, preprocess=False, max_side_len=960, min_confidence=0.25)
         h, w = img.shape[:2]
         x1 = max(0, roi["x"])
         y1 = max(0, roi["y"])
@@ -266,7 +254,7 @@ class MainLoop:
         if x2 <= x1 or y2 <= y1:
             return []
         roi_img = img[y1:y2, x1:x2]
-        results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+        results = recognize(roi_img, preprocess=False, max_side_len=960, min_confidence=0.25)
         for r in results:
             r.x += x1
             r.y += y1
@@ -775,12 +763,11 @@ class MainLoop:
                         self._perf.record_frame()
                         continue
 
-                    with self._frame_lock:
-                        prev = self._prev_frame
-                        self._prev_frame = img
+                    prev = self._prev_frame
+                    self._prev_frame = img
 
                     if prev is not None and prev.shape == img.shape:
-                        diff = cv2.absdiff(prev, img)
+                        diff = cv2.absdiff(prev[::8, ::8], img[::8, ::8])
                         change_ratio = np.mean(diff) / 255.0
                         self._frame_diff_ratio = change_ratio
                         if change_ratio < 0.02 and not self._should_process_static_frame():
@@ -993,8 +980,8 @@ if __name__ == "__main__":
     ml._tracking_hwnd = None
     ml._verbose = False
     ml._prev_frame = None
-    ml._frame_lock = threading.Lock()
     ml._frame_diff_ratio = 0.0
+    ml._has_detect_rules = False
     ml._logger = logging.getLogger("main_loop_test")
     ml._logger.setLevel(logging.INFO)
     ml._logger.handlers.clear()
@@ -1174,6 +1161,7 @@ if __name__ == "__main__":
     ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r_detect"])]
     ml.set_active_groups(["g1"])
     ml._rule_in_group_ptr = 0
+    ml._update_has_detect()
     assert ml._should_process_static_frame(), "rule with detect should process static frame"
 
     ml._rules = [
@@ -1190,6 +1178,7 @@ if __name__ == "__main__":
     ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r_no_detect"])]
     ml.set_active_groups(["g1"])
     ml._rule_in_group_ptr = 0
+    ml._update_has_detect()
     assert not ml._should_process_static_frame(), (
         "rule without detect should NOT process static frame"
     )
@@ -1208,6 +1197,7 @@ if __name__ == "__main__":
     ml._groups = [RuleGroup(id="g1", name="G1", rule_ids=["r_disabled"])]
     ml.set_active_groups(["g1"])
     ml._rule_in_group_ptr = 0
+    ml._update_has_detect()
     assert not ml._should_process_static_frame(), "disabled rule should NOT process static frame"
     print("  [OK] _should_process_static_frame logic (group-based)")
 
