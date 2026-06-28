@@ -977,7 +977,15 @@ class _MatchImageStepForm(QWidget):
         if not self._capture_cb:
             return
         data = self._capture_cb()
-        if data:
+        if isinstance(data, dict):
+            self._step.params["template_data"] = data.get("b64", "")
+            self._step.params.pop("template", None)
+            if data.get("roi"):
+                self._step.params["roi"] = data["roi"]
+            self._tmpl_label.setText("內嵌圖片")
+            self._update_thumbnail()
+            self._list.steps_changed.emit()
+        elif data:
             self._step.params["template_data"] = data
             self._step.params.pop("template", None)
             self._tmpl_label.setText("內嵌圖片")
@@ -1905,6 +1913,19 @@ class InitWorker(QThread):
             self.finished.emit(True, "")
         except Exception as e:
             self.finished.emit(False, str(e))
+
+
+def _pixels_to_ratio_expanded(
+    px: int, py: int, pw: int, ph: int, ww: int, wh: int, margin: float = 0.2
+) -> dict:
+    margin_w = max(pw * margin, ww * 0.01)
+    margin_h = max(ph * margin, wh * 0.01)
+    return {
+        "x": max(0.0, min(1.0, (px - margin_w) / ww)),
+        "y": max(0.0, min(1.0, (py - margin_h) / wh)),
+        "w": max(0.0, min(1.0, (pw + 2 * margin_w) / ww)),
+        "h": max(0.0, min(1.0, (ph + 2 * margin_h) / wh)),
+    }
 
 
 class MainWindow(QMainWindow):
@@ -3469,6 +3490,25 @@ class MainWindow(QMainWindow):
             }
         return result
 
+    def _capture_rect_to_roi(self, rect: dict, title: str) -> dict | None:
+        if not title:
+            return None
+        wr = get_window_rect(title)
+        if not wr or wr["w"] <= 0 or wr["h"] <= 0:
+            return None
+        cx, cy = rect["x"] + rect["w"] // 2, rect["y"] + rect["h"] // 2
+        dpr = 1.0
+        for screen in QApplication.screens():
+            g = screen.geometry()
+            if g.x() <= cx < g.x() + g.width() and g.y() <= cy < g.y() + g.height():
+                dpr = screen.devicePixelRatio()
+                break
+        px = int(rect["x"] * dpr) - wr["x"]
+        py = int(rect["y"] * dpr) - wr["y"]
+        pw = int(rect["w"] * dpr)
+        ph = int(rect["h"] * dpr)
+        return _pixels_to_ratio_expanded(px, py, pw, ph, wr["w"], wr["h"])
+
     def _open_capture_region(self):
         """Capture a screen region from the target window as template image."""
         title = self._window_combo.currentText()
@@ -3485,7 +3525,8 @@ class MainWindow(QMainWindow):
         if b64:
             self._status_bar.showMessage("已截取範本")
             self._edit_stack.setCurrentIndex(1)
-            return b64
+            roi_ratio = self._capture_rect_to_roi(rect, title)
+            return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
         if title:
             screen = QApplication.primaryScreen()
             ratio = screen.devicePixelRatio()
@@ -3497,13 +3538,14 @@ class MainWindow(QMainWindow):
             if wr:
                 rx -= wr["x"]
                 ry -= wr["y"]
+            roi_ratio = _pixels_to_ratio_expanded(rx, ry, rw, rh, wr["w"], wr["h"]) if wr else None
             img = capture(title)
             if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
                 crop = img[ry : ry + rh, rx : rx + rw]
                 b64 = img_to_b64(crop)
                 self._status_bar.showMessage(f"已截取範本 ({crop.shape[1]}×{crop.shape[0]})")
                 self._edit_stack.setCurrentIndex(1)
-                return b64
+                return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
         return None
 
     # === Test rule ===
