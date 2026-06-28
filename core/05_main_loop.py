@@ -420,6 +420,7 @@ class MainLoop:
             if fail_key:
                 activate_window(self._window_title)
                 self._send_key(fail_key)
+                ctx.triggered = True
             return StepResult("continue")
 
         if action == "skip":
