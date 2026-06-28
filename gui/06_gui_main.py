@@ -2465,6 +2465,8 @@ class MainWindow(QMainWindow):
         self._on_task_changed(self._task_combo.currentText())
 
     def _on_task_changed(self, name: str):
+        if self._loop and self._loop.is_running:
+            self._flush_save()
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_current_rule()
