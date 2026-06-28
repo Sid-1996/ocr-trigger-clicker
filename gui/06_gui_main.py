@@ -2790,11 +2790,13 @@ class MainWindow(QMainWindow):
             if self._loop is not None:
                 self._stop_loop()
                 return
+            self._rule_list.blockSignals(True)
             for i in range(self._rule_list.topLevelItemCount()):
                 item = self._rule_list.topLevelItem(i)
                 item.setForeground(0, QColor())
                 for j in range(item.childCount()):
                     item.child(j).setForeground(0, QColor())
+            self._rule_list.blockSignals(False)
             self._refresh_rule_list()
             return
         statuses = self._loop.get_rules_status()
@@ -3150,24 +3152,14 @@ class MainWindow(QMainWindow):
     def _on_item_double_clicked(self, item, column):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
-            self._rule_list.editItem(item)
+            self._rename_group(item)
 
     def _on_item_changed(self, item, column):
         if column != 0:
             return
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
-            new_name = item.text(0).strip()
-            import re
-
-            new_name = re.sub(r"^(?:\[[^\]]*\]\s*[↻∥]*|📁)\s*", "", new_name).strip()
-            new_name = re.sub(r"\s*×\d+$", "", new_name).strip()
-            gid = data[1]
-            group = next((g for g in self._groups if g.id == gid), None)
-            if group and new_name:
-                group.name = new_name
-                self._refresh_rule_list()
-                self._flush_save()
+            pass  # groups renamed via dialog only
 
     def _add_rule(self):
         if self._loop and self._loop.is_running:
