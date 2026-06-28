@@ -1,8 +1,9 @@
+import base64
 import sys
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, pyqtSignal
+from PyQt6.QtCore import QBuffer, QByteArray, QEventLoop, QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -131,6 +132,27 @@ class CaptureRegionSelector(QWidget):
             self.close()
 
 
+def _extract_template_b64(selector: CaptureRegionSelector, rect: dict) -> Optional[str]:
+    x, y, w, h = rect["x"], rect["y"], rect["w"], rect["h"]
+    cx, cy = x + w // 2, y + h // 2
+    for pixmap, geom in selector._bg_pixmaps:
+        if geom.x() <= cx < geom.x() + geom.width() and geom.y() <= cy < geom.y() + geom.height():
+            ox, oy = x - geom.x(), y - geom.y()
+            cropped = pixmap.copy(ox, oy, w, h)
+            if cropped.isNull() or cropped.width() < 1:
+                return None
+            img = cropped.toImage()
+            if img.isNull():
+                return None
+            ba = QByteArray()
+            buf = QBuffer(ba)
+            buf.open(QBuffer.OpenModeFlag.WriteOnly)
+            if not img.save(buf, "PNG"):
+                return None
+            return base64.b64encode(ba.data()).decode("ascii")
+    return None
+
+
 def capture_region(parent_window=None, task_path="", window_title="") -> Optional[dict]:
     if parent_window:
         parent_window.showMinimized()
@@ -156,12 +178,16 @@ def capture_region(parent_window=None, task_path="", window_title="") -> Optiona
         QApplication.processEvents()
 
     result = selector._result
-    if result and task_path and window_title:
-        _screenshot_mod = load_sibling("screenshot", "core/01_screenshot.py")
-        _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
-        rect = _screenshot_mod.get_window_rect(window_title)
-        if rect:
-            _rule_mod.set_capture_size(task_path, rect["w"], rect["h"])
+    if result and window_title:
+        b64 = _extract_template_b64(selector, result)
+        if b64:
+            result["template_b64"] = b64
+        if task_path:
+            _screenshot_mod = load_sibling("screenshot", "core/01_screenshot.py")
+            _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
+            rect = _screenshot_mod.get_window_rect(window_title)
+            if rect:
+                _rule_mod.set_capture_size(task_path, rect["w"], rect["h"])
     selector.close()
     selector.deleteLater()
     return result

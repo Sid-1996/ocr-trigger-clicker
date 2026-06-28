@@ -3481,6 +3481,11 @@ class MainWindow(QMainWindow):
         rect = mod.capture_region(parent_window=self, task_path=task_path, window_title=title)
         if not rect:
             return None
+        b64 = rect.get("template_b64")
+        if b64:
+            self._status_bar.showMessage("已截取範本")
+            self._edit_stack.setCurrentIndex(1)
+            return b64
         if title:
             screen = QApplication.primaryScreen()
             ratio = screen.devicePixelRatio()
