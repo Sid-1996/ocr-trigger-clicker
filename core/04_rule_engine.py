@@ -128,10 +128,10 @@ def _as_float(value, default: float = 0.0) -> float:
 def _sanitize_roi(roi: dict | None) -> dict:
     roi = roi if isinstance(roi, dict) else {}
     return {
-        "x": max(0, _as_int(roi.get("x", 0))),
-        "y": max(0, _as_int(roi.get("y", 0))),
-        "w": max(0, _as_int(roi.get("w", 0))),
-        "h": max(0, _as_int(roi.get("h", 0))),
+        "x": max(0.0, _as_float(roi.get("x", 0))),
+        "y": max(0.0, _as_float(roi.get("y", 0))),
+        "w": max(0.0, _as_float(roi.get("w", 0))),
+        "h": max(0.0, _as_float(roi.get("h", 0))),
     }
 
 
@@ -176,8 +176,8 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
     elif step_type in ("click", "drag"):
         base["target"] = str(base.get("target", "text_center"))
-        base["x"] = _as_int(base.get("x", 0), 0)
-        base["y"] = _as_int(base.get("y", 0), 0)
+        base["x"] = _as_float(base.get("x", 0), 0)
+        base["y"] = _as_float(base.get("y", 0), 0)
         base["text"] = str(base.get("text", "")).strip()
         base["button"] = str(base.get("button", "left"))
         if step_type == "click":
