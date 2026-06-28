@@ -3055,24 +3055,31 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("規則執行順序"))
         order_combo = QComboBox()
         order_combo.addItem("依序執行（↻）", "sequential")
-        order_combo.addItem("同時並行（∥）", "parallel")
+        order_combo.addItem("並行掃描（∥）", "parallel")
         idx2 = order_combo.findData(group.order)
         if idx2 >= 0:
             order_combo.setCurrentIndex(idx2)
         order_combo.setToolTip(
-            "依序：一次執行一個規則，觸發後才換下一個。\n"
-            "並行：所有規則同時監聽，列表較前面的優先觸發。"
+            "依序：每次只跑列表當前的規則，觸發才前進到下一條。未觸發會卡住指標。\n"
+            "並行：每幀從頭掃全部規則，第一條命中的執行，其餘跳過。不卡指標。"
         )
         layout.addWidget(order_combo)
-        order_hint = QLabel(
-            "並行模式下，規則照列表順序逐條檢查，\n命中一條就跳過後續，保證不重複觸發。"
+        seq_hint = QLabel(
+            "依序：每次只檢查列表中的一個規則，該規則觸發後指標才前進到下一條。未觸發則重複執行同一條。"
         )
-        order_hint.setStyleSheet("color: #888; font-size: 11px;")
-        order_hint.setWordWrap(True)
-        layout.addWidget(order_hint)
+        par_hint = QLabel(
+            "並行：每幀從列表最上方開始依序掃描，第一個命中目標的規則會執行其動作，其餘直接跳過。下幀重新從頭掃描。"
+        )
+        for lbl in (seq_hint, par_hint):
+            lbl.setStyleSheet("color: #888; font-size: 11px;")
+            lbl.setWordWrap(True)
+        layout.addWidget(seq_hint)
+        layout.addWidget(par_hint)
 
         def _on_order_changed(idx3):
-            order_hint.setVisible(order_combo.currentData() == "parallel")
+            is_par = order_combo.currentData() == "parallel"
+            seq_hint.setVisible(not is_par)
+            par_hint.setVisible(is_par)
 
         order_combo.currentIndexChanged.connect(_on_order_changed)
         _on_order_changed(order_combo.currentIndex())
