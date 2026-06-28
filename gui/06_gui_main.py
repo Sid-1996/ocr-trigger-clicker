@@ -1247,7 +1247,7 @@ class _ClickStepForm(QWidget):
         self._click_text.setVisible(p.get("target", "") == "click_text")
         form.addRow("目標文字:", self._click_text)
 
-        self._coord_label = QLabel(f"X: {p.get('x', 0)}, Y: {p.get('y', 0)}")
+        self._coord_label = QLabel(_fmt_point(p.get("x", 0), p.get("y", 0)))
         self._pick_btn = QPushButton("選取點擊座標")
         if pick_cb:
             self._pick_btn.clicked.connect(self._pick_coord)
@@ -1291,7 +1291,7 @@ class _ClickStepForm(QWidget):
             if result:
                 self._step.params["x"], self._step.params["y"] = result
                 self._step.params["target"] = "custom"
-                self._coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
+                self._coord_label.setText(_fmt_point(result[0], result[1]))
                 self._target.setCurrentIndex(self._target.findData("custom"))
                 self.save()
                 self._list.steps_changed.emit()
@@ -1328,7 +1328,7 @@ class _DragStepForm(QWidget):
         self._click_text.setVisible(p.get("target", "") == "click_text")
         form.addRow("目標文字:", self._click_text)
 
-        self._coord_label = QLabel(f"X: {p.get('x', 0)}, Y: {p.get('y', 0)}")
+        self._coord_label = QLabel(_fmt_point(p.get("x", 0), p.get("y", 0)))
         self._pick_btn = QPushButton("選取座標")
         if pick_cb:
             self._pick_btn.clicked.connect(self._pick_coord)
@@ -1339,7 +1339,6 @@ class _DragStepForm(QWidget):
         cl.addWidget(self._pick_btn)
         self._coord_row.setVisible(p.get("target", "") == "custom")
         form.addRow("起點座標:", self._coord_row)
-
         self._dx = _NoWheelSpin()
         self._dx.setRange(-9999, 9999)
         self._dx.setSuffix(" px")
@@ -1370,7 +1369,7 @@ class _DragStepForm(QWidget):
             result = self._pick_cb()
             if result:
                 self._step.params["x"], self._step.params["y"] = result
-                self._coord_label.setText(f"X: {result[0]}, Y: {result[1]}")
+                self._coord_label.setText(_fmt_point(result[0], result[1]))
                 self._target.setCurrentIndex(self._target.findData("custom"))
                 self.save()
                 self._list.steps_changed.emit()
@@ -3371,7 +3370,7 @@ class MainWindow(QMainWindow):
             f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
         # Convert to ratio before storing
-        if wr and wr["w"] > 0 and wr["h"] > 0:
+        if title and wr and wr["w"] > 0 and wr["h"] > 0:
             result = {
                 "x": result["x"] / wr["w"],
                 "y": result["y"] / wr["h"],
@@ -3471,6 +3470,12 @@ class MainWindow(QMainWindow):
                 return {"x": int(x * W), "y": int(y * H), "w": int(w * W), "h": int(h * H)}
             return roi
 
+        def _resolve_point(px, py):
+            W, H = img.shape[1], img.shape[0]
+            if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
+                return int(px * W), int(py * H)
+            return int(px), int(py)
+
         markers = []
         log = []
         log.append(f"規則「{rule.name}」— {len(rule.steps)} 個步驟")
@@ -3566,7 +3571,7 @@ class MainWindow(QMainWindow):
                     target = p.get("target", "text_center")
                     cx, cy = None, None
                     if target == "custom":
-                        cx, cy = p.get("x", 0), p.get("y", 0)
+                        cx, cy = _resolve_point(p.get("x", 0), p.get("y", 0))
                     elif target == "text_center":
                         if last_center:
                             cx, cy = last_center
@@ -3604,7 +3609,7 @@ class MainWindow(QMainWindow):
                     target = p.get("target", "text_center")
                     sx, sy = None, None
                     if target == "custom":
-                        sx, sy = p.get("x", 0), p.get("y", 0)
+                        sx, sy = _resolve_point(p.get("x", 0), p.get("y", 0))
                     elif target == "text_center":
                         if last_center:
                             sx, sy = last_center
@@ -3663,11 +3668,7 @@ class MainWindow(QMainWindow):
                     pattern = p.get("pattern", "")
                     roi = p.get("roi", {})
                     z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                    roi_str = (
-                        "全視窗"
-                        if z
-                        else f"({roi.get('x', 0)},{roi.get('y', 0)}){roi.get('w', 0)}×{roi.get('h', 0)}"
-                    )
+                    roi_str = "全視窗" if z else _fmt_roi(roi)
                     log.append(f"[{idx + 1}] 🔢 {op} {val} {roi_str} regex=「{pattern}」")
 
                 elif step.type == "key":

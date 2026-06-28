@@ -415,12 +415,19 @@ class OcrDebugPanel(QWidget):
         r = self._ocr_results[self._selected_index]
 
         pad = 20
-        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (9999, 9999)
+        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
+        if img_w < 1 or img_h < 1:
+            return
+        px_x = max(0, r.x - pad)
+        px_y = max(0, r.y - pad)
+        px_w = min(img_w - px_x, r.w + pad * 2)
+        px_h = min(img_h - px_y, r.h + pad * 2)
+
         roi = {
-            "x": max(0, r.x - pad),
-            "y": max(0, r.y - pad),
-            "w": min(img_w - max(0, r.x - pad), r.w + pad * 2),
-            "h": min(img_h - max(0, r.y - pad), r.h + pad * 2),
+            "x": px_x / img_w,
+            "y": px_y / img_h,
+            "w": px_w / img_w,
+            "h": px_h / img_h,
         }
 
         self.rule_requested.emit(
@@ -434,7 +441,7 @@ class OcrDebugPanel(QWidget):
 
         self._status_bar.showMessage(
             f"✓ 已建立新規則：「{r.text}」"
-            f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
+            f"  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
         )
 
     def _on_set_sub_target(self):
@@ -443,12 +450,19 @@ class OcrDebugPanel(QWidget):
         r = self._ocr_results[self._selected_index]
 
         pad = 20
-        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (9999, 9999)
+        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
+        if img_w < 1 or img_h < 1:
+            return
+        px_x = max(0, r.x - pad)
+        px_y = max(0, r.y - pad)
+        px_w = min(img_w - px_x, r.w + pad * 2)
+        px_h = min(img_h - px_y, r.h + pad * 2)
+
         roi = {
-            "x": max(0, r.x - pad),
-            "y": max(0, r.y - pad),
-            "w": min(img_w - max(0, r.x - pad), r.w + pad * 2),
-            "h": min(img_h - max(0, r.y - pad), r.h + pad * 2),
+            "x": px_x / img_w,
+            "y": px_y / img_h,
+            "w": px_w / img_w,
+            "h": px_h / img_h,
         }
 
         self.step_requested.emit(
@@ -460,7 +474,7 @@ class OcrDebugPanel(QWidget):
 
         self._status_bar.showMessage(
             f"✓ 已加入偵測步驟：「{r.text}」"
-            f"  ROI: x={roi['x']}, y={roi['y']}, w={roi['w']}, h={roi['h']}"
+            f"  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
         )
 
     def _on_click_test(self):
