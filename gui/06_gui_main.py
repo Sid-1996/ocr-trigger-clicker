@@ -1032,6 +1032,7 @@ class _MatchImageStepForm(QWidget):
 
     def save(self):
         p = self._step.params
+        p["threshold"] = self._threshold.value()
         action = self._of_action.currentData()
         if action == "stop":
             p["on_fail"] = "stop"
