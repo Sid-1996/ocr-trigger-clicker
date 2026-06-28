@@ -158,6 +158,7 @@ class MainLoop:
         self._rules_dirty: bool = False
         self._save_period_counter: int = 0
         self._process_counter: int = 0
+        self._match_image_warn_counter: dict[str, int] = {}
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
 
@@ -344,9 +345,13 @@ class MainLoop:
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         if roi_is_empty and ctx.img.shape[1] > 800:
-            self._log("⚠ match_image 未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
-            if self.on_warning:
-                self.on_warning("圖示辨識未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域")
+            warn_key = rule.id
+            last = self._match_image_warn_counter.get(warn_key, 0)
+            self._match_image_warn_counter[warn_key] = last + 1
+            if last % 30 == 0:
+                self._log("⚠ match_image 未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
+                if self.on_warning:
+                    self.on_warning("圖示辨識未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域")
         threshold = params.get("threshold", 0.8)
         capture_size = get_capture_size(self._rules_path)
         results = match_template(
