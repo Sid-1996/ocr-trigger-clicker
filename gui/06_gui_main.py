@@ -3050,7 +3050,7 @@ class MainWindow(QMainWindow):
             new_name = item.text(0).strip()
             import re
 
-            new_name = re.sub(r"^.\s*", "", new_name).strip()
+            new_name = re.sub(r"^(?:\[[^\]]*\]|📁)\s*", "", new_name).strip()
             new_name = re.sub(r"\s*×\d+$", "", new_name).strip()
             gid = data[1]
             group = next((g for g in self._groups if g.id == gid), None)
@@ -3271,7 +3271,6 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
         if self._loop:
             self._loop.reload_rules()
-
 
     def _duplicate_rule_to_group(self, target_gid: str):
         """Copy the current rule to the specified group."""

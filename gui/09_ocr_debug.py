@@ -440,8 +440,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已建立新規則：「{r.text}」"
-            f"  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
+            f"✓ 已建立新規則：「{r.text}」  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
         )
 
     def _on_set_sub_target(self):
@@ -473,8 +472,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已加入偵測步驟：「{r.text}」"
-            f"  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
+            f"✓ 已加入偵測步驟：「{r.text}」  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
         )
 
     def _on_click_test(self):
