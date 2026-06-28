@@ -423,7 +423,10 @@ class MainLoop:
             return StepResult("continue")
 
         if action == "skip":
-            skip_to = int(raw.get("skip_to", 0)) if isinstance(raw, dict) else 0
+            try:
+                skip_to = int(raw.get("skip_to", 0)) if isinstance(raw, dict) else 0
+            except (TypeError, ValueError):
+                skip_to = 0
             return StepResult("jump_step", step_index=skip_to)
 
         if action == "jump":
