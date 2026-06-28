@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -440,6 +441,7 @@ class _StepListWidget(QWidget):
         self._capture_callback: Optional[callable] = None
         self._click_pick_callback: Optional[callable] = None
         self._rules_provider: Optional[callable] = None  # () -> list[Rule]
+        self._groups_provider: Optional[callable] = None  # () -> list[RuleGroup]
         self._window_title_cb: Optional[callable] = None  # () -> str
         self._rule_id: str = ""
         self._drag_indicator_idx: int = -1
@@ -456,6 +458,9 @@ class _StepListWidget(QWidget):
 
     def set_rules_provider(self, cb):
         self._rules_provider = cb
+
+    def set_groups_provider(self, cb):
+        self._groups_provider = cb
 
     def set_window_title_callback(self, cb):
         self._window_title_cb = cb
@@ -672,6 +677,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._rule_id,
                 simplified=self._simplified_mode,
+                groups_provider=self._groups_provider,
             )
         if t == "click":
             return _ClickStepForm(
@@ -694,6 +700,7 @@ class _StepListWidget(QWidget):
                 self._rule_id,
                 step_count=len(self._steps),
                 window_title_cb=self._window_title_cb,
+                groups_provider=self._groups_provider,
             )
         if t == "drag":
             return _DragStepForm(self, step, idx, self._click_pick_callback)
@@ -709,6 +716,7 @@ class _StepListWidget(QWidget):
                 self._rule_id,
                 simplified=self._simplified_mode,
                 step_count=len(self._steps),
+                groups_provider=self._groups_provider,
             )
         return None
 
@@ -728,6 +736,7 @@ class _MatchImageStepForm(QWidget):
         exclude_rule_id="",
         step_count=0,
         window_title_cb=None,
+        groups_provider=None,
     ):
         super().__init__()
         self._list = parent_list
@@ -739,6 +748,7 @@ class _MatchImageStepForm(QWidget):
         self._exclude_rule_id = exclude_rule_id
         self._step_count = step_count
         self._window_title_cb = window_title_cb
+        self._groups_provider = groups_provider
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
@@ -821,9 +831,15 @@ class _MatchImageStepForm(QWidget):
         self._of_action.addItem("跳至步驟", "skip")
         self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
+        self._of_action.addItem("通知並停止群組", "notify")
         raw_of = p.get("on_fail", "stop")
+        default_notify_msg = ""
+        default_notify_groups: list[str] = []
         if isinstance(raw_of, dict):
             of_act = raw_of.get("action", "stop")
+            if raw_of.get("action") == "notify":
+                default_notify_msg = raw_of.get("message", "")
+                default_notify_groups = raw_of.get("stop_groups", [])
         else:
             of_act = raw_of
         idx_of = self._of_action.findData(of_act)
@@ -880,6 +896,25 @@ class _MatchImageStepForm(QWidget):
         kf.addWidget(QLabel("後繼續"))
         kf.addStretch()
         of_form.addRow("", self._of_key_row)
+
+        # notify widgets
+        self._of_notify_msg = QLineEdit()
+        self._of_notify_msg.setPlaceholderText("例如：每日探索次數已為空，已停止流程")
+        of_form.addRow("通知訊息:", self._of_notify_msg)
+        self._of_notify_msg.setText(default_notify_msg)
+        self._of_notify_groups = QListWidget()
+        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self._of_notify_groups.setMaximumHeight(80)
+        groups = groups_provider() if groups_provider else []
+        for g in groups:
+            name = g.get("name", "") if isinstance(g, dict) else g.name
+            gid = g.get("id", "") if isinstance(g, dict) else g.id
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, gid)
+            if gid in default_notify_groups:
+                item.setSelected(True)
+            self._of_notify_groups.addItem(item)
+        of_form.addRow("停止群組:", self._of_notify_groups)
 
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
@@ -1030,6 +1065,9 @@ class _MatchImageStepForm(QWidget):
         self._of_skip_row.setVisible(action == "skip")
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
+        is_notify = action == "notify"
+        self._of_notify_msg.setVisible(is_notify)
+        self._of_notify_groups.setVisible(is_notify)
 
     def save(self):
         p = self._step.params
@@ -1052,6 +1090,17 @@ class _MatchImageStepForm(QWidget):
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
             }
+        elif action == "notify":
+            selected_ids = [
+                self._of_notify_groups.item(i).data(Qt.ItemDataRole.UserRole)
+                for i in range(self._of_notify_groups.count())
+                if self._of_notify_groups.item(i).isSelected()
+            ]
+            p["on_fail"] = {
+                "action": "notify",
+                "message": self._of_notify_msg.text().strip(),
+                "stop_groups": selected_ids,
+            }
         if p.get("template"):
             self._tmpl_label.setText(Path(p["template"]).stem)
             self._update_thumbnail()
@@ -1067,6 +1116,7 @@ class _DetectStepForm(QWidget):
         rules_provider=None,
         exclude_rule_id="",
         simplified=False,
+        groups_provider=None,
     ):
         super().__init__()
         self._list = parent_list
@@ -1075,6 +1125,7 @@ class _DetectStepForm(QWidget):
         self._roi_cb = roi_cb
         self._rules_provider = rules_provider
         self._exclude_rule_id = exclude_rule_id
+        self._groups_provider = groups_provider
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
@@ -1138,9 +1189,15 @@ class _DetectStepForm(QWidget):
         self._of_action.addItem("跳過本次（預設）", "stop")
         self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
+        self._of_action.addItem("通知並停止群組", "notify")
         raw = p.get("on_fail", "stop")
+        default_notify_msg = ""
+        default_notify_groups: list[str] = []
         if isinstance(raw, dict):
             act = raw.get("action", "stop")
+            if raw.get("action") == "notify":
+                default_notify_msg = raw.get("message", "")
+                default_notify_groups = raw.get("stop_groups", [])
         else:
             act = raw
         idx_of = self._of_action.findData(act)
@@ -1186,6 +1243,25 @@ class _DetectStepForm(QWidget):
         kf.addStretch()
         of_form.addRow("", self._of_key_row)
 
+        # notify widgets
+        self._of_notify_msg = QLineEdit()
+        self._of_notify_msg.setPlaceholderText("例如：每日探索次數已為空，已停止流程")
+        of_form.addRow("通知訊息:", self._of_notify_msg)
+        self._of_notify_msg.setText(default_notify_msg)
+        self._of_notify_groups = QListWidget()
+        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self._of_notify_groups.setMaximumHeight(80)
+        groups = self._groups_provider() if self._groups_provider else []
+        for g in groups:
+            name = g.get("name", "") if isinstance(g, dict) else g.name
+            gid = g.get("id", "") if isinstance(g, dict) else g.id
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, gid)
+            if gid in default_notify_groups:
+                item.setSelected(True)
+            self._of_notify_groups.addItem(item)
+        of_form.addRow("停止群組:", self._of_notify_groups)
+
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
 
@@ -1203,6 +1279,9 @@ class _DetectStepForm(QWidget):
         action = self._of_action.currentData()
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
+        is_notify = action == "notify"
+        self._of_notify_msg.setVisible(is_notify)
+        self._of_notify_groups.setVisible(is_notify)
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -1230,6 +1309,17 @@ class _DetectStepForm(QWidget):
             self._step.params["on_fail"] = {
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
+            }
+        elif action == "notify":
+            selected_ids = [
+                self._of_notify_groups.item(i).data(Qt.ItemDataRole.UserRole)
+                for i in range(self._of_notify_groups.count())
+                if self._of_notify_groups.item(i).isSelected()
+            ]
+            self._step.params["on_fail"] = {
+                "action": "notify",
+                "message": self._of_notify_msg.text().strip(),
+                "stop_groups": selected_ids,
             }
 
 
@@ -1440,6 +1530,7 @@ class _CompareStepForm(QWidget):
         exclude_rule_id="",
         simplified=False,
         step_count=0,
+        groups_provider=None,
     ):
         super().__init__()
         self._list = parent_list
@@ -1448,6 +1539,7 @@ class _CompareStepForm(QWidget):
         self._roi_cb = roi_cb
         self._rules_provider = rules_provider
         self._exclude_rule_id = exclude_rule_id
+        self._groups_provider = groups_provider
         self._step_count = step_count
         self._on_fail_expanded = False
         p = step.params
@@ -1516,8 +1608,14 @@ class _CompareStepForm(QWidget):
         self._of_action.addItem("跳至步驟", "skip")
         self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
+        self._of_action.addItem("通知並停止群組", "notify")
         raw_of = p.get("on_fail", "stop")
+        default_notify_msg = ""
+        default_notify_groups: list[str] = []
         of_act = raw_of.get("action", "stop") if isinstance(raw_of, dict) else raw_of
+        if isinstance(raw_of, dict) and raw_of.get("action") == "notify":
+            default_notify_msg = raw_of.get("message", "")
+            default_notify_groups = raw_of.get("stop_groups", [])
         of_idx = self._of_action.findData(of_act)
         if of_idx >= 0:
             self._of_action.setCurrentIndex(of_idx)
@@ -1571,6 +1669,25 @@ class _CompareStepForm(QWidget):
         kf.addWidget(self._of_key)
         adv.addRow("", self._of_key_row)
 
+        # notify widgets
+        self._of_notify_msg = QLineEdit()
+        self._of_notify_msg.setPlaceholderText("例如：每日探索次數已為空，已停止流程")
+        adv.addRow("通知訊息:", self._of_notify_msg)
+        self._of_notify_msg.setText(default_notify_msg)
+        self._of_notify_groups = QListWidget()
+        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self._of_notify_groups.setMaximumHeight(80)
+        groups = groups_provider() if groups_provider else []
+        for g in groups:
+            name = g.get("name", "") if isinstance(g, dict) else g.name
+            gid = g.get("id", "") if isinstance(g, dict) else g.id
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, gid)
+            if gid in default_notify_groups:
+                item.setSelected(True)
+            self._of_notify_groups.addItem(item)
+        adv.addRow("停止群組:", self._of_notify_groups)
+
         form.addRow(self._adv_container)
 
         self._on_of_action_changed()
@@ -1616,6 +1733,17 @@ class _CompareStepForm(QWidget):
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
             }
+        elif action == "notify":
+            selected_ids = [
+                self._of_notify_groups.item(i).data(Qt.ItemDataRole.UserRole)
+                for i in range(self._of_notify_groups.count())
+                if self._of_notify_groups.item(i).isSelected()
+            ]
+            self._step.params["on_fail"] = {
+                "action": "notify",
+                "message": self._of_notify_msg.text().strip(),
+                "stop_groups": selected_ids,
+            }
 
     def _pick_roi(self):
         if not self._roi_cb:
@@ -1645,6 +1773,9 @@ class _CompareStepForm(QWidget):
         self._of_skip_row.setVisible(action == "skip")
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
+        is_notify = action == "notify"
+        self._of_notify_msg.setVisible(is_notify)
+        self._of_notify_groups.setVisible(is_notify)
 
 
 class _KeyStepForm(QWidget):
@@ -2254,6 +2385,7 @@ class MainWindow(QMainWindow):
         self._step_list.set_capture_callback(self._open_capture_region)
         self._step_list.set_click_pick_callback(self._on_pick_coord)
         self._step_list.set_rules_provider(lambda: list(self._rules))
+        self._step_list.set_groups_provider(lambda: self._groups)
         self._step_list.set_window_title_callback(lambda: self._window_combo.currentText())
         edit_layout.addWidget(self._step_list, 1)
 
@@ -4274,7 +4406,6 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setEnabled(True)
         if success:
             self._loop = self._init_worker.loop
-            import ctypes
             self._loop.set_tool_hwnd(int(self.winId()))
             self._btn_toggle.setText("暫停")
             self._update_edit_enabled(False)

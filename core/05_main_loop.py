@@ -350,9 +350,13 @@ class MainLoop:
             last = self._match_image_warn_counter.get(warn_key, 0)
             self._match_image_warn_counter[warn_key] = last + 1
             if last % 30 == 0:
-                self._log("⚠ match_image 未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
+                self._log(
+                    "⚠ match_image 未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域"
+                )
                 if self.on_warning:
-                    self.on_warning("圖示辨識未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域")
+                    self.on_warning(
+                        "圖示辨識未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域"
+                    )
         threshold = params.get("threshold", 0.8)
         capture_size = get_capture_size(self._rules_path)
         results = match_template(
@@ -966,6 +970,7 @@ class MainLoop:
             return False
         try:
             import ctypes
+
             return ctypes.windll.user32.GetForegroundWindow() == self._tool_hwnd
         except Exception:
             return False
