@@ -652,6 +652,29 @@ class MainLoop:
         if group is None:
             return
 
+        if group.order == "parallel":
+            triggered = False
+            for rid in group.rule_ids:
+                if triggered:
+                    break
+                r = self._rule_map.get(rid)
+                if r is None or not r.enabled:
+                    continue
+                r_ctx = StepContext(img=img, rect=rect)
+                self._process_counter += 1
+                try:
+                    self._run_rule(r, img, rect, r_ctx)
+                except Exception as e:
+                    if self._verbose:
+                        self._log(f"並行規則「{r.name}」異常: {e}")
+                    if self.on_warning:
+                        self.on_warning(f"並行規則「{r.name}」異常: {e}")
+                if r_ctx.triggered:
+                    triggered = True
+            if triggered and group.mode == "once":
+                self._advance_group_queue()
+            return
+
         if self._rule_in_group_ptr >= len(group.rule_ids):
             self._advance_group_queue()
             return

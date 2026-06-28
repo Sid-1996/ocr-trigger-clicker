@@ -3051,6 +3051,15 @@ class MainWindow(QMainWindow):
             mode_combo.setCurrentIndex(idx)
         layout.addWidget(mode_combo)
 
+        layout.addWidget(QLabel("規則執行順序"))
+        order_combo = QComboBox()
+        order_combo.addItem("依序執行", "sequential")
+        order_combo.addItem("同時並行", "parallel")
+        idx2 = order_combo.findData(group.order)
+        if idx2 >= 0:
+            order_combo.setCurrentIndex(idx2)
+        layout.addWidget(order_combo)
+
         repeat_widget = QWidget()
         repeat_layout = QVBoxLayout(repeat_widget)
         repeat_layout.setContentsMargins(0, 0, 0, 0)
@@ -3093,6 +3102,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             group.name = name_edit.text().strip() or group.name
             group.mode = mode_combo.currentData()
+            group.order = order_combo.currentData()
             group.repeat_times = repeat_spin.value()
             group.between_rounds_sec = interval_spin.value()
             group.enabled = enabled_cb.isChecked()

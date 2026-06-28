@@ -61,6 +61,7 @@ class RuleGroup:
     repeat_times: int = 1
     between_rounds_sec: int = 0
     rule_ids: list[str] = field(default_factory=list)
+    order: str = "sequential"
 
 
 _STEP_DEFAULTS = {
@@ -369,6 +370,7 @@ def _dict_to_group(d: dict) -> RuleGroup:
         repeat_times=int(d.get("repeat_times", 1)),
         between_rounds_sec=int(d.get("between_rounds_sec", 0)),
         rule_ids=[str(r) for r in d.get("rule_ids", []) if r],
+        order=str(d.get("order", "sequential")),
     )
 
 
@@ -436,6 +438,7 @@ def migrate_v2_to_v3(data: dict) -> dict:
             "repeat_times": repeat_times,
             "between_rounds_sec": between_rounds_sec,
             "rule_ids": normal_ids,
+            "order": "sequential",
         }
     ]
     data.pop("run_mode", None)
