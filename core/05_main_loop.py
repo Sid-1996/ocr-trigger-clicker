@@ -624,9 +624,14 @@ class MainLoop:
             if result.action == "stop":
                 return
             if result.action == "jump_step":
-                if result.step_index < 0 or result.step_index >= len(rule.steps):
+                idx = result.step_index
+                if idx < 0:
+                    idx = 0
+                if idx >= len(rule.steps):
+                    idx = len(rule.steps) - 1
+                if idx < 0:
                     return
-                i = result.step_index
+                i = idx
                 continue
             i += 1
 
