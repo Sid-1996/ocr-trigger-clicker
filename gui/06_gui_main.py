@@ -1578,8 +1578,13 @@ class _CompareStepForm(QWidget):
             return
         result = self._roi_cb()
         if result:
-            self._roi = {"x": result[0], "y": result[1], "w": result[2], "h": result[3]}
-            z = all(v == 0 for v in result)
+            self._roi = {
+                "x": result.get("x", 0),
+                "y": result.get("y", 0),
+                "w": result.get("w", 0),
+                "h": result.get("h", 0),
+            }
+            z = all(v == 0 for v in self._roi.values())
             self._roi_label.setText("全視窗" if z else _fmt_roi(self._roi))
             self.save()
             self._list.steps_changed.emit()
