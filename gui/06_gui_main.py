@@ -3224,9 +3224,19 @@ class MainWindow(QMainWindow):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
         if data and data[0] == "rule":
-            act = menu.addAction("複製規則")
+            act = menu.addAction("複製規則（同群組）")
             act.triggered.connect(self._duplicate_rule)
-        elif data and data[0] == "group":
+            copy_to_menu = menu.addMenu("複製到群組…")
+            normal_groups = [g for g in self._groups if not g.id.startswith("__")]
+            if normal_groups:
+                for g in normal_groups:
+                    group_act = copy_to_menu.addAction(g.name)
+                    group_act.setData(g.id)
+                    group_act.triggered.connect(
+                        lambda checked, gid=g.id: self._duplicate_rule_to_group(gid)
+                    )
+            else:
+                copy_to_menu.setEnabled(False)
             act = menu.addAction("⚙ 群組設定")
             act.triggered.connect(self._show_group_settings)
             menu.addSeparator()
@@ -3259,6 +3269,37 @@ class MainWindow(QMainWindow):
         self._flush_save()
         self._selected_rule_id = new.id
         self._refresh_rule_list()
+        if self._loop:
+            self._loop.reload_rules()
+
+
+    def _duplicate_rule_to_group(self, target_gid: str):
+        """Copy the current rule to the specified group."""
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再複製規則")
+            return
+        cur = self._get_current_rule()
+        if cur is not None:
+            cur.steps = self._step_list.get_steps()
+        src_rule = self._get_current_rule()
+        if src_rule is None:
+            return
+        target_group = next((g for g in self._groups if g.id == target_gid), None)
+        if target_group is None:
+            return
+        import uuid
+
+        new_rule = deepcopy(src_rule)
+        new_rule.id = "rule_" + uuid.uuid4().hex[:8]
+        new_rule.name = src_rule.name + " (副本)"
+        self._rules.append(new_rule)
+        target_group.rule_ids.append(new_rule.id)
+        self._flush_save()
+        self._selected_rule_id = new_rule.id
+        self._refresh_rule_list()
+        self._status_bar.showMessage(
+            "已將「" + src_rule.name + "」複製到群組「" + target_group.name + "」", 4000
+        )
         if self._loop:
             self._loop.reload_rules()
 
