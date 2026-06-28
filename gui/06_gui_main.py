@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QStackedWidget,
     QStatusBar,
+    QSystemTrayIcon,
     QTextEdit,
     QTreeWidget,
     QTreeWidgetItem,
@@ -2001,6 +2002,21 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "啟動失敗", f"初始化過程中發生錯誤：\n{e}")
             raise
+
+        # ── 系統托盤 ──
+        _icon_path = Path(__file__).resolve().parent.parent / "icons" / "app.ico"
+        _app_icon = QIcon(str(_icon_path)) if _icon_path.exists() else QIcon()
+        self.setWindowIcon(_app_icon)
+        self._tray = QSystemTrayIcon(self)
+        self._tray.setIcon(_app_icon)
+        self._tray.setToolTip("OCR Trigger Clicker")
+        _tray_menu = QMenu(self)
+        _tray_menu.addAction("顯示視窗", self._restore_window)
+        _tray_menu.addSeparator()
+        _tray_menu.addAction("離開", self._quit_app)
+        self._tray.setContextMenu(_tray_menu)
+        self._tray.activated.connect(self._on_tray_activated)
+        self._tray.show()
 
     def _load_config(self) -> dict:
         try:
@@ -4385,15 +4401,32 @@ class MainWindow(QMainWindow):
         except Exception:
             pass  # 網路錯誤不影響啟動
 
-    # === Close ===
     def closeEvent(self, event):
+        event.ignore()
+        self.hide()
+        self._tray.showMessage(
+            "OCR Trigger Clicker",
+            "程式仍在背景執行，雙擊托盤圖示可重新開啟",
+            QSystemTrayIcon.MessageIcon.Information,
+            2000,
+        )
+
+    def _restore_window(self):
+        self.showNormal()
+        self.activateWindow()
+
+    def _quit_app(self):
         self._flush_save()
         self._status_timer.stop()
         if self._loop:
             self._loop.stop()
         self._perf_timer.stop()
         _ahk_mod.shutdown()
-        event.accept()
+        QApplication.quit()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self._restore_window()
 
 
 if __name__ == "__main__":
@@ -4405,6 +4438,7 @@ if __name__ == "__main__":
 
     try:
         app = QApplication(sys.argv)
+        app.setQuitOnLastWindowClosed(False)
         win = MainWindow()
         win.show()
         sys.exit(app.exec())
