@@ -1547,6 +1547,7 @@ class _CompareStepForm(QWidget):
 
         self._on_of_action_changed()
         self._adv_container.setVisible(not simplified)
+        self._on_fail_container = self._adv_container
 
     def save(self):
         self._step.params["roi"] = {
