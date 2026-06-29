@@ -2433,7 +2433,7 @@ class MainWindow(QMainWindow):
         self._rule_list.setIndentation(20)
         self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._rule_list.setToolTip("右鍵可複製規則")
+        self._rule_list.setMouseTracking(True)
         self._rule_list.setColumnCount(2)
         hdr = self._rule_list.header()
         hdr.setStretchLastSection(False)
@@ -3016,6 +3016,7 @@ class MainWindow(QMainWindow):
             group_item.setText(0, text)
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
             group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
+            group_item.setToolTip(0, "右鍵可重新命名、群組設定、上移／下移、刪除")
             for rid in g.rule_ids:
                 r = rule_map.get(rid)
                 if r is None:
@@ -3027,6 +3028,7 @@ class MainWindow(QMainWindow):
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
                 )
+                child.setToolTip(0, "右鍵可複製規則、移動到其他群組")
                 group_item.addChild(child)
                 if r.id == self._selected_rule_id:
                     selected_item = child
@@ -3050,6 +3052,7 @@ class MainWindow(QMainWindow):
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
                 )
+                child.setToolTip(0, "右鍵可複製規則、移動到其他群組")
                 bg_item.addChild(child)
                 if r.id == self._selected_rule_id:
                     selected_item = child
