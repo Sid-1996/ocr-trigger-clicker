@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -2433,6 +2434,12 @@ class MainWindow(QMainWindow):
         self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._rule_list.setToolTip("右鍵可複製規則")
+        self._rule_list.setColumnCount(2)
+        hdr = self._rule_list.header()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(1, QHeaderView.Fixed)
+        hdr.resizeSection(1, 56)
         self._rule_list.customContextMenuRequested.connect(self._on_rule_context_menu)
         left_layout.addWidget(self._rule_list)
 
@@ -3024,6 +3031,7 @@ class MainWindow(QMainWindow):
                 if r.id == self._selected_rule_id:
                     selected_item = child
             self._rule_list.addTopLevelItem(group_item)
+            self._rule_list.setItemWidget(group_item, 1, self._make_group_buttons(g.id))
 
         # 常駐監控固定節點
         bg_rules = [r for r in self._rules if r.background]
@@ -3210,6 +3218,7 @@ class MainWindow(QMainWindow):
         self._groups = [group_map[gid] for gid in new_group_ids if gid in group_map]
         self._rules = new_order
         self._flush_save()
+        self._reapply_group_buttons()
 
     def _show_rule_detail(self, rule: Optional[Rule]):
         if rule is None:
@@ -3260,6 +3269,24 @@ class MainWindow(QMainWindow):
         self._flush_save()
         self._refresh_rule_list()
 
+    def _make_group_buttons(self, gid: str) -> QWidget:
+        w = QWidget()
+        layout = QHBoxLayout(w)
+        layout.setContentsMargins(0, 0, 4, 0)
+        layout.setSpacing(2)
+        layout.addStretch()
+        up = QPushButton("▲")
+        up.setFixedSize(22, 22)
+        up.setToolTip("上移群組")
+        up.clicked.connect(lambda: self._move_group_up(gid))
+        down = QPushButton("▼")
+        down.setFixedSize(22, 22)
+        down.setToolTip("下移群組")
+        down.clicked.connect(lambda: self._move_group_down(gid))
+        layout.addWidget(up)
+        layout.addWidget(down)
+        return w
+
     def _add_group(self):
         import uuid
 
@@ -3275,6 +3302,30 @@ class MainWindow(QMainWindow):
                 self._rule_list.setCurrentItem(item)
                 self._rule_list.editItem(item)
                 break
+
+    def _move_group_up(self, gid: str):
+        idx = next((i for i, g in enumerate(self._groups) if g.id == gid), None)
+        if idx is None or idx == 0:
+            return
+        self._groups[idx], self._groups[idx - 1] = self._groups[idx - 1], self._groups[idx]
+        self._refresh_rule_list()
+        self._flush_save()
+
+    def _move_group_down(self, gid: str):
+        idx = next((i for i, g in enumerate(self._groups) if g.id == gid), None)
+        if idx is None or idx == len(self._groups) - 1:
+            return
+        self._groups[idx], self._groups[idx + 1] = self._groups[idx + 1], self._groups[idx]
+        self._refresh_rule_list()
+        self._flush_save()
+
+    def _reapply_group_buttons(self):
+        for i in range(self._rule_list.topLevelItemCount()):
+            item = self._rule_list.topLevelItem(i)
+            gdata = item.data(0, Qt.ItemDataRole.UserRole)
+            if gdata and gdata[0] == "group":
+                self._rule_list.removeItemWidget(item, 1)
+                self._rule_list.setItemWidget(item, 1, self._make_group_buttons(gdata[1]))
 
     def _delete_group(self):
         if self._loop and self._loop.is_running:
@@ -3622,10 +3673,16 @@ class MainWindow(QMainWindow):
                 copy_to_menu.setEnabled(False)
         elif data and data[0] == "group":
             self._rule_list.setCurrentItem(item)
+            gid = data[1]
             act = menu.addAction("✏ 重新命名")
             act.triggered.connect(lambda: self._rename_group(item))
             act = menu.addAction("⚙ 群組設定")
             act.triggered.connect(self._show_group_settings)
+            menu.addSeparator()
+            act = menu.addAction("▲ 上移")
+            act.triggered.connect(lambda checked, gid=gid: self._move_group_up(gid))
+            act = menu.addAction("▼ 下移")
+            act.triggered.connect(lambda checked, gid=gid: self._move_group_down(gid))
             menu.addSeparator()
             act = menu.addAction("刪除群組")
             act.triggered.connect(self._delete_group)
