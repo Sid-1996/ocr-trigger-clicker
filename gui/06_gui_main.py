@@ -167,19 +167,6 @@ class _RuleTreeWidget(QTreeWidget):
                 if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
                     event.ignore()
                     return
-        # ponytail: 防止規則被拖到群組之間變成 top-level 孤兒
-        if src_data and src_data[0] == "rule":
-            pos = event.position().toPoint()
-            target = self.itemAt(pos)
-            if target is None:
-                event.ignore()
-                return
-            if (
-                target.parent() is None
-                and self.dropIndicatorPosition() != QAbstractItemView.DropIndicatorPosition.OnItem
-            ):
-                event.ignore()
-                return
         super().dragMoveEvent(event)
 
 
@@ -3207,16 +3194,23 @@ class MainWindow(QMainWindow):
         new_order = []
         seen = set()
         new_group_ids = []
+        rule_orig_group = {}
+        for g in self._groups:
+            for rid in list(g.rule_ids):
+                rule_orig_group[rid] = g.id
+
         for i in range(self._rule_list.topLevelItemCount()):
             group_item = self._rule_list.topLevelItem(i)
             gdata = group_item.data(0, Qt.ItemDataRole.UserRole)
             if not gdata or gdata[0] != "group":
-                # ponytail: 安全網：若規則意外變成 top-level，歸到第一個可用群組
+                # ponytail: 安全網：將意外變成 top-level 的規則歸回原群組
                 if gdata and gdata[0] == "rule" and self._groups:
                     rid = gdata[1]
                     if rid not in seen:
                         seen.add(rid)
-                        self._groups[0].rule_ids.append(rid)
+                        orig_gid = rule_orig_group.get(rid)
+                        orig = next((g for g in self._groups if g.id == orig_gid), self._groups[0])
+                        orig.rule_ids.append(rid)
                         rule = next((r for r in self._rules if r.id == rid), None)
                         if rule:
                             new_order.append(rule)
