@@ -3671,6 +3671,16 @@ class MainWindow(QMainWindow):
                     )
             else:
                 copy_to_menu.setEnabled(False)
+            move_to_menu = menu.addMenu("移動到群組…")
+            if normal_groups:
+                for g in normal_groups:
+                    group_act = move_to_menu.addAction(g.name)
+                    group_act.setData(g.id)
+                    group_act.triggered.connect(
+                        lambda checked, gid=g.id: self._move_rule_to_group(gid)
+                    )
+            else:
+                move_to_menu.setEnabled(False)
         elif data and data[0] == "group":
             self._rule_list.setCurrentItem(item)
             gid = data[1]
@@ -3742,6 +3752,31 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
         self._status_bar.showMessage(
             "已將「" + src_rule.name + "」複製到群組「" + target_group.name + "」", 4000
+        )
+        if self._loop:
+            self._loop.reload_rules()
+
+    def _move_rule_to_group(self, target_gid: str):
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, "提示", "請先停止偵測再移動規則")
+            return
+        cur = self._get_current_rule()
+        if cur is not None:
+            cur.steps = self._step_list.get_steps()
+        src_rule = self._get_current_rule()
+        if src_rule is None:
+            return
+        target_group = next((g for g in self._groups if g.id == target_gid), None)
+        if target_group is None:
+            return
+        for g in self._groups:
+            if src_rule.id in g.rule_ids:
+                g.rule_ids.remove(src_rule.id)
+        target_group.rule_ids.append(src_rule.id)
+        self._flush_save()
+        self._refresh_rule_list()
+        self._status_bar.showMessage(
+            f"已將「{src_rule.name}」移動到群組「{target_group.name}」", 4000
         )
         if self._loop:
             self._loop.reload_rules()
