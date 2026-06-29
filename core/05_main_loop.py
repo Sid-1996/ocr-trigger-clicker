@@ -34,6 +34,7 @@ get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda h
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 activate_window = _screenshot.activate_window
+get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 is_window_foreground = _perf.is_window_foreground
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
@@ -344,6 +345,11 @@ class MainLoop:
             return StepResult("stop")
 
         capture_size = get_capture_size(self._rules_path)
+        chrome = get_window_client_offset(self._window_title)
+        if chrome:
+            current_size = [ctx.rect["w"] - chrome[0], ctx.rect["h"] - chrome[1]]
+        else:
+            current_size = [ctx.rect["w"], ctx.rect["h"]]
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         if roi_is_empty and ctx.img.shape[1] > 800:
@@ -366,7 +372,7 @@ class MainLoop:
             threshold,
             template_data=template_data or None,
             capture_size=capture_size,
-            current_size=[ctx.rect["w"], ctx.rect["h"]],
+            current_size=current_size,
         )
         if not results:
             return self._handle_on_fail(params, ctx)

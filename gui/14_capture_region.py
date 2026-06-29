@@ -187,7 +187,8 @@ def capture_region(parent_window=None, task_path="", window_title="") -> Optiona
             _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
             rect = _screenshot_mod.get_window_rect(window_title)
             if rect:
-                _rule_mod.set_capture_size(task_path, rect["w"], rect["h"])
+                chrome = _screenshot_mod.get_window_client_offset(window_title) or (0, 0)
+                _rule_mod.set_capture_size(task_path, rect["w"] - chrome[0], rect["h"] - chrome[1])
     selector.close()
     selector.deleteLater()
     return result
