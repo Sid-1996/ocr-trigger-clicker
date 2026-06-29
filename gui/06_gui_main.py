@@ -978,6 +978,22 @@ class _MatchImageStepForm(QWidget):
             self._test_result.setText("⚠️ 無法截取視窗畫面")
             self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
+        h, w = img.shape[:2]
+        if roi and any(isinstance(v, float) for v in roi.values()):
+            roi = {
+                "x": int(round(roi.get("x", 0) * w))
+                if isinstance(roi.get("x"), float)
+                else int(roi.get("x", 0)),
+                "y": int(round(roi.get("y", 0) * h))
+                if isinstance(roi.get("y"), float)
+                else int(roi.get("y", 0)),
+                "w": max(1, int(round(roi.get("w", 0) * w)))
+                if isinstance(roi.get("w"), float)
+                else int(roi.get("w", 0)),
+                "h": max(1, int(round(roi.get("h", 0) * h)))
+                if isinstance(roi.get("h"), float)
+                else int(roi.get("h", 0)),
+            }
         wr = get_window_rect(title)
         current_size = [wr["w"], wr["h"]] if wr else None
         results = _tmpl_mod.match_template(
