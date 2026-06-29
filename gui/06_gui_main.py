@@ -150,6 +150,26 @@ class _RuleTreeWidget(QTreeWidget):
 
         super().dropEvent(event)
 
+    def dragMoveEvent(self, event):
+        src = self.currentItem()
+        if src is None:
+            event.ignore()
+            return
+        src_data = src.data(0, Qt.ItemDataRole.UserRole)
+        if src_data and src_data[0] == "group":
+            pos = event.position().toPoint()
+            target = self.itemAt(pos)
+            if target:
+                tgt_data = target.data(0, Qt.ItemDataRole.UserRole)
+                if tgt_data and tgt_data[0] == "group":
+                    if (
+                        self.dropIndicatorPosition()
+                        == QAbstractItemView.DropIndicatorPosition.OnItem
+                    ):
+                        event.ignore()
+                        return
+        super().dragMoveEvent(event)
+
 
 # ── Step list helpers ──
 
