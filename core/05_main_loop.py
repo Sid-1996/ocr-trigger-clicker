@@ -450,6 +450,7 @@ class MainLoop:
         if action == "notify":
             message = raw.get("message", "") if isinstance(raw, dict) else ""
             stop_groups = raw.get("stop_groups", []) if isinstance(raw, dict) else []
+            ctx.triggered = True
             if self.on_warning:
                 self.on_warning(f"[通知] {message}" if message else "[通知] 流程已停止")
             group = self._current_group()
@@ -1069,6 +1070,7 @@ if __name__ == "__main__":
     ml._rules_dirty = False
     ml._save_period_counter = 0
     ml._tracking_hwnd = None
+    ml._tool_hwnd = None
     ml._verbose = False
     ml._prev_frame = None
     ml._frame_diff_ratio = 0.0
@@ -1171,7 +1173,32 @@ if __name__ == "__main__":
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
     print("  [OK] _handle_on_fail (stop/key)")
 
-    # ── Test 9: _process_rules advances through group ──
+    # ── Test 9: _handle_on_fail notify action ──
+    ml._stop_event.clear()
+    ml._active_group_ids = ["group_A", "group_B", "group_C"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [
+        RuleGroup(id="group_A", name="A", rule_ids=[]),
+        RuleGroup(id="group_B", name="B", rule_ids=[]),
+        RuleGroup(id="group_C", name="C", rule_ids=[]),
+    ]
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "message": "測試通知", "stop_groups": ["group_A", "group_B"]}},
+        ctx,
+    )
+    assert notify_result.action == "stop", "notify should return stop"
+    assert ctx.triggered, "notify should set ctx.triggered"
+    assert "group_A" not in ml._active_group_ids, "group_A should be removed"
+    assert "group_B" not in ml._active_group_ids, "group_B should be removed"
+    assert "group_C" in ml._active_group_ids, "group_C should remain"
+    assert ml._group_queue_idx == 1
+    assert ml._rule_in_group_ptr == 0
+    assert ml._stop_event.is_set(), "no active groups remaining should set stop"
+    print("  [OK] _handle_on_fail notify")
+
+    # ── Test 10: _process_rules advances through group ──
+    ml._stop_event.clear()
     ml._rules = [
         Rule(
             id="r0",
@@ -1211,7 +1238,7 @@ if __name__ == "__main__":
     )
     print("  [OK] wait-only rule does not advance without trigger")
 
-    # ── Test 10: disabled rule is skipped via _advance_rule_in_group ──
+    # ── Test 11: disabled rule is skipped via _advance_rule_in_group ──
     ml._rules = [
         Rule(
             id="r0",
@@ -1238,7 +1265,7 @@ if __name__ == "__main__":
     assert ml._rule_in_group_ptr == 1, "should skip disabled r0"
     print("  [OK] _process_rules skips disabled rule")
 
-    # ── Test 11: _should_process_static_frame (group-based) ──
+    # ── Test 12: _should_process_static_frame (group-based) ──
     ml._rules = [
         Rule(
             id="r_detect",
@@ -1293,7 +1320,7 @@ if __name__ == "__main__":
     assert not ml._should_process_static_frame(), "disabled rule should NOT process static frame"
     print("  [OK] _should_process_static_frame logic (group-based)")
 
-    # ── Test 12: _emit_trigger_log ──
+    # ── Test 13: _emit_trigger_log ──
     trigger_events = []
     ml.on_trigger = lambda log: trigger_events.append(log)
     ml.rules_dirty = False
@@ -1304,7 +1331,7 @@ if __name__ == "__main__":
     assert trigger_events[0].matched_text == "matched_text"
     print("  [OK] _emit_trigger_log")
 
-    # ── Test 13: _handle_wait interrupt by stop event ──
+    # ── Test 14: _handle_wait interrupt by stop event ──
     interrupted = []
     ml._stop_event.set()
     result = ml._handle_wait({"ms": 10000}, ctx, test_rule)
@@ -1312,7 +1339,7 @@ if __name__ == "__main__":
     assert result.action == "stop", "wait should be interrupted by stop event"
     print("  [OK] _handle_wait stop-event interrupt")
 
-    # ── Test 14: _handle_match_image ──
+    # ── Test 15: _handle_match_image ──
     import tempfile as _tf
 
     import cv2 as _cv2
@@ -1361,7 +1388,7 @@ if __name__ == "__main__":
     Path(_mi_tmp.name).unlink(missing_ok=True)
     print("  [OK] _handle_match_image")
 
-    # ── Test 15: _handle_on_fail skip action ──
+    # ── Test 16: _handle_on_fail skip action ──
     _skip_result = ml._handle_on_fail({"on_fail": {"action": "skip", "skip_to": 3}}, ctx)
     assert _skip_result.action == "jump_step"
     assert _skip_result.step_index == 3
@@ -1371,7 +1398,7 @@ if __name__ == "__main__":
     assert _key_result.action == "continue"
     print("  [OK] _handle_on_fail skip")
 
-    # ── Test 16: Single group once mode finishes and stops (via _advance_rule_in_group) ──
+    # ── Test 17: Single group once mode finishes and stops (via _advance_rule_in_group) ──
     ml._rules = [
         Rule(id="r1", name="R1", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
         Rule(id="r2", name="R2", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
@@ -1392,7 +1419,7 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "once mode should stop after group done"
     print("  [OK] Single group once mode stops after completion")
 
-    # ── Test 17: Multiple groups execute sequentially ──
+    # ── Test 18: Multiple groups execute sequentially ──
     ml._groups = [
         RuleGroup(id="ga", name="Group A", mode="once", rule_ids=["r1"]),
         RuleGroup(id="gb", name="Group B", mode="once", rule_ids=["r2"]),
@@ -1414,7 +1441,7 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "all groups done → stop"
     print("  [OK] Multiple groups execute sequentially")
 
-    # ── Test 18: Jump within same group succeeds ──
+    # ── Test 19: Jump within same group succeeds ──
     ml._rules = [
         Rule(
             id="j1",
@@ -1442,7 +1469,7 @@ if __name__ == "__main__":
     assert ml._rule_in_group_ptr == 1, "jump within group should advance ptr"
     print("  [OK] Jump within same group succeeds")
 
-    # ── Test 19: Jump across groups returns stop ──
+    # ── Test 20: Jump across groups returns stop ──
     ml._rules = [
         Rule(
             id="xa",
@@ -1469,7 +1496,7 @@ if __name__ == "__main__":
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    # ── Test 20: Background rules prevent stop when groups are done ──
+    # ── Test 21: Background rules prevent stop when groups are done ──
     ml._rules = [
         Rule(
             id="bg1",
@@ -1504,7 +1531,7 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "no background → should stop after group done"
     print("  [OK] No background → stops normally")
 
-    # ── Test 21: _resolve_roi ratio conversion ──
+    # ── Test 22: _resolve_roi ratio conversion ──
     rect = {"w": 1920, "h": 1080}
     # ratio input → pixel output
     r = ml._resolve_roi({"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.3}, rect)
@@ -1521,7 +1548,7 @@ if __name__ == "__main__":
     assert r == {"x": 100, "y": 200, "w": 300, "h": 400}
     print("  [OK] _resolve_roi absolute pixels → passthrough")
 
-    # ── Test 22: _resolve_point ratio conversion ──
+    # ── Test 23: _resolve_point ratio conversion ──
     px, py = ml._resolve_point(0.5, 0.25, rect)
     assert (px, py) == (960, 270), f"{(px, py)}"
     print("  [OK] _resolve_point ratio → pixels")
@@ -1531,4 +1558,4 @@ if __name__ == "__main__":
     assert (px, py) == (123, 456)
     print("  [OK] _resolve_point absolute → passthrough")
 
-    print("\n=== All 22 tests passed ===")
+    print("\n=== All 23 tests passed ===")
