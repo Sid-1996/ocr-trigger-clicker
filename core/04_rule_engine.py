@@ -25,6 +25,22 @@ _FORMAT_VERSION = 1
 _IMPORT_DESCRIPTION_MAX = 200
 
 
+def _replace_file(tmp_path: str, dst: str) -> None:
+    """Windows-safe atomic replace: unlink + rename (raises OSError on failure)."""
+    try:
+        os.unlink(dst)
+    except FileNotFoundError:
+        pass
+    try:
+        os.rename(tmp_path, dst)
+    except OSError:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 @dataclass
 class ImportPreview:
     meta: dict
@@ -420,7 +436,7 @@ def save_groups(groups: list[RuleGroup], path: str) -> bool:
         ) as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             tmp_path = f.name
-        os.replace(tmp_path, p)
+        _replace_file(tmp_path, str(p))
         return True
     except OSError:
         if tmp_path:
@@ -505,7 +521,7 @@ def load_rules(path: str) -> list[Rule]:
             ) as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
                 tmp_path = f.name
-            os.replace(tmp_path, p)
+            _replace_file(tmp_path, str(p))
         except OSError:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
@@ -519,7 +535,7 @@ def load_rules(path: str) -> list[Rule]:
             ) as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
                 tmp_path = f.name
-            os.replace(tmp_path, p)
+            _replace_file(tmp_path, str(p))
         except OSError:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
@@ -553,7 +569,7 @@ def save_rules(rules: list[Rule], path: str) -> bool:
         ) as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             tmp_path = f.name
-        os.replace(tmp_path, p)
+        _replace_file(tmp_path, str(p))
         return True
     except OSError:
         if tmp_path:
@@ -789,7 +805,7 @@ def set_task_window(path: str, title: str) -> bool:
         ) as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             tmp_path = f.name
-        os.replace(tmp_path, p)
+        _replace_file(tmp_path, str(p))
         return True
     except (OSError, json.JSONDecodeError):
         if tmp_path:
@@ -830,7 +846,7 @@ def set_run_mode(path: str, mode: str, repeat_times: int = 1, between_rounds_sec
         ) as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             tmp_path = f.name
-        os.replace(tmp_path, p)
+        _replace_file(tmp_path, str(p))
         return True
     except (OSError, json.JSONDecodeError):
         if tmp_path:
@@ -868,7 +884,7 @@ def set_capture_size(path: str, w: int, h: int) -> bool:
         ) as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             tmp_path = f.name
-        os.replace(tmp_path, p)
+        _replace_file(tmp_path, str(p))
         return True
     except (OSError, json.JSONDecodeError):
         if tmp_path:
