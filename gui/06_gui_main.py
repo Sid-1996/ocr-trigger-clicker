@@ -903,7 +903,7 @@ class _MatchImageStepForm(QWidget):
         of_form.addRow("通知訊息:", self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = QListWidget()
-        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._of_notify_groups.setMaximumHeight(80)
         groups = groups_provider() if groups_provider else []
         for g in groups:
@@ -911,8 +911,10 @@ class _MatchImageStepForm(QWidget):
             gid = g.get("id", "") if isinstance(g, dict) else g.id
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, gid)
-            if gid in default_notify_groups:
-                item.setSelected(True)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if gid in default_notify_groups else Qt.CheckState.Unchecked
+            )
             self._of_notify_groups.addItem(item)
         of_form.addRow("停止群組:", self._of_notify_groups)
 
@@ -1110,7 +1112,7 @@ class _MatchImageStepForm(QWidget):
             selected_ids = [
                 self._of_notify_groups.item(i).data(Qt.ItemDataRole.UserRole)
                 for i in range(self._of_notify_groups.count())
-                if self._of_notify_groups.item(i).isSelected()
+                if self._of_notify_groups.item(i).checkState() == Qt.CheckState.Checked
             ]
             p["on_fail"] = {
                 "action": "notify",
@@ -1265,7 +1267,7 @@ class _DetectStepForm(QWidget):
         of_form.addRow("通知訊息:", self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = QListWidget()
-        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._of_notify_groups.setMaximumHeight(80)
         groups = self._groups_provider() if self._groups_provider else []
         for g in groups:
@@ -1273,8 +1275,10 @@ class _DetectStepForm(QWidget):
             gid = g.get("id", "") if isinstance(g, dict) else g.id
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, gid)
-            if gid in default_notify_groups:
-                item.setSelected(True)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if gid in default_notify_groups else Qt.CheckState.Unchecked
+            )
             self._of_notify_groups.addItem(item)
         of_form.addRow("停止群組:", self._of_notify_groups)
 
@@ -1330,7 +1334,7 @@ class _DetectStepForm(QWidget):
             selected_ids = [
                 self._of_notify_groups.item(i).data(Qt.ItemDataRole.UserRole)
                 for i in range(self._of_notify_groups.count())
-                if self._of_notify_groups.item(i).isSelected()
+                if self._of_notify_groups.item(i).checkState() == Qt.CheckState.Checked
             ]
             self._step.params["on_fail"] = {
                 "action": "notify",
@@ -1691,7 +1695,7 @@ class _CompareStepForm(QWidget):
         adv.addRow("通知訊息:", self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = QListWidget()
-        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self._of_notify_groups.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._of_notify_groups.setMaximumHeight(80)
         groups = groups_provider() if groups_provider else []
         for g in groups:
@@ -1699,8 +1703,10 @@ class _CompareStepForm(QWidget):
             gid = g.get("id", "") if isinstance(g, dict) else g.id
             item = QListWidgetItem(name)
             item.setData(Qt.ItemDataRole.UserRole, gid)
-            if gid in default_notify_groups:
-                item.setSelected(True)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if gid in default_notify_groups else Qt.CheckState.Unchecked
+            )
             self._of_notify_groups.addItem(item)
         adv.addRow("停止群組:", self._of_notify_groups)
 
@@ -1753,7 +1759,7 @@ class _CompareStepForm(QWidget):
             selected_ids = [
                 self._of_notify_groups.item(i).data(Qt.ItemDataRole.UserRole)
                 for i in range(self._of_notify_groups.count())
-                if self._of_notify_groups.item(i).isSelected()
+                if self._of_notify_groups.item(i).checkState() == Qt.CheckState.Checked
             ]
             self._step.params["on_fail"] = {
                 "action": "notify",
