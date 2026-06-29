@@ -68,8 +68,8 @@ def match_template(
     roi: Optional[dict] = None,
     threshold: float = 0.8,
     max_results: int = 5,
-    scale_range: Optional[tuple[float, float]] = (0.8, 1.2),
-    scale_step: float = 0.1,
+    scale_range: Optional[tuple[float, float]] = (0.7, 1.3),
+    scale_step: float = 0.05,
     template_data: Optional[str] = None,
     capture_size: Optional[list] = None,
     current_size: Optional[list] = None,
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     # scale_range defaults work
     default = match_template(big_img, tmp2_path, threshold=0.5)
     assert len(default) >= 1
-    print("  [OK] default scale_range=(0.8,1.2) finds match")
+    print("  [OK] default scale_range=(0.7,1.3) step=0.05 finds match")
 
     # ── Cross-resolution via capture_size ──
     high_res_img = np.zeros((200, 200, 3), dtype=np.uint8)

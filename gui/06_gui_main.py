@@ -443,6 +443,7 @@ class _StepListWidget(QWidget):
         self._rules_provider: Optional[callable] = None  # () -> list[Rule]
         self._groups_provider: Optional[callable] = None  # () -> list[RuleGroup]
         self._window_title_cb: Optional[callable] = None  # () -> str
+        self._task_path_cb: Optional[callable] = None  # () -> str
         self._rule_id: str = ""
         self._drag_indicator_idx: int = -1
         self._simplified_mode: bool = False
@@ -464,6 +465,9 @@ class _StepListWidget(QWidget):
 
     def set_window_title_callback(self, cb):
         self._window_title_cb = cb
+
+    def set_task_path_callback(self, cb):
+        self._task_path_cb = cb
 
     def set_rule_id(self, rule_id: str):
         self._rule_id = rule_id
@@ -701,6 +705,7 @@ class _StepListWidget(QWidget):
                 step_count=len(self._steps),
                 window_title_cb=self._window_title_cb,
                 groups_provider=self._groups_provider,
+                task_path_cb=self._task_path_cb,
             )
         if t == "drag":
             return _DragStepForm(self, step, idx, self._click_pick_callback)
@@ -737,6 +742,7 @@ class _MatchImageStepForm(QWidget):
         step_count=0,
         window_title_cb=None,
         groups_provider=None,
+        task_path_cb=None,
     ):
         super().__init__()
         self._list = parent_list
@@ -749,6 +755,7 @@ class _MatchImageStepForm(QWidget):
         self._step_count = step_count
         self._window_title_cb = window_title_cb
         self._groups_provider = groups_provider
+        self._task_path_cb = task_path_cb
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
@@ -998,13 +1005,18 @@ class _MatchImageStepForm(QWidget):
             }
         wr = get_window_rect(title)
         current_size = [wr["w"], wr["h"]] if wr else None
+        capture_size = None
+        if self._task_path_cb:
+            task_path = self._task_path_cb()
+            if task_path:
+                capture_size = _rule_mod.get_capture_size(task_path)
         results = _tmpl_mod.match_template(
             img,
             tmpl_path,
             roi,
             threshold,
             template_data=tmpl_data or None,
-            capture_size=None,
+            capture_size=capture_size,
             current_size=current_size,
         )
         if results:
@@ -1019,7 +1031,7 @@ class _MatchImageStepForm(QWidget):
                 roi,
                 0.01,
                 template_data=tmpl_data or None,
-                capture_size=None,
+                capture_size=capture_size,
                 current_size=current_size,
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
@@ -2459,6 +2471,11 @@ class MainWindow(QMainWindow):
         self._step_list.set_rules_provider(lambda: list(self._rules))
         self._step_list.set_groups_provider(lambda: self._groups)
         self._step_list.set_window_title_callback(lambda: self._window_combo.currentText())
+        self._step_list.set_task_path_callback(
+            lambda: (
+                str(Path(_tasks_dir()) / f"{self._current_task}.json") if self._current_task else ""
+            )
+        )
         edit_layout.addWidget(self._step_list, 1)
 
         # Add step dropdown
