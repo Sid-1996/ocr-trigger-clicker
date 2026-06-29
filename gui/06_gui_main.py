@@ -161,14 +161,12 @@ class _RuleTreeWidget(QTreeWidget):
             pos = event.position().toPoint()
             target = self.itemAt(pos)
             if target:
-                tgt_data = target.data(0, Qt.ItemDataRole.UserRole)
-                if tgt_data and tgt_data[0] == "group":
-                    if (
-                        self.dropIndicatorPosition()
-                        == QAbstractItemView.DropIndicatorPosition.OnItem
-                    ):
-                        event.ignore()
-                        return
+                if target.parent():
+                    event.ignore()
+                    return
+                if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
+                    event.ignore()
+                    return
         super().dragMoveEvent(event)
 
 
@@ -3327,7 +3325,10 @@ class MainWindow(QMainWindow):
             item = self._rule_list.topLevelItem(i)
             gdata = item.data(0, Qt.ItemDataRole.UserRole)
             if gdata and gdata[0] == "group":
+                old = self._rule_list.itemWidget(item, 1)
                 self._rule_list.removeItemWidget(item, 1)
+                if old:
+                    old.deleteLater()
                 self._rule_list.setItemWidget(item, 1, self._make_group_buttons(gdata[1]))
 
     def _delete_group(self):
@@ -3763,11 +3764,11 @@ class MainWindow(QMainWindow):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再移動規則")
             return
-        cur = self._get_current_rule()
-        if cur is not None:
-            cur.steps = self._step_list.get_steps()
         src_rule = self._get_current_rule()
         if src_rule is None:
+            return
+        src_rule.steps = self._step_list.get_steps()
+        if any(src_rule.id in g.rule_ids for g in self._groups if g.id == target_gid):
             return
         target_group = next((g for g in self._groups if g.id == target_gid), None)
         if target_group is None:
