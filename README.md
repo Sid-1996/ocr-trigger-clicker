@@ -81,13 +81,13 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 | 步驟類型 | 用途 | 關鍵參數 |
 |----------|------|----------|
-| `detect` | OCR 偵測文字，未命中可中斷規則 | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail` |
+| `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify） |
 | `click` | 滑鼠點擊 | `target`（text_center/custom）、`x`, `y`, `button`, `random_offset` |
 | `key` | 鍵盤按鍵 | `key`（AHK 格式）, `hold_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
-| `compare` | 數值比對（擷取 ROI 內數字後比較） | `pattern`, `operator`, `value`, `on_fail` |
-| `match_image` | 圖示模板比對 | `template`, `roi`, `threshold`, `on_fail` |
+| `compare` | 數值比對（擷取 ROI 內數字後比較） | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify） |
+| `match_image` | 圖示模板比對 | `template`, `roi`, `threshold`, `on_fail`（stop/key/skip/jump/notify） |
 | `scroll` | 滑鼠滾輪 | `direction`, `amount`, `delay_ms` |
 | `drag` | 滑鼠拖曳 | `target`, `dx`, `dy`, `button` |
 
@@ -107,6 +107,11 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 - 可建立多組任務，各自獨立啟用（每組任務包含獨立的規則與群組設定）
 - 任務可匯出／匯入，便於分享與備份
 - 儲存位置：`%APPDATA%\ocr-trigger-clicker\tasks\`
+- 模板圖片儲存位置：`%APPDATA%\ocr-trigger-clicker\images\`
+
+### 步驟測試按鈕
+
+每個偵測／比較／圖像比對步驟旁皆有「測試」按鈕，可在編輯時直接 dry-run，結果會以視覺化標記繪製在截圖上（偵測到的文字框、比對結果、點擊位置等），便於調校參數。
 
 ### ROI 區域選擇器
 
@@ -127,8 +132,18 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 ### 安全機制
 
 - **前景保護** — 可選功能，開啟後僅在目標視窗位於前景時才執行點擊
+- **工具前景保護** — 工具本身視窗位於前景時自動暫停 click/key/drag/scroll，防止誤操作搶走焦點
 - **速率限制** — 最高每秒 5 次點擊，超限自動暫停
 - **緊急停止** — 主視窗停止按鈕立即終止循環
+
+### 系統托盤與關閉行為
+
+打叉關閉視窗時，預設縮小至系統托盤（背景持續偵測），雙擊托盤圖示可還原視窗。可透過托盤選單的「設定...」調整：
+
+- **關閉行為** — 選擇「縮小至系統托盤」或「直接關閉程式」
+- **關閉前確認** — 關閉前跳出確認對話框，可勾選「不再顯示此確認」
+
+托盤選單提供「顯示視窗」與「離開」（完整結束程式）兩個選項。
 
 ---
 
@@ -174,7 +189,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | `03_ahk_socket.py` | TCP Server，與 AHK 跨行程通訊 |
 | `04_rule_engine.py` | 規則模型、群組管理、步驟系統、任務管理、舊格式遷移 |
 | `05_main_loop.py` | 主循環：群組兩層指標模型、步驟執行、安全機制 |
-| `06_gui_main.py` | PyQt6 主視窗（規則編輯、群組管理、步驟拖曳排序、任務管理） |
+| `06_gui_main.py` | PyQt6 主視窗（規則編輯、群組管理、步驟拖曳排序、任務管理、系統托盤、SettingsDialog） |
 | `07_gui_roi.py` | 全螢幕 ROI 框選覆蓋層 |
 | `09_ocr_debug.py` | OCR 診斷面板（即時截圖、OCR 標註、測試按鈕） |
 | `10_performance_monitor.py` | CPU／記憶體／FPS 監控、速率限制 |
@@ -195,11 +210,11 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 ### 座標系統
 
-所有 ROI / 點擊座標統一儲存為**視窗相對座標**：
+所有 ROI / 點擊座標統一儲存為**視窗比例座標**（0~1 比值，與視窗解析度無關）：
 
-- OCR 辨識結果：自然為視窗相對（在視窗截圖上執行）
-- ROI 框選、點擊選取：螢幕絕對座標 → 減去視窗位置轉為視窗相對
-- 主循環點擊前：視窗相對 → 加回視窗位置轉為螢幕絕對，送給 AHK
+- OCR 辨識結果：自然為視窗相對，再除以視窗寬高轉為比例
+- ROI 框選、點擊選取：螢幕絕對座標 → 減去視窗位置 → 除以視窗寬高轉為比例
+- 主循環使用時：比例 × 當前視窗寬高 → 還原為像素座標 → 加回視窗位置送給 AHK
 
 ---
 
