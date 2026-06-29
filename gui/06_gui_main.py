@@ -2437,7 +2437,7 @@ class MainWindow(QMainWindow):
         hdr.setStretchLastSection(False)
         hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        hdr.resizeSection(1, 56)
+        hdr.resizeSection(1, 80)
         self._rule_list.customContextMenuRequested.connect(self._on_rule_context_menu)
         left_layout.addWidget(self._rule_list)
 
@@ -3276,6 +3276,13 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 4, 0)
         layout.setSpacing(2)
         layout.addStretch()
+        group = next((g for g in self._groups if g.id == gid), None)
+        enabled = group.enabled if group else True
+        toggle = QPushButton("✓" if enabled else "■")
+        toggle.setFixedSize(22, 22)
+        toggle.setToolTip("停用群組" if enabled else "啟用群組")
+        toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
+        toggle.clicked.connect(lambda: self._toggle_group(gid))
         up = QPushButton("▲")
         up.setFixedSize(22, 22)
         up.setToolTip("上移群組")
@@ -3284,6 +3291,7 @@ class MainWindow(QMainWindow):
         down.setFixedSize(22, 22)
         down.setToolTip("下移群組")
         down.clicked.connect(lambda: self._move_group_down(gid))
+        layout.addWidget(toggle)
         layout.addWidget(up)
         layout.addWidget(down)
         return w
@@ -3317,6 +3325,14 @@ class MainWindow(QMainWindow):
         if idx is None or idx == len(self._groups) - 1:
             return
         self._groups[idx], self._groups[idx + 1] = self._groups[idx + 1], self._groups[idx]
+        self._refresh_rule_list()
+        self._flush_save()
+
+    def _toggle_group(self, gid: str):
+        group = next((g for g in self._groups if g.id == gid), None)
+        if group is None:
+            return
+        group.enabled = not group.enabled
         self._refresh_rule_list()
         self._flush_save()
 
