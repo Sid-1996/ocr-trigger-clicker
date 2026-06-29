@@ -167,6 +167,19 @@ class _RuleTreeWidget(QTreeWidget):
                 if self.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.OnItem:
                     event.ignore()
                     return
+        # ponytail: 防止規則被拖到群組之間變成 top-level 孤兒
+        if src_data and src_data[0] == "rule":
+            pos = event.position().toPoint()
+            target = self.itemAt(pos)
+            if target is None:
+                event.ignore()
+                return
+            if (
+                target.parent() is None
+                and self.dropIndicatorPosition() != QAbstractItemView.DropIndicatorPosition.OnItem
+            ):
+                event.ignore()
+                return
         super().dragMoveEvent(event)
 
 
@@ -3197,7 +3210,16 @@ class MainWindow(QMainWindow):
         for i in range(self._rule_list.topLevelItemCount()):
             group_item = self._rule_list.topLevelItem(i)
             gdata = group_item.data(0, Qt.ItemDataRole.UserRole)
-            if not gdata or gdata[0] != "group":  # 跳過 bg_group 節點
+            if not gdata or gdata[0] != "group":
+                # ponytail: 安全網：若規則意外變成 top-level，歸到第一個可用群組
+                if gdata and gdata[0] == "rule" and self._groups:
+                    rid = gdata[1]
+                    if rid not in seen:
+                        seen.add(rid)
+                        self._groups[0].rule_ids.append(rid)
+                        rule = next((r for r in self._rules if r.id == rid), None)
+                        if rule:
+                            new_order.append(rule)
                 continue
             gid = gdata[1]
             new_group_ids.append(gid)
@@ -3733,12 +3755,10 @@ class MainWindow(QMainWindow):
         new = deepcopy(src)
         new.id = f"rule_{uuid.uuid4().hex[:8]}"
         new.name = f"{src.name} (副本)"
-        idx = self._rules.index(src) + 1
-        self._rules.insert(idx, new)
+        self._rules.append(new)
         for g in self._groups:
             if src.id in g.rule_ids:
-                pos = g.rule_ids.index(src.id) + 1
-                g.rule_ids.insert(pos, new.id)
+                g.rule_ids.append(new.id)
                 break
         self._flush_save()
         self._selected_rule_id = new.id
