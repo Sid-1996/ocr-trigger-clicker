@@ -2083,6 +2083,55 @@ def _pixels_to_ratio_expanded(
     }
 
 
+class SettingsDialog(QDialog):
+    def __init__(self, config_path: str, parent=None):
+        super().__init__(parent)
+        self._config_path = config_path
+        self.setWindowTitle("偏好設定")
+        self.setMinimumWidth(350)
+
+        config = self._load_config()
+        form = QFormLayout(self)
+
+        self._behavior = QComboBox()
+        self._behavior.addItem("縮小至系統托盤", "tray")
+        self._behavior.addItem("直接關閉程式", "quit")
+        self._behavior.setCurrentIndex(0 if config.get("close_behavior", "tray") == "tray" else 1)
+        form.addRow("關閉按鈕行為:", self._behavior)
+
+        self._show_confirm = QCheckBox("關閉前顯示確認視窗（可勾選不再提醒）")
+        self._show_confirm.setChecked(config.get("show_close_confirm", True))
+        form.addRow("", self._show_confirm)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+    def _load_config(self) -> dict:
+        try:
+            with open(self._config_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
+
+    def _save_config(self, data: dict):
+        try:
+            with open(self._config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
+
+    def _on_accept(self):
+        config = self._load_config()
+        config["close_behavior"] = self._behavior.currentData()
+        config["show_close_confirm"] = self._show_confirm.isChecked()
+        self._save_config(config)
+        self.accept()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2165,6 +2214,7 @@ class MainWindow(QMainWindow):
         self._tray.setToolTip("OCR Trigger Clicker")
         _tray_menu = QMenu(self)
         _tray_menu.addAction("顯示視窗", self._restore_window)
+        _tray_menu.addAction("設定...", self._open_settings)
         _tray_menu.addSeparator()
         _tray_menu.addAction("離開", self._quit_app)
         self._tray.setContextMenu(_tray_menu)
@@ -4559,15 +4609,44 @@ class MainWindow(QMainWindow):
         except Exception:
             pass  # 網路錯誤不影響啟動
 
+    def _open_settings(self):
+        SettingsDialog(self._config_path, self).exec()
+
     def closeEvent(self, event):
-        event.ignore()
-        self.hide()
-        self._tray.showMessage(
-            "OCR Trigger Clicker",
-            "程式仍在背景執行，雙擊托盤圖示可重新開啟",
-            QSystemTrayIcon.MessageIcon.Information,
-            2000,
-        )
+        config = self._load_config()
+        behavior = config.get("close_behavior", "tray")
+        show_confirm = config.get("show_close_confirm", True)
+
+        if show_confirm:
+            title = "關閉確認"
+            msg = "確定要關閉程式？" if behavior == "quit" else "確定要縮小至系統托盤？"
+            box = QMessageBox(self)
+            box.setWindowTitle(title)
+            box.setIcon(QMessageBox.Icon.Question)
+            box.setText(msg)
+            box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            box.setDefaultButton(QMessageBox.StandardButton.No)
+            cb = QCheckBox("不再顯示此確認")
+            box.setCheckBox(cb)
+            if box.exec() != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            if cb.isChecked():
+                config["show_close_confirm"] = False
+                self._save_config(config)
+
+        if behavior == "quit":
+            self._quit_app()
+            event.accept()
+        else:
+            event.ignore()
+            self.hide()
+            self._tray.showMessage(
+                "OCR Trigger Clicker",
+                "程式仍在背景執行，雙擊托盤圖示可重新開啟",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000,
+            )
 
     def _restore_window(self):
         self.showNormal()
