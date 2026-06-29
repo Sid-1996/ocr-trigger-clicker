@@ -310,10 +310,23 @@ MainLoop.emergency_stop()
 
 | 執行模式 | 基底目錄 |
 |----------|----------|
-| `python gui/06_gui_main.py`（開發模式） | 專案根目錄 |
-| 打包 EXE（PyInstaller） | `%APPDATA%\ocr-trigger-clicker\`（可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋） |
+| `python gui/06_gui_main.py`（開發模式） | `%APPDATA%\ocr-trigger-clicker\` |
+| 打包 EXE（PyInstaller） | `%APPDATA%\ocr-trigger-clicker\` |
 
-任務檔案：`<基底>/tasks/<任務名稱>.json`（如 `專案根目錄/tasks/每日任務.json`）。
+兩種模式皆同，因為 `build.get_data_path()` 在開發環境也可 import。可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋基底路徑。僅當 `build` 模組完全無法 import 的極端情況才會 fallback 到專案根目錄。
+
+任務檔案：`<基底>/tasks/<任務名稱>.json`（如 `%APPDATA%\ocr-trigger-clicker\tasks\每日任務.json`）。
+
+### 匯入／匯出
+
+匯入與匯出的對話框起始目錄：
+
+| 執行模式 | 起始目錄 |
+|----------|----------|
+| `python gui/06_gui_main.py` | 專案根目錄（`_here` = `Path(__file__).resolve().parent.parent`） |
+| 打包 EXE | PyInstaller 暫存目錄（`sys._MEIPASS`），通常為 `%TEMP%\_MEIxxxxx` |
+
+使用者可透過對話框自由選擇任意路徑，起始目錄僅為開啟對話框時的預設位置。
 
 ### 全域設定 config.json
 

@@ -105,9 +105,9 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 ### 多任務管理
 
 - 可建立多組任務，各自獨立啟用（每組任務包含獨立的規則與群組設定）
-- 任務可匯出／匯入，便於分享與備份
-- 儲存位置：`%APPDATA%\ocr-trigger-clicker\tasks\`（打包 EXE 模式）；以 `python gui/06_gui_main.py` 開發執行時則在專案根目錄的 `tasks/` 下
-- 模板圖片儲存位置：`%APPDATA%\ocr-trigger-clicker\images\`（開發模式為專案根目錄 `images/`）
+- 儲存位置：`%APPDATA%\ocr-trigger-clicker\tasks\`（開發與打包 EXE 皆同）；可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋基底路徑
+- 模板圖片儲存位置：`%APPDATA%\ocr-trigger-clicker\images\`（同上）
+- 匯入／匯出：對話框起始目錄為專案根目錄（開發模式）或 EXE 所在目錄（打包模式），可自由選擇存放位置
 
 ### 步驟測試按鈕
 
