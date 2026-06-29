@@ -3164,12 +3164,14 @@ class MainWindow(QMainWindow):
     def _on_rules_reordered(self):
         new_order = []
         seen = set()
+        new_group_ids = []
         for i in range(self._rule_list.topLevelItemCount()):
             group_item = self._rule_list.topLevelItem(i)
             gdata = group_item.data(0, Qt.ItemDataRole.UserRole)
             if not gdata or gdata[0] != "group":  # 跳過 bg_group 節點
                 continue
             gid = gdata[1]
+            new_group_ids.append(gid)
             group = next((g for g in self._groups if g.id == gid), None)
             if group:
                 group.rule_ids = []
@@ -3184,6 +3186,8 @@ class MainWindow(QMainWindow):
                             rule = next((r for r in self._rules if r.id == rid), None)
                             if rule:
                                 new_order.append(rule)
+        group_map = {g.id: g for g in self._groups}
+        self._groups = [group_map[gid] for gid in new_group_ids if gid in group_map]
         self._rules = new_order
         self._flush_save()
 
