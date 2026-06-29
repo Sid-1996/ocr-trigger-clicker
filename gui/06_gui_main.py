@@ -970,6 +970,9 @@ class _MatchImageStepForm(QWidget):
 
     def _test_match(self):
         title = self._window_title_cb() if self._window_title_cb else ""
+        import traceback
+
+        traceback.print_stack(limit=3)
         if not title:
             self._test_result.setText("⚠️ 請先選擇目標視窗")
             self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
@@ -988,24 +991,39 @@ class _MatchImageStepForm(QWidget):
             self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
         h, w = img.shape[:2]
-        if roi and any(isinstance(v, float) for v in roi.values()):
-            roi = {
-                "x": int(round(roi.get("x", 0) * w))
-                if isinstance(roi.get("x"), float)
-                else int(roi.get("x", 0)),
-                "y": int(round(roi.get("y", 0) * h))
-                if isinstance(roi.get("y"), float)
-                else int(roi.get("y", 0)),
-                "w": max(1, int(round(roi.get("w", 0) * w)))
-                if isinstance(roi.get("w"), float)
-                else int(roi.get("w", 0)),
-                "h": max(1, int(round(roi.get("h", 0) * h)))
-                if isinstance(roi.get("h"), float)
-                else int(roi.get("h", 0)),
-            }
         wr = get_window_rect(title)
-        current_size = [wr["w"], wr["h"]] if wr else None
+        chrome = get_window_client_offset(title) or (0, 0)
+        cx, cy = chrome
+        client_w = wr["w"] - cx if wr else w
+        client_h = wr["h"] - cy if wr else h
+        if roi and any(isinstance(v, float) for v in roi.values()):
+            if roi.get("roi_coord") == "client":
+                roi = {
+                    "x": int(round(roi.get("x", 0) * client_w)) + cx,
+                    "y": int(round(roi.get("y", 0) * client_h)) + cy,
+                    "w": max(1, int(round(roi.get("w", 0) * client_w))),
+                    "h": max(1, int(round(roi.get("h", 0) * client_h))),
+                }
+            else:
+                roi = {
+                    "x": int(round(roi.get("x", 0) * w))
+                    if isinstance(roi.get("x"), float)
+                    else int(roi.get("x", 0)),
+                    "y": int(round(roi.get("y", 0) * h))
+                    if isinstance(roi.get("y"), float)
+                    else int(roi.get("y", 0)),
+                    "w": max(1, int(round(roi.get("w", 0) * w)))
+                    if isinstance(roi.get("w"), float)
+                    else int(roi.get("w", 0)),
+                    "h": max(1, int(round(roi.get("h", 0) * h)))
+                    if isinstance(roi.get("h"), float)
+                    else int(roi.get("h", 0)),
+                }
+        current_size = [client_w, client_h] if wr else None
         capture_size = None
+        print(
+            f"[TEST DEBUG] w={w} h={h} chrome={chrome} client=({client_w},{client_h}) roi_before={self._step.params.get('roi', {})} roi_after={roi} current_size={current_size} capture_size={capture_size}"
+        )
         if self._task_path_cb:
             task_path = self._task_path_cb()
             if task_path:
@@ -1971,6 +1989,7 @@ load_rules = _main_loop_mod.load_rules
 save_rules = _main_loop_mod.save_rules
 activate_window = _main_loop_mod.activate_window
 get_window_rect = _main_loop_mod.get_window_rect
+get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 capture = _main_loop_mod.capture
 recognize = _main_loop_mod.recognize
 find_text = _main_loop_mod.find_text
@@ -3780,7 +3799,16 @@ class MainWindow(QMainWindow):
         py = int(rect["y"] * dpr) - wr["y"]
         pw = int(rect["w"] * dpr)
         ph = int(rect["h"] * dpr)
-        return _pixels_to_ratio_expanded(px, py, pw, ph, wr["w"], wr["h"])
+        chrome = get_window_client_offset(title) or (0, 0)
+        client_px = px - chrome[0]
+        client_py = py - chrome[1]
+        client_w = wr["w"] - chrome[0]
+        client_h = wr["h"] - chrome[1]
+        if client_w <= 0 or client_h <= 0:
+            return _pixels_to_ratio_expanded(px, py, pw, ph, wr["w"], wr["h"])
+        roi = _pixels_to_ratio_expanded(client_px, client_py, pw, ph, client_w, client_h)
+        roi["roi_coord"] = "client"
+        return roi
 
     def _open_capture_region(self):
         """Capture a screen region from the target window as template image."""
@@ -3811,7 +3839,21 @@ class MainWindow(QMainWindow):
             if wr:
                 rx -= wr["x"]
                 ry -= wr["y"]
-            roi_ratio = _pixels_to_ratio_expanded(rx, ry, rw, rh, wr["w"], wr["h"]) if wr else None
+            if wr:
+                chrome = get_window_client_offset(title) or (0, 0)
+                client_rx = rx - chrome[0]
+                client_ry = ry - chrome[1]
+                client_w = wr["w"] - chrome[0]
+                client_h = wr["h"] - chrome[1]
+                if client_w > 0 and client_h > 0:
+                    roi_ratio = _pixels_to_ratio_expanded(
+                        client_rx, client_ry, rw, rh, client_w, client_h
+                    )
+                    roi_ratio["roi_coord"] = "client"
+                else:
+                    roi_ratio = _pixels_to_ratio_expanded(rx, ry, rw, rh, wr["w"], wr["h"])
+            else:
+                roi_ratio = None
             img = capture(title)
             if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
                 crop = img[ry : ry + rh, rx : rx + rw]
@@ -3877,6 +3919,18 @@ class MainWindow(QMainWindow):
             if x == 0 and y == 0 and w == 0 and h == 0:
                 return roi
             if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
+                if roi.get("roi_coord") == "client":
+                    chrome = get_window_client_offset(self._window_combo.currentText()) or (0, 0)
+                    cx, cy = chrome
+                    client_w = W - cx
+                    client_h = H - cy
+                    if client_w > 0 and client_h > 0:
+                        return {
+                            "x": int(round(x * client_w)) + cx,
+                            "y": int(round(y * client_h)) + cy,
+                            "w": int(round(w * client_w)),
+                            "h": int(round(h * client_h)),
+                        }
                 return {"x": int(x * W), "y": int(y * H), "w": int(w * W), "h": int(h * H)}
             return roi
 

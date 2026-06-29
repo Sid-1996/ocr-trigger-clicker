@@ -285,6 +285,22 @@ class MainLoop:
         if W <= 0 or H <= 0:
             return roi
         if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
+            if roi.get("roi_coord") == "client":
+                chrome = get_window_client_offset(self._window_title) or (0, 0)
+                cx, cy = chrome
+                client_w = W - cx
+                client_h = H - cy
+                if client_w > 0 and client_h > 0:
+                    result = {
+                        "x": int(round(x * client_w)) + cx,
+                        "y": int(round(y * client_h)) + cy,
+                        "w": int(round(w * client_w)),
+                        "h": int(round(h * client_h)),
+                    }
+                    print(
+                        f"[ROI DEBUG] rect=({W},{H}) chrome=({cx},{cy}) ratio=({x:.4f},{y:.4f},{w:.4f},{h:.4f}) → pixel={result}"
+                    )
+                    return result
             return {
                 "x": int(round(x * W)),
                 "y": int(round(y * H)),
