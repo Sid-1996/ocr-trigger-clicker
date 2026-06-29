@@ -2524,6 +2524,11 @@ class MainWindow(QMainWindow):
         self._signals.warning_signal.connect(
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
         )
+        self._signals.warning_signal.connect(
+            lambda msg: self._tray.showMessage(
+                "OCR Trigger Clicker", msg, QSystemTrayIcon.MessageIcon.Information, 5000
+            )
+        )
         self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
         self._signals.trigger_signal.connect(self._on_trigger_log_received)
         self._signals.finished.connect(self._on_loop_finished)
