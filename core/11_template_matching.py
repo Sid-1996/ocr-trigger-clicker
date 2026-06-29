@@ -112,8 +112,10 @@ def match_template(
 
     if capture_size is not None and len(capture_size) == 2 and capture_size[0] > 0:
         current_w = current_size[0] if current_size else search_bgr.shape[1]
-        scale = current_w / capture_size[0]
-        scales = [max(0.5, min(2.0, scale))]
+        center = current_w / capture_size[0]
+        center = max(0.5, min(2.0, center))
+        scales = [round(center * s, 4) for s in (0.9, 0.95, 1.0, 1.05, 1.1)]
+        scales = [s for s in scales if 0.5 <= s <= 2.0]
     elif scale_range is None:
         scales = [1.0]
     else:
@@ -290,6 +292,53 @@ if __name__ == "__main__":
     assert len(default) >= 1
     print("  [OK] default scale_range=(0.8,1.2) finds match")
 
+    # ── Cross-resolution via capture_size ──
+    high_res_img = np.zeros((200, 200, 3), dtype=np.uint8)
+    cv2.rectangle(high_res_img, (40, 40), (80, 80), (100, 150, 200), -1)
+    cv2.rectangle(high_res_img, (50, 50), (70, 70), (30, 40, 50), -1)
+    cropped = high_res_img[40:81, 40:81].copy()
+    # simulate lower resolution (80%)
+    low_res_img = cv2.resize(high_res_img, (160, 160), interpolation=cv2.INTER_AREA)
+    # encode template as base64 (like real tasks)
+    _, buf = cv2.imencode(".png", cropped)
+    tpl_b64 = base64.b64encode(buf).decode("ascii")
+
+    # matching at same res with exact capture_size
+    same = match_template(
+        high_res_img,
+        "",
+        threshold=0.5,
+        template_data=tpl_b64,
+        capture_size=[200, 200],
+        current_size=[200, 200],
+    )
+    assert len(same) >= 1, "same res with capture_size should match"
+    print(f"  [OK] capture_size same-res match ({len(same)} found)")
+
+    # matching at 80% res with capture_size → should trigger ±range scaling
+    cross = match_template(
+        low_res_img,
+        "",
+        threshold=0.5,
+        template_data=tpl_b64,
+        capture_size=[200, 200],
+        current_size=[160, 160],
+    )
+    assert len(cross) >= 1, f"cross-res (200→160) should match via scale range, got {len(cross)}"
+    print(f"  [OK] capture_size cross-res 200→160 match ({len(cross)} found)")
+
+    # capture_size without current_size → use search_bgr.shape
+    no_current = match_template(
+        low_res_img,
+        "",
+        threshold=0.5,
+        template_data=tpl_b64,
+        capture_size=[200, 200],
+        current_size=None,
+    )
+    assert len(no_current) >= 1, "should fallback to search_bgr width"
+    print(f"  [OK] capture_size without current_size fallback ({len(no_current)} found)")
+
     Path(tmp2_path).unlink(missing_ok=True)
 
-    print("\n=== All 8 tests passed ===")
+    print("\n=== All 11 tests passed ===")
