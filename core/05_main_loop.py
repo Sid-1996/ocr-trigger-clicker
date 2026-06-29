@@ -34,7 +34,6 @@ get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda h
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 activate_window = _screenshot.activate_window
-get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 is_window_foreground = _perf.is_window_foreground
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
@@ -277,9 +276,7 @@ class MainLoop:
         self._frame_ocr_cache[cache_key] = results
         return results
 
-    def _resolve_roi(
-        self, roi: dict, rect: dict, capture_size: list = None, chrome: tuple = None
-    ) -> dict:
+    def _resolve_roi(self, roi: dict, rect: dict) -> dict:
         x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
         if x == 0 and y == 0 and w == 0 and h == 0:
             return roi
@@ -287,23 +284,6 @@ class MainLoop:
         if W <= 0 or H <= 0:
             return roi
         if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
-            if capture_size is not None and chrome is not None:
-                cx, cy = chrome
-                cw, ch = capture_size
-                return {
-                    "x": int(round(((x * cw - cx) / (cw - cx)) * (W - cx) + cx))
-                    if cw > cx
-                    else int(round(x * W)),
-                    "y": int(round(((y * ch - cy) / (ch - cy)) * (H - cy) + cy))
-                    if ch > cy
-                    else int(round(y * H)),
-                    "w": int(round(w * cw / (cw - cx) * (W - cx)))
-                    if cw > cx
-                    else int(round(w * W)),
-                    "h": int(round(h * ch / (ch - cy) * (H - cy)))
-                    if ch > cy
-                    else int(round(h * H)),
-                }
             return {
                 "x": int(round(x * W)),
                 "y": int(round(y * H)),
@@ -363,9 +343,8 @@ class MainLoop:
         if not template_data.strip() and not template_path.strip():
             return StepResult("stop")
 
-        chrome = get_window_client_offset(self._window_title) if self._window_title else None
         capture_size = get_capture_size(self._rules_path)
-        roi = self._resolve_roi(params.get("roi", {}), ctx.rect, capture_size, chrome)
+        roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         if roi_is_empty and ctx.img.shape[1] > 800:
             warn_key = rule.id
@@ -1621,31 +1600,7 @@ if __name__ == "__main__":
     assert r == {"x": 100, "y": 200, "w": 300, "h": 400}
     print("  [OK] _resolve_roi absolute pixels → passthrough")
 
-    # ── Test 24: _resolve_roi chrome correction ──
-    rect2 = {"w": 1600, "h": 900}
-    r = ml._resolve_roi(
-        {"x": 0.0521, "y": 0.1852, "w": 0.1, "h": 0.1},
-        rect2,
-        capture_size=[1920, 1080],
-        chrome=(8, 30),
-    )
-    assert r["x"] == 85, f"x={r['x']}"
-    assert r["y"] == 171, f"y={r['y']}"
-    assert r["w"] == 160, f"w={r['w']}"
-    assert r["h"] == 89, f"h={r['h']}"
-    print("  [OK] _resolve_roi chrome correction")
-    # chrome=(0,0) → same as regular proportional
-    r2 = ml._resolve_roi(
-        {"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.3}, rect2, capture_size=[1920, 1080], chrome=(0, 0)
-    )
-    assert r2 == {"x": 160, "y": 180, "w": 800, "h": 270}, f"{r2}"
-    print("  [OK] _resolve_roi chrome zero → proportional")
-    # no chrome/capture_size → regular path
-    r3 = ml._resolve_roi({"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.3}, rect2)
-    assert r3 == {"x": 160, "y": 180, "w": 800, "h": 270}, f"{r3}"
-    print("  [OK] _resolve_roi no chrome → regular path")
-
-    # ── Test 25: _resolve_point ratio conversion ──
+    # ── Test 24: _resolve_point ratio conversion ──
     px, py = ml._resolve_point(0.5, 0.25, rect)
     assert (px, py) == (960, 270), f"{(px, py)}"
     print("  [OK] _resolve_point ratio → pixels")
@@ -1655,4 +1610,4 @@ if __name__ == "__main__":
     assert (px, py) == (123, 456)
     print("  [OK] _resolve_point absolute → passthrough")
 
-    print("\n=== All 25 tests passed ===")
+    print("\n=== All 24 tests passed ===")
