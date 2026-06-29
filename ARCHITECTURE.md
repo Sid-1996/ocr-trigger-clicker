@@ -306,11 +306,14 @@ MainLoop.emergency_stop()
 
 ### 任務路徑
 
-```
-專案根目錄/tasks/<任務名稱>.json
-```
+任務 JSON 的基底目錄由 `_tasks_base()`（`04_rule_engine.py:567`）決定：
 
-若使用 `build.get_data_path()`（PyInstaller 打包後），基底目錄改為使用者資料目錄。
+| 執行模式 | 基底目錄 |
+|----------|----------|
+| `python gui/06_gui_main.py`（開發模式） | 專案根目錄 |
+| 打包 EXE（PyInstaller） | `%APPDATA%\ocr-trigger-clicker\`（可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋） |
+
+任務檔案：`<基底>/tasks/<任務名稱>.json`（如 `專案根目錄/tasks/每日任務.json`）。
 
 ### 全域設定 config.json
 
