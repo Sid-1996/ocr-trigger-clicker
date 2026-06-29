@@ -320,20 +320,27 @@ class MainLoop:
 
     def _handle_detect(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         text = params.get("text", "")
+        print(
+            f"[DEBUG _handle_detect] rule={rule.name}, text={text!r}, on_fail={params.get('on_fail')!r}"
+        )
         if not text.strip():
+            print("[DEBUG] text.strip() is empty, returning stop")
             return StepResult("stop")
 
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         if not results:
+            print("[DEBUG] OCR no results, calling _handle_on_fail")
             return self._handle_on_fail(params, ctx)
 
         matches = find_text(
             results, text, params.get("match_mode", "fuzzy"), params.get("fuzzy_threshold", 0.8)
         )
         if not matches:
+            print("[DEBUG] find_text no matches, calling _handle_on_fail")
             return self._handle_on_fail(params, ctx)
 
+        print(f"[DEBUG] detect SUCCESS: matched={matches[0].text!r}")
         ctx.matched_text = matches[0]
         return StepResult("continue")
 
@@ -415,6 +422,7 @@ class MainLoop:
 
     def _handle_on_fail(self, params: dict, ctx: StepContext) -> StepResult:
         raw = params.get("on_fail", "stop")
+        print(f"[DEBUG _handle_on_fail] raw={raw!r}, type={type(raw).__name__}")
 
         if isinstance(raw, dict):
             action = raw.get("action", "stop")
@@ -450,6 +458,9 @@ class MainLoop:
         if action == "notify":
             message = raw.get("message", "") if isinstance(raw, dict) else ""
             stop_groups = raw.get("stop_groups", []) if isinstance(raw, dict) else []
+            print(
+                f"[DEBUG notify] message={message!r}, stop_groups={stop_groups}, on_warning={'set' if self.on_warning else 'NONE'}"
+            )
             ctx.triggered = True
             if self.on_warning:
                 self.on_warning(f"[通知] {message}" if message else "[通知] 流程已停止")
@@ -1184,7 +1195,13 @@ if __name__ == "__main__":
         RuleGroup(id="group_C", name="C", rule_ids=[]),
     ]
     notify_result = ml._handle_on_fail(
-        {"on_fail": {"action": "notify", "message": "測試通知", "stop_groups": ["group_A", "group_B"]}},
+        {
+            "on_fail": {
+                "action": "notify",
+                "message": "測試通知",
+                "stop_groups": ["group_A", "group_B"],
+            }
+        },
         ctx,
     )
     assert notify_result.action == "stop", "notify should return stop"
