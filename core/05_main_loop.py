@@ -450,22 +450,29 @@ class MainLoop:
         if action == "notify":
             message = raw.get("message", "") if isinstance(raw, dict) else ""
             stop_groups = raw.get("stop_groups", []) if isinstance(raw, dict) else []
-            ctx.triggered = True
             if self.on_warning:
                 self.on_warning(f"[通知] {message}" if message else "[通知] 流程已停止")
             group = self._current_group()
+            stopped = False
             if stop_groups:
                 for gid in stop_groups:
                     if gid in self._active_group_ids:
                         self._active_group_ids.remove(gid)
                 if group and group.id not in self._active_group_ids:
                     self._rule_in_group_ptr = 0
-                    self._advance_group_queue()
+                    stopped = True
             else:
-                if group and group.id in self._active_group_ids:
+                if group:
                     self._active_group_ids.remove(group.id)
                     self._rule_in_group_ptr = 0
-                    self._advance_group_queue()
+                    stopped = True
+            if not self._active_group_ids:
+                has_bg = any(r.background and r.enabled for r in self._rules)
+                if not has_bg:
+                    self._stop_event.set()
+                return StepResult("stop")
+            if not stopped:
+                ctx.triggered = True
             return StepResult("stop")
 
         return StepResult("stop")
@@ -1174,6 +1181,7 @@ if __name__ == "__main__":
     print("  [OK] _handle_on_fail (stop/key)")
 
     # ── Test 9: _handle_on_fail notify action ──
+    ctx.triggered = False
     ml._stop_event.clear()
     ml._active_group_ids = ["group_A", "group_B", "group_C"]
     ml._group_queue_idx = 0
@@ -1194,14 +1202,52 @@ if __name__ == "__main__":
         ctx,
     )
     assert notify_result.action == "stop", "notify should return stop"
-    assert ctx.triggered, "notify should set ctx.triggered"
+    assert not ctx.triggered, "notify should NOT set triggered when current group is stopped"
     assert "group_A" not in ml._active_group_ids, "group_A should be removed"
     assert "group_B" not in ml._active_group_ids, "group_B should be removed"
     assert "group_C" in ml._active_group_ids, "group_C should remain"
-    assert ml._group_queue_idx == 1
-    assert ml._rule_in_group_ptr == 0
-    assert ml._stop_event.is_set(), "no active groups remaining should set stop"
-    print("  [OK] _handle_on_fail notify")
+    assert ml._group_queue_idx == 0, "should NOT advance queue, index shift works naturally"
+    assert ml._rule_in_group_ptr == 0, "should reset pointer for the new group"
+    assert not ml._stop_event.is_set(), "group_C remains, should not stop"
+    print("  [OK] _handle_on_fail notify (stop_groups)")
+
+    # ── Test 9b: notify without stop_groups (current group only) ──
+    ml._active_group_ids = ["group_X", "group_Y"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [
+        RuleGroup(id="group_X", name="X", rule_ids=[]),
+        RuleGroup(id="group_Y", name="Y", rule_ids=[]),
+    ]
+    ctx.triggered = False
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "message": "單組停止"}}, ctx
+    )
+    assert notify_result.action == "stop"
+    assert not ctx.triggered, "should NOT set triggered when current group is removed"
+    assert "group_X" not in ml._active_group_ids, "current group should be removed"
+    assert "group_Y" in ml._active_group_ids, "other groups remain"
+    assert not ml._stop_event.is_set(), "group_Y remains"
+    print("  [OK] _handle_on_fail notify (current group only)")
+
+    # ── Test 9c: notify stop_groups does NOT include current group ──
+    ml._active_group_ids = ["group_P", "group_Q"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [
+        RuleGroup(id="group_P", name="P", rule_ids=[]),
+        RuleGroup(id="group_Q", name="Q", rule_ids=[]),
+    ]
+    ctx.triggered = False
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "stop_groups": ["group_Q"], "message": "stop Q"}}, ctx
+    )
+    assert notify_result.action == "stop"
+    assert ctx.triggered, "should set triggered when current group is NOT removed"
+    assert "group_P" in ml._active_group_ids, "current group P remains"
+    assert "group_Q" not in ml._active_group_ids, "group Q removed"
+    assert not ml._stop_event.is_set(), "group_P remains"
+    print("  [OK] _handle_on_fail notify (current group not stopped)")
 
     # ── Test 10: _process_rules advances through group ──
     ml._stop_event.clear()
