@@ -123,6 +123,8 @@ class _NoWheelDoubleSpin(QDoubleSpinBox):
 
 
 class _RuleTreeWidget(QTreeWidget):
+    reordered = pyqtSignal()
+
     def dropEvent(self, event):
         src = self.currentItem()
         if src is None:
@@ -141,15 +143,18 @@ class _RuleTreeWidget(QTreeWidget):
                     return
                 if tgt_data and tgt_data[0] == "group":
                     super().dropEvent(event)
+                    self.reordered.emit()
                     return
             event.ignore()
             return
 
         if not src_data or src_data[0] != "rule":
             super().dropEvent(event)
+            self.reordered.emit()
             return
 
         super().dropEvent(event)
+        self.reordered.emit()
 
     def dragMoveEvent(self, event):
         src = self.currentItem()
@@ -2635,7 +2640,7 @@ class MainWindow(QMainWindow):
         self._rule_list.itemExpanded.connect(self._on_rule_item_expanded)
         self._rule_list.itemDoubleClicked.connect(self._on_item_double_clicked)
 
-        self._rule_list.model().rowsMoved.connect(self._on_rules_reordered)
+        self._rule_list.reordered.connect(self._on_rules_reordered)
         self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
