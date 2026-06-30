@@ -1,9 +1,0 @@
-feat: 為 on_fail 加入 fail_duration_sec 時間制判定
-
-- StepContext 新增 step_idx 欄位，由 _run_rule 在每步驟執行前設定
-- MainLoop 新增 self._fail_since 字典，key=f"{rule.id}:{step_idx}" 追蹤連續失敗起始時間
-- _handle_on_fail 簽名加入 rule 參數，開頭判定 fail_duration_sec
-- 設定 fail_duration_sec > 0 時，失敗不會立即觸發 on_fail action，須持續失敗滿指定秒數才觸發
-- 未設定或 fail_duration_sec=0 時維持原行為（立即觸發），向下相容
-- 三個 handler（detect/match_image/compare）成功時清除對應 _fail_since 計時
-- 測試 harness 補上 ml._fail_since = {} 與 8 處呼叫點加 test_rule 參數
