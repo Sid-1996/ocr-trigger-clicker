@@ -4822,10 +4822,12 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import QPoint
 
         menu = QMenu(self)
-        menu.addAction("💳 ECPAY (台灣)").triggered.connect(
+        ecpay_icon = self._make_color_icon((0, 166, 81))
+        paypal_icon = self._make_color_icon((0, 112, 186))
+        menu.addAction(ecpay_icon, "ECPAY").triggered.connect(
             lambda: webbrowser.open("https://p.ecpay.com.tw/E0E3A")
         )
-        menu.addAction("💰 PayPal (國際)").triggered.connect(
+        menu.addAction(paypal_icon, "PayPal").triggered.connect(
             lambda: webbrowser.open("https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6")
         )
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
