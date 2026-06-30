@@ -3,6 +3,7 @@
 ![License](https://img.shields.io/badge/license-AGPLv3-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
+![Downloads](https://img.shields.io/github/downloads/Sid-1996/ocr-trigger-clicker/total?label=%E4%B8%8B%E8%BC%89%E6%AC%A1%E6%95%B8&color=238636)
 
 > 透過 OCR 即時偵測螢幕文字，自動執行滑鼠點擊的 Windows 開源工具。  
 > Author: Sid
