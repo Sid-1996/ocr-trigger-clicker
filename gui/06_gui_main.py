@@ -2400,6 +2400,26 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
         toolbar.addStretch()
+        self._sponsor_btn = QPushButton("♥")
+        self._sponsor_btn.setFixedSize(28, 28)
+        self._sponsor_btn.setToolTip("贊助開發者 ❤️")
+        self._sponsor_btn.setStyleSheet(
+            """
+            QPushButton {
+                background: #fce4ec;
+                color: #e91e63;
+                font-size: 18px;
+                border: 1px solid #f8bbd0;
+                border-radius: 14px;
+            }
+            QPushButton:hover {
+                background: #f8bbd0;
+                color: #c2185b;
+            }
+            """
+        )
+        self._sponsor_btn.clicked.connect(self._open_sponsor)
+        toolbar.addWidget(self._sponsor_btn)
         self._about_btn = QPushButton("關於")
         self._about_btn.setToolTip(f"OCR Trigger Clicker v{__version__} — 作者: {__author__}")
         self._about_btn.clicked.connect(self._show_about)
@@ -4794,6 +4814,21 @@ class MainWindow(QMainWindow):
             self._trigger_log_toggle.setChecked(True)
             self._trigger_log_widget.setVisible(True)
             self._trigger_log_toggle.setText("▾ 觸發記錄")
+
+    # === Sponsor ===
+    def _open_sponsor(self):
+        import webbrowser
+
+        from PyQt6.QtCore import QPoint
+
+        menu = QMenu(self)
+        menu.addAction("💳 ECPAY (台灣)").triggered.connect(
+            lambda: webbrowser.open("https://p.ecpay.com.tw/E0E3A")
+        )
+        menu.addAction("💰 PayPal (國際)").triggered.connect(
+            lambda: webbrowser.open("https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6")
+        )
+        menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
 
     # === About & Version ===
     def _show_about(self):
