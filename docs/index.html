@@ -26,7 +26,7 @@
   "applicationCategory": "UtilityApplication",
   "description": "透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作的 Windows 綠色工具。",
   "author": { "@type": "Person", "name": "Sid" },
-  "softwareVersion": "0.0.2",
+  "softwareVersion": "0.0.3",
   "license": "https://github.com/Sid-1996/ocr-trigger-clicker/blob/master/LICENSE",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" }
 }
@@ -141,6 +141,8 @@
     <li><strong>系統托盤常駐</strong> — 關閉視窗縮小至系統托盤背景執行，可透過設定調整關閉行為或啟用關閉確認。</li>
     <li><strong>on_fail 通知</strong> — 步驟失敗時可發送系統通知並自動停止指定群組。</li>
     <li><strong>規則匯入／匯出</strong> — 任務可匯出為 JSON 檔，分享給他人或備份。</li>
+    <li><strong>圖示模板比對（match_image）</strong> — 以圖找圖，支援多尺度搜尋與 NMS 篩選，適合無文字的按鈕或圖示辨識。</li>
+    <li><strong>步驟層級失敗處理（on_fail）</strong> — 支援停止規則、按鍵、跳躍步驟、跳躍群組、系統通知等多種異常流程控制。</li>
   </ul>
 </section>
 
@@ -153,6 +155,10 @@
   <figure>
     <img class="screenshot" src="images/zh_ocr.png" alt="OCR 即時診斷功能 — 顯示視窗內所有可辨識文字、位置與信心度" loading="lazy">
     <figcaption style="font-size:.85em;color:#8b949e;">OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
+  </figure>
+  <figure>
+    <img class="screenshot" src="images/gui2.png" alt="圖示模板比對 match_image 步驟設定 — 選取範本圖片、框選 ROI、設定門檻值與 on_fail 行為" loading="lazy">
+    <figcaption style="font-size:.85em;color:#8b949e;">圖示比對步驟：選取範本圖片、設定 ROI 與相似度門檻、on_fail 行為</figcaption>
   </figure>
 </section>
 
@@ -176,6 +182,7 @@
     <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快，建議只框選包含目標文字的最小範圍。</li>
     <li><strong>使用 jump 步驟</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
     <li><strong>使用 compare 步驟</strong>：對 ROI 內的數字做數值條件判斷（大於／小於／等於）。</li>
+    <li><strong>使用 match_image 步驟</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕或圖示。可在步驟內直接按「測試比對」確認是否命中。</li>
     <li><strong>常駐監控</strong>：適合用於錯誤攔截，不受群組順序影響，每幀獨立執行。</li>
     <li><strong>OCR 診斷模式</strong>：按下「OCR 診斷」可即時看到視窗中所有文字，幫助確認 ROI 位置是否正確。</li>
   </ul>
@@ -207,8 +214,8 @@
   <h3>OCR 辨識速度如何？</h3>
   <p>一般情況下每秒可處理 5–15 次，取決於 ROI 大小與 CPU/GPU 效能。支援 DirectML GPU 加速（需 DirectX 12 顯卡）。</p>
 
-  <h3>可以辨識圖示或圖片嗎？</h3>
-  <p>不行。本工具為純文字 OCR，不支援圖形比對。若需要圖形辨識，建議搭配其他工具使用。</p>
+  <h3>可以比對圖示或按鈕圖片嗎？</h3>
+  <p>可以。步驟類型選擇 <code>match_image</code>（圖像比對），載入範本圖片並設定相似度門檻，即可在 ROI 區域內以模板比對方式偵測圖示或按鈕位置。</p>
 
   <h3>多個規則可以同時執行嗎？</h3>
   <p>群組內的規則依序執行，一次只執行一條，觸發成功後才推進到下一條。常駐監控規則則每幀都會執行，不受群組順序影響。</p>
