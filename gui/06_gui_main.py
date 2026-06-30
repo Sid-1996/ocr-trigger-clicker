@@ -4822,8 +4822,8 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import QPoint
 
         menu = QMenu(self)
-        ecpay_icon = self._make_color_icon((0, 166, 81))
-        paypal_icon = self._make_color_icon((0, 112, 186))
+        ecpay_icon = self._make_circle_icon((0, 166, 81))
+        paypal_icon = self._make_circle_icon((0, 112, 186))
         menu.addAction(ecpay_icon, "ECPAY").triggered.connect(
             lambda: webbrowser.open("https://p.ecpay.com.tw/E0E3A")
         )
