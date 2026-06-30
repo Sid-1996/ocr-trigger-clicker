@@ -3402,10 +3402,35 @@ class MainWindow(QMainWindow):
                 if rule.id in g.rule_ids:
                     g.rule_ids.remove(rule.id)
         else:
-            target = next((g for g in self._groups if g.enabled), None)
-            if target and rule.id not in target.rule_ids:
+            target = next((g for g in self._groups if g.id == "__uncategorized__"), None)
+            if target is None:
+                target = RuleGroup(id="__uncategorized__", name="未歸類", enabled=False)
+                self._groups.append(target)
+            if rule.id not in target.rule_ids:
                 target.rule_ids.append(rule.id)
-                self._status_bar.showMessage(f"「{rule.name}」已加回群組「{target.name}」", 4000)
+            if self._groups[-1].id != "__uncategorized__":
+                self._groups.remove(target)
+                self._groups.append(target)
+            self._status_bar.showMessage(f"「{rule.name}」已移至未歸類", 4000)
+        self._flush_save()
+        self._refresh_rule_list()
+
+    def _clear_uncategorized(self):
+        target = next((g for g in self._groups if g.id == "__uncategorized__"), None)
+        if target is None or not target.rule_ids:
+            return
+        count = len(target.rule_ids)
+        reply = QMessageBox.question(
+            self,
+            "清空未歸類",
+            f"確定刪除「未歸類」中的所有規則（共 {count} 條）？\n此操作無法復原。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._rules = [r for r in self._rules if r.id not in target.rule_ids]
+        target.rule_ids.clear()
+        self._selected_rule_id = None
         self._flush_save()
         self._refresh_rule_list()
 
@@ -3416,12 +3441,15 @@ class MainWindow(QMainWindow):
         layout.setSpacing(2)
         layout.addStretch()
         group = next((g for g in self._groups if g.id == gid), None)
-        enabled = group.enabled if group else True
-        toggle = QPushButton("✓" if enabled else "■")
-        toggle.setFixedSize(22, 22)
-        toggle.setToolTip("停用群組" if enabled else "啟用群組")
-        toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
-        toggle.clicked.connect(lambda: self._toggle_group(gid))
+        is_uncat = group and group.id == "__uncategorized__"
+        if not is_uncat:
+            enabled = group.enabled if group else True
+            toggle = QPushButton("✓" if enabled else "■")
+            toggle.setFixedSize(22, 22)
+            toggle.setToolTip("停用群組" if enabled else "啟用群組")
+            toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
+            toggle.clicked.connect(lambda: self._toggle_group(gid))
+            layout.addWidget(toggle)
         up = QPushButton("▲")
         up.setFixedSize(22, 22)
         up.setToolTip("上移群組")
@@ -3430,7 +3458,6 @@ class MainWindow(QMainWindow):
         down.setFixedSize(22, 22)
         down.setToolTip("下移群組")
         down.clicked.connect(lambda: self._move_group_down(gid))
-        layout.addWidget(toggle)
         layout.addWidget(up)
         layout.addWidget(down)
         return w
@@ -3469,7 +3496,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_group(self, gid: str):
         group = next((g for g in self._groups if g.id == gid), None)
-        if group is None:
+        if group is None or group.id == "__uncategorized__":
             return
         group.enabled = not group.enabled
         self._refresh_rule_list()
@@ -3500,6 +3527,13 @@ class MainWindow(QMainWindow):
         group = next((g for g in self._groups if g.id == gid), None)
         if group is None:
             return
+        if group.id == "__uncategorized__":
+            QMessageBox.warning(
+                self,
+                "無法刪除",
+                "「未歸類」為系統保留群組，無法刪除。\n可使用右鍵選單「清空未歸類」移出所有規則。",
+            )
+            return
         rule_count = len([rid for rid in group.rule_ids if any(r.id == rid for r in self._rules)])
         msg = f"確定刪除群組「{group.name}」？"
         if rule_count > 0:
@@ -3528,6 +3562,8 @@ class MainWindow(QMainWindow):
         gid = data[1]
         group = next((g for g in self._groups if g.id == gid), None)
         if not group:
+            return
+        if group.id == "__uncategorized__":
             return
         from PyQt6.QtWidgets import QInputDialog
 
@@ -3652,6 +3688,9 @@ class MainWindow(QMainWindow):
     def _on_item_double_clicked(self, item, column):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
+            gid = data[1]
+            if gid == "__uncategorized__":
+                return
             self._rename_group(item)
 
     def _add_rule(self):
@@ -3843,11 +3882,18 @@ class MainWindow(QMainWindow):
         elif data and data[0] == "group":
             self._rule_list.setCurrentItem(item)
             gid = data[1]
-            act = menu.addAction("✏ 重新命名")
-            act.triggered.connect(lambda: self._rename_group(item))
-            act = menu.addAction("⚙ 群組設定")
-            act.triggered.connect(self._show_group_settings)
-            menu.addSeparator()
+            group = next((g for g in self._groups if g.id == gid), None)
+            is_uncat = group and group.id == "__uncategorized__"
+            if is_uncat:
+                act = menu.addAction("🗑 清空未歸類")
+                act.triggered.connect(self._clear_uncategorized)
+                menu.addSeparator()
+            else:
+                act = menu.addAction("✏ 重新命名")
+                act.triggered.connect(lambda: self._rename_group(item))
+                act = menu.addAction("⚙ 群組設定")
+                act.triggered.connect(self._show_group_settings)
+                menu.addSeparator()
             act = menu.addAction("▲ 上移")
             act.triggered.connect(lambda checked, gid=gid: self._move_group_up(gid))
             act = menu.addAction("▼ 下移")
