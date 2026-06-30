@@ -5139,8 +5139,10 @@ if __name__ == "__main__":
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    _log_dir = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs"
+    _log_dir.mkdir(parents=True, exist_ok=True)
     _log_handler = TimedRotatingFileHandler(
-        Path(__file__).resolve().parent.parent / "logs" / "debug.log",
+        _log_dir / "debug.log",
         when="midnight",
         backupCount=7,
         encoding="utf-8",
