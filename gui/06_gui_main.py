@@ -3441,15 +3441,15 @@ class MainWindow(QMainWindow):
         layout.setSpacing(2)
         layout.addStretch()
         group = next((g for g in self._groups if g.id == gid), None)
-        is_uncat = group and group.id == "__uncategorized__"
-        if not is_uncat:
-            enabled = group.enabled if group else True
-            toggle = QPushButton("✓" if enabled else "■")
-            toggle.setFixedSize(22, 22)
-            toggle.setToolTip("停用群組" if enabled else "啟用群組")
-            toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
-            toggle.clicked.connect(lambda: self._toggle_group(gid))
-            layout.addWidget(toggle)
+        if group and group.id == "__uncategorized__":
+            return w
+        enabled = group.enabled if group else True
+        toggle = QPushButton("✓" if enabled else "■")
+        toggle.setFixedSize(22, 22)
+        toggle.setToolTip("停用群組" if enabled else "啟用群組")
+        toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
+        toggle.clicked.connect(lambda: self._toggle_group(gid))
+        layout.addWidget(toggle)
         up = QPushButton("▲")
         up.setFixedSize(22, 22)
         up.setToolTip("上移群組")
@@ -3479,6 +3479,8 @@ class MainWindow(QMainWindow):
                 break
 
     def _move_group_up(self, gid: str):
+        if gid == "__uncategorized__":
+            return
         idx = next((i for i, g in enumerate(self._groups) if g.id == gid), None)
         if idx is None or idx == 0:
             return
@@ -3487,6 +3489,8 @@ class MainWindow(QMainWindow):
         self._flush_save()
 
     def _move_group_down(self, gid: str):
+        if gid == "__uncategorized__":
+            return
         idx = next((i for i, g in enumerate(self._groups) if g.id == gid), None)
         if idx is None or idx == len(self._groups) - 1:
             return
