@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import sys
 import threading
 import time
@@ -2880,14 +2881,28 @@ class MainWindow(QMainWindow):
             self._save_timer.stop()
             self._save_current_rule()
         if not name:
+            logging.debug('[task changed] rules=0, task=""')
             self._rules = []
             self._current_task = ""
             self._refresh_rule_list()
             return
         self._current_task = name
         self._rules = load_task(name)
+        logging.debug('[task changed] rules=%d, task="%s"', len(self._rules), name)
         task_path = str(Path(_tasks_dir()) / f"{name}.json")
         self._groups = load_groups(task_path)
+        # safety net: remove from uncategorized any rule also in a normal group
+        uncat = next((g for g in self._groups if g.id == "__uncategorized__"), None)
+        if uncat and uncat.rule_ids:
+            normal_ids = set()
+            for g in self._groups:
+                if g.id != "__uncategorized__":
+                    normal_ids.update(g.rule_ids)
+            dupes = [rid for rid in uncat.rule_ids if rid in normal_ids]
+            for rid in dupes:
+                uncat.rule_ids.remove(rid)
+            if dupes:
+                logging.info("[auto-cleanup] 從未歸類移除 %d 條重複規則", len(dupes))
         # load collapsed state from task file
         self._collapsed_groups = set()
         try:
@@ -3357,6 +3372,7 @@ class MainWindow(QMainWindow):
         group_map = {g.id: g for g in self._groups}
         self._groups = [group_map[gid] for gid in new_group_ids if gid in group_map]
         self._rules = new_order
+        logging.debug("[reorder] drag-drop, ids=[%s]", ",".join(r.id for r in self._rules))
         self._flush_save()
         self._reapply_group_buttons()
 
@@ -3375,8 +3391,12 @@ class MainWindow(QMainWindow):
         self._edit_name.setEnabled(True)
         self._edit_enabled.setEnabled(True)
         self._edit_name.setText(rule.name)
+        self._edit_enabled.blockSignals(True)
         self._edit_enabled.setChecked(rule.enabled)
+        self._edit_enabled.blockSignals(False)
+        self._edit_background.blockSignals(True)
         self._edit_background.setChecked(getattr(rule, "background", False))
+        self._edit_background.blockSignals(False)
         self._step_list.set_rule_id(rule.id)
         self._step_list.set_steps(rule.steps)
 
@@ -3428,8 +3448,14 @@ class MainWindow(QMainWindow):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
+        removed = [r for r in self._rules if r.id in target.rule_ids]
         self._rules = [r for r in self._rules if r.id not in target.rule_ids]
         target.rule_ids.clear()
+        logging.debug(
+            "[clear uncategorized] removed=%d rules, ids=[%s]",
+            len(removed),
+            ",".join(r.id for r in removed),
+        )
         self._selected_rule_id = None
         self._flush_save()
         self._refresh_rule_list()
@@ -3553,8 +3579,10 @@ class MainWindow(QMainWindow):
         ):
             return
         # remove rules in this group
+        removed = [r for r in self._rules if r.id in group.rule_ids]
         self._rules = [r for r in self._rules if r.id not in group.rule_ids]
         self._groups = [g for g in self._groups if g.id != gid]
+        logging.debug('[delete group] group="%s", removed=%d rules', group.name, len(removed))
         self._flush_save()
         self._selected_rule_id = None
         self._refresh_rule_list()
@@ -3744,6 +3772,12 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
+        logging.debug(
+            '[add rule] manual, name="%s", id=%s, background=%s',
+            rule.name,
+            rule.id,
+            rule.background,
+        )
         if target_group:
             target_group.rule_ids.append(rule.id)
         self._flush_save()
@@ -3817,6 +3851,7 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
+        logging.debug('[delete rule] manual, name="%s", id=%s', rule.name, rule.id)
         for g in self._groups:
             g.rule_ids = [rid for rid in g.rule_ids if rid != rule.id]
         # 清理被刪規則的孤兒範本圖片（僅限舊版檔案路徑殘留）
@@ -3923,6 +3958,9 @@ class MainWindow(QMainWindow):
         new.id = f"rule_{uuid.uuid4().hex[:8]}"
         new.name = f"{src.name} (副本)"
         self._rules.append(new)
+        logging.debug(
+            '[duplicate rule] manual (same group), name="%s", id=%s <- %s', new.name, new.id, src.id
+        )
         for g in self._groups:
             if src.id in g.rule_ids:
                 g.rule_ids.append(new.id)
@@ -3953,6 +3991,13 @@ class MainWindow(QMainWindow):
         new_rule.id = "rule_" + uuid.uuid4().hex[:8]
         new_rule.name = src_rule.name + " (副本)"
         self._rules.append(new_rule)
+        logging.debug(
+            '[duplicate rule] manual (to group), name="%s", id=%s <- %s, group="%s"',
+            new_rule.name,
+            new_rule.id,
+            src_rule.id,
+            target_group.name,
+        )
         target_group.rule_ids.append(new_rule.id)
         self._flush_save()
         self._selected_rule_id = new_rule.id
@@ -4749,6 +4794,7 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
+        logging.debug('[add rule] debug panel, name="%s", id=%s', rule.name, rule.id)
         target_group = None
         item = self._rule_list.currentItem()
         if item:
@@ -5080,9 +5126,22 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     import sys
     import traceback
+    from logging.handlers import TimedRotatingFileHandler
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    _log_handler = TimedRotatingFileHandler(
+        Path(__file__).resolve().parent.parent / "logs" / "debug.log",
+        when="midnight",
+        backupCount=7,
+        encoding="utf-8",
+    )
+    _log_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    )
+    _log_handler.setLevel(logging.DEBUG)
+    logging.getLogger().addHandler(_log_handler)
+    logging.getLogger().setLevel(logging.DEBUG)
 
     try:
         app = QApplication(sys.argv)

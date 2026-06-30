@@ -722,17 +722,42 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
             valid_rules.append(raw)
 
     rule_names = [r.get("name", "?") for r in valid_rules]
-    if len(valid_rules) < len(data["rules"]):
+    dropped = len(data["rules"]) - len(valid_rules)
+    if dropped:
         warnings.append(
-            f"共 {len(data['rules'])} 條規則，{len(valid_rules)} 條格式正確，{len(data['rules']) - len(valid_rules)} 條已略過"
+            f"共 {len(data['rules'])} 條規則，{len(valid_rules)} 條格式正確，{dropped} 條已略過"
         )
+
+    valid_ids = {r["id"] for r in valid_rules}
+    valid_groups = []
+    for g in data.get("groups", []):
+        gid = g.get("id", "")
+        gname = g.get("name", "")
+        if not isinstance(gid, str) or not gid:
+            warnings.append("群組缺少 id，已略過")
+            continue
+        if not isinstance(gname, str) or not gname:
+            warnings.append(f"群組 {gid} 缺少 name，已略過")
+            continue
+        raw_ids = g.get("rule_ids", [])
+        if not isinstance(raw_ids, list):
+            raw_ids = []
+        filtered = [rid for rid in raw_ids if isinstance(rid, str) and rid in valid_ids]
+        if len(filtered) < len(raw_ids):
+            warnings.append(f"群組「{gname}」部分 rule_ids 指向無效規則，已自動過濾")
+        g["rule_ids"] = filtered
+        valid_groups.append(g)
+
+    raw_data: dict = {"rules": valid_rules}
+    if valid_groups:
+        raw_data["groups"] = valid_groups
 
     return ImportPreview(
         meta=meta,
         rule_names=rule_names,
         rule_count=len(valid_rules),
         warnings=warnings,
-        raw_data={"rules": valid_rules},
+        raw_data=raw_data,
     )
 
 
@@ -766,6 +791,8 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
                         rid = oaf.get("rule_id", "")
                         if rid in id_map:
                             oaf["rule_id"] = id_map[rid]
+        for g in data.get("groups", []):
+            g["rule_ids"] = [id_map.get(rid, rid) for rid in g.get("rule_ids", [])]
 
     src_name = Path(src_path).stem
     dest = get_tasks_dir() / f"{src_name}.json"
