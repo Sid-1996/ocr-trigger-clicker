@@ -111,6 +111,7 @@ class StepContext:
     matched_text: Optional[OcrResult] = None
     matched_box: Optional[dict] = None
     triggered: bool = False
+    step_idx: int = -1
 
 
 @dataclass
@@ -160,6 +161,9 @@ class MainLoop:
         self._save_period_counter: int = 0
         self._process_counter: int = 0
         self._match_image_warn_counter: dict[str, int] = {}
+        self._fail_since: dict[
+            str, float
+        ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -343,14 +347,15 @@ class MainLoop:
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         if not results:
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
 
         matches = find_text(
             results, text, params.get("match_mode", "fuzzy"), params.get("fuzzy_threshold", 0.8)
         )
         if not matches:
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
 
+        self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = matches[0]
         return StepResult("continue")
 
@@ -391,8 +396,9 @@ class MainLoop:
             current_size=current_size,
         )
         if not results:
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
 
+        self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = results[0]
         return StepResult("continue")
 
@@ -403,11 +409,11 @@ class MainLoop:
         pattern = params.get("pattern", r"-?\d+\.?\d*")
         m = re.search(pattern, combined)
         if not m:
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
         try:
             num = float(m.group())
         except (ValueError, TypeError):
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
         op = params.get("operator", ">=")
         val = params.get("value", 0.0)
         ops = {
@@ -419,9 +425,10 @@ class MainLoop:
             "!=": lambda a, b: a != b,
         }
         if op not in ops:
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
         if not ops[op](num, val):
-            return self._handle_on_fail(params, ctx)
+            return self._handle_on_fail(params, ctx, rule)
+        self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = results[0]
         ctx.matched_box = {
             "x": roi.get("x", 0),
@@ -435,8 +442,26 @@ class MainLoop:
             self._log(f"比較：{num} {op} {val} → 成立")
         return StepResult("continue")
 
-    def _handle_on_fail(self, params: dict, ctx: StepContext) -> StepResult:
+    def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         raw = params.get("on_fail", "stop")
+
+        fail_duration = raw.get("fail_duration_sec", 0) if isinstance(raw, dict) else 0
+        try:
+            fail_duration = float(fail_duration)
+        except (TypeError, ValueError):
+            fail_duration = 0.0
+
+        if fail_duration > 0:
+            key = f"{rule.id}:{ctx.step_idx}"
+            now = time.monotonic()
+            first_fail = self._fail_since.get(key)
+            if first_fail is None:
+                self._fail_since[key] = now
+                return StepResult("continue")
+            if now - first_fail < fail_duration:
+                return StepResult("continue")
+            self._fail_since.pop(key, None)
+            # fail_duration elapsed → fall through to execute the configured action
 
         if isinstance(raw, dict):
             action = raw.get("action", "stop")
@@ -688,6 +713,7 @@ class MainLoop:
             ctx = StepContext(img=img, rect=rect)
         i = 0
         while i < len(rule.steps):
+            ctx.step_idx = i
             result = self._run_step(rule.steps[i], ctx, rule)
             if result.action == "stop":
                 return
@@ -1093,6 +1119,7 @@ if __name__ == "__main__":
     ml._rule_in_group_ptr = 0
     ml._rule_map = {}
     ml._group_rounds_completed = {}
+    ml._fail_since = {}
     ml._rules_lock = threading.RLock()
     ml._window_lock = threading.RLock()
     ml._process_counter = 0
@@ -1190,13 +1217,13 @@ if __name__ == "__main__":
     print("  [OK] _handle_click text_center without match")
 
     # ── Test 8: _handle_on_fail actions ──
-    result = ml._handle_on_fail({"on_fail": "stop"}, ctx)
+    result = ml._handle_on_fail({"on_fail": "stop"}, ctx, test_rule)
     assert result.action == "stop", "on_fail stop should return stop"
 
     mock_called = []
     _orig_k = _ahk.send_key
     _ahk.send_key = lambda k: mock_called.append(k) or True
-    result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx)
+    result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
     _ahk.send_key = _orig_k
     assert result.action == "continue", "on_fail key should return continue"
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
@@ -1222,6 +1249,7 @@ if __name__ == "__main__":
             }
         },
         ctx,
+        test_rule,
     )
     assert notify_result.action == "stop", "notify should return stop"
     assert not ctx.triggered, "notify should NOT set triggered when current group is stopped"
@@ -1243,7 +1271,7 @@ if __name__ == "__main__":
     ]
     ctx.triggered = False
     notify_result = ml._handle_on_fail(
-        {"on_fail": {"action": "notify", "message": "單組停止"}}, ctx
+        {"on_fail": {"action": "notify", "message": "單組停止"}}, ctx, test_rule
     )
     assert notify_result.action == "stop"
     assert not ctx.triggered, "should NOT set triggered when current group is removed"
@@ -1262,7 +1290,9 @@ if __name__ == "__main__":
     ]
     ctx.triggered = False
     notify_result = ml._handle_on_fail(
-        {"on_fail": {"action": "notify", "stop_groups": ["group_Q"], "message": "stop Q"}}, ctx
+        {"on_fail": {"action": "notify", "stop_groups": ["group_Q"], "message": "stop Q"}},
+        ctx,
+        test_rule,
     )
     assert notify_result.action == "stop"
     assert ctx.triggered, "should set triggered when current group is NOT removed"
@@ -1463,12 +1493,12 @@ if __name__ == "__main__":
     print("  [OK] _handle_match_image")
 
     # ── Test 16: _handle_on_fail skip action ──
-    _skip_result = ml._handle_on_fail({"on_fail": {"action": "skip", "skip_to": 3}}, ctx)
+    _skip_result = ml._handle_on_fail({"on_fail": {"action": "skip", "skip_to": 3}}, ctx, test_rule)
     assert _skip_result.action == "jump_step"
     assert _skip_result.step_index == 3
-    _stop_result = ml._handle_on_fail({"on_fail": "stop"}, ctx)
+    _stop_result = ml._handle_on_fail({"on_fail": "stop"}, ctx, test_rule)
     assert _stop_result.action == "stop"
-    _key_result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "F5"}}, ctx)
+    _key_result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "F5"}}, ctx, test_rule)
     assert _key_result.action == "continue"
     print("  [OK] _handle_on_fail skip")
 
