@@ -21,6 +21,13 @@ _initialized = False
 _restart_fail_count = 0
 _MAX_RESTART_ATTEMPTS = 3
 
+_recv_buffers: dict[int, bytes] = {}
+
+
+def _cleanup_recv_buffer(conn: socket.socket) -> None:
+    _recv_buffers.pop(id(conn), None)
+
+
 _AHK_DOWNLOAD_URL = (
     "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip"
 )
@@ -56,20 +63,29 @@ def _find_ahk() -> str:
 
 def _recv_line(conn: socket.socket, timeout: float = 1.0) -> str:
     conn.settimeout(timeout)
-    buf = b""
+    conn_id = id(conn)
+    buf = _recv_buffers.pop(conn_id, b"")
+
     while True:
+        idx = buf.find(b"\n")
+        if idx != -1:
+            line = buf[:idx]
+            rest = buf[idx + 1 :]
+            if rest:
+                _recv_buffers[conn_id] = rest
+            return line.decode("utf-8", errors="replace").strip()
+
         try:
             chunk = conn.recv(4096)
         except socket.timeout:
             break
         if not chunk:
             break
-        idx = chunk.find(b"\n")
-        if idx != -1:
-            buf += chunk[:idx]
-            break
         buf += chunk
-    return buf.decode("utf-8", errors="replace").strip()
+
+    if buf:
+        _recv_buffers[conn_id] = buf
+    return ""
 
 
 def _send_cmd(cmd: str) -> bool:
@@ -84,6 +100,7 @@ def _send_cmd(cmd: str) -> bool:
                 if resp == "OK":
                     return True
             except (BrokenPipeError, ConnectionError, OSError):
+                _cleanup_recv_buffer(_conn)
                 _conn = None
     return False
 
@@ -118,6 +135,7 @@ def _restart_ahk() -> bool:
                     _conn.close()
                 except OSError:
                     pass
+                _cleanup_recv_buffer(_conn)
                 _conn = None
             if _ahk_process:
                 try:
@@ -251,6 +269,7 @@ def _close_all():
             _conn.close()
         except OSError:
             pass
+        _cleanup_recv_buffer(_conn)
         _conn = None
     if _server:
         try:
@@ -286,6 +305,7 @@ def _accept_loop():
                         _conn.close()
                     except OSError:
                         pass
+                    _cleanup_recv_buffer(_conn)
                 _conn = conn
         except socket.timeout:
             continue
