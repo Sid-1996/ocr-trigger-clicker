@@ -2236,6 +2236,58 @@ class SettingsDialog(QDialog):
         self.accept()
 
 
+class _NotificationStack(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._layout = QVBoxLayout(self)
+        self._layout.setSpacing(4)
+        self._layout.setContentsMargins(8, 8, 8, 8)
+        self._margin = 12
+
+    def push(self, msg: str):
+        label = QLabel(msg)
+        label.setStyleSheet(
+            "background: rgba(50,50,50,230); color: #fff; padding: 6px 10px; "
+            "border-radius: 4px; font: 9pt;"
+        )
+        label.setWordWrap(True)
+        label.setMaximumWidth(320)
+        self._layout.addWidget(label)
+        self._reposition()
+        self.show()
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda lbl=label, t=timer: self._pop(lbl, t))
+        timer.start(2000)
+
+    def _pop(self, label, timer):
+        timer.stop()
+        timer.deleteLater()
+        self._layout.removeWidget(label)
+        label.deleteLater()
+        self._reposition()
+        if self._layout.count() == 0:
+            self.hide()
+
+    def _reposition(self):
+        self.adjustSize()
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        ag = screen.availableGeometry()
+        self.move(
+            ag.right() - self.width() - self._margin, ag.bottom() - self.height() - self._margin
+        )
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2261,6 +2313,7 @@ class MainWindow(QMainWindow):
             self._groups: list[RuleGroup] = []
             self._collapsed_groups: set[str] = set()
             self._simplified_mode = False
+            self._notif_stack = _NotificationStack()
 
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
@@ -2731,11 +2784,7 @@ class MainWindow(QMainWindow):
         self._signals.warning_signal.connect(
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
         )
-        self._signals.warning_signal.connect(
-            lambda msg: self._tray.showMessage(
-                "OCR Trigger Clicker", msg, QSystemTrayIcon.MessageIcon.Information, 5000
-            )
-        )
+        self._signals.warning_signal.connect(self._notif_stack.push)
         self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
         self._signals.trigger_signal.connect(self._on_trigger_log_received)
         self._signals.finished.connect(self._on_loop_finished)
