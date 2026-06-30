@@ -74,10 +74,12 @@ def main():
         ("core/04_rule_engine.py", "core"),
         ("core/05_main_loop.py", "core"),
         ("core/10_performance_monitor.py", "core"),
+        ("core/11_template_matching.py", "core"),
         ("gui/06_gui_main.py", "gui"),
         ("gui/07_gui_roi.py", "gui"),
         ("gui/09_ocr_debug.py", "gui"),
         ("gui/13_gui_click_picker.py", "gui"),
+        ("gui/14_capture_region.py", "gui"),
         ("build.py", "."),
         ("_loader.py", "."),
     ]

@@ -7,19 +7,21 @@ Tests:
 - whether OCR tasks overlap (re-entrancy)
 - simulate slow OCR via artificial sleep in the engine path
 """
+
+import gc
+import sys
 import threading
 import time
 import tracemalloc
-import gc
-import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import numpy as np
 import cv2
+import numpy as np
 
 import _loader
+
 _ocr = _loader.load_sibling("ocr_engine", "core/02_ocr_engine.py")
 recognize = _ocr.recognize
 init_engine = _ocr.init_engine
@@ -27,8 +29,7 @@ init_engine = _ocr.init_engine
 
 def _gen_test_img(w=640, h=480):
     img = np.full((h, w, 3), 240, dtype=np.uint8)
-    cv2.putText(img, "OCR Test 123", (100, 240),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
+    cv2.putText(img, "OCR Test 123", (100, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 2)
     return img
 
 
@@ -91,7 +92,7 @@ def test_burst_parallel():
     print(f"  Max concurrent OCR workers: {runner.max_concurrent}")
     print(f"  Errors: {runner.errors}")
     print(f"  Total time: {elapsed:.3f}s")
-    print(f"  Memory current: {current/1024:.1f}KB peak: {peak/1024:.1f}KB")
+    print(f"  Memory current: {current / 1024:.1f}KB peak: {peak / 1024:.1f}KB")
     return runner.errors, runner.max_concurrent, threads_after - threads_before
 
 
@@ -106,7 +107,6 @@ def test_sustained_load():
 
     errors = 0
     latencies = []
-    t0 = time.monotonic()
 
     for i in range(50):
         tc = time.monotonic()
@@ -116,12 +116,11 @@ def test_sustained_load():
             latencies.append(dt)
             if results is None:
                 errors += 1
-        except Exception as e:
+        except Exception:
             errors += 1
         if i > 0 and i % 10 == 0:
             gc.collect()
 
-    elapsed = time.monotonic() - t0
     threads_after = threading.active_count()
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
@@ -131,7 +130,7 @@ def test_sustained_load():
     print(f"  Threads: {threads_before} → {threads_after}")
     print(f"  Errors: {errors}/50")
     print(f"  Avg latency: {avg_lat:.1f}ms  Max: {max_lat:.1f}ms")
-    print(f"  Memory current: {current/1024:.1f}KB peak: {peak/1024:.1f}KB")
+    print(f"  Memory current: {current / 1024:.1f}KB peak: {peak / 1024:.1f}KB")
     return errors, threads_after - threads_before, avg_lat, max_lat
 
 
@@ -190,7 +189,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("Summary")
     print("=" * 60)
-    print(f"  Burst parallel (20x): errors={e1} max_concurrent={max_conc} thread_leak={thread_delta1}")
+    print(
+        f"  Burst parallel (20x): errors={e1} max_concurrent={max_conc} thread_leak={thread_delta1}"
+    )
     print(f"  Sustained (50x):     errors={e2} thread_leak={thread_delta2} avg_lat={avg_lat:.1f}ms")
     print(f"  Engine reinit (10x): errors={e3}")
     print()

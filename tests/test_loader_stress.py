@@ -5,6 +5,7 @@ Tests:
 - 20 threads concurrently calling load_sibling() 10000 times each
 - Checks for: deadlock, duplicate imports, cache corruption, module reload
 """
+
 import sys
 import threading
 import time
@@ -67,7 +68,7 @@ def test_concurrent_load():
 
     print(f"  Threads: {N_THREADS} × {N_EACH} = {total} calls")
     print(f"  OK: {total_ok}  Error: {total_err}")
-    print(f"  Time: {elapsed:.3f}s  Rate: {total/elapsed:.0f} calls/s")
+    print(f"  Time: {elapsed:.3f}s  Rate: {total / elapsed:.0f} calls/s")
     return total_err
 
 
@@ -89,7 +90,7 @@ def test_cache_consistency():
 
 def test_loader_cache_size():
     """Check how many items are in the loader cache."""
-    print(f"\n--- Test: Loader cache state ---")
+    print("\n--- Test: Loader cache state ---")
     print(f"  Cache entries: {len(_loader._cache)}")
     for key in _loader._cache:
         print(f"    {key}")

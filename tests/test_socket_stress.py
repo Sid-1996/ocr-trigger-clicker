@@ -8,15 +8,17 @@ Tests:
 4. Merged packet: 3 commands in one sendall (TCP coalescing)
 5. High-frequency burst: 10ms interval
 """
+
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import _loader
+
 _ahk = _loader.load_sibling("ahk_socket", "core/03_ahk_socket.py")
 _recv_line = _ahk._recv_line
 
@@ -74,9 +76,10 @@ def _send_cmd(conn, cmd):
 
 # ── Test cases ──
 
+
 def test_baseline(port):
     """2000 single commands — like normal production operation."""
-    print(f"\n--- Test 1: Baseline one-at-a-time (2000) ---")
+    print("\n--- Test 1: Baseline one-at-a-time (2000) ---")
     stop = threading.Event()
     t = threading.Thread(target=echo_server, args=(port, stop, True), daemon=True)
     t.start()
@@ -110,7 +113,9 @@ def test_baseline(port):
     t.join(timeout=3)
     avg = sum(rtt) / len(rtt) if rtt else 0
     mx = max(rtt) if rtt else 0
-    print(f"  OK={ok}/{N} ({ok/N*100:.1f}%)  FAIL={fail}  avg_rtt={avg:.3f}ms  max_rtt={mx:.3f}ms")
+    print(
+        f"  OK={ok}/{N} ({ok / N * 100:.1f}%)  FAIL={fail}  avg_rtt={avg:.3f}ms  max_rtt={mx:.3f}ms"
+    )
     return ok, fail
 
 
@@ -120,7 +125,7 @@ def test_nagle_server(port):
     This reveals whether _recv_line's 1-second timeout is vulnerable
     to Nagle-induced delays.
     """
-    print(f"\n--- Test 2: Nagle-delayed server (2000) ---")
+    print("\n--- Test 2: Nagle-delayed server (2000) ---")
     stop = threading.Event()
     t = threading.Thread(target=echo_server, args=(port, stop, False), daemon=True)
     t.start()
@@ -154,7 +159,7 @@ def test_nagle_server(port):
     stop.set()
     cli.close()
     t.join(timeout=3)
-    print(f"  OK={ok}/{N} ({ok/N*100:.1f}%)  FAIL={fail}  TIMEOUTS={timeout_count}")
+    print(f"  OK={ok}/{N} ({ok / N * 100:.1f}%)  FAIL={fail}  TIMEOUTS={timeout_count}")
     return ok, fail, timeout_count
 
 
@@ -164,7 +169,7 @@ def test_merged_packets(port):
     If server's OK responses coalesce into one TCP segment, _recv_line
     only takes the first line and discards the rest.
     """
-    print(f"\n--- Test 3: Merged packets (3-per-batch × 500 = 1500 cmd) ---")
+    print("\n--- Test 3: Merged packets (3-per-batch × 500 = 1500 cmd) ---")
     stop = threading.Event()
     t = threading.Thread(target=echo_server, args=(port, stop, True), daemon=True)
     t.start()
@@ -187,7 +192,6 @@ def test_merged_packets(port):
             cli.sendall(batch.encode("utf-8"))
             # Read 3 responses
             for j in range(3):
-                t0 = time.monotonic()
                 resp = _recv_line(cli, timeout=1.0)
                 if resp == "OK":
                     ok += 1
@@ -204,14 +208,16 @@ def test_merged_packets(port):
     cli.close()
     t.join(timeout=3)
     total = N * 3
-    print(f"  OK={ok}/{total} ({ok/total*100:.1f}%)  FAIL={fail}  TIMEOUTS={timeouts}  "
-          f"MISORDERED={misordered}")
+    print(
+        f"  OK={ok}/{total} ({ok / total * 100:.1f}%)  FAIL={fail}  TIMEOUTS={timeouts}  "
+        f"MISORDERED={misordered}"
+    )
     return ok, fail, timeouts
 
 
 def test_high_freq(port):
     """200 commands with no delay at all — tests rapid-fire production scenario."""
-    print(f"\n--- Test 4: High frequency burst (200, no delay) ---")
+    print("\n--- Test 4: High frequency burst (200, no delay) ---")
     stop = threading.Event()
     t = threading.Thread(target=echo_server, args=(port, stop, True), daemon=True)
     t.start()
@@ -244,7 +250,9 @@ def test_high_freq(port):
     t.join(timeout=3)
     avg = sum(rtt) / len(rtt) if rtt else 0
     mx = max(rtt) if rtt else 0
-    print(f"  OK={ok}/{N} ({ok/N*100:.1f}%)  FAIL={fail}  avg_rtt={avg:.3f}ms  max_rtt={mx:.3f}ms")
+    print(
+        f"  OK={ok}/{N} ({ok / N * 100:.1f}%)  FAIL={fail}  avg_rtt={avg:.3f}ms  max_rtt={mx:.3f}ms"
+    )
     return ok, fail
 
 
@@ -254,7 +262,8 @@ def test_partial_read(port):
     only 2 bytes arrive in the first recv. Tests if _recv_line correctly
     loops around for more data.
     """
-    print(f"\n--- Test 5: Partial read (500 cmds, simulated split) ---")
+    print("\n--- Test 5: Partial read (500 cmds, simulated split) ---")
+
     # Special server that sends byte-by-byte
     def split_server(port, stop):
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -325,7 +334,9 @@ def test_partial_read(port):
     t.join(timeout=3)
     avg = sum(rtt) / len(rtt) if rtt else 0
     mx = max(rtt) if rtt else 0
-    print(f"  OK={ok}/{N} ({ok/N*100:.1f}%)  FAIL={fail}  avg_rtt={avg:.3f}ms  max_rtt={mx:.3f}ms")
+    print(
+        f"  OK={ok}/{N} ({ok / N * 100:.1f}%)  FAIL={fail}  avg_rtt={avg:.3f}ms  max_rtt={mx:.3f}ms"
+    )
     return ok, fail
 
 
@@ -356,8 +367,10 @@ if __name__ == "__main__":
         if len(r) > 2:
             extra = f"  timeouts={r[2]}"
         total = ok + fail
-        print(f"  {name:>20}: OK={ok}/{total} ({ok/total*100:.1f}%)  FAIL={fail}{extra}")
+        print(f"  {name:>20}: OK={ok}/{total} ({ok / total * 100:.1f}%)  FAIL={fail}{extra}")
 
-    print(f"\n  {'GRAND TOTAL':>20}: OK={grand_ok}/{grand_ok+grand_fail} "
-          f"({grand_ok/(grand_ok+grand_fail)*100:.2f}%)  FAIL={grand_fail}")
+    print(
+        f"\n  {'GRAND TOTAL':>20}: OK={grand_ok}/{grand_ok + grand_fail} "
+        f"({grand_ok / (grand_ok + grand_fail) * 100:.2f}%)  FAIL={grand_fail}"
+    )
     print()

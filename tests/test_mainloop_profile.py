@@ -10,8 +10,8 @@ Scenarios:
 NOTE: This test actually runs the MainLoop, which is blocking.
       Each scenario runs for up to 60s. Use --quick for 10s each.
 """
+
 import argparse
-import os
 import sys
 import tempfile
 import threading
@@ -33,6 +33,7 @@ _VERBOSE = False
 def _find_any_window():
     """Pick first visible window as target."""
     import pygetwindow as gw
+
     wins = [w for w in gw.getWindowsWithTitle("") if w.title and w.visible]
     if wins:
         return wins[0].title
@@ -108,11 +109,12 @@ def profile_poll_roi_value(duration):
     elapsed = time.monotonic() - t0
     print(f"   poll_roi_value calls: {calls[0]}")
     print(f"   Elapsed: {elapsed:.1f}s")
-    print(f"   Rate: {calls[0]/elapsed:.1f} calls/s")
+    print(f"   Rate: {calls[0] / elapsed:.1f} calls/s")
 
     # Rough CPU — use psutil if available
     try:
         import psutil
+
         p = psutil.Process()
         cpu = p.cpu_percent(interval=2)
         print(f"   CPU (psutil): {cpu:.1f}%")
@@ -136,7 +138,10 @@ if __name__ == "__main__":
     # Create a minimal rules file
     tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8")
     import json
-    json.dump({"rules": [], "groups": [{"id": "__default__", "name": "Default", "rule_ids": []}]}, tmp)
+
+    json.dump(
+        {"rules": [], "groups": [{"id": "__default__", "name": "Default", "rule_ids": []}]}, tmp
+    )
     tmp.close()
     rules_path = tmp.name
 
@@ -169,7 +174,9 @@ if __name__ == "__main__":
         if name == "poll_roi_value":
             print(f"  {name:>15}: {s.get('calls', 0)} calls in {duration}s")
         else:
-            print(f"  {name:>15}: FPS={s.get('fps', 0):.1f} CPU={s.get('cpu_pct', 0):.1f}% "
-                  f"OCR_avg={s.get('ocr_avg_ms', 0):.1f}ms "
-                  f"Loop_avg={s.get('loop_avg_ms', 0):.1f}ms")
+            print(
+                f"  {name:>15}: FPS={s.get('fps', 0):.1f} CPU={s.get('cpu_pct', 0):.1f}% "
+                f"OCR_avg={s.get('ocr_avg_ms', 0):.1f}ms "
+                f"Loop_avg={s.get('loop_avg_ms', 0):.1f}ms"
+            )
     print()
