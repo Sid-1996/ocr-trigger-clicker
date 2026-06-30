@@ -304,20 +304,25 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
         return "" if raw == "stop" else "→按鍵"  # bare "key"
     if isinstance(raw, dict):
         action = raw.get("action", "stop")
+        try:
+            fail_duration = float(raw.get("fail_duration_sec", 0) or 0)
+        except (TypeError, ValueError):
+            fail_duration = 0.0
+        prefix = f"[{fail_duration:g}秒]" if fail_duration > 0 else ""
         if action == "stop":
-            return ""
+            return prefix if prefix else ""
         if action == "key":
-            return f"→按鍵{raw.get('key', '')}"
+            return f"{prefix}→按鍵{raw.get('key', '')}"
         if action == "skip":
             idx = raw.get("skip_to", -1)
             if idx < 0:
-                return "→停止"
-            return f"→步驟{idx + 1}"
+                return f"{prefix}→停止"
+            return f"{prefix}→步驟{idx + 1}"
         if action == "jump":
             name = _resolve_rule_name(raw.get("rule_id", ""), rules_provider)
-            return f"→規則「{name}」"
+            return f"{prefix}→規則「{name}」"
         if action == "retry":
-            return "→重試"
+            return f"{prefix}→重試"
     return ""
 
 
@@ -879,6 +884,19 @@ class _MatchImageStepForm(QWidget):
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         of_form.addRow("動作:", self._of_action)
 
+        self._of_fail_duration = QDoubleSpinBox()
+        self._of_fail_duration.setRange(0.0, 30.0)
+        self._of_fail_duration.setSingleStep(0.5)
+        self._of_fail_duration.setSuffix(" 秒")
+        self._of_fail_duration.setDecimals(1)
+        default_duration = raw_of.get("fail_duration_sec", 0.0) if isinstance(raw_of, dict) else 0.0
+        try:
+            default_duration = float(default_duration)
+        except (TypeError, ValueError):
+            default_duration = 0.0
+        self._of_fail_duration.setValue(default_duration)
+        of_form.addRow("持續失敗:", self._of_fail_duration)
+
         # skip row (jump to step)
         self._of_skip_row = QWidget()
         sf = QHBoxLayout(self._of_skip_row)
@@ -1145,22 +1163,29 @@ class _MatchImageStepForm(QWidget):
         p = self._step.params
         p["threshold"] = self._threshold.value()
         action = self._of_action.currentData()
+        fail_duration = self._of_fail_duration.value()
         if action == "stop":
-            p["on_fail"] = "stop"
+            if fail_duration > 0:
+                p["on_fail"] = {"action": "stop", "fail_duration_sec": fail_duration}
+            else:
+                p["on_fail"] = "stop"
         elif action == "skip":
             p["on_fail"] = {
                 "action": "skip",
                 "skip_to": self._of_skip_combo.currentData() or 0,
+                "fail_duration_sec": fail_duration,
             }
         elif action == "jump":
             p["on_fail"] = {
                 "action": "jump",
                 "rule_id": self._of_jump_combo.currentData() or "",
+                "fail_duration_sec": fail_duration,
             }
         elif action == "key":
             p["on_fail"] = {
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
+                "fail_duration_sec": fail_duration,
             }
         elif action == "notify":
             selected_ids = [
@@ -1172,6 +1197,7 @@ class _MatchImageStepForm(QWidget):
                 "action": "notify",
                 "message": self._of_notify_msg.text().strip(),
                 "stop_groups": selected_ids,
+                "fail_duration_sec": fail_duration,
             }
         if p.get("template"):
             self._tmpl_label.setText(Path(p["template"]).stem)
@@ -1278,6 +1304,19 @@ class _DetectStepForm(QWidget):
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         of_form.addRow("動作:", self._of_action)
 
+        self._of_fail_duration = QDoubleSpinBox()
+        self._of_fail_duration.setRange(0.0, 30.0)
+        self._of_fail_duration.setSingleStep(0.5)
+        self._of_fail_duration.setSuffix(" 秒")
+        self._of_fail_duration.setDecimals(1)
+        default_duration = raw.get("fail_duration_sec", 0.0) if isinstance(raw, dict) else 0.0
+        try:
+            default_duration = float(default_duration)
+        except (TypeError, ValueError):
+            default_duration = 0.0
+        self._of_fail_duration.setValue(default_duration)
+        of_form.addRow("持續失敗:", self._of_fail_duration)
+
         # jump row (jump to rule)
         self._of_jump_row = QWidget()
         jf = QHBoxLayout(self._of_jump_row)
@@ -1372,17 +1411,26 @@ class _DetectStepForm(QWidget):
         self._step.params["match_mode"] = self._match_mode.currentData()
         self._step.params["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
         action = self._of_action.currentData()
+        fail_duration = self._of_fail_duration.value()
         if action == "stop":
-            self._step.params["on_fail"] = "stop"
+            if fail_duration > 0:
+                self._step.params["on_fail"] = {
+                    "action": "stop",
+                    "fail_duration_sec": fail_duration,
+                }
+            else:
+                self._step.params["on_fail"] = "stop"
         elif action == "jump":
             self._step.params["on_fail"] = {
                 "action": "jump",
                 "rule_id": self._of_jump_combo.currentData() or "",
+                "fail_duration_sec": fail_duration,
             }
         elif action == "key":
             self._step.params["on_fail"] = {
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
+                "fail_duration_sec": fail_duration,
             }
         elif action == "notify":
             selected_ids = [
@@ -1394,6 +1442,7 @@ class _DetectStepForm(QWidget):
                 "action": "notify",
                 "message": self._of_notify_msg.text().strip(),
                 "stop_groups": selected_ids,
+                "fail_duration_sec": fail_duration,
             }
 
 
