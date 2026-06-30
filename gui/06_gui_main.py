@@ -1013,9 +1013,6 @@ class _MatchImageStepForm(QWidget):
 
     def _test_match(self):
         title = self._window_title_cb() if self._window_title_cb else ""
-        import traceback
-
-        traceback.print_stack(limit=3)
         if not title:
             self._test_result.setText("⚠️ 請先選擇目標視窗")
             self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
@@ -1028,7 +1025,19 @@ class _MatchImageStepForm(QWidget):
             return
         roi = self._step.params.get("roi", {})
         threshold = self._step.params.get("threshold", 0.8)
+        win = self.window()
+        if isinstance(win, QMainWindow):
+            win.showMinimized()
+            QApplication.processEvents()
+            time.sleep(0.08)
+            activate_window(title)
+            time.sleep(0.12)
         img = capture(title)
+        if img is None:
+            img = capture_window_content(title)
+        if isinstance(win, QMainWindow):
+            win.showNormal()
+            win.activateWindow()
         if img is None:
             self._test_result.setText("⚠️ 無法截取視窗畫面")
             self._test_result.setStyleSheet("color: #e67e22; font-weight: bold;")
