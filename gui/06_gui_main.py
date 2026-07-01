@@ -5020,6 +5020,8 @@ class MainWindow(QMainWindow):
         )
         self._flush_save()
         self._step_list.set_steps(rule.steps)
+        self._main_stack.setCurrentIndex(0)
+        self._debug_btn.setText("OCR 診斷")
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     # === Start / Pause ===
