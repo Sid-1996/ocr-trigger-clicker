@@ -3222,7 +3222,7 @@ class MainWindow(QMainWindow):
         p.end()
         return QIcon(pix)
 
-    def _refresh_rule_list(self):
+    def _refresh_rule_list(self, _expand_gid: str | None = None):
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
         rule_map = {r.id: r for r in self._rules}
@@ -3299,12 +3299,17 @@ class MainWindow(QMainWindow):
             self._rule_list.addTopLevelItem(bg_item)
             bg_item.setExpanded("__background__" not in self._collapsed_groups)
 
-        self._rule_list.expandAll()
+        # 設定各群組展開/折疊狀態，跳過 expandAll 避免抖動
+        # 此時仍在 blockSignals(True) 保護下，itemExpanded/itemCollapsed 不會誤觸
         for i in range(self._rule_list.topLevelItemCount()):
             item = self._rule_list.topLevelItem(i)
-            gid = item.data(0, Qt.ItemDataRole.UserRole)[1]
-            if gid in self._collapsed_groups:
-                item.setExpanded(False)
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data and data[0] in ("group", "bg_group"):
+                gid = data[1]
+                if gid == _expand_gid:
+                    item.setExpanded(True)
+                else:
+                    item.setExpanded(gid not in self._collapsed_groups)
         self._rule_list.blockSignals(False)
         self._rule_hint.setVisible(len(self._rules) == 0)
 
@@ -3886,7 +3891,7 @@ class MainWindow(QMainWindow):
             target_group.rule_ids.append(rule.id)
         self._flush_save()
         self._selected_rule_id = rule.id
-        self._refresh_rule_list()
+        self._refresh_rule_list(target_group.id if target_group else None)
         if self._loop:
             self._loop.reload_rules()
 
@@ -4065,13 +4070,15 @@ class MainWindow(QMainWindow):
         logging.debug(
             '[duplicate rule] manual (same group), name="%s", id=%s <- %s', new.name, new.id, src.id
         )
+        dup_gid = None
         for g in self._groups:
             if src.id in g.rule_ids:
                 g.rule_ids.append(new.id)
+                dup_gid = g.id
                 break
         self._flush_save()
         self._selected_rule_id = new.id
-        self._refresh_rule_list()
+        self._refresh_rule_list(dup_gid)
         if self._loop:
             self._loop.reload_rules()
 
@@ -4105,7 +4112,7 @@ class MainWindow(QMainWindow):
         target_group.rule_ids.append(new_rule.id)
         self._flush_save()
         self._selected_rule_id = new_rule.id
-        self._refresh_rule_list()
+        self._refresh_rule_list(target_group.id)
         self._status_bar.showMessage(
             "已將「" + src_rule.name + "」複製到群組「" + target_group.name + "」", 4000
         )
@@ -4997,7 +5004,7 @@ class MainWindow(QMainWindow):
             target_group.rule_ids.append(rule.id)
         self._flush_save()
         self._selected_rule_id = rule.id
-        self._refresh_rule_list()
+        self._refresh_rule_list(target_group.id if target_group else None)
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._show_rule_detail(rule)
