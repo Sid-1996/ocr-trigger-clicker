@@ -66,6 +66,12 @@
     .start-flow { padding: 16px; }
   }
   .faq q { font-style: italic; color: #8b949e; display: block; margin: 4px 0 12px 16px; border-left: 2px solid #30363d; padding-left: 12px; }
+  .principle { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .principle strong { color: #58a6ff; }
+  .pattern { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .pattern h4 { margin: 0 0 8px; color: #e6edf3; }
+  .step-flow { background: #161b22; border-left: 3px solid #238636; padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-family: monospace; color: #8b949e; }
+  .step-flow .arrow { color: #58a6ff; }
   #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.88); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
   #lightbox img { max-width: 92%; max-height: 92%; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,.6); }
   #lightbox.show { display: flex; }
@@ -88,9 +94,11 @@
   <h2>目錄</h2>
   <ul>
     <li><a href="#features">核心功能</a></li>
-    <li><a href="#screenshots">介面截圖</a></li>
     <li><a href="#guide">使用指引</a></li>
-    <li><a href="#scenarios">適用場景</a></li>
+    <li><a href="#tools">工具教學</a></li>
+    <li><a href="#principles">規則設計原則</a></li>
+    <li><a href="#patterns">常見腳本模式</a></li>
+    <li><a href="#examples">腳本設計範例</a></li>
     <li><a href="#faq">常見問題</a></li>
     <li><a href="#requirements">系統需求</a></li>
     <li><a href="#download">下載</a></li>
@@ -111,10 +119,20 @@
       <strong>我要先跑起來</strong>
       <span>看最短流程：下載、開啟、選視窗、加規則、啟動。</span>
     </button>
-    <button class="path-card" type="button" data-target="features">
-      <span class="tag">還沒設定好</span>
-      <strong>我要看功能長什麼樣</strong>
-      <span>先理解 ROI、OCR 診斷、二次確認與任務管理。</span>
+    <button class="path-card" type="button" data-target="tools">
+      <span class="tag">工具操作</span>
+      <strong>我要學怎麼用工具</strong>
+      <span>OCR 診斷、ROI 框選、點擊選取、圖像比對、乾跑測試。</span>
+    </button>
+    <button class="path-card" type="button" data-target="patterns">
+      <span class="tag">設計腳本</span>
+      <strong>我想設計自己的腳本</strong>
+      <span>先看設計原則和常見模式，再套用到你的場景。</span>
+    </button>
+    <button class="path-card" type="button" data-target="examples">
+      <span class="tag">看範例</span>
+      <strong>我想看完整的腳本</strong>
+      <span>4 個完整範例：循環任務、錯誤攔截、數值監控、圖示比對。</span>
     </button>
     <button class="path-card" type="button" data-target="faq">
       <span class="tag">卡住了</span>
@@ -169,35 +187,199 @@
 
   <h3>快速入門</h3>
   <ol>
-    <li>從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
-    <li>在工具列選取目標視窗（例如遊戲、ERP 系統、瀏覽器）。</li>
-    <li>建立群組（右鍵 → 新增群組，設定執行模式）。</li>
-    <li>在群組內新增規則，設定 steps（detect → click）。</li>
-    <li>若需要隨時監控的條件，勾選「常駐監控」。</li>
-    <li>點擊「啟動」→ 選擇群組 → 開始偵測。</li>
+    <li><strong>下載解壓縮</strong>：從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
+    <li><strong>選目標視窗</strong>：在工具列選取你要操控的視窗（遊戲、ERP 系統、瀏覽器等）。</li>
+    <li><strong>建立群組</strong>：右鍵 → 新增群組。預設是「執行一次」+「依序執行」，代表跑完一輪就停。</li>
+    <li><strong>加規則</strong>：在群組內新增規則，第一步選「偵測（detect）」，輸入你要找的文字。</li>
+    <li><strong>用 OCR 診斷確認</strong>：按「OCR 診斷」確認文字有沒有被偵測到，再決定要不要框 ROI。</li>
+    <li><strong>加動作步驟</strong>：偵測後面加「點擊（click）」或「按鍵（key）」，設定你要觸發的動作。</li>
+    <li><strong>測試</strong>：按「▶測試」確認規則是否正常觸發。OK 就按「啟動」開始跑。</li>
   </ol>
 
   <h3>進階技巧</h3>
   <ul>
-    <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快，建議只框選包含目標文字的最小範圍。</li>
-    <li><strong>使用 jump 步驟</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
-    <li><strong>使用 compare 步驟</strong>：對 ROI 內的數字做數值條件判斷（大於／小於／等於）。</li>
-    <li><strong>使用 match_image 步驟</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕或圖示。可在步驟內直接按「測試比對」確認是否命中。</li>
-    <li><strong>常駐監控</strong>：適合用於錯誤攔截，不受群組順序影響，每幀獨立執行。</li>
-    <li><strong>OCR 診斷模式</strong>：按下「OCR 診斷」可即時看到視窗中所有文字，幫助確認 ROI 位置是否正確。</li>
+    <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快。建議只框選包含目標文字的最小範圍。</li>
+    <li><strong>加等待</strong>：在動作步驟之間加「等待（wait）」，讓畫面有時間變化，避免動作太快抓不到狀態。</li>
+    <li><strong>用 jump 跳轉</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
+    <li><strong>用 compare 做數值判斷</strong>：對 ROI 內的數字做大於／小於／等於判斷，適合監控數值變化。</li>
+    <li><strong>用 match_image 比對圖示</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕或圖示辨識。</li>
+    <li><strong>善用常駐監控</strong>：勾選「常駐監控」讓規則每幀都跑，適合做錯誤攔截或緊急告警。</li>
+    <li><strong>前景保護</strong>：開啟後只在目標視窗位於前景時才執行點擊，避免干擾其他操作。</li>
   </ul>
 </section>
 
-<section id="scenarios">
-  <h2>適用場景</h2>
-  <ul>
-    <li><strong>表單自動填寫</strong> — ERP、CRM 等 Web 系統中反覆填寫相同欄位，等待特定提示文字後自動點擊下一步。</li>
-    <li><strong>遊戲日常任務</strong> — 根據畫面中的 NPC 對話或系統訊息自動執行重複操作，如 farming、釣魚、採集。</li>
-    <li><strong>即時監控告警</strong> — 監控畫面中的錯誤訊息或告警文字，自動觸發截圖、點擊確認或執行復原腳本。</li>
-    <li><strong>批次處理</strong> — 需要等待特定狀態文字出現才能進行的批次工作，如轉檔、匯出、壓縮。</li>
-    <li><strong>QA 自動化測試</strong> — 根據 UI 文字判斷頁面狀態並執行對應操作，輔助手動測試流程。</li>
-  </ul>
+<hr>
+
+<section id="tools">
+  <h2>工具教學</h2>
+  <p>每個工具都有專屬功能，搭配使用能大幅降低設定難度。</p>
+
+  <h3 id="tool-ocr">OCR 診斷面板</h3>
+  <p>即時顯示目標視窗中所有可辨識的文字、位置與信心度。</p>
+  <ol>
+    <li>按主介面上的「OCR 診斷」按鈕。</li>
+    <li>面板開啟後，即時掃描目標視窗，列出所有辨識到的文字。</li>
+    <li>點選任一筆文字，可以看到它的位置（ROI）和信心度。</li>
+    <li>如果文字有被偵測到，直接按「建立為新規則」自動帶入文字和 ROI。</li>
+    <li>如果沒有偵測到，嘗試調整 ROI 區域或簡化文字內容。</li>
+  </ol>
+  <figure>
+    <img class="screenshot" src="images/zh_ocr.png" alt="OCR 診斷面板介面" loading="lazy">
+    <figcaption style="font-size:.85em;color:#8b949e;">OCR 診斷面板：即時掃描，點選文字可自動建立規則</figcaption>
+  </figure>
+
+  <h3 id="tool-roi">ROI 框選</h3>
+  <p>ROI（Region of Interest）就是你要偵測的畫面範圍。範圍越小，速度越快、準確度越高。</p>
+  <ol>
+    <li>在偵測步驟中，按「框選偵測區域」按鈕。</li>
+    <li>主視窗會自動最小化，目標視窗跳到前景。</li>
+    <li>在目標視窗上拖曳滑鼠，框選你要偵測的區域。</li>
+    <li>放開滑鼠後自動回到主視窗，ROI 座標自動填入。</li>
+    <li>確認 ROI 位置正確，按「▶測試」驗證。</li>
+  </ol>
+
+  <h3 id="tool-click">Click Picker（點擊座標選取）</h3>
+  <p>選取你要點擊的精確位置。</p>
+  <ol>
+    <li>在點擊步驟中，按「選取點擊座標」按鈕。</li>
+    <li>主視窗最小化，目標視窗跳到前景。</li>
+    <li>在目標視窗上單擊你要點擊的位置。</li>
+    <li>自動回到主視窗，座標自動填入。</li>
+    <li>可搭配「隨機偏移」避免被檢測為機器人。</li>
+  </ol>
+
+  <h3 id="tool-match">match_image 圖像比對</h3>
+  <p>以圖找圖，適合偵測無文字的按鈕或圖示。</p>
+  <ol>
+    <li>在步驟中選擇「match_image（圖像比對）」。</li>
+    <li>按「選取範本圖片」載入你要比對的圖片（例如按鈕截圖）。</li>
+    <li>按「框選偵測區域」框選搜尋範圍。</li>
+    <li>調整「相似度門檻」：越高越嚴格，越低越寬鬆。建議從 0.7 開始調。</li>
+    <li>按「測試比對」確認是否命中。命中會顯示匹配位置。</li>
+  </ol>
+
+  <h3 id="tool-dryrun">乾跑測試（Dry-run）</h3>
+  <p>不實際執行動作，先看規則會發生什麼事。</p>
+  <ol>
+    <li>選取你要測試的規則。</li>
+    <li>按「▶測試」按鈕。</li>
+    <li>程式會模擬執行：偵測步驟會實際截圖辨識，但點擊／按鍵不會真的執行。</li>
+    <li>查看結果：偵測有沒有找到字、座標對不對、後續步驟會不會執行。</li>
+    <li>根據結果調整參數，再測一次。</li>
+  </ol>
 </section>
+
+<hr>
+
+<section id="principles">
+  <h2>規則設計原則</h2>
+  <p>理解這三個原則，就能設計出大部分的腳本。</p>
+
+  <div class="principle">
+    <strong>原則一：失敗就跳</strong>
+    <p>規則的步驟從上往下跑，但如果某一步失敗（on_fail 設「停止規則」），整條規則就結束，後面的步驟全部跳過。</p>
+    <p>所以：<strong>動作步驟一定要放在偵測後面</strong>，偵測失敗就不會誤觸發。</p>
+  </div>
+
+  <div class="principle">
+    <strong>原則二：等待只在成功後</strong>
+    <p>等待步驟放在偵測後面 → 只有偵測成功才會等待那幾毫秒。偵測失敗 → 等待直接跳過，不會卡住。</p>
+    <p>這是安全的設計，不用擔心等待會造成卡關。</p>
+  </div>
+
+  <div class="principle">
+    <strong>原則三：背景規則適合攔截型</strong>
+    <p>背景規則每幀都跑，不受群組指標影響。適合做緊急攔截（例如出現錯誤訊息時立刻按掉）。</p>
+    <p>一般任務放在群組規則就好，不需要勾選「常駐監控」。</p>
+  </div>
+</section>
+
+<hr>
+
+<section id="patterns">
+  <h2>常見腳本模式</h2>
+  <p>以下四種模式涵蓋 80% 的使用場景。</p>
+
+  <div class="pattern">
+    <h4>模式一：循環任務</h4>
+    <p>偵測到特定文字 → 執行動作 → 等待畫面變化 → 再偵測。重複循環。</p>
+    <div class="step-flow">
+      detect（文字A）<span class="arrow">→</span> click <span class="arrow">→</span> wait 1000ms <span class="arrow">→</span> detect（文字B）<span class="arrow">→</span> click <span class="arrow">→</span> wait ...
+    </div>
+    <p>適用：遊戲日常 farming、表單重複填寫、批次處理。</p>
+  </div>
+
+  <div class="pattern">
+    <h4>模式二：錯誤攔截</h4>
+    <p>背景規則每幀檢查，偵測到錯誤訊息就自動按掉。</p>
+    <div class="step-flow">
+      detect（錯誤訊息）<span class="arrow">→</span> click（確認按鈕）
+    </div>
+    <p>適用：長時間運算時自動處理彈窗、遊戲掉線自動重連。</p>
+  </div>
+
+  <div class="pattern">
+    <h4>模式三：數值監控</h4>
+    <p>偵測特定數字，超過／低於門檻就觸發動作。</p>
+    <div class="step-flow">
+      compare（數值 >= 100）<span class="arrow">→</span> click / key
+    </div>
+    <p>適用：監控遊戲血量、進度百分比、庫存數量。</p>
+  </div>
+
+  <div class="pattern">
+    <h4>模式四：圖示比對</h4>
+    <p>無文字時用圖片比對偵測按鈕或圖示。</p>
+    <div class="step-flow">
+      match_image（範本圖）<span class="arrow">→</span> click（匹配位置）
+    </div>
+    <p>適用：遊戲介面按鈕辨識、無文字的 UI 元素。</p>
+  </div>
+</section>
+
+<hr>
+
+<section id="examples">
+  <h2>腳本設計範例</h2>
+  <p>四個完整範例，從簡單到進階。你可以直接複製步驟順序到你的規則中。</p>
+
+  <h3>範例一：遊戲日常 Farming</h3>
+  <p>場景：偵測到 NPC 對話「要開始了嗎？」→ 按「確定」→ 等 2 秒 → 偵測「任務完成」→ 按「領取獎勵」。</p>
+  <div class="step-flow">
+    步驟 1: detect「要開始了嗎？」<span class="arrow">→</span><br>
+    步驟 2: click「確定」<span class="arrow">→</span><br>
+    步驟 3: wait 2000ms <span class="arrow">→</span><br>
+    步驟 4: detect「任務完成」<span class="arrow">→</span><br>
+    步驟 5: click「領取獎勵」
+  </div>
+  <p>群組設定：「執行一次」，規則放「依序執行」。完成一輪後手動再按「啟動」，或改「循環執行」自動重複。</p>
+
+  <h3>範例二：錯誤自動處理</h3>
+  <p>場景：遊戲彈出「連線中斷」視窗，自動按「重新連接」。</p>
+  <div class="step-flow">
+    步驟 1: detect「連線中斷」<span class="arrow">→</span><br>
+    步驟 2: click「重新連接」
+  </div>
+  <p>勾選「常駐監控」，讓這條規則每幀都檢查。on_fail 用預設的「停止規則」就好——沒偵測到就跳過，不會卡住。</p>
+
+  <h3>範例三：血量低於門檻自動喝藥</h3>
+  <p>場景：偵測到血量數字 <= 30% 就自動喝藥。</p>
+  <div class="step-flow">
+    步驟 1: compare（ROI: 血量區域）數值 <= 30 <span class="arrow">→</span><br>
+    步驟 2: key「F1」（喝藥快捷鍵）
+  </div>
+  <p>compare 步驟會自動從 ROI 中抓數字，不需要 OCR 文字偵測。群組設定「循環執行」讓它持續監控。</p>
+
+  <h3>範例四：偵測圖示按鈕自動點擊</h3>
+  <p>場景：遊戲中出現特定圖示（例如寶箱），自動點擊拾取。</p>
+  <div class="step-flow">
+    步驟 1: match_image（範本: 寶箱截圖）<span class="arrow">→</span><br>
+    步驟 2: click（匹配位置）
+  </div>
+  <p>相似度門檻從 0.7 開始調。太高會漏掉（不同解析度），太低會誤判。先用「測試比對」確認命中率再正式啟動。</p>
+</section>
+
+<hr>
 
 <section id="faq">
   <h2>常見問題</h2>
@@ -228,6 +410,13 @@
 
   <h3>多個規則可以同時執行嗎？</h3>
   <p>群組內的規則依序執行，一次只執行一條，觸發成功後才推進到下一條。常駐監控規則則每幀都會執行，不受群組順序影響。</p>
+
+  <h3>依序跟並行有什麼差別？</h3>
+  <p><strong>依序（↻）</strong>：從第一條規則開始，沒觸發就卡住（一直重試同一條），觸發了才換下一條。像排隊。</p>
+  <p><strong>並行（∥）</strong>：每幀從頭掃全部規則，第一條符合的就做，做完就結束這一輪。下幀重新從頭掃。像搶答。</p>
+
+  <h3>要怎麼讓程式先做 A 再做 B？</h3>
+  <p>把 A 規則放在 B 前面（同群組用「依序執行」），A 觸發後指標才會走到 B。或在不同群組，把 A 群組排在 B 群組前面。</p>
 
   <h3>規則設定檔存在哪裡？</h3>
   <p>設定檔與任務資料儲存在 <code>%APPDATA%\ocr-trigger-clicker\</code>，解除安裝或刪除 exe 後設定仍會保留。</p>
@@ -264,7 +453,9 @@
 <script>
 const sections = {
   guide: document.getElementById('guide'),
-  features: document.getElementById('features'),
+  tools: document.getElementById('tools'),
+  patterns: document.getElementById('patterns'),
+  examples: document.getElementById('examples'),
   faq: document.getElementById('faq'),
 };
 const hint = document.getElementById('path-hint');
@@ -279,9 +470,13 @@ document.querySelectorAll('.path-card').forEach(function(card) {
       });
       if (hint) {
         if (target === 'guide') {
-          hint.textContent = '先完成快速入門，再回來看 OCR 診斷和進階技巧。';
-        } else if (target === 'features') {
-          hint.textContent = '先理解功能，再決定要不要用 ROI、二次確認和任務拆分。';
+          hint.textContent = '先完成快速入門，再回來看工具教學和進階技巧。';
+        } else if (target === 'tools') {
+          hint.textContent = '每個工具都有專屬功能，搭配使用能大幅降低設定難度。';
+        } else if (target === 'patterns') {
+          hint.textContent = '先理解設計原則，再套用常見模式到你的場景。';
+        } else if (target === 'examples') {
+          hint.textContent = '看完整範例，直接複製步驟順序到你的規則中。';
         } else if (target === 'faq') {
           hint.textContent = '如果有問題，先看常見問題；通常權限與 AutoHotkey 最常見。';
         }
