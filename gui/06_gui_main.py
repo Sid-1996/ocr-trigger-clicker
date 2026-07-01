@@ -4967,6 +4967,10 @@ class MainWindow(QMainWindow):
                         "y": 0,
                     },
                 ),
+                Step(
+                    type="wait",
+                    params={"ms": 500},
+                ),
             ],
         )
         self._rules.append(rule)
