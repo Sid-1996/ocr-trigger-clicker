@@ -1815,7 +1815,7 @@ class _CompareStepForm(QWidget):
         op_idx = self._operator.findData(p.get("operator", ">="))
         if op_idx >= 0:
             self._operator.setCurrentIndex(op_idx)
-        form.addRow("運算子:", self._operator)
+        form.addRow("比較方式:", self._operator)
 
         # Value
         self._value = _NoWheelDoubleSpin()
@@ -1841,8 +1841,10 @@ class _CompareStepForm(QWidget):
 
         self._pattern = QLineEdit()
         self._pattern.setText(p.get("pattern", r"-?\d+\.?\d*"))
-        self._pattern.setToolTip("正則表達式，用於從 OCR 文字中擷取數字")
-        adv.addRow("比對規則 (regex):", self._pattern)
+        self._pattern.setToolTip(
+            "從 OCR 文字中擷取數字用的正則表達式，預設值 -?\\d+\\.?\\d* 可匹配正負整數與小數"
+        )
+        adv.addRow("數字格式:", self._pattern)
 
         # on_fail section (same as detect/match_image)
         self._of_action = _NoWheelCombo()
@@ -1875,6 +1877,7 @@ class _CompareStepForm(QWidget):
         except (TypeError, ValueError):
             default_duration = 0.0
         self._of_fail_duration.setValue(default_duration)
+        self._of_fail_duration.setToolTip("連續失敗超過此秒數時才觸發失敗動作，0=立即觸發")
         adv.addRow("持續失敗:", self._of_fail_duration)
 
         self._of_jump_combo = _NoWheelCombo()
