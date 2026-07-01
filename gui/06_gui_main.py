@@ -1171,9 +1171,9 @@ class _MatchImageStepForm(QWidget):
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
         roi = self._step.params.get("roi", {})
-        threshold = self._step.params.get("threshold", 0.8)
-        match_color = self._step.params.get("match_color", False)
-        color_tolerance = self._step.params.get("color_tolerance", 40)
+        threshold = self._threshold.value()
+        match_color = self._match_color.isChecked()
+        color_tolerance = self._color_tolerance.value()
         win = self.window()
         if isinstance(win, QMainWindow):
             win.showMinimized()
