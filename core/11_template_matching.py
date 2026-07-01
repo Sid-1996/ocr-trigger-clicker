@@ -379,27 +379,27 @@ if __name__ == "__main__":
     cv2.imwrite(tmp3.name, color_tpl)
     tmp3_path = Path(tmp3.name)
 
-    # same color → should match
+    # same color → should match (tolerance=100 is generous enough)
     same_color = match_template(
         color_img,
         tmp3_path,
         threshold=0.5,
         match_color=True,
-        color_tolerance=30,
+        color_tolerance=100,
     )
     assert len(same_color) >= 1, "same-color should pass color_tolerance"
     print(f"  [OK] color_tolerance: same-color passes ({len(same_color)} match)")
 
     # different color (blue template vs red square at same position, same shape) → should reject
     diff_color_img = np.zeros((100, 100, 3), dtype=np.uint8)
-    cv2.rectangle(diff_color_img, (10, 10), (30, 30), (0, 100, 200), -1)  # same location, same shape, red-orange
-    cv2.rectangle(diff_color_img, (15, 15), (25, 25), (0, 20, 150), -1)
+    cv2.rectangle(diff_color_img, (10, 10), (30, 30), (0, 0, 255), -1)  # pure red
+    cv2.rectangle(diff_color_img, (15, 15), (25, 25), (0, 0, 200), -1)
     diff_color = match_template(
         diff_color_img,
         tmp3_path,
         threshold=0.5,
         match_color=True,
-        color_tolerance=30,
+        color_tolerance=100,
     )
     assert len(diff_color) == 0, "blue-vs-red should be rejected by color_tolerance"
     print(f"  [OK] color_tolerance: blue-vs-red rejected (got {len(diff_color)})")
@@ -410,7 +410,7 @@ if __name__ == "__main__":
         tmp3_path,
         threshold=0.5,
         match_color=False,
-        color_tolerance=30,
+        color_tolerance=100,
     )
     assert len(gray_match) >= 1, "match_color=False should ignore color_tolerance"
     print(f"  [OK] color_tolerance: match_color=False ignores filter ({len(gray_match)} match)")

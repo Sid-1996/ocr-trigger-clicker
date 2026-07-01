@@ -387,7 +387,7 @@ class MainLoop:
                     )
         threshold = params.get("threshold", 0.8)
         match_color = params.get("match_color", False)
-        color_tolerance = params.get("color_tolerance", 40)
+        color_tolerance = params.get("color_tolerance", 100)
         results = match_template(
             ctx.img,
             template_path,

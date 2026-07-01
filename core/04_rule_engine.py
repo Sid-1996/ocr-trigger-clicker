@@ -121,7 +121,7 @@ _STEP_DEFAULTS = {
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
         "threshold": 0.8,
         "match_color": False,
-        "color_tolerance": 40,
+        "color_tolerance": 100,  # 0~255，預設 100 可過濾明顯色差（如灰 vs 白），同時保留正常亮度差異
         "on_fail": "stop",
     },
 }
@@ -247,7 +247,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["roi"] = _sanitize_roi(base.get("roi"))
         base["threshold"] = max(0.0, min(1.0, _as_float(base.get("threshold", 0.8), 0.8)))
         base["match_color"] = bool(base.get("match_color", False))
-        base["color_tolerance"] = max(0, min(255, _as_int(base.get("color_tolerance", 40), 40)))
+        base["color_tolerance"] = max(0, min(255, _as_int(base.get("color_tolerance", 100), 100)))
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
         if base["template"] and not base["template_data"]:
             p = Path(base["template"])

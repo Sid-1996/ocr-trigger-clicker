@@ -991,10 +991,10 @@ class _MatchImageStepForm(QWidget):
 
         self._color_tolerance = _NoWheelSpin()
         self._color_tolerance.setRange(0, 255)
-        self._color_tolerance.setValue(p.get("color_tolerance", 40))
+        self._color_tolerance.setValue(p.get("color_tolerance", 100))
         self._color_tolerance.setSuffix(" 色差")
         self._color_tolerance.setToolTip(
-            "比對顏色啟用後，每個像素平均色差容許值（0=完全一致，255=幾乎不檢查）"
+            "比對顏色啟用後，每個像素平均色差容許值（0=完全一致，255=幾乎不檢查，預設 100 可過濾明顯色差）"
         )
 
         def _on_match_color_toggled(checked):
@@ -4741,7 +4741,7 @@ class MainWindow(QMainWindow):
                     roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
                     match_color = p.get("match_color", False)
-                    color_tolerance = p.get("color_tolerance", 40)
+                    color_tolerance = p.get("color_tolerance", 100)
                     task_path = (
                         str(Path(_tasks_dir()) / f"{self._current_task}.json")
                         if self._current_task
