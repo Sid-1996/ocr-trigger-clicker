@@ -14,3 +14,4 @@ custom_models/
 tasks/
 *任務*.json
 /images/
+/stderr.txt
