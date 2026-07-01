@@ -73,7 +73,7 @@ class RuleGroup:
     id: str
     name: str
     enabled: bool = True
-    mode: str = "loop"
+    mode: str = "once"
     repeat_times: int = 1
     between_rounds_sec: int = 0
     rule_ids: list[str] = field(default_factory=list)
@@ -406,7 +406,7 @@ def _dict_to_group(d: dict) -> RuleGroup:
         id=str(d.get("id", "")),
         name=str(d.get("name", "")),
         enabled=bool(d.get("enabled", True)),
-        mode=str(d.get("mode", "loop")),
+        mode=str(d.get("mode", "once")),
         repeat_times=int(d.get("repeat_times", 1)),
         between_rounds_sec=int(d.get("between_rounds_sec", 0)),
         rule_ids=[str(r) for r in d.get("rule_ids", []) if r],
@@ -463,7 +463,7 @@ def save_groups(groups: list[RuleGroup], path: str) -> bool:
 
 
 def migrate_v2_to_v3(data: dict) -> dict:
-    mode = str(data.get("run_mode", "loop"))
+    mode = str(data.get("run_mode", "once"))
     repeat_times = int(data.get("repeat_times", 1))
     between_rounds_sec = int(data.get("between_rounds_sec", 0))
 
@@ -885,9 +885,9 @@ def get_run_mode(path: str) -> dict:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
-        return {"mode": "loop", "repeat_times": 1, "between_rounds_sec": 0}
+        return {"mode": "once", "repeat_times": 1, "between_rounds_sec": 0}
     return {
-        "mode": str(data.get("run_mode", "loop")),
+        "mode": str(data.get("run_mode", "once")),
         "repeat_times": int(data.get("repeat_times", 1)),
         "between_rounds_sec": int(data.get("between_rounds_sec", 0)),
     }
@@ -1264,7 +1264,7 @@ if __name__ == "__main__":
 
     # ── Test 11: RuleGroup creation and defaults ──
     g1 = RuleGroup(id="g1", name="Group One")
-    assert g1.mode == "loop"
+    assert g1.mode == "once"
     assert g1.repeat_times == 1
     assert g1.between_rounds_sec == 0
     assert g1.rule_ids == []
