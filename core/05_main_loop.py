@@ -387,6 +387,7 @@ class MainLoop:
                     )
         threshold = params.get("threshold", 0.8)
         match_color = params.get("match_color", False)
+        color_tolerance = params.get("color_tolerance", 40)
         results = match_template(
             ctx.img,
             template_path,
@@ -396,6 +397,7 @@ class MainLoop:
             capture_size=capture_size,
             current_size=current_size,
             match_color=match_color,
+            color_tolerance=color_tolerance,
         )
         if not results:
             return self._handle_on_fail(params, ctx, rule)

@@ -989,6 +989,21 @@ class _MatchImageStepForm(QWidget):
         )
         form.addRow("", self._match_color)
 
+        self._color_tolerance = _NoWheelSpin()
+        self._color_tolerance.setRange(0, 255)
+        self._color_tolerance.setValue(p.get("color_tolerance", 40))
+        self._color_tolerance.setSuffix(" 色差")
+        self._color_tolerance.setToolTip(
+            "比對顏色啟用後，每個像素平均色差容許值（0=完全一致，255=幾乎不檢查）"
+        )
+
+        def _on_match_color_toggled(checked):
+            self._color_tolerance.setEnabled(checked)
+
+        self._match_color.toggled.connect(_on_match_color_toggled)
+        _on_match_color_toggled(self._match_color.isChecked())
+        form.addRow("", self._color_tolerance)
+
         # ── on_fail collapsible section ──
         self._on_fail_expanded = False
         self._toggle_btn = QPushButton("▶ 進階：找不到圖示時…")
@@ -1158,6 +1173,7 @@ class _MatchImageStepForm(QWidget):
         roi = self._step.params.get("roi", {})
         threshold = self._step.params.get("threshold", 0.8)
         match_color = self._step.params.get("match_color", False)
+        color_tolerance = self._step.params.get("color_tolerance", 40)
         win = self.window()
         if isinstance(win, QMainWindow):
             win.showMinimized()
@@ -1222,6 +1238,7 @@ class _MatchImageStepForm(QWidget):
             capture_size=capture_size,
             current_size=current_size,
             match_color=match_color,
+            color_tolerance=color_tolerance,
         )
         if results:
             best = results[0]
@@ -1238,6 +1255,7 @@ class _MatchImageStepForm(QWidget):
                 capture_size=capture_size,
                 current_size=current_size,
                 match_color=match_color,
+                color_tolerance=color_tolerance,
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
@@ -1308,6 +1326,7 @@ class _MatchImageStepForm(QWidget):
         p = self._step.params
         p["threshold"] = self._threshold.value()
         p["match_color"] = self._match_color.isChecked()
+        p["color_tolerance"] = self._color_tolerance.value()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":
@@ -4722,6 +4741,7 @@ class MainWindow(QMainWindow):
                     roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
                     match_color = p.get("match_color", False)
+                    color_tolerance = p.get("color_tolerance", 40)
                     task_path = (
                         str(Path(_tasks_dir()) / f"{self._current_task}.json")
                         if self._current_task
@@ -4747,6 +4767,7 @@ class MainWindow(QMainWindow):
                         capture_size=cs,
                         current_size=cur_size,
                         match_color=match_color,
+                        color_tolerance=color_tolerance,
                     )
                     tmpl_name = "內嵌" if tmpl_data.strip() else Path(tmpl_path).stem
                     if results:

@@ -74,6 +74,7 @@ def match_template(
     capture_size: Optional[list] = None,
     current_size: Optional[list] = None,
     match_color: bool = False,  # 預設灰階比對（只看形狀），打勾則保留顏色資訊比對
+    color_tolerance: float = 0,  # 第二階段顏色驗證：每個像素平均色差容許值（0~255），0=關閉
 ) -> list[MatchResult]:
     if template_data:
         template_bgr = b64_to_img(template_data)
@@ -178,6 +179,28 @@ def match_template(
             kept.append(m)
         if len(kept) >= max_results:
             break
+
+    # ponytail: 第二階段 — 顏色差異驗證（只對 match_color 啟用時生效）
+    if match_color and color_tolerance > 0 and kept:
+        filtered = []
+        for m in kept:
+            x1 = max(0, m.x - offset_x)
+            y1 = max(0, m.y - offset_y)
+            x2 = min(search_bgr.shape[1], x1 + m.w)
+            y2 = min(search_bgr.shape[0], y1 + m.h)
+            if x2 <= x1 or y2 <= y1:
+                continue
+            crop = search_bgr[y1:y2, x1:x2]
+            if crop.shape[:2] != template_bgr.shape[:2]:
+                crop = cv2.resize(
+                    crop,
+                    (template_bgr.shape[1], template_bgr.shape[0]),
+                )
+            diff = cv2.absdiff(crop, template_bgr)
+            dist = float(np.mean(diff))
+            if dist <= color_tolerance:
+                filtered.append(m)
+        kept = filtered
 
     return kept
 
@@ -346,6 +369,54 @@ if __name__ == "__main__":
     assert len(no_current) >= 1, "should fallback to search_bgr width"
     print(f"  [OK] capture_size without current_size fallback ({len(no_current)} found)")
 
+    # ── color_tolerance second-stage filter ──
+    color_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    cv2.rectangle(color_img, (10, 10), (30, 30), (180, 200, 220), -1)
+    cv2.rectangle(color_img, (15, 15), (25, 25), (50, 60, 70), -1)
+    color_tpl = color_img[10:31, 10:31].copy()
+    tmp3 = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp3.close()
+    cv2.imwrite(tmp3.name, color_tpl)
+    tmp3_path = Path(tmp3.name)
+
+    # same color → should match
+    same_color = match_template(
+        color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=True,
+        color_tolerance=30,
+    )
+    assert len(same_color) >= 1, "same-color should pass color_tolerance"
+    print(f"  [OK] color_tolerance: same-color passes ({len(same_color)} match)")
+
+    # different color (blue template vs red square at same position, same shape) → should reject
+    diff_color_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    cv2.rectangle(diff_color_img, (10, 10), (30, 30), (0, 100, 200), -1)  # same location, same shape, red-orange
+    cv2.rectangle(diff_color_img, (15, 15), (25, 25), (0, 20, 150), -1)
+    diff_color = match_template(
+        diff_color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=True,
+        color_tolerance=30,
+    )
+    assert len(diff_color) == 0, "blue-vs-red should be rejected by color_tolerance"
+    print(f"  [OK] color_tolerance: blue-vs-red rejected (got {len(diff_color)})")
+
+    # match_color=False → color_tolerance ignored → shape-only match works
+    gray_match = match_template(
+        diff_color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=False,
+        color_tolerance=30,
+    )
+    assert len(gray_match) >= 1, "match_color=False should ignore color_tolerance"
+    print(f"  [OK] color_tolerance: match_color=False ignores filter ({len(gray_match)} match)")
+
+    tmp3_path.unlink(missing_ok=True)
+
     Path(tmp2_path).unlink(missing_ok=True)
 
-    print("\n=== All 11 tests passed ===")
+    print("\n=== All 14 tests passed ===")
