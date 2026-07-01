@@ -1794,6 +1794,8 @@ class _CompareStepForm(QWidget):
             "w": roi.get("w", 0),
             "h": roi.get("h", 0),
         }
+        if "roi_coord" in roi:
+            self._roi["roi_coord"] = roi["roi_coord"]
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         self._roi_label = QLabel("全視窗" if z else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選偵測區域")
@@ -1861,6 +1863,19 @@ class _CompareStepForm(QWidget):
             self._of_action.setCurrentIndex(of_idx)
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         adv.addRow("失敗動作:", self._of_action)
+
+        self._of_fail_duration = _NoWheelDoubleSpin()
+        self._of_fail_duration.setRange(0.0, 30.0)
+        self._of_fail_duration.setSingleStep(0.5)
+        self._of_fail_duration.setSuffix(" 秒")
+        self._of_fail_duration.setDecimals(1)
+        default_duration = raw_of.get("fail_duration_sec", 0.0) if isinstance(raw_of, dict) else 0.0
+        try:
+            default_duration = float(default_duration)
+        except (TypeError, ValueError):
+            default_duration = 0.0
+        self._of_fail_duration.setValue(default_duration)
+        adv.addRow("持續失敗:", self._of_fail_duration)
 
         self._of_jump_combo = _NoWheelCombo()
         self._of_jump_combo.setMinimumWidth(200)
@@ -1950,8 +1965,15 @@ class _CompareStepForm(QWidget):
         self._step.params["value"] = self._value.value()
         self._step.params["pattern"] = self._pattern.text().strip()
         action = self._of_action.currentData()
+        fail_duration = self._of_fail_duration.value()
         if action == "stop":
-            self._step.params["on_fail"] = "stop"
+            if fail_duration > 0:
+                self._step.params["on_fail"] = {
+                    "action": "stop",
+                    "fail_duration_sec": fail_duration,
+                }
+            else:
+                self._step.params["on_fail"] = "stop"
         elif action == "skip":
             self._step.params["on_fail"] = {
                 "action": "skip",
@@ -1961,11 +1983,13 @@ class _CompareStepForm(QWidget):
             self._step.params["on_fail"] = {
                 "action": "jump",
                 "rule_id": self._of_jump_combo.currentData() or "",
+                "fail_duration_sec": fail_duration,
             }
         elif action == "key":
             self._step.params["on_fail"] = {
                 "action": "key",
                 "key": self._of_key.currentData() or self._of_key.currentText(),
+                "fail_duration_sec": fail_duration,
             }
         elif action == "notify":
             selected_ids = self._of_notify_groups.selected_ids()
@@ -1973,6 +1997,7 @@ class _CompareStepForm(QWidget):
                 "action": "notify",
                 "message": self._of_notify_msg.text().strip(),
                 "stop_groups": selected_ids,
+                "fail_duration_sec": fail_duration,
             }
 
     def _pick_roi(self):
@@ -1980,12 +2005,7 @@ class _CompareStepForm(QWidget):
             return
         result = self._roi_cb()
         if result:
-            self._roi = {
-                "x": result.get("x", 0),
-                "y": result.get("y", 0),
-                "w": result.get("w", 0),
-                "h": result.get("h", 0),
-            }
+            self._roi = dict(result)
             z = all(v == 0 for v in self._roi.values())
             self._roi_label.setText("全視窗" if z else _fmt_roi(self._roi))
             self.save()
