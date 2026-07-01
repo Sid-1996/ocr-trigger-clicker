@@ -4721,6 +4721,7 @@ class MainWindow(QMainWindow):
                         continue
                     roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
+                    match_color = p.get("match_color", False)
                     task_path = (
                         str(Path(_tasks_dir()) / f"{self._current_task}.json")
                         if self._current_task
@@ -4745,6 +4746,7 @@ class MainWindow(QMainWindow):
                         template_data=tmpl_data or None,
                         capture_size=cs,
                         current_size=cur_size,
+                        match_color=match_color,
                     )
                     tmpl_name = "內嵌" if tmpl_data.strip() else Path(tmpl_path).stem
                     if results:
