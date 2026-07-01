@@ -1981,6 +1981,7 @@ class _CompareStepForm(QWidget):
             self._step.params["on_fail"] = {
                 "action": "skip",
                 "skip_to": self._of_skip_combo.currentData() or 0,
+                "fail_duration_sec": fail_duration,
             }
         elif action == "jump":
             self._step.params["on_fail"] = {
