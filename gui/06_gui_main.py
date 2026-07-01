@@ -999,7 +999,7 @@ class _MatchImageStepForm(QWidget):
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         of_form.addRow("動作:", self._of_action)
 
-        self._of_fail_duration = QDoubleSpinBox()
+        self._of_fail_duration = _NoWheelDoubleSpin()
         self._of_fail_duration.setRange(0.0, 30.0)
         self._of_fail_duration.setSingleStep(0.5)
         self._of_fail_duration.setSuffix(" 秒")
@@ -1414,7 +1414,7 @@ class _DetectStepForm(QWidget):
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
         of_form.addRow("動作:", self._of_action)
 
-        self._of_fail_duration = QDoubleSpinBox()
+        self._of_fail_duration = _NoWheelDoubleSpin()
         self._of_fail_duration.setRange(0.0, 30.0)
         self._of_fail_duration.setSingleStep(0.5)
         self._of_fail_duration.setSuffix(" 秒")
