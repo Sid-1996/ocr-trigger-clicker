@@ -982,6 +982,13 @@ class _MatchImageStepForm(QWidget):
         self._threshold.setValue(p.get("threshold", 0.8))
         form.addRow("相似度閾值:", self._threshold)
 
+        self._match_color = QCheckBox("比對顏色")
+        self._match_color.setChecked(p.get("match_color", False))
+        self._match_color.setToolTip(
+            "打勾時保留圖片的顏色資訊進行比對（預設為灰階，只看形狀不顏色）"
+        )
+        form.addRow("", self._match_color)
+
         # ── on_fail collapsible section ──
         self._on_fail_expanded = False
         self._toggle_btn = QPushButton("▶ 進階：找不到圖示時…")
@@ -1150,6 +1157,7 @@ class _MatchImageStepForm(QWidget):
             return
         roi = self._step.params.get("roi", {})
         threshold = self._step.params.get("threshold", 0.8)
+        match_color = self._step.params.get("match_color", False)
         win = self.window()
         if isinstance(win, QMainWindow):
             win.showMinimized()
@@ -1213,6 +1221,7 @@ class _MatchImageStepForm(QWidget):
             template_data=tmpl_data or None,
             capture_size=capture_size,
             current_size=current_size,
+            match_color=match_color,
         )
         if results:
             best = results[0]
@@ -1228,6 +1237,7 @@ class _MatchImageStepForm(QWidget):
                 template_data=tmpl_data or None,
                 capture_size=capture_size,
                 current_size=current_size,
+                match_color=match_color,
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
@@ -1297,6 +1307,7 @@ class _MatchImageStepForm(QWidget):
     def save(self):
         p = self._step.params
         p["threshold"] = self._threshold.value()
+        p["match_color"] = self._match_color.isChecked()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":

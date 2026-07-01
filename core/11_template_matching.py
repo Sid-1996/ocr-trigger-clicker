@@ -73,6 +73,7 @@ def match_template(
     template_data: Optional[str] = None,
     capture_size: Optional[list] = None,
     current_size: Optional[list] = None,
+    match_color: bool = False,  # 預設灰階比對（只看形狀），打勾則保留顏色資訊比對
 ) -> list[MatchResult]:
     if template_data:
         template_bgr = b64_to_img(template_data)
@@ -88,7 +89,10 @@ def match_template(
             return []
         tmpl_name = Path(template_path).stem
 
-    template = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
+    if not match_color:
+        template = cv2.cvtColor(template_bgr, cv2.COLOR_BGR2GRAY)
+    else:
+        template = template_bgr  # ponytail: 保留 BGR 三通道，顏色差異會影響 TM_CCOEFF_NORMED 信心度
     th, tw = template.shape[:2]
 
     if roi is not None and any(roi.get(k, 0) != 0 for k in ("w", "h")):
@@ -107,7 +111,10 @@ def match_template(
         search_bgr = img
         offset_x = offset_y = 0
 
-    search_img = cv2.cvtColor(search_bgr, cv2.COLOR_BGR2GRAY)
+    if not match_color:
+        search_img = cv2.cvtColor(search_bgr, cv2.COLOR_BGR2GRAY)
+    else:
+        search_img = search_bgr
     min_side = 8
 
     if capture_size is not None and len(capture_size) == 2 and capture_size[0] > 0:

@@ -386,6 +386,7 @@ class MainLoop:
                         "圖示辨識未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域"
                     )
         threshold = params.get("threshold", 0.8)
+        match_color = params.get("match_color", False)
         results = match_template(
             ctx.img,
             template_path,
@@ -394,6 +395,7 @@ class MainLoop:
             template_data=template_data or None,
             capture_size=capture_size,
             current_size=current_size,
+            match_color=match_color,
         )
         if not results:
             return self._handle_on_fail(params, ctx, rule)
