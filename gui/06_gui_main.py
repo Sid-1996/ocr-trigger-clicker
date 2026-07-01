@@ -2100,6 +2100,7 @@ class _WaitStepForm(QWidget):
         self._ms = _NoWheelSpin()
         self._ms.setRange(0, 60000)
         self._ms.setSuffix(" ms")
+        self._ms.setToolTip("只有在前面步驟成功後才會執行。若偵測失敗，此等待會直接跳過。")
         self._ms.setValue(step.params.get("ms", 500))
         self._ms.editingFinished.connect(lambda: self._list.steps_changed.emit())
         form.addRow("毫秒:", self._ms)
