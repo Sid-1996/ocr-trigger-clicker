@@ -203,6 +203,13 @@ class _StopGroupsPicker(QWidget):
                 Qt.CheckState.Checked if g["id"] in self._selected else Qt.CheckState.Unchecked
             )
             list_widget.addItem(item)
+        list_widget.itemClicked.connect(
+            lambda item: item.setCheckState(
+                Qt.CheckState.Unchecked
+                if item.checkState() == Qt.CheckState.Checked
+                else Qt.CheckState.Checked
+            )
+        )
         layout.addWidget(list_widget)
 
         def _filter(text: str):
