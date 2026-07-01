@@ -347,7 +347,19 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         roi_str = "全視窗" if zero_roi else _fmt_roi(roi)
-        parts = [f"「{text}」" if text else "未設定"]
+        mode = p.get("match_mode", "fuzzy")
+        th = p.get("fuzzy_threshold", 0.8)
+        extra = ""
+        if mode == "regex":
+            extra = " [正規]"
+        elif mode == "exact":
+            extra = " [完全]"
+        elif mode == "contains":
+            extra = " [包含]"
+        elif mode == "fuzzy" and th != 0.8:
+            extra = f" [模糊@{th}]"
+        text_label = f"「{text}」" if text else "未設定"
+        parts = [text_label + extra]
         parts.append(roi_str)
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
@@ -436,6 +448,8 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
         if action == "jump":
             name = _resolve_rule_name(raw.get("rule_id", ""), rules_provider)
             return f"{prefix}→規則「{name}」"
+        if action == "notify":
+            return f"{prefix}→停群組"
         if action == "retry":
             return f"{prefix}→重試"
     return ""
