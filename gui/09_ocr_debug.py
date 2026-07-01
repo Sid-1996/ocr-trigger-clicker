@@ -423,12 +423,27 @@ class OcrDebugPanel(QWidget):
         px_w = min(img_w - px_x, r.w + pad * 2)
         px_h = min(img_h - px_y, r.h + pad * 2)
 
-        roi = {
-            "x": px_x / img_w,
-            "y": px_y / img_h,
-            "w": px_w / img_w,
-            "h": px_h / img_h,
-        }
+        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
+        cx, cy = chrome
+        is_gdi = self._capture_source == "GDI 截圖"
+        if is_gdi or (cx <= 0 and cy <= 0):
+            roi = {
+                "x": px_x / img_w,
+                "y": px_y / img_h,
+                "w": px_w / img_w,
+                "h": px_h / img_h,
+                "roi_coord": "client",
+            }
+        else:
+            client_w = img_w - cx
+            client_h = img_h - cy
+            roi = {
+                "x": max(0.0, (px_x - cx) / client_w) if client_w > 0 else 0.0,
+                "y": max(0.0, (px_y - cy) / client_h) if client_h > 0 else 0.0,
+                "w": min(1.0, px_w / client_w) if client_w > 0 else 0.0,
+                "h": min(1.0, px_h / client_h) if client_h > 0 else 0.0,
+                "roi_coord": "client",
+            }
 
         self.rule_requested.emit(
             {
@@ -457,12 +472,27 @@ class OcrDebugPanel(QWidget):
         px_w = min(img_w - px_x, r.w + pad * 2)
         px_h = min(img_h - px_y, r.h + pad * 2)
 
-        roi = {
-            "x": px_x / img_w,
-            "y": px_y / img_h,
-            "w": px_w / img_w,
-            "h": px_h / img_h,
-        }
+        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
+        cx, cy = chrome
+        is_gdi = self._capture_source == "GDI 截圖"
+        if is_gdi or (cx <= 0 and cy <= 0):
+            roi = {
+                "x": px_x / img_w,
+                "y": px_y / img_h,
+                "w": px_w / img_w,
+                "h": px_h / img_h,
+                "roi_coord": "client",
+            }
+        else:
+            client_w = img_w - cx
+            client_h = img_h - cy
+            roi = {
+                "x": max(0.0, (px_x - cx) / client_w) if client_w > 0 else 0.0,
+                "y": max(0.0, (px_y - cy) / client_h) if client_h > 0 else 0.0,
+                "w": min(1.0, px_w / client_w) if client_w > 0 else 0.0,
+                "h": min(1.0, px_h / client_h) if client_h > 0 else 0.0,
+                "roi_coord": "client",
+            }
 
         self.step_requested.emit(
             {
