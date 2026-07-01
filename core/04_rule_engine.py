@@ -173,17 +173,28 @@ def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
 def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
     if isinstance(raw, dict):
         action = str(raw.get("action", "stop"))
+        fd = raw.get("fail_duration_sec", 0)
+        try:
+            fd = float(fd)
+        except (TypeError, ValueError):
+            fd = 0.0
         if action == "notify":
-            return {
+            result: dict = {
                 "action": "notify",
                 "message": str(raw.get("message", "")).strip(),
                 "stop_groups": [str(g) for g in raw.get("stop_groups", []) if g],
             }
-        if action == "key":
-            return {"action": "key", "key": str(raw.get("key", ""))}
-        if action == "skip" and allow_skip:
-            return {"action": "skip", "skip_to": max(0, int(raw.get("skip_to", 0)))}
-        return "stop"
+        elif action == "key":
+            result = {"action": "key", "key": str(raw.get("key", ""))}
+        elif action == "skip" and allow_skip:
+            result = {"action": "skip", "skip_to": max(0, int(raw.get("skip_to", 0)))}
+        elif action == "jump":
+            result = {"action": "jump", "rule_id": str(raw.get("rule_id", ""))}
+        else:
+            return "stop"
+        if fd > 0:
+            result["fail_duration_sec"] = fd
+        return result
     return str(raw) if str(raw) in ("key", "stop") else "stop"
 
 
@@ -1220,8 +1231,7 @@ if __name__ == "__main__":
     assert of_rule.steps[0].params["on_fail"] == "stop"
     assert of_rule.steps[1].params["on_fail"] == "key"
     assert of_rule.steps[2].params["on_fail"] == {"action": "key", "key": "F5"}
-    # jump on_fail → normalized to "stop"
-    assert of_rule.steps[3].params["on_fail"] == "stop"
+    assert of_rule.steps[3].params["on_fail"] == {"action": "jump", "rule_id": "x"}
     assert of_rule.steps[4].params["on_fail"] == {"action": "skip", "skip_to": 3}
     print("  [OK] on_fail normalization (detect)")
 
