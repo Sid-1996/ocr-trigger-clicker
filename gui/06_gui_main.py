@@ -1847,6 +1847,8 @@ class _CompareStepForm(QWidget):
             "w": self._roi.get("w", 0),
             "h": self._roi.get("h", 0),
         }
+        if "roi_coord" in self._roi:
+            self._step.params["roi"]["roi_coord"] = self._roi["roi_coord"]
         self._step.params["operator"] = self._operator.currentData()
         self._step.params["value"] = self._value.value()
         self._step.params["pattern"] = self._pattern.text().strip()
@@ -4149,14 +4151,27 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(
             f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
         )
-        # Convert to ratio before storing
+        # Convert to client-relative ratio before storing
         if title and wr and wr["w"] > 0 and wr["h"] > 0:
-            result = {
-                "x": result["x"] / wr["w"],
-                "y": result["y"] / wr["h"],
-                "w": result["w"] / wr["w"],
-                "h": result["h"] / wr["h"],
-            }
+            chrome = get_window_client_offset(title) or (0, 0)
+            cx, cy = chrome
+            client_w = wr["w"] - cx
+            client_h = wr["h"] - cy
+            if client_w > 0 and client_h > 0:
+                result = {
+                    "x": max(0.0, (result["x"] - cx) / client_w),
+                    "y": max(0.0, (result["y"] - cy) / client_h),
+                    "w": min(1.0, result["w"] / client_w),
+                    "h": min(1.0, result["h"] / client_h),
+                    "roi_coord": "client",
+                }
+            else:
+                result = {
+                    "x": result["x"] / wr["w"],
+                    "y": result["y"] / wr["h"],
+                    "w": result["w"] / wr["w"],
+                    "h": result["h"] / wr["h"],
+                }
         return result
 
     def _capture_rect_to_roi(self, rect: dict, title: str) -> dict | None:

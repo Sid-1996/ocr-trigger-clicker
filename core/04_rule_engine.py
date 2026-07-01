@@ -504,6 +504,23 @@ def _migrate_roi_to_ratio(data: dict) -> dict:
     return data
 
 
+def _migrate_roi_coord(data: dict) -> dict:
+    for rule in data.get("rules", []):
+        for step in rule.get("steps", []):
+            if step.get("type") not in ("detect", "compare", "match_image"):
+                continue
+            roi = step.get("params", {}).get("roi", {})
+            if not isinstance(roi, dict):
+                continue
+            if "roi_coord" in roi:
+                continue
+            x = roi.get("x", 0)
+            if not (isinstance(x, (int, float)) and x <= 1.0 and x >= 0):
+                continue
+            roi["roi_coord"] = "client"
+    return data
+
+
 def load_rules(path: str) -> list[Rule]:
     p = Path(path)
     if not p.exists():
@@ -542,6 +559,8 @@ def load_rules(path: str) -> list[Rule]:
         except OSError:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
+
+    data = _migrate_roi_coord(data)
 
     rules: list[Rule] = []
     for raw in data.get("rules", []):
