@@ -4537,8 +4537,18 @@ class MainWindow(QMainWindow):
                         continue
                     roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
+                    task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json") if self._current_task else None
+                    cs = _rule_mod.get_capture_size(task_path) if task_path else None
+                    title = self._window_combo.currentText()
+                    wr = get_window_rect(title) if title else None
+                    chrome = get_window_client_offset(title) or (0, 0) if title else (0, 0)
+                    if wr and chrome and chrome[0] >= 0 and chrome[1] >= 0:
+                        cur_size = [wr["w"] - chrome[0], wr["h"] - chrome[1]]
+                    else:
+                        cur_size = None
                     results = _main_loop_mod.match_template(
-                        img, tmpl_path, roi, threshold, template_data=tmpl_data or None
+                        img, tmpl_path, roi, threshold, template_data=tmpl_data or None,
+                        capture_size=cs, current_size=cur_size,
                     )
                     tmpl_name = "內嵌" if tmpl_data.strip() else Path(tmpl_path).stem
                     if results:

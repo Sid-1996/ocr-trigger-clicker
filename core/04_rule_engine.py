@@ -144,12 +144,15 @@ def _as_float(value, default: float = 0.0) -> float:
 
 def _sanitize_roi(roi: dict | None) -> dict:
     roi = roi if isinstance(roi, dict) else {}
-    return {
+    result = {
         "x": max(0.0, _as_float(roi.get("x", 0))),
         "y": max(0.0, _as_float(roi.get("y", 0))),
         "w": max(0.0, _as_float(roi.get("w", 0))),
         "h": max(0.0, _as_float(roi.get("h", 0))),
     }
+    if roi.get("roi_coord") == "client":
+        result["roi_coord"] = "client"
+    return result
 
 
 def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
