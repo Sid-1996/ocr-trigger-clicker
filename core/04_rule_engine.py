@@ -705,6 +705,7 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         "scroll",
         "match_image",
         "compare",
+        "notify",
     }
     for i, s in enumerate(steps):
         if not isinstance(s, dict):
