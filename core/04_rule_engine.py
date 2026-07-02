@@ -124,6 +124,7 @@ _STEP_DEFAULTS = {
         "color_tolerance": 100,  # 0~255，預設 100 可過濾明顯色差（如灰 vs 白），同時保留正常亮度差異
         "on_fail": "stop",
     },
+    "notify": {"message": ""},
 }
 
 

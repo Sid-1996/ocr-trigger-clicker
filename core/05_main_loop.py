@@ -693,6 +693,12 @@ class MainLoop:
             self._log(f"跳轉至規則 「{target_name}」 (group ptr {self._rule_in_group_ptr})")
         return StepResult("stop")
 
+    def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        msg = params.get("message", "")
+        if msg and self.on_warning:
+            self.on_warning(msg)
+        return StepResult("continue")
+
     def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
         handlers = {
             "detect": self._handle_detect,
@@ -704,6 +710,7 @@ class MainLoop:
             "scroll": self._handle_scroll,
             "match_image": self._handle_match_image,
             "compare": self._handle_compare,
+            "notify": self._handle_notify,
         }
         handler = handlers.get(step.type)
         if handler is None:
@@ -1172,6 +1179,7 @@ if __name__ == "__main__":
         "scroll",
         "match_image",
         "compare",
+        "notify",
     ]:
         step = _rule.Step(type=hn, params={})
         result = ml._run_step(step, ctx, test_rule)
@@ -1667,27 +1675,42 @@ if __name__ == "__main__":
     print("  [OK] _resolve_point absolute → passthrough")
 
     # ── Test 25: fail_duration_sec prevents subsequent step execution ──
-    import tempfile as _tf25
-    import cv2 as _cv225
     import time as _time25
+
+    import cv2 as _cv225
 
     _fd25_tpl = np.zeros((20, 20, 3), dtype=np.uint8)
     _cv225.rectangle(_fd25_tpl, (5, 5), (15, 15), (200, 200, 200), -1)
     _fd25_b64 = img_to_b64(_fd25_tpl)
 
-    _fd25_rule = Rule(id="rule_fd25", name="FD測試", enabled=True, steps=[
-        _rule.Step(type="match_image", params={
-            "template": "",
-            "template_data": _fd25_b64,
-            "threshold": 0.99,
-            "on_fail": {"action": "notify", "message": "FD timeout expired", "fail_duration_sec": 5.0},
-        }),
-        _rule.Step(type="detect", params={
-            "text": "不該執行",
-            "match_mode": "fuzzy",
-            "on_fail": "stop",
-        }),
-    ])
+    _fd25_rule = Rule(
+        id="rule_fd25",
+        name="FD測試",
+        enabled=True,
+        steps=[
+            _rule.Step(
+                type="match_image",
+                params={
+                    "template": "",
+                    "template_data": _fd25_b64,
+                    "threshold": 0.99,
+                    "on_fail": {
+                        "action": "notify",
+                        "message": "FD timeout expired",
+                        "fail_duration_sec": 5.0,
+                    },
+                },
+            ),
+            _rule.Step(
+                type="detect",
+                params={
+                    "text": "不該執行",
+                    "match_mode": "fuzzy",
+                    "on_fail": "stop",
+                },
+            ),
+        ],
+    )
 
     _fd25_blank = np.zeros((100, 100, 3), dtype=np.uint8)
     _fd25_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
@@ -1695,15 +1718,19 @@ if __name__ == "__main__":
 
     _fd25_detect_calls = [0]
     _fd25_orig_ocr = ml._ocr_region
+
     def _fd25_count_ocr(*a, **kw):
         _fd25_detect_calls[0] += 1
         return []
+
     ml._ocr_region = _fd25_count_ocr
 
     _fd25_warn_calls = [0]
     _fd25_orig_warn = ml.on_warning
+
     def _fd25_count_warn(msg):
         _fd25_warn_calls[0] += 1
+
     ml.on_warning = _fd25_count_warn
 
     ml._groups = [RuleGroup(id="fd_dummy", name="FD測試群組", rule_ids=["rule_fd25"])]
@@ -1717,7 +1744,9 @@ if __name__ == "__main__":
     # First run: match_image fails → _handle_on_fail records fail_since, returns stop → rule stops
     ml._run_rule(_fd25_rule, _fd25_blank, _fd25_rect, _fd25_ctx)
 
-    assert _fd25_detect_calls[0] == 0, f"step 1 (detect) should not execute, got {_fd25_detect_calls[0]} calls"
+    assert _fd25_detect_calls[0] == 0, (
+        f"step 1 (detect) should not execute, got {_fd25_detect_calls[0]} calls"
+    )
     assert _fd25_key in ml._fail_since, "fail_since should record key on first failure"
     assert not _fd25_ctx.triggered, "triggered should remain False (action not yet executed)"
     print("  [OK] fail_duration_sec: stop on step 0, step 1 skipped")

@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -309,6 +310,7 @@ _STEP_TYPE_ICONS = {
     "jump": "↩",
     "drag": "↗",
     "scroll": "↕",
+    "notify": "💬",
 }
 
 _STEP_TYPE_LABELS = {
@@ -321,6 +323,7 @@ _STEP_TYPE_LABELS = {
     "jump": "跳轉規則",
     "drag": "拖曳",
     "scroll": "滾輪",
+    "notify": "提示訊息",
 }
 
 
@@ -430,6 +433,9 @@ def _step_summary(step, rules_provider=None) -> str:
             "WheelRight": "向右",
         }.get(d, d)
         return f"滾輪 {dir_label} ×{a}"
+    if t == "notify":
+        msg = p.get("message", "")
+        return f"💬「{msg}」" if msg else "💬 (空白)"
     return t
 
 
@@ -888,6 +894,8 @@ class _StepListWidget(QWidget):
                 step_count=len(self._steps),
                 groups_provider=self._groups_provider,
             )
+        if t == "notify":
+            return _NotifyStepForm(self, step, idx)
         return None
 
 
@@ -2135,6 +2143,24 @@ class _JumpStepForm(QWidget):
         self._step.params["rule_id"] = self._combo.currentData() or ""
 
 
+class _NotifyStepForm(QWidget):
+    def __init__(self, parent_list, step, idx):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        form = QFormLayout(self)
+        form.setContentsMargins(12, 6, 12, 6)
+
+        self._msg = QLineEdit()
+        self._msg.setText(step.params.get("message", ""))
+        self._msg.setPlaceholderText("請輸入要顯示的訊息…")
+        self._msg.editingFinished.connect(lambda: self._list.steps_changed.emit())
+        form.addRow("訊息文字:", self._msg)
+
+    def save(self):
+        self._step.params["message"] = self._msg.text()
+
+
 class _InlineActionEditor(QWidget):
     changed = pyqtSignal()
 
@@ -2825,6 +2851,7 @@ class MainWindow(QMainWindow):
             ("scroll", "↕ 滾輪"),
             ("wait", "⏱ 等待"),
             ("jump", "↩ 跳轉規則"),
+            ("notify", "💬 提示訊息"),
         ]
         for st, label in step_types:
             action = add_menu.addAction(label)
@@ -4717,15 +4744,120 @@ class MainWindow(QMainWindow):
                     d = dirs.get(p.get("direction", "WheelDown"), p.get("direction", ""))
                     log.append(f"[{idx + 1}] ↕ 滾輪 {d} ×{p.get('amount', 1)}")
 
+                elif step.type == "notify":
+                    msg = step.params.get("message", "")
+                    log.append(f"[{idx + 1}] 💬 {msg}" if msg else f"[{idx + 1}] 💬 (空白)")
+
                 elif step.type == "compare":
                     p = step.params
                     op = p.get("operator", ">=")
                     val = p.get("value", 0.0)
-                    pattern = p.get("pattern", "")
-                    roi = p.get("roi", {})
-                    z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                    roi_str = "全視窗" if z else _fmt_roi(roi)
-                    log.append(f"[{idx + 1}] 🔢 {op} {val} {roi_str} regex=「{pattern}」")
+                    pattern = p.get("pattern", r"-?\d+\.?\d*")
+
+                    r = _resolve(p.get("roi", {}))
+                    use_roi = any(r.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
+                    if use_roi:
+                        roi_img = crop_roi(img, r)
+                        if roi_img is None:
+                            log.append(f"[{idx + 1}] ⚠ ROI 裁切無效")
+                            continue
+                    else:
+                        roi_img = img
+                        r = {"x": 0, "y": 0, "w": img.shape[1], "h": img.shape[0]}
+                    results_ocr = recognize(
+                        roi_img, preprocess=False, max_side_len=0, min_confidence=0.25
+                    )
+                    combined = " ".join(res.text for res in results_ocr)
+                    m = re.search(pattern, combined)
+
+                    rx = r.get("x", 0)
+                    ry = r.get("y", 0)
+                    rw = r.get("w", img.shape[1])
+                    rh = r.get("h", img.shape[0])
+
+                    if results_ocr:
+                        first = results_ocr[0]
+                        cx = rx + int(first.x) + int(first.w) // 2
+                        cy = ry + int(first.y) + int(first.h) // 2
+                        last_center = (cx, cy)
+
+                    if not m:
+                        log.append(f"[{idx + 1}] 🔢 未從文字匹配到數字 pattern=「{pattern}」")
+                        if results_ocr:
+                            top5 = "、".join(
+                                f"「{res.text}」({res.confidence:.2f})" for res in results_ocr[:5]
+                            )
+                            log.append(f"  OCR 文字: {top5}")
+                            if len(results_ocr) > 5:
+                                log.append(f"  … 尚有 {len(results_ocr) - 5} 筆")
+                        of_hint = _of_summary(p.get("on_fail", "stop"))
+                        if of_hint:
+                            log.append(f"  → {of_hint}")
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "rect",
+                                "color": (0, 0, 200),
+                                "x": rx,
+                                "y": ry,
+                                "w": rw,
+                                "h": rh,
+                            }
+                        )
+                        continue
+
+                    try:
+                        num = float(m.group())
+                    except (ValueError, TypeError):
+                        log.append(
+                            f"[{idx + 1}] 🔢 提取數字無效: 「{m.group()}」pattern=「{pattern}」"
+                        )
+                        of_hint = _of_summary(p.get("on_fail", "stop"))
+                        if of_hint:
+                            log.append(f"  → {of_hint}")
+                        markers.append(
+                            {
+                                "step": idx + 1,
+                                "shape": "rect",
+                                "color": (0, 0, 200),
+                                "x": rx,
+                                "y": ry,
+                                "w": rw,
+                                "h": rh,
+                            }
+                        )
+                        continue
+
+                    _cmp_ops = {
+                        ">": lambda a, b: a > b,
+                        "<": lambda a, b: a < b,
+                        ">=": lambda a, b: a >= b,
+                        "<=": lambda a, b: a <= b,
+                        "==": lambda a, b: a == b,
+                        "!=": lambda a, b: a != b,
+                    }
+                    passed = op in _cmp_ops and _cmp_ops[op](num, val)
+                    status = "✅" if passed else "❌"
+                    log.append(
+                        f"[{idx + 1}] 🔢 {num} {op} {val}  {status}   OCR:「{combined[:40]}」"
+                    )
+
+                    markers.append(
+                        {
+                            "step": idx + 1,
+                            "shape": "rect",
+                            "color": (0, 200, 0) if passed else (0, 0, 200),
+                            "x": rx,
+                            "y": ry,
+                            "w": rw,
+                            "h": rh,
+                        }
+                    )
+
+                    if not passed:
+                        of_hint = _of_summary(p.get("on_fail", "stop"))
+                        if of_hint:
+                            log.append(f"  → {of_hint}")
 
                 elif step.type == "key":
                     p = step.params
