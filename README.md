@@ -82,7 +82,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 | 設定 | 說明 |
 |------|------|
-| 執行模式 | 循環執行（持續輪迴）、執行一次（跑完就停）、重複 N 次（指定次數後停止） |
+| 執行模式 | 循環執行（持續輪迴）、執行一次（跑完就停，預設）、重複 N 次（指定次數後停止） |
 | 重複次數 | 僅「重複 N 次」模式下有效 |
 | 每輪間隔 | 每輪完成後的等待秒數 |
 | 啟用／停用 | 停用的群組在啟動時不會出現在選單中 |
@@ -105,13 +105,14 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 | 步驟類型 | 用途 | 關鍵參數 |
 |----------|------|----------|
-| `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify） |
+| `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
 | `click` | 滑鼠點擊 | `target`（text_center/custom）、`x`, `y`, `button`, `random_offset` |
 | `key` | 鍵盤按鍵 | `key`（AHK 格式）, `hold_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
-| `compare` | 數值比對（擷取 ROI 內數字後比較） | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify） |
-| `match_image` | 圖示模板比對 | `template`, `roi`, `threshold`, `on_fail`（stop/key/skip/jump/notify） |
+| `compare` | 數值比對（擷取 ROI 內數字後比較） | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
+| `match_image` | 圖示模板比對（可選顏色比對） | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
+| `notify` | 提示訊息彈窗 | `message` |
 | `scroll` | 滑鼠滾輪 | `direction`, `amount`, `delay_ms` |
 | `drag` | 滑鼠拖曳 | `target`, `dx`, `dy`, `button` |
 
