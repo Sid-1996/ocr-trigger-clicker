@@ -1230,9 +1230,6 @@ class _MatchImageStepForm(QWidget):
                 }
         current_size = [client_w, client_h] if wr else None
         capture_size = None
-        print(
-            f"[TEST DEBUG] w={w} h={h} chrome={chrome} client=({client_w},{client_h}) roi_before={self._step.params.get('roi', {})} roi_after={roi} current_size={current_size} capture_size={capture_size}"
-        )
         if self._task_path_cb:
             task_path = self._task_path_cb()
             if task_path:
@@ -4501,20 +4498,9 @@ class MainWindow(QMainWindow):
         activate_window(title)
         time.sleep(0.12)
         img = capture(title)
-        cap_src = "mss"
         if img is None:
             img = capture_window_content(title)
-            cap_src = "fallback(GDI)"
         h, w = img.shape[:2] if img is not None else (0, 0)
-        wr = get_window_rect(title) if title else None
-        chrome = get_window_client_offset(title) or (0, 0)
-        print(f"=== 測試規則「{rule.name}」===")
-        print(f"  視窗: {title}")
-        if wr:
-            print(
-                f"  全視窗: {wr['w']}×{wr['h']}  Chrome: {chrome}  Client: {wr['w'] - chrome[0]}×{wr['h'] - chrome[1]}"
-            )
-        print(f"  截圖: {cap_src} {w}×{h}")
         self.showNormal()
         self.activateWindow()
         self._edit_stack.setCurrentIndex(1)
@@ -4561,19 +4547,9 @@ class MainWindow(QMainWindow):
                             "w": int(round(w * client_w)),
                             "h": int(round(h * client_h)),
                         }
-                        print(
-                            f"    _resolve(client): ratio=({x},{y},{w},{h}) client=({client_w},{client_h})→ pixel=({px['x']},{px['y']},{px['w']},{px['h']})"
-                        )
                         return px
-                    print(
-                        f"    _resolve(client) FAILED: client_w={client_w} client_h={client_h}, falling back to full-window"
-                    )
                 px = {"x": int(x * W), "y": int(y * H), "w": int(w * W), "h": int(h * H)}
-                print(
-                    f"    _resolve(full): ratio=({x},{y},{w},{h}) W×H=({W}×{H})→ pixel=({px['x']},{px['y']},{px['w']},{px['h']})"
-                )
                 return px
-            print(f"    _resolve(pixel, pass-thru): ({x},{y},{w},{h})")
             return roi
 
         def _resolve_point(px, py):
@@ -4615,9 +4591,6 @@ class MainWindow(QMainWindow):
                     matches = find_text(results_ocr, text, match_mode, threshold)
                     rx = roi.get("x", 0)
                     ry = roi.get("y", 0)
-                    print(
-                        f"    detect OCR: roi_px=({rx},{ry}) img={roi_img.shape[1]}×{roi_img.shape[0]} raw_hits={len(results_ocr)}"
-                    )
                     if matches:
                         m = matches[0]
                         mx = rx + int(m.x)
@@ -4626,9 +4599,6 @@ class MainWindow(QMainWindow):
                         mh = int(m.h)
                         cx = mx + mw // 2
                         cy = my + mh // 2
-                        print(
-                            f"    detect hit: roi_local=({int(m.x)},{int(m.y)},{int(m.w)},{int(m.h)}) +offset=({rx},{ry})→ final=({mx},{my},{mw},{mh}) center=({cx},{cy})"
-                        )
                         last_center = (cx, cy)
                         log.append(
                             f"[{idx + 1}] 🔍 命中「{m.text}」{m.confidence:.2f}  ({mx},{my}) {mw}×{mh}"
@@ -4654,9 +4624,6 @@ class MainWindow(QMainWindow):
                             }
                         )
                     else:
-                        print(
-                            f"    detect miss: text=「{text}」mode={match_mode} threshold={threshold}"
-                        )
                         log.append(
                             f"[{idx + 1}] ❌ 未命中「{text}」（{match_mode}，閾值 {threshold}）"
                         )
@@ -4708,7 +4675,6 @@ class MainWindow(QMainWindow):
                                 log.append(f"[{idx + 1}] ⚠ 點擊目標文字「{ct}」未找到")
                                 continue
                     if cx is not None:
-                        print(f"    click: target={target} → ({cx},{cy})")
                         log.append(f"[{idx + 1}] 🖱 {p.get('button', 'left')} 點擊 ({cx},{cy})")
                         markers.append(
                             {
@@ -4932,9 +4898,6 @@ class MainWindow(QMainWindow):
                         cur_size = [wr["w"] - chrome[0], wr["h"] - chrome[1]]
                     else:
                         cur_size = None
-                    print(
-                        f"    match_image: roi={roi} capture_size={cs} current_size={cur_size} threshold={threshold}"
-                    )
                     results = _main_loop_mod.match_template(
                         img,
                         tmpl_path,
@@ -4951,9 +4914,6 @@ class MainWindow(QMainWindow):
                         m = results[0]
                         cx, cy = m.center_x, m.center_y
                         last_center = (cx, cy)
-                        print(
-                            f"    match_image hit: 「{tmpl_name}」({m.x},{m.y}) {m.w}×{m.h} center=({cx},{cy}) conf={m.confidence:.2%}"
-                        )
                         log.append(
                             f"[{idx + 1}] 🖼 命中「{tmpl_name}」{m.confidence:.2f}  ({m.x},{m.y}) {m.w}×{m.h}"
                         )

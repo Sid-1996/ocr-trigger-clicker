@@ -301,9 +301,6 @@ class MainLoop:
                         "w": int(round(w * client_w)),
                         "h": int(round(h * client_h)),
                     }
-                    print(
-                        f"[ROI DEBUG] rect=({W},{H}) chrome=({cx},{cy}) ratio=({x:.4f},{y:.4f},{w:.4f},{h:.4f}) → pixel={result}"
-                    )
                     return result
             return {
                 "x": int(round(x * W)),
