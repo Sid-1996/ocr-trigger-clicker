@@ -461,9 +461,9 @@ class MainLoop:
             first_fail = self._fail_since.get(key)
             if first_fail is None:
                 self._fail_since[key] = now
-                return StepResult("continue")
+                return StepResult("stop")
             if now - first_fail < fail_duration:
-                return StepResult("continue")
+                return StepResult("stop")
             self._fail_since.pop(key, None)
             # fail_duration elapsed → fall through to execute the configured action
 
@@ -1666,4 +1666,79 @@ if __name__ == "__main__":
     assert (px, py) == (123, 456)
     print("  [OK] _resolve_point absolute → passthrough")
 
-    print("\n=== All 24 tests passed ===")
+    # ── Test 25: fail_duration_sec prevents subsequent step execution ──
+    import tempfile as _tf25
+    import cv2 as _cv225
+    import time as _time25
+
+    _fd25_tpl = np.zeros((20, 20, 3), dtype=np.uint8)
+    _cv225.rectangle(_fd25_tpl, (5, 5), (15, 15), (200, 200, 200), -1)
+    _fd25_b64 = img_to_b64(_fd25_tpl)
+
+    _fd25_rule = Rule(id="rule_fd25", name="FD測試", enabled=True, steps=[
+        _rule.Step(type="match_image", params={
+            "template": "",
+            "template_data": _fd25_b64,
+            "threshold": 0.99,
+            "on_fail": {"action": "notify", "message": "FD timeout expired", "fail_duration_sec": 5.0},
+        }),
+        _rule.Step(type="detect", params={
+            "text": "不該執行",
+            "match_mode": "fuzzy",
+            "on_fail": "stop",
+        }),
+    ])
+
+    _fd25_blank = np.zeros((100, 100, 3), dtype=np.uint8)
+    _fd25_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    _fd25_ctx = StepContext(img=_fd25_blank, rect=_fd25_rect)
+
+    _fd25_detect_calls = [0]
+    _fd25_orig_ocr = ml._ocr_region
+    def _fd25_count_ocr(*a, **kw):
+        _fd25_detect_calls[0] += 1
+        return []
+    ml._ocr_region = _fd25_count_ocr
+
+    _fd25_warn_calls = [0]
+    _fd25_orig_warn = ml.on_warning
+    def _fd25_count_warn(msg):
+        _fd25_warn_calls[0] += 1
+    ml.on_warning = _fd25_count_warn
+
+    ml._groups = [RuleGroup(id="fd_dummy", name="FD測試群組", rule_ids=["rule_fd25"])]
+    ml._fail_since.clear()
+    ml._active_group_ids = ["fd_dummy"]
+    ml._group_queue_idx = 0
+    ml._stop_event.clear()
+
+    _fd25_key = f"{_fd25_rule.id}:0"
+
+    # First run: match_image fails → _handle_on_fail records fail_since, returns stop → rule stops
+    ml._run_rule(_fd25_rule, _fd25_blank, _fd25_rect, _fd25_ctx)
+
+    assert _fd25_detect_calls[0] == 0, f"step 1 (detect) should not execute, got {_fd25_detect_calls[0]} calls"
+    assert _fd25_key in ml._fail_since, "fail_since should record key on first failure"
+    assert not _fd25_ctx.triggered, "triggered should remain False (action not yet executed)"
+    print("  [OK] fail_duration_sec: stop on step 0, step 1 skipped")
+
+    # Second run: fast-forward time past fail_duration
+    _fd25_ctx2 = StepContext(img=_fd25_blank, rect=_fd25_rect)
+    ml._fail_since[_fd25_key] = _time25.monotonic() - 10.0
+
+    ml._run_rule(_fd25_rule, _fd25_blank, _fd25_rect, _fd25_ctx2)
+
+    assert _fd25_key not in ml._fail_since, "fail_since key should be cleared after duration"
+    assert _fd25_warn_calls[0] > 0, "notify action should fire after fail_duration elapsed"
+    assert "fd_dummy" not in ml._active_group_ids, "群組應被 notify 移出 active"
+    assert ml._stop_event.is_set(), "唯一 active group 被清空且無背景規則，loop 應該停止"
+    assert not _fd25_ctx2.triggered, "此路徑下 triggered 不應被設 True"
+
+    ml._ocr_region = _fd25_orig_ocr
+    ml.on_warning = _fd25_orig_warn
+    ml._stop_event.clear()
+    ml._active_group_ids = []
+    ml._groups = []
+    print("  [OK] fail_duration_sec elapsed → on_fail notify fires")
+
+    print("\n=== All 25 tests passed ===")
