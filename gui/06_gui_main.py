@@ -2433,45 +2433,78 @@ class _NotificationStack(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._layout = QVBoxLayout(self)
-        self._layout.setSpacing(4)
-        self._layout.setContentsMargins(8, 8, 8, 8)
         self._margin = 12
+        self._spacing = 4
+        self._max_width = 320
+        self._labels: list[QLabel] = []
 
     def push(self, msg: str):
-        label = QLabel(msg)
+        label = QLabel(msg, self)
         label.setStyleSheet(
             "background: rgba(50,50,50,230); color: #fff; padding: 6px 10px; "
             "border-radius: 4px; font: 9pt;"
         )
         label.setWordWrap(True)
-        label.setMaximumWidth(320)
-        self._layout.addWidget(label)
-        self._reposition()
-        self.show()
+        label.setMaximumWidth(self._max_width)
+        label.show()
+
         timer = QTimer(self)
         timer.setSingleShot(True)
         timer.timeout.connect(lambda lbl=label, t=timer: self._pop(lbl, t))
         timer.start(2000)
 
+        self._labels.append(label)
+        self._reposition()
+        self.show()
+        self.raise_()
+
     def _pop(self, label, timer):
         timer.stop()
         timer.deleteLater()
-        self._layout.removeWidget(label)
+        if label not in self._labels:
+            return
+        self._labels.remove(label)
         label.deleteLater()
         self._reposition()
-        if self._layout.count() == 0:
+        if not self._labels:
             self.hide()
 
     def _reposition(self):
-        self.adjustSize()
+        if not self._labels:
+            return
+
+        max_lbl_w = 0
+        total_h = 0
+        for lbl in self._labels:
+            lbl.adjustSize()
+            max_lbl_w = max(max_lbl_w, lbl.width())
+            total_h += lbl.height()
+
+        padding = 16
+        spacing_total = self._spacing * (len(self._labels) - 1)
+        w = max(max_lbl_w + padding, 100)
+        h = total_h + spacing_total + padding
+
         screen = QApplication.primaryScreen()
         if screen is None:
             return
         ag = screen.availableGeometry()
-        self.move(
-            ag.right() - self.width() - self._margin, ag.bottom() - self.height() - self._margin
-        )
+        max_h = int(ag.height() * 0.6)
+        if h > max_h:
+            h = max_h
+
+        self.resize(int(w), int(h))
+
+        cy = int(h) - 8
+        for lbl in reversed(self._labels):
+            lbl_h = lbl.height()
+            cy -= lbl_h
+            lbl.move(8, cy)
+            cy -= self._spacing
+
+        x = ag.right() - int(w) - self._margin
+        y = ag.bottom() - int(h) - self._margin
+        self.move(int(x), int(y))
 
 
 class MainWindow(QMainWindow):
