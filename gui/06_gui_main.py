@@ -3597,6 +3597,8 @@ class MainWindow(QMainWindow):
                 self._groups.append(target)
             self._status_bar.showMessage(f"「{rule.name}」已移至未歸類", 4000)
         self._flush_save()
+        if self._loop:
+            self._loop.reload_rules()
         self._refresh_rule_list()
 
     def _clear_uncategorized(self):
@@ -4216,10 +4218,15 @@ class MainWindow(QMainWindow):
         if not self._current_task:
             return
         task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
-        save_task(self._current_task, self._rules)
-        save_groups(self._groups, task_path)
         if self._loop:
-            self._loop.reload_rules()
+            with self._loop._rules_lock:
+                save_task(self._current_task, self._rules)
+                save_groups(self._groups, task_path)
+                self._loop._rules_dirty = False
+                self._loop._load_rules()
+        else:
+            save_task(self._current_task, self._rules)
+            save_groups(self._groups, task_path)
 
     def _flush_save(self):
         bg_ids = [r.id for r in self._rules if r.background]
