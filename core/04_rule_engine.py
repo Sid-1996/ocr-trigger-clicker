@@ -588,6 +588,8 @@ def load_rules(path: str) -> list[Rule]:
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
+    bg_ids = [r.id for r in rules if r.background]
+    logging.info("[save] save_rules: rules=%d, background=%s, path=%s", len(rules), bg_ids, path)
     tmp_path: str = ""
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}

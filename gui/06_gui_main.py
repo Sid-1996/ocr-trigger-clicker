@@ -4208,6 +4208,8 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
 
     def _schedule_save(self):
+        bg_ids = [r.id for r in self._rules if r.background]
+        logging.info("[save] _schedule_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.start()
 
     def _do_debounced_save(self):
@@ -4220,6 +4222,8 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
 
     def _flush_save(self):
+        bg_ids = [r.id for r in self._rules if r.background]
+        logging.info("[save] _flush_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.stop()
         self._do_debounced_save()
 
