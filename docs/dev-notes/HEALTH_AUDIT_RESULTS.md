@@ -1,3 +1,5 @@
+> 歷史稽核記錄，所列問題均已於對應 commit 修復，僅供開發參考。
+
 # Health Audit — Final Consolidated Results
 
 ## Priority 1 — Socket Protocol (`_recv_line` no-partial-buffer)

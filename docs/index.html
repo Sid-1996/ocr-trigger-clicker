@@ -26,7 +26,7 @@
   "applicationCategory": "UtilityApplication",
   "description": "透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作的 Windows 綠色工具。",
   "author": { "@type": "Person", "name": "Sid" },
-  "softwareVersion": "0.0.3",
+  "softwareVersion": "0.0.4",
   "license": "https://github.com/Sid-1996/ocr-trigger-clicker/blob/master/LICENSE",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" }
 }
@@ -255,7 +255,17 @@
     <li>按「選取範本圖片」載入你要比對的圖片（例如按鈕截圖）。</li>
     <li>按「框選偵測區域」框選搜尋範圍。</li>
     <li>調整「相似度門檻」：越高越嚴格，越低越寬鬆。建議從 0.7 開始調。</li>
+    <li>（選擇性）勾選「比對顏色」：預設只比形狀（灰階），勾選後會額外比對顏色，可降低誤判但對光影變化較敏感，適合按鈕顏色是關鍵辨識特徵的情境。</li>
     <li>按「測試比對」確認是否命中。命中會顯示匹配位置。</li>
+  </ol>
+
+  <h3 id="tool-notify">notify（提示訊息）</h3>
+  <p>在流程中插入一則畫面右下角的提示，不影響規則繼續執行，適合標示流程階段或提醒手動操作。</p>
+  <ol>
+    <li>在步驟中選擇「notify（提示訊息）」。</li>
+    <li>輸入要顯示的訊息文字。</li>
+    <li>規則執行到此步驟時，訊息會自動在螢幕右下角顯示約 2 秒後消失。</li>
+    <li>可搭配 on_fail 的「通知並停止群組」動作，在步驟失敗時顯示通知並暫停流程。</li>
   </ol>
 
   <h3 id="tool-dryrun">乾跑測試（Dry-run）</h3>

@@ -91,6 +91,40 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 加印 debug log 在關鍵 signal/slot 邊界（如 `dropEvent`、`_on_rules_reordered`、`_refresh_rule_list`）→ 從終端機執行重現以取得輸出 → 找出實際分歧的程式碼路徑 → 修根因 → 用 `git log` 驗證 commit 確實落地。改動指令給執行端（小弟/OpenCode）時必須完整明確，不預期來回確認。
 
+## Release Notes 寫法規範
+
+Release notes 必須分兩層，先一般使用者後技術細節，中間用 `---` 分隔：
+
+1. **一般使用者摘要** — 白話、功能角度，不說內部機制。用「你可以…」「適合用來…」這類表達。條列 3~5 項重點。
+2. **技術細節** — 提交類型分類（`✨ 新功能` / `🔧 修正` / `🚀 改善`），附 commit hash。寫給貢獻者與進階使用者看。
+
+範例結構：
+
+```
+## vX.Y.Z 更新內容
+
+### 🎯 一般使用者更新摘要
+
+**功能 A**
+一句話說明做了什麼、對使用者有什麼好處。
+
+**功能 B**
+同上。
+
+---
+
+### 🔧 技術細節
+
+### ✨ 新功能
+- 功能（commit `xxxxxxx`）
+
+### 🔧 修正
+- 修正（commit `xxxxxxx`）
+
+### 🚀 改善
+- 改善（commit `xxxxxxx`）
+```
+
 ---
 
 ## 驗證記錄

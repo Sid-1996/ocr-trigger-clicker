@@ -214,3 +214,13 @@ python -c "import core.11_template_matching; core.11_template_matching.demo()"
 7. 輸出 release 網址
 
 若 `-Notes` 省略則不寫 release note，可在 GitHub 上手動補充。
+
+### CHANGELOG 維護
+
+每次執行 `release.ps1` 發版前，必須先手動更新根目錄 `CHANGELOG.md`，
+新增一個對應版本區塊（格式參照 Keep a Changelog，
+既有 `v0.0.0`~`v0.0.4` 區塊可當範本）。
+
+`CHANGELOG.md` 內容應與該版本的 GitHub release note 技術細節區段
+（見 `SKILL.md`「Release Notes 寫法規範」）保持一致，
+避免兩邊漂移。
