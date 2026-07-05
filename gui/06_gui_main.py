@@ -5171,7 +5171,7 @@ class MainWindow(QMainWindow):
                 ),
                 Step(
                     type="wait",
-                    params={"ms": 500},
+                    params={"ms": 100},
                 ),
             ],
         )
