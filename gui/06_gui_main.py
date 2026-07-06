@@ -4165,6 +4165,16 @@ class MainWindow(QMainWindow):
             act.triggered.connect(self._delete_group)
         menu.exec(self._rule_list.viewport().mapToGlobal(pos))
 
+    def _next_duplicate_name(self, src_name: str) -> str:
+        import re
+
+        base = re.sub(r"\s+\(\d+\)$", "", src_name)
+        existing = {r.name for r in self._rules}
+        n = 2
+        while f"{base} ({n})" in existing:
+            n += 1
+        return f"{base} ({n})"
+
     def _duplicate_rule(self):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, "提示", "請先停止偵測再複製規則")
@@ -4179,7 +4189,7 @@ class MainWindow(QMainWindow):
 
         new = deepcopy(src)
         new.id = f"rule_{uuid.uuid4().hex[:8]}"
-        new.name = f"{src.name} (副本)"
+        new.name = self._next_duplicate_name(src.name)
         self._rules.append(new)
         logging.debug(
             '[duplicate rule] manual (same group), name="%s", id=%s <- %s', new.name, new.id, src.id
@@ -4214,7 +4224,7 @@ class MainWindow(QMainWindow):
 
         new_rule = deepcopy(src_rule)
         new_rule.id = "rule_" + uuid.uuid4().hex[:8]
-        new_rule.name = src_rule.name + " (副本)"
+        new_rule.name = self._next_duplicate_name(src_rule.name)
         self._rules.append(new_rule)
         logging.debug(
             '[duplicate rule] manual (to group), name="%s", id=%s <- %s, group="%s"',
