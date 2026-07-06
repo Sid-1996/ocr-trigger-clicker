@@ -52,6 +52,32 @@ match_template = _tmpl.match_template
 img_to_b64 = _tmpl.img_to_b64
 
 
+_main_handler: Optional[TimedRotatingFileHandler] = None
+
+
+def _ensure_main_logger() -> logging.Logger:
+    global _main_handler
+    logger = logging.getLogger("main_loop")
+    if _main_handler is not None:
+        return logger
+    log_dir = Path(__file__).resolve().parent.parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+    _main_handler = TimedRotatingFileHandler(
+        log_dir / "main.log", when="midnight", backupCount=7, encoding="utf-8"
+    )
+    _main_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    )
+    logger.addHandler(_main_handler)
+    logger.setLevel(logging.INFO)
+    logger.handler = _main_handler
+    return logger
+
+
+def log_main(msg: str):
+    _ensure_main_logger().info(msg)
+
+
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
     h, w = img.shape[:2]
     x1 = max(0, roi["x"])
@@ -183,19 +209,7 @@ class MainLoop:
         self._perf.start()
 
         self._rules: list[Rule] = []
-        self._log_dir = Path(__file__).resolve().parent.parent / "logs"
-        self._log_dir.mkdir(exist_ok=True)
-        self._logger = logging.getLogger("main_loop")
-        self._logger.setLevel(logging.INFO)
-        self._logger.handlers.clear()
-        handler = TimedRotatingFileHandler(
-            self._log_dir / "main.log", when="midnight", backupCount=7, encoding="utf-8"
-        )
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-        )
-        self._logger.addHandler(handler)
-        self._logger.handler = handler
+        self._logger = _ensure_main_logger()
         self._load_rules()
         init_engine()
 
@@ -668,8 +682,6 @@ class MainLoop:
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         ms = params.get("ms", 1000)
         if ms > 0:
-            if self._verbose:
-                self._log(f"等待 {ms}ms")
             interrupted = self._stop_event.wait(timeout=ms / 1000.0)
             if interrupted:
                 return StepResult("stop")
@@ -923,11 +935,6 @@ class MainLoop:
                     else:
                         self._frame_diff_ratio = 1.0
 
-                    if self._verbose and iteration % 30 == 0:
-                        self._log(
-                            f"視窗位置=({rect['x']},{rect['y']}) 尺寸=({rect['w']}×{rect['h']}) img={img.shape}"
-                        )
-
                     t2 = time.monotonic()
                     self._process_rules(img, rect)
                     t3 = time.monotonic()
@@ -978,9 +985,6 @@ class MainLoop:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
         self._perf.stop()
-        handler = getattr(self._logger, "handler", None)
-        if handler:
-            handler.close()
 
     def pause(self) -> None:
         self._pause_event.set()

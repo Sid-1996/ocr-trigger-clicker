@@ -3104,7 +3104,7 @@ class MainWindow(QMainWindow):
             return
         self._current_task = name
         self._rules = load_task(name)
-        logging.debug('[task changed] rules=%d, task="%s"', len(self._rules), name)
+        _main_loop_mod.log_main(f"已載入任務「{name}」，共 {len(self._rules)} 條規則")
         task_path = str(Path(_tasks_dir()) / f"{name}.json")
         self._groups = load_groups(task_path)
         # safety net: remove from uncategorized any rule also in a normal group
@@ -3118,7 +3118,7 @@ class MainWindow(QMainWindow):
             for rid in dupes:
                 uncat.rule_ids.remove(rid)
             if dupes:
-                logging.info("[auto-cleanup] 從未歸類移除 %d 條重複規則", len(dupes))
+                _main_loop_mod.log_main(f"從未歸類移除 {len(dupes)} 條重複規則: {', '.join(dupes)}")
         # load collapsed state from task file
         self._collapsed_groups = set()
         try:
@@ -4074,7 +4074,7 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
-        logging.debug('[delete rule] manual, name="%s", id=%s', rule.name, rule.id)
+        _main_loop_mod.log_main(f"規則「{rule.name}」已刪除 (id={rule.id})")
         for g in self._groups:
             g.rule_ids = [rid for rid in g.rule_ids if rid != rule.id]
         # 清理被刪規則的孤兒範本圖片（僅限舊版檔案路徑殘留）
@@ -4191,9 +4191,7 @@ class MainWindow(QMainWindow):
         new.id = f"rule_{uuid.uuid4().hex[:8]}"
         new.name = self._next_duplicate_name(src.name)
         self._rules.append(new)
-        logging.debug(
-            '[duplicate rule] manual (same group), name="%s", id=%s <- %s', new.name, new.id, src.id
-        )
+        _main_loop_mod.log_main(f"規則「{new.name}」從「{src.name}」複製 (id={new.id})")
         dup_gid = None
         for g in self._groups:
             if src.id in g.rule_ids:
@@ -4294,6 +4292,7 @@ class MainWindow(QMainWindow):
         else:
             save_task(self._current_task, self._rules)
             save_groups(self._groups, task_path)
+        _main_loop_mod.log_main(f"任務已儲存：{len(self._rules)} 條規則")
 
     def _flush_save(self):
         bg_ids = [r.id for r in self._rules if r.background]
@@ -5186,7 +5185,7 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
-        logging.debug('[add rule] debug panel, name="%s", id=%s', rule.name, rule.id)
+        _main_loop_mod.log_main(f"規則「{rule.name}」從 OCR 診斷新增 (id={rule.id})")
         target_group = None
         item = self._rule_list.currentItem()
         if item:
