@@ -15,7 +15,7 @@ _here = Path(__file__).resolve().parent.parent
 if str(_here) not in sys.path:
     sys.path.insert(0, str(_here))
 
-from _loader import load_sibling  # noqa: E402
+from _loader import load_sibling, log_main  # noqa: E402
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
@@ -545,7 +545,7 @@ def load_rules(path: str) -> list[Rule]:
         with open(p, encoding="utf-8") as f:
             data = json.load(f)
     except (json.JSONDecodeError, OSError, KeyError) as e:
-        logging.warning("規則檔案載入失敗 (%s): %s", path, e)
+        log_main(f"規則檔案載入失敗「{path}」: {e}")
         return []
 
     if "groups" not in data:
@@ -583,7 +583,7 @@ def load_rules(path: str) -> list[Rule]:
         try:
             rules.append(_dict_to_rule(raw))
         except Exception as e:
-            logging.warning("規則項目解析失敗，已略過: %s", e)
+            log_main(f"規則項目解析失敗，已略過: {e}")
             continue
     return rules
 

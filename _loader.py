@@ -31,3 +31,9 @@ def load_sibling(name: str, filename: str) -> object:
         spec.loader.exec_module(mod)
         _cache[key] = mod
         return mod
+
+
+def log_main(msg: str):
+    """Write to main.log via lazy import to avoid circular dependency."""
+    mod = load_sibling("main_loop", "core/05_main_loop.py")
+    mod.log_main(msg)

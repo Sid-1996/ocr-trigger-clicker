@@ -152,6 +152,9 @@ def init_engine() -> None:
             _engine(warmup, use_cls=False)
         except Exception:
             logging.warning("OCR warmup 失敗", exc_info=True)
+            from _loader import log_main as _log_main
+
+            _log_main("OCR warmup 失敗")
 
 
 def _prepare_image(
