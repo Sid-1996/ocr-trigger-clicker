@@ -1019,7 +1019,7 @@ class MainLoop:
                 self._rules_dirty = False
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=3)
+            self._thread.join(timeout=0.5)
         self._perf.stop()
 
     def pause(self) -> None:

@@ -5267,7 +5267,7 @@ class MainWindow(QMainWindow):
         elif self._loop is not None and self._loop.is_running:
             if self._loop.is_paused:
                 self._loop.resume()
-                self._btn_toggle.setText("暫停")
+                self._btn_toggle.setText("停止")
             else:
                 self._stop_loop()
         else:
@@ -5317,7 +5317,7 @@ class MainWindow(QMainWindow):
         if success:
             self._loop = self._init_worker.loop
             self._loop.set_tool_hwnd(int(self.winId()))
-            self._btn_toggle.setText("暫停")
+            self._btn_toggle.setText("停止")
             self._update_edit_enabled(False)
             self._status_bar.showMessage(f"偵測中 — 目標: {self._window_combo.currentText()}")
             self._status_timer.start(1000)
