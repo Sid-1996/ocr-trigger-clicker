@@ -2722,21 +2722,20 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
         toolbar.addStretch()
-        self._sponsor_btn = QPushButton("♥")
-        self._sponsor_btn.setFixedSize(28, 28)
-        self._sponsor_btn.setToolTip("贊助開發者 ❤️")
+        self._sponsor_btn = QPushButton("☕ 請喝咖啡")
+        self._sponsor_btn.setToolTip("如果這工具有幫助，歡迎請開發者喝杯咖啡 ☕")
         self._sponsor_btn.setStyleSheet(
             """
             QPushButton {
-                background: #fce4ec;
-                color: #e91e63;
-                font-size: 18px;
-                border: 1px solid #f8bbd0;
-                border-radius: 14px;
+                background: #e67e22;
+                color: #fff;
+                font-size: 13px;
+                padding: 4px 12px;
+                border: none;
+                border-radius: 4px;
             }
             QPushButton:hover {
-                background: #f8bbd0;
-                color: #c2185b;
+                background: #d35400;
             }
             """
         )
