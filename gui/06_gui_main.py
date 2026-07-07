@@ -2709,8 +2709,8 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._task_import_btn)
         toolbar.addWidget(self._task_export_btn)
         self._task_share_btn = QPushButton("📂任務分享")
-        self._task_share_btn.setToolTip("瀏覽社群分享的任務檔案，或分享自己的任務設定")
-        self._task_share_btn.clicked.connect(self._open_task_share_menu)
+        self._task_share_btn.setToolTip("瀏覽社群分享的任務檔案")
+        self._task_share_btn.clicked.connect(self._open_task_share)
         toolbar.addWidget(self._task_share_btn)
 
         # -- Action section --
@@ -3315,19 +3315,18 @@ class MainWindow(QMainWindow):
                 + "\n".join(preview.warnings),
             )
 
-    def _on_task_export(self) -> bool:
+    def _on_task_export(self):
         if not self._current_task:
-            return False
+            return
         path, _ = QFileDialog.getSaveFileName(
             self, "匯出任務", str(_here / f"{self._current_task}.json"), "JSON (*.json)"
         )
         if not path:
-            return False
+            return
         if export_task(self._current_task, path):
             self._status_bar.showMessage(f"任務「{self._current_task}」已匯出")
-            return True
-        QMessageBox.warning(self, "匯出失敗", "無法寫入目標檔案")
-        return False
+        else:
+            QMessageBox.warning(self, "匯出失敗", "無法寫入目標檔案")
 
     # === Rule list ===
     @staticmethod
@@ -5456,29 +5455,13 @@ class MainWindow(QMainWindow):
 
         webbrowser.open(_GUIDE_URL)
 
-    def _open_task_share_menu(self):
+    def _open_task_share(self):
         import webbrowser
 
-        from PyQt6.QtCore import QPoint
-
-        menu = QMenu(self)
-        menu.addAction("🌐 瀏覽任務分享區").triggered.connect(
-            lambda: webbrowser.open(
-                "https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/"
-                "%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB"
-            )
+        webbrowser.open(
+            "https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/"
+            "%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB"
         )
-        menu.addAction("📤 分享目前任務").triggered.connect(lambda: self._export_and_share())
-        menu.exec(self._task_share_btn.mapToGlobal(QPoint(0, self._task_share_btn.height())))
-
-    def _export_and_share(self):
-        import webbrowser
-
-        if self._on_task_export():
-            webbrowser.open(
-                "https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/"
-                "%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB"
-            )
 
     def _check_version(self):
         import urllib.request
