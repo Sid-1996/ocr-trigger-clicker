@@ -4279,7 +4279,7 @@ class MainWindow(QMainWindow):
         logging.info("[save] _schedule_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.start()
 
-    def _do_debounced_save(self):
+    def _do_debounced_save(self) -> None:
         if not self._current_task:
             return
         task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
@@ -4292,13 +4292,13 @@ class MainWindow(QMainWindow):
         else:
             save_task(self._current_task, self._rules)
             save_groups(self._groups, task_path)
-        _main_loop_mod.log_main(f"任務已儲存：{len(self._rules)} 條規則")
 
-    def _flush_save(self):
+    def _flush_save(self) -> None:
         bg_ids = [r.id for r in self._rules if r.background]
         logging.info("[save] _flush_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.stop()
         self._do_debounced_save()
+        _main_loop_mod.log_main(f"任務已儲存：{len(self._rules)} 條規則")
 
     def _save_current_rule(self):
         if self._loop and self._loop.is_running:
