@@ -2724,21 +2724,6 @@ class MainWindow(QMainWindow):
         toolbar.addStretch()
         self._sponsor_btn = QPushButton("☕ 請喝咖啡")
         self._sponsor_btn.setToolTip("如果這工具有幫助，歡迎請開發者喝杯咖啡 ☕")
-        self._sponsor_btn.setStyleSheet(
-            """
-            QPushButton {
-                background: #e67e22;
-                color: #fff;
-                font-size: 13px;
-                padding: 4px 12px;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background: #d35400;
-            }
-            """
-        )
         self._sponsor_btn.clicked.connect(self._open_sponsor)
         toolbar.addWidget(self._sponsor_btn)
         self._about_btn = QPushButton("關於")
