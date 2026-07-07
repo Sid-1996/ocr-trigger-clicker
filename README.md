@@ -297,6 +297,15 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 
 ---
 
+## 社群與交流
+
+- 📂 **任務檔案分享** — 想找現成腳本或分享自己的任務設定？歡迎到 [任務檔案分享 Discussions](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB) 交流。
+- 💬 **一般討論** — 使用心得、功能建議、疑難排解，都歡迎在 [GitHub Discussions](https://github.com/Sid-1996/ocr-trigger-clicker/discussions) 發起。
+- 🐛 **問題回報** — 遇到 bug 或想要新功能，請到 [Issues](https://github.com/Sid-1996/ocr-trigger-clicker/issues) 回報。
+- ⭐ 如果這套工具對你有幫助，歡迎到 [GitHub 專案](https://github.com/Sid-1996/ocr-trigger-clicker) 給一顆 Star 支持開發！
+
+---
+
 ## 免責聲明
 
 本工具僅供學習與研究用途。使用者應自行確認使用行為是否符合目標軟體的服務條款。開發者不對任何因使用本工具造成的帳號停權、資料損失或其他損害負責。
