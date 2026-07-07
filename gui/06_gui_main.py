@@ -5430,11 +5430,15 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         ecpay_icon = self._make_circle_icon((0, 166, 81))
         paypal_icon = self._make_circle_icon((0, 112, 186))
+        afdian_icon = self._make_circle_icon((231, 76, 60))
         menu.addAction(ecpay_icon, "ECPAY").triggered.connect(
             lambda: webbrowser.open("https://p.ecpay.com.tw/E0E3A")
         )
         menu.addAction(paypal_icon, "PayPal").triggered.connect(
             lambda: webbrowser.open("https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6")
+        )
+        menu.addAction(afdian_icon, "愛發電").triggered.connect(
+            lambda: webbrowser.open("https://afdian.com/a/sid-1996")
         )
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
 

@@ -303,6 +303,7 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 - 💬 **一般討論** — 使用心得、功能建議、疑難排解，都歡迎在 [GitHub Discussions](https://github.com/Sid-1996/ocr-trigger-clicker/discussions) 發起。
 - 🐛 **問題回報** — 遇到 bug 或想要新功能，請到 [Issues](https://github.com/Sid-1996/ocr-trigger-clicker/issues) 回報。
 - ⭐ 如果這套工具對你有幫助，歡迎到 [GitHub 專案](https://github.com/Sid-1996/ocr-trigger-clicker) 給一顆 Star 支持開發！
+- ☕ **贊助開發者** — [ECPAY](https://p.ecpay.com.tw/E0E3A) / [PayPal](https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6) / [愛發電](https://afdian.com/a/sid-1996)
 
 ---
 
