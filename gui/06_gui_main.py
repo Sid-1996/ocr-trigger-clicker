@@ -5242,7 +5242,15 @@ class MainWindow(QMainWindow):
             return [g.id for g in enabled] if enabled else []
         dialog = QDialog(self)
         dialog.setWindowTitle("選擇要執行的群組")
+        dialog.setStyleSheet("QDialog { background-color: #f5f5f5; }")
         layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
+
+        hint = QLabel(f"已啟用 {len(enabled)} 個群組，取消勾選可略過")
+        hint.setStyleSheet("color: #666; font-size: 12px; padding-bottom: 4px;")
+        layout.addWidget(hint)
+
         checks = []
         for g in enabled:
             cb = QCheckBox(g.name)
