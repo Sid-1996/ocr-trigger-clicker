@@ -15,6 +15,7 @@ import numpy as np
 
 _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _loader import load_sibling  # noqa: E402
+from _version import __version__  # noqa: E402
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
@@ -212,6 +213,9 @@ class MainLoop:
         self._logger = _ensure_main_logger()
         self._load_rules()
         init_engine()
+        log_main(
+            f"應用啟動 v{__version__}，目標視窗「{window_title}」，載入 {len(self._rules)} 條規則"
+        )
 
     def _log(self, msg: str):
         if self._verbose:
@@ -887,6 +891,7 @@ class MainLoop:
                         title = self._window_title
                     rect = get_window_rect(title)
                     if rect is None:
+                        log_main(f"視窗「{title}」遺失，自動暫停")
                         if self.on_window_lost:
                             self.on_window_lost()
                         self._pause_event.set()
@@ -896,8 +901,7 @@ class MainLoop:
                             rect = get_window_rect(title)
                             if rect is not None:
                                 self._pause_event.clear()
-                                if self._verbose:
-                                    self._log("視窗已重新出現，恢復偵測")
+                                self._log("視窗已重新出現，恢復偵測")
                                 break
                             time.sleep(0.5)
                         self._perf.record_frame()
@@ -912,7 +916,7 @@ class MainLoop:
                         img = capture_window_content(self._window_title)
                     t1 = time.monotonic()
                     if img is None:
-                        if self._verbose and iteration % 30 == 0:
+                        if iteration % 30 == 0:
                             self._log(f"所有截圖方式皆失敗: {title}")
                         self._perf.record_frame()
                         continue
@@ -971,12 +975,14 @@ class MainLoop:
                 self.on_finished()
 
     def start(self) -> None:
+        log_main(f"循環開始，目標視窗「{self._window_title}」")
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
+        log_main("循環停止")
         with self._rules_lock:
             if self._rules_dirty:
                 save_rules(self._rules, self._rules_path)
@@ -987,9 +993,11 @@ class MainLoop:
         self._perf.stop()
 
     def pause(self) -> None:
+        log_main("循環暫停")
         self._pause_event.set()
 
     def resume(self) -> None:
+        log_main("循環恢復")
         self._pause_event.clear()
 
     @property
@@ -1048,6 +1056,7 @@ class MainLoop:
         return self._perf
 
     def emergency_stop(self):
+        log_main("⚠ 緊急停止")
         self._emergency_event.set()
         self._stop_event.set()
         self._pause_event.set()
