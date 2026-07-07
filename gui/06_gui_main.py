@@ -5245,8 +5245,8 @@ class MainWindow(QMainWindow):
         dialog.setStyleSheet(
             "QDialog { background-color: #2b2b2b; }"
             "QLabel { color: #aaa; font-size: 12px; padding-bottom: 4px; }"
-            "QCheckBox { color: #ddd; spacing: 6px; }"
-            "QCheckBox::indicator { width: 16px; height: 16px; }"
+            "QCheckBox { color: #e0e0e0; spacing: 8px; }"
+            "QCheckBox::indicator { width: 18px; height: 18px; }"
         )
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(16, 16, 16, 16)
