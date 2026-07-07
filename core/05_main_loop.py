@@ -372,6 +372,7 @@ class MainLoop:
 
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = matches[0]
+        self._log(f"規則「{rule.name}」匹配文字「{ctx.matched_text.text}」")
         return StepResult("continue")
 
     def _handle_match_image(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -419,6 +420,7 @@ class MainLoop:
 
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = results[0]
+        self._log(f"規則「{rule.name}」模板匹配成功 (conf={results[0].confidence})")
         return StepResult("continue")
 
     def _handle_compare(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -457,8 +459,7 @@ class MainLoop:
             "number": num,
             "text": combined[:64],
         }
-        if self._verbose:
-            self._log(f"比較：{num} {op} {val} → 成立")
+        self._log(f"規則「{rule.name}」比較 {num} {op} {val} → 成立")
         return StepResult("continue")
 
     def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -476,6 +477,9 @@ class MainLoop:
             first_fail = self._fail_since.get(key)
             if first_fail is None:
                 self._fail_since[key] = now
+                self._log(
+                    f"規則「{rule.name}」步驟{ctx.step_idx} 失敗，進入 {fail_duration}s 容忍期"
+                )
                 return StepResult("stop")
             if now - first_fail < fail_duration:
                 return StepResult("stop")
@@ -497,6 +501,7 @@ class MainLoop:
                 activate_window(self._window_title)
                 self._send_key(fail_key)
                 ctx.triggered = True
+                self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 按鍵「{fail_key}」")
             return StepResult("continue")
 
         if action == "skip":
@@ -504,12 +509,17 @@ class MainLoop:
                 skip_to = int(raw.get("skip_to", 0)) if isinstance(raw, dict) else 0
             except (TypeError, ValueError):
                 skip_to = 0
+            self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 跳至步驟 {skip_to}")
             return StepResult("jump_step", step_index=skip_to)
 
         if action == "jump":
             rule_id = raw.get("rule_id", "") if isinstance(raw, dict) else ""
             group = self._current_group()
             if group and rule_id in group.rule_ids:
+                target_name = getattr(self._rule_map.get(rule_id), "name", rule_id)
+                self._log(
+                    f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 跳轉至規則「{target_name}」"
+                )
                 self._rule_in_group_ptr = group.rule_ids.index(rule_id)
             return StepResult("stop")
 
@@ -521,17 +531,23 @@ class MainLoop:
             group = self._current_group()
             stopped = False
             if stop_groups:
-                for gid in stop_groups:
-                    if gid in self._active_group_ids:
-                        self._active_group_ids.remove(gid)
+                stopped_groups = [gid for gid in stop_groups if gid in self._active_group_ids]
+                for gid in stopped_groups:
+                    self._active_group_ids.remove(gid)
                 if group and group.id not in self._active_group_ids:
                     self._rule_in_group_ptr = 0
                     stopped = True
+                self._log(
+                    f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 通知並停止群組 {stopped_groups}"
+                )
             else:
                 if group:
                     self._active_group_ids.remove(group.id)
                     self._rule_in_group_ptr = 0
                     stopped = True
+                    self._log(
+                        f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 通知「{message}」，停止當前群組"
+                    )
             if not self._active_group_ids:
                 has_bg = any(r.background and r.enabled for r in self._rules)
                 if not has_bg:
@@ -575,8 +591,10 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
+            self._log(f"規則「{rule.name}」點擊略過：CPS 速率限制")
             return StepResult("stop")
         if self._is_tool_foreground():
+            self._log(f"規則「{rule.name}」點擊略過：工具處於前景")
             return StepResult("stop")
 
         button = params.get("button", "left")
@@ -588,6 +606,7 @@ class MainLoop:
         if ok:
             self._perf.record_click()
             ctx.triggered = True
+            self._log(f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」")
             self._emit_trigger_log(rule, matched_text, sx, sy)
 
         return StepResult("continue")
@@ -598,8 +617,10 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
+            self._log(f"規則「{rule.name}」按鍵略過：CPS 速率限制")
             return StepResult("stop")
         if self._is_tool_foreground():
+            self._log(f"規則「{rule.name}」按鍵略過：工具處於前景")
             return StepResult("stop")
 
         activate_window(self._window_title)
@@ -612,6 +633,7 @@ class MainLoop:
         if ok:
             self._perf.record_click()
             ctx.triggered = True
+            self._log(f"規則「{rule.name}」按鍵「{key}」")
             self._emit_trigger_log(rule)
 
         return StepResult("continue")
@@ -639,8 +661,10 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
+            self._log(f"規則「{rule.name}」拖曳略過：CPS 速率限制")
             return StepResult("stop")
         if self._is_tool_foreground():
+            self._log(f"規則「{rule.name}」拖曳略過：工具處於前景")
             return StepResult("stop")
 
         dx = params.get("dx", 0)
@@ -656,13 +680,16 @@ class MainLoop:
             return StepResult("stop")
         self._perf.record_click()
         ctx.triggered = True
+        self._log(f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})")
         self._emit_trigger_log(rule, "", ssx, ssy)
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         if not self._can_perform_action():
+            self._log(f"規則「{rule.name}」滾輪略過：CPS 速率限制")
             return StepResult("stop")
         if self._is_tool_foreground():
+            self._log(f"規則「{rule.name}」滾輪略過：工具處於前景")
             return StepResult("stop")
 
         direction = params.get("direction", "WheelDown")
@@ -680,6 +707,7 @@ class MainLoop:
 
         self._perf.record_click()
         ctx.triggered = True
+        self._log(f"規則「{rule.name}」滾輪 {direction} x{amount}")
         self._emit_trigger_log(rule)
         return StepResult("continue")
 
@@ -697,19 +725,19 @@ class MainLoop:
             return StepResult("stop")
         group = self._current_group()
         if group is None or target_id not in group.rule_ids:
-            if self._verbose:
-                self._log(f"jump 目標「{target_id}」不在當前群組內，忽略")
+            self._log(f"規則「{rule.name}」jump 目標「{target_id}」不在當前群組內")
             return StepResult("stop")
         self._rule_in_group_ptr = group.rule_ids.index(target_id)
-        if self._verbose:
-            target_name = getattr(self._rule_map.get(target_id), "name", target_id)
-            self._log(f"跳轉至規則 「{target_name}」 (group ptr {self._rule_in_group_ptr})")
+        target_name = getattr(self._rule_map.get(target_id), "name", target_id)
+        self._log(f"規則「{rule.name}」跳轉至「{target_name}」")
         return StepResult("stop")
 
     def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         msg = params.get("message", "")
-        if msg and self.on_warning:
-            self.on_warning(msg)
+        if msg:
+            self._log(f"規則「{rule.name}」通知：{msg}")
+            if self.on_warning:
+                self.on_warning(msg)
         return StepResult("continue")
 
     def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
@@ -768,8 +796,7 @@ class MainLoop:
                 try:
                     self._run_rule(rule, img, rect)
                 except Exception as e:
-                    if self._verbose:
-                        self._log(f"背景規則「{rule.name}」異常: {e}")
+                    self._log(f"背景規則「{rule.name}」異常: {e}")
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
                 self._rule_pointer = saved_ptr
@@ -792,8 +819,7 @@ class MainLoop:
                 try:
                     self._run_rule(r, img, rect, r_ctx)
                 except Exception as e:
-                    if self._verbose:
-                        self._log(f"並行規則「{r.name}」異常: {e}")
+                    self._log(f"並行規則「{r.name}」異常: {e}")
                     if self.on_warning:
                         self.on_warning(f"並行規則「{r.name}」異常: {e}")
                 if r_ctx.triggered:
@@ -818,8 +844,7 @@ class MainLoop:
         try:
             self._run_rule(rule, img, rect, ctx)
         except Exception as e:
-            if self._verbose:
-                self._log(f"規則「{rule.name}」處理異常: {e}")
+            self._log(f"規則「{rule.name}」處理異常: {e}")
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
@@ -955,14 +980,19 @@ class MainLoop:
                                 save_rules(self._rules, self._rules_path)
                                 self._rules_dirty = False
 
-                    if loop_elapsed > 2000 and self.on_warning:
-                        self.on_warning(
-                            f"慢循環: {loop_elapsed:.0f}ms "
-                            f"(截圖={(t1 - t0) * 1000:.0f}ms "
-                            f"OCR={ocr_ms:.0f}ms)"
+                    if loop_elapsed > 2000:
+                        self._log(
+                            f"慢循環: {loop_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
                         )
+                        if self.on_warning:
+                            self.on_warning(
+                                f"慢循環: {loop_elapsed:.0f}ms "
+                                f"(截圖={(t1 - t0) * 1000:.0f}ms "
+                                f"OCR={ocr_ms:.0f}ms)"
+                            )
 
                 except Exception as e:
+                    self._log(f"主循環異常: {e}")
                     if self.on_error:
                         self.on_error(f"主循環異常: {e}")
 
@@ -1067,16 +1097,19 @@ class MainLoop:
     def _on_rate_limit_exceeded(self):
         self._pause_event.set()
         msg = "全域速率限制違規次數過多，已自動暫停偵測"
+        self._log(msg)
         if self.on_error:
             self.on_error(msg)
 
     def _on_cpu_warn(self, pct: float):
         msg = f"CPU 使用率過高 ({pct:.0f}%)，請注意系統負載"
+        self._log(msg)
         if self.on_warning:
             self.on_warning(msg)
 
     def _on_memory_warn(self, mb: float):
         msg = f"記憶體使用量過高 ({mb:.0f} MB)，請注意系統負載"
+        self._log(msg)
         if self.on_warning:
             self.on_warning(msg)
 
