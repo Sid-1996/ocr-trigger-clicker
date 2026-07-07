@@ -3080,6 +3080,9 @@ class MainWindow(QMainWindow):
         self._task_combo.clear()
         for t in list_tasks():
             self._task_combo.addItem(t)
+            self._task_combo.setItemData(
+                self._task_combo.count() - 1, t, Qt.ItemDataRole.ToolTipRole
+            )
         self._task_combo.blockSignals(False)
         last = self._load_config().get("last_task", "")
         if last:
