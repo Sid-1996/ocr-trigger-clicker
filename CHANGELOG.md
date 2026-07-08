@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.0.6] - 2026-07-08
+
+### 改善
+- 版本號更新（測試自動更新流程）
+
+## [v0.0.5] - 2026-07-08
+
+### 新增
+- 自動更新功能（版本檢查、下載、zip 解壓、自我取代、重啟）
+- 設定頁「啟動時檢查更新」開關（Settings 分頁）
+
+### 修正
+- 啟動時背景檢查更新不再彈阻塞對話框
+
+### 改善
+- 版本檢查改用 raw GitHub latest_version.txt 取代 GitHub API（避免 rate limit）
+
 ## [v0.0.4] - 2026-07-03
 
 ### 新增
@@ -56,6 +73,8 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.0.6]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.6
+[v0.0.5]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.5
 [v0.0.4]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.4
 [v0.0.3]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.3
 [v0.0.2]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.2
