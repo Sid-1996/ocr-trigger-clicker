@@ -75,6 +75,7 @@ def main():
         ("core/05_main_loop.py", "core"),
         ("core/10_performance_monitor.py", "core"),
         ("core/11_template_matching.py", "core"),
+        ("core/12_updater.py", "core"),
         ("gui/06_gui_main.py", "gui"),
         ("gui/07_gui_roi.py", "gui"),
         ("gui/09_ocr_debug.py", "gui"),

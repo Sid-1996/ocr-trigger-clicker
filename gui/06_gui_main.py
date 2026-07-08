@@ -42,6 +42,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -2284,6 +2285,8 @@ _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl_mod.img_to_b64
 b64_to_img = _tmpl_mod.b64_to_img
 
+_updater_mod = load_sibling("updater", "core/12_updater.py")
+
 # ── Helpers ──
 
 
@@ -2390,6 +2393,10 @@ class SettingsDialog(QDialog):
         self._show_confirm.setChecked(config.get("show_close_confirm", True))
         form.addRow("", self._show_confirm)
 
+        self._auto_check = QCheckBox("啟動時自動檢查更新")
+        self._auto_check.setChecked(not config.get("skip_update_check", False))
+        form.addRow("", self._auto_check)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -2415,6 +2422,7 @@ class SettingsDialog(QDialog):
         config = self._load_config()
         config["close_behavior"] = self._behavior.currentData()
         config["show_close_confirm"] = self._show_confirm.isChecked()
+        config["skip_update_check"] = not self._auto_check.isChecked()
         self._save_config(config)
         self.accept()
 
@@ -2530,6 +2538,10 @@ class MainWindow(QMainWindow):
             self._collapsed_groups: set[str] = set()
             self._simplified_mode = False
             self._notif_stack = _NotificationStack()
+            self._updating = False
+            self._downloading = False
+            self._update_cancel = None
+            self._pending_update_ver = ""
 
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
@@ -2545,6 +2557,20 @@ class MainWindow(QMainWindow):
             self._restore_last_state()
             self._refresh_task_list()
             self._maybe_show_startup_guide()
+
+            config = self._load_config()
+            updated_ver = config.pop("just_updated", None)
+            if updated_ver:
+                self._save_config(config)
+                QTimer.singleShot(
+                    4000,
+                    lambda v=updated_ver: (
+                        self._status_bar.showMessage(
+                            f"✅ 已更新至 v{v}！若有問題，請前往 GitHub 回報", 8000
+                        ),
+                        self._notif_stack.push(f"已更新至 v{v}"),
+                    ),
+                )
 
             if not _ahk_mod.is_ahk_available():
                 reply = QMessageBox.question(
@@ -2588,6 +2614,7 @@ class MainWindow(QMainWindow):
         _tray_menu = QMenu(self)
         _tray_menu.addAction("顯示視窗", self._restore_window)
         _tray_menu.addAction("設定...", self._open_settings)
+        _tray_menu.addAction("檢查更新", lambda: self._check_version(force=True))
         _tray_menu.addSeparator()
         _tray_menu.addAction("離開", self._quit_app)
         self._tray.setContextMenu(_tray_menu)
@@ -2734,6 +2761,10 @@ class MainWindow(QMainWindow):
         self._guide_btn.setToolTip("開啟 GitHub Pages 的互動式使用指引")
         self._guide_btn.clicked.connect(self._open_guide)
         toolbar.addWidget(self._guide_btn)
+        self._update_btn = QPushButton("🔄檢查更新")
+        self._update_btn.setToolTip("檢查 GitHub 是否有新版本釋出")
+        self._update_btn.clicked.connect(lambda: self._check_version(force=True))
+        toolbar.addWidget(self._update_btn)
         self._simplified_btn = QPushButton("進階")
         self._simplified_btn.setCheckable(True)
         self._simplified_btn.setChecked(False)
@@ -5451,28 +5482,164 @@ class MainWindow(QMainWindow):
             "%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB"
         )
 
-    def _check_version(self):
-        import urllib.request
+    def _check_version(self, force: bool = False):
+        if self._updating:
+            return
+        if not force:
+            config = self._load_config()
+            if config.get("skip_update_check", False):
+                return
 
-        url = f"{__github__}/raw/master/latest_version.txt"
-        try:
-            resp = urllib.request.urlopen(url, timeout=5)
-            latest = resp.read().decode("utf-8").strip()
-            current_parts = _parse_version(__version__)
-            latest_parts = _parse_version(latest)
-            if latest_parts > current_parts:
-                btn = QMessageBox.question(
+        self._updating = True
+        self._update_cancel = threading.Event()
+        self._status_bar.showMessage("正在檢查更新...")
+
+        class _CheckWorker(QThread):
+            result = pyqtSignal(object)
+            error = pyqtSignal(str)
+
+            def run(self):
+                try:
+                    info = _updater_mod.check_for_update(__version__)
+                    self.result.emit(info)
+                except Exception as e:
+                    self.error.emit(str(e))
+
+        self._check_worker = _CheckWorker()
+        self._check_worker.result.connect(self._on_update_checked)
+        self._check_worker.error.connect(self._on_update_error)
+        self._check_worker.start()
+
+    def _on_update_checked(self, info):
+        self._updating = False
+        if info is None:
+            self._status_bar.showMessage("已是最新版本", 3000)
+            return
+
+        cb = QCheckBox("不再提醒此次版本的更新")
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("發現新版本")
+        box.setText(f"新版本 v{info.version} 已發布（目前 v{__version__}）")
+        if info.release_notes:
+            box.setDetailedText(info.release_notes[:1000])
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.button(QMessageBox.StandardButton.Yes).setText("立即更新")
+        box.button(QMessageBox.StandardButton.No).setText("稍後再說")
+        box.layout().addWidget(cb)
+
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            if cb.isChecked():
+                config = self._load_config()
+                config["skip_update_check"] = True
+                self._save_config(config)
+            return
+
+        if cb.isChecked():
+            config = self._load_config()
+            config["skip_update_check"] = True
+            self._save_config(config)
+
+        self._pending_update_ver = info.version
+        self._start_download(info)
+
+    def _on_update_error(self, msg):
+        self._updating = False
+        self._status_bar.showMessage("")
+        QMessageBox.warning(
+            self,
+            "檢查更新失敗",
+            f"無法檢查更新：{msg}\n\n請前往 GitHub 手動下載最新版本。",
+        )
+
+    def _start_download(self, info):
+        if self._downloading:
+            return
+        self._downloading = True
+        self._update_cancel = threading.Event()
+
+        self._progress = QProgressDialog("正在下載更新...", "取消", 0, 100, self)
+        self._progress.setWindowTitle(f"下載 v{info.version}")
+        self._progress.setWindowModality(Qt.WindowModality.WindowModal)
+        self._progress.setMinimumDuration(0)
+        self._progress.setValue(0)
+        self._progress.canceled.connect(self._cancel_download)
+
+        class _DownloadWorker(QThread):
+            finished = pyqtSignal(object)
+            error = pyqtSignal(str)
+            progress = pyqtSignal(int, int)
+
+            def run(self):
+                try:
+                    exe_path = _updater_mod.download_update(
+                        info,
+                        progress_cb=lambda d, t: self.progress.emit(d, t),
+                        cancel_event=self.parent()._update_cancel
+                        if hasattr(self.parent(), "_update_cancel")
+                        else None,
+                    )
+                    self.finished.emit(exe_path)
+                except Exception as e:
+                    self.error.emit(str(e))
+
+        self._dl_worker = _DownloadWorker()
+        self._dl_worker.setParent(self)
+        self._dl_worker.progress.connect(self._on_download_progress)
+        self._dl_worker.finished.connect(self._on_download_finished)
+        self._dl_worker.error.connect(self._on_download_error)
+        self._dl_worker.start()
+
+    def _on_download_progress(self, downloaded, total):
+        if total > 0:
+            pct = int(downloaded * 100 / total)
+            self._progress.setValue(pct)
+            self._progress.setLabelText(
+                f"正在下載更新...（{downloaded // 1024} KB / {total // 1024} KB, {pct}%）"
+            )
+        else:
+            self._progress.setLabelText(f"正在下載更新...（{downloaded // 1024} KB，未知總大小）")
+
+    def _cancel_download(self):
+        if self._update_cancel:
+            self._update_cancel.set()
+        self._progress.close()
+        self._downloading = False
+        self._status_bar.showMessage("下載已取消", 3000)
+
+    def _on_download_finished(self, exe_path):
+        self._progress.close()
+        self._downloading = False
+
+        config = self._load_config()
+        config["just_updated"] = self._pending_update_ver
+        self._save_config(config)
+
+        btn = QMessageBox.question(
+            self,
+            "更新下載完成",
+            f"v{self._pending_update_ver} 已下載並驗證完成。\n是否立即重新啟動以套用更新？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if btn == QMessageBox.StandardButton.Yes:
+            try:
+                _updater_mod.apply_update(exe_path)
+                QApplication.quit()
+            except Exception as e:
+                QMessageBox.critical(
                     self,
-                    "發現新版本",
-                    f"新版本 v{latest} 已發布（目前 v{__version__}）\n是否前往 GitHub 下載？",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    "更新失敗",
+                    f"無法套用更新：{e}\n\n請手動下載並取代檔案。",
                 )
-                if btn == QMessageBox.StandardButton.Yes:
-                    import webbrowser
 
-                    webbrowser.open(__github__ + "/releases")
-        except Exception:
-            pass  # 網路錯誤不影響啟動
+    def _on_download_error(self, msg):
+        self._progress.close()
+        self._downloading = False
+        QMessageBox.critical(
+            self,
+            "下載失敗",
+            f"下載更新時發生錯誤：{msg}\n\n請前往 GitHub 手動下載。",
+        )
 
     def _open_settings(self):
         SettingsDialog(self._config_path, self).exec()
