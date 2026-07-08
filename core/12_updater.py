@@ -170,7 +170,7 @@ def apply_update(new_exe_path: Path) -> Path:
     subprocess.Popen(
         ["cmd", "/c", str(bat_path)],
         cwd=str(old_dir),
-        creationflags=0x00000008,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
         close_fds=True,
     )
     return bat_path
