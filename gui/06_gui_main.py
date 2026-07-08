@@ -5496,16 +5496,20 @@ class MainWindow(QMainWindow):
 
         class _CheckWorker(QThread):
             result = pyqtSignal(object)
-            error = pyqtSignal(str)
+            error = pyqtSignal(str, bool)  # (msg, forced)
+
+            def __init__(self, forced):
+                super().__init__()
+                self.forced = forced
 
             def run(self):
                 try:
                     info = _updater_mod.check_for_update(__version__)
                     self.result.emit(info)
                 except Exception as e:
-                    self.error.emit(str(e))
+                    self.error.emit(str(e), self.forced)
 
-        self._check_worker = _CheckWorker()
+        self._check_worker = _CheckWorker(forced=force)
         self._check_worker.result.connect(self._on_update_checked)
         self._check_worker.error.connect(self._on_update_error)
         self._check_worker.start()
@@ -5543,14 +5547,17 @@ class MainWindow(QMainWindow):
         self._pending_update_ver = info.version
         self._start_download(info)
 
-    def _on_update_error(self, msg):
+    def _on_update_error(self, msg, forced=False):
         self._updating = False
         self._status_bar.showMessage("")
-        QMessageBox.warning(
-            self,
-            "檢查更新失敗",
-            f"無法檢查更新：{msg}\n\n請前往 GitHub 手動下載最新版本。",
-        )
+        if forced:
+            QMessageBox.warning(
+                self,
+                "檢查更新失敗",
+                f"無法檢查更新：{msg}\n\n請前往 GitHub 手動下載最新版本。",
+            )
+        else:
+            logging.warning("背景檢查更新失敗（不影響使用）: %s", msg)
 
     def _start_download(self, info):
         if self._downloading:
