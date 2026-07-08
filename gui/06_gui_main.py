@@ -5525,8 +5525,6 @@ class MainWindow(QMainWindow):
         box.setIcon(QMessageBox.Icon.Information)
         box.setWindowTitle("發現新版本")
         box.setText(f"新版本 v{info.version} 已發布（目前 v{__version__}）")
-        if info.release_notes:
-            box.setDetailedText(info.release_notes[:1000])
         box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         box.button(QMessageBox.StandardButton.Yes).setText("立即更新")
         box.button(QMessageBox.StandardButton.No).setText("稍後再說")

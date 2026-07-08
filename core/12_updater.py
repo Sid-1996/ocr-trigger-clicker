@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 import shutil
@@ -12,9 +11,14 @@ from urllib.request import Request, urlopen
 
 log = logging.getLogger(__name__)
 
-GITHUB_API_LATEST = "https://api.github.com/repos/Sid-1996/ocr-trigger-clicker/releases/latest"
-ASSET_NAME = "ocr-trigger-clicker.zip"
+_GITHUB_OWNER = "Sid-1996"
+_GITHUB_REPO = "ocr-trigger-clicker"
 _USER_AGENT = "ocr-trigger-clicker-updater/1.0"
+RAW_VERSION_URL = (
+    f"https://raw.githubusercontent.com/{_GITHUB_OWNER}/{_GITHUB_REPO}"
+    "/master/latest_version.txt"
+)
+ASSET_NAME = "ocr-trigger-clicker.zip"
 
 
 @dataclass
@@ -22,7 +26,6 @@ class UpdateInfo:
     version: str
     download_url: str
     release_url: str
-    release_notes: str
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -45,27 +48,24 @@ def current_exe_path() -> Path:
 
 
 def check_for_update(current_version: str) -> UpdateInfo | None:
-    req = Request(GITHUB_API_LATEST, headers={"User-Agent": _USER_AGENT})
-    with urlopen(req, timeout=10) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-
-    tag = data.get("tag_name", "")
-    latest = _parse_version(tag)
+    with urlopen(RAW_VERSION_URL, timeout=10) as resp:
+        latest = _parse_version(resp.read().decode("utf-8"))
     current = _parse_version(current_version)
 
     if latest <= current:
         return None
 
-    assets = data.get("assets", [])
-    zip_asset = next((a for a in assets if a["name"] == ASSET_NAME), None)
-    if not zip_asset:
-        raise RuntimeError(f"Release {tag} \u6c92\u6709 {ASSET_NAME} \u9644\u4ef6")
-
+    version_str = ".".join(str(x) for x in latest)
     return UpdateInfo(
-        version=tag.lstrip("v"),
-        download_url=zip_asset["browser_download_url"],
-        release_url=data.get("html_url", ""),
-        release_notes=data.get("body", ""),
+        version=version_str,
+        download_url=(
+            f"https://github.com/{_GITHUB_OWNER}/{_GITHUB_REPO}"
+            f"/releases/download/v{version_str}/{ASSET_NAME}"
+        ),
+        release_url=(
+            f"https://github.com/{_GITHUB_OWNER}/{_GITHUB_REPO}"
+            f"/releases/tag/v{version_str}"
+        ),
     )
 
 
