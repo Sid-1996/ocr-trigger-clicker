@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import os
 import re
 import sys
 import threading
@@ -5630,6 +5631,7 @@ class MainWindow(QMainWindow):
             try:
                 _updater_mod.apply_update(exe_path)
                 QApplication.quit()
+                os._exit(0)
             except Exception as e:
                 QMessageBox.critical(
                     self,

@@ -131,6 +131,8 @@ def apply_update(new_exe_path: Path) -> Path:
 
     old_str = str(old_exe).replace("%", "%%")
     new_str = str(new_exe_path).replace("%", "%%")
+    log_file = new_exe_path.parent / "_update_error.log"
+    log_str = str(log_file).replace("%", "%%")
 
     bat_path = new_exe_path.parent / "_update.bat"
     bat_content = (
@@ -138,24 +140,22 @@ def apply_update(new_exe_path: Path) -> Path:
         "setlocal\n"
         f'set "OLD={old_str}"\n'
         f'set "NEW={new_str}"\n'
+        f'set "LOG={log_str}"\n'
         "set COUNT=0\n"
+        "set DELAY=5\n"
         "\n"
         ":retry\n"
-        "timeout /t 2 /nobreak >nul\n"
+        "timeout /t %DELAY% /nobreak >nul\n"
         'copy /Y "%NEW%" "%OLD%" >nul 2>&1\n'
         "if %errorlevel% equ 0 goto done\n"
         "set /a COUNT+=1\n"
         "if %COUNT% lss 5 goto retry\n"
         "\n"
-        "echo [ERROR] \u66f4\u65b0\u5931\u6557\uff1a\u7121\u6cd5\u53d6\u4ee3\u820a\u6a94\u6848\u3002\n"
-        "echo \u8acb\u624b\u52d5\u8907\u88fd\uff1a\n"
-        "echo   %NEW%\n"
-        "echo \u5230\uff1a\n"
-        "echo   %OLD%\n"
-        "echo.\n"
-        "echo \u82e5\u6a94\u6848\u4f4d\u65bc\u53d7\u4fdd\u8b77\u76ee\u9304\uff0c"
-        "\u8acb\u4ee5\u7cfb\u7d71\u7ba1\u7406\u54e1\u8eab\u5206\u57f7\u884c\u3002\n"
-        "pause\n"
+        "echo [ERROR] Update failed after 5 attempts > \"%LOG%\"\n"
+        "echo OLD=%OLD% >> \"%LOG%\"\n"
+        "echo NEW=%NEW% >> \"%LOG%\"\n"
+        "echo. >> \"%LOG%\"\n"
+        "echo Open the paths above and replace manually. >> \"%LOG%\"\n"
         "exit /b 1\n"
         "\n"
         ":done\n"
@@ -165,7 +165,7 @@ def apply_update(new_exe_path: Path) -> Path:
         'del "%~f0"\n'
     )
 
-    bat_path.write_text("\ufeff" + bat_content, encoding="utf-8-sig")
+    bat_path.write_text(bat_content, encoding="utf-8-sig")
 
     subprocess.Popen(
         ["cmd", "/c", str(bat_path)],
