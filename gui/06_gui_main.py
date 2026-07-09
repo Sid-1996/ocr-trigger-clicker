@@ -2661,18 +2661,19 @@ class MainWindow(QMainWindow):
                 ok = _ahk_mod.init_ahk()
                 self.done.emit(ok)
 
-        def _on_ahk_done(ok):
-            self._ahk_ready = ok
-            if not ok:
-                self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
-            else:
-                self._status_bar.showMessage("AHK 已就緒", 3000)
-
         self._status_bar.showMessage("正在啟動 AHK…")
         self._ahk_ready = False
-        w = _AhkWorker()
-        w.done.connect(_on_ahk_done)
-        w.start()
+        self._ahk_worker = _AhkWorker()
+        self._ahk_worker.done.connect(self._on_ahk_init_done)
+        self._ahk_worker.start()
+
+    def _on_ahk_init_done(self, ok):
+        self._ahk_worker = None
+        self._ahk_ready = ok
+        if not ok:
+            self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
+        else:
+            self._status_bar.showMessage("AHK 已就緒", 3000)
 
     def _maybe_show_startup_guide(self):
         config = self._load_config()
