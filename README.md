@@ -275,6 +275,8 @@ python build.py
 - `dist\ocr-trigger-clicker.exe` — 主程式
 - `dist\updater.exe` — 獨立更新行程（自動更新時用 `WaitForSingleObject` 等待母進程退出後取代檔案）
 
+> `docs/` 目錄為 GitHub Pages 專案網站（<https://sid-1996.github.io/ocr-trigger-clicker/>），含 `docs/index.html` 手刻首頁與 Google Search Console 驗證檔。
+
 ---
 
 ## 常見問題
