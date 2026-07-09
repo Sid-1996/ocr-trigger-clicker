@@ -2353,7 +2353,6 @@ def _get_images_dir() -> Path:
 
 
 class WorkerSignals(QObject):
-    trigger_signal = pyqtSignal(object)
     error_signal = pyqtSignal(str)
     warning_signal = pyqtSignal(str)
     info_signal = pyqtSignal(str)
@@ -2391,7 +2390,6 @@ class InitWorker(QThread):
             )
             if self._active_group_ids:
                 loop.set_active_groups(self._active_group_ids)
-            loop.on_trigger = lambda log: self._signals.trigger_signal.emit(log)
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
             loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
@@ -3035,28 +3033,6 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         layout.addWidget(self._main_stack)
 
-        # === Compare log panel ===
-        self._compare_log_toggle = QPushButton("▸ 比較輪次日誌")
-        self._compare_log_toggle.setCheckable(True)
-        self._compare_log_toggle.setChecked(False)
-        self._compare_log_toggle.clicked.connect(self._toggle_compare_log)
-        self._compare_log_widget = QListWidget()
-        self._compare_log_widget.setMaximumHeight(120)
-        self._compare_log_widget.setVisible(False)
-        layout.addWidget(self._compare_log_toggle)
-        layout.addWidget(self._compare_log_widget)
-
-        # === Trigger log panel ===
-        self._trigger_log_toggle = QPushButton("▸ 觸發記錄")
-        self._trigger_log_toggle.setCheckable(True)
-        self._trigger_log_toggle.setChecked(False)
-        self._trigger_log_toggle.clicked.connect(self._toggle_trigger_log)
-        self._trigger_log_widget = QListWidget()
-        self._trigger_log_widget.setMaximumHeight(100)
-        self._trigger_log_widget.setVisible(False)
-        layout.addWidget(self._trigger_log_toggle)
-        layout.addWidget(self._trigger_log_widget)
-
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
@@ -3111,7 +3087,6 @@ class MainWindow(QMainWindow):
         )
         self._signals.warning_signal.connect(self._notif_stack.push)
         self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
-        self._signals.trigger_signal.connect(self._on_trigger_log_received)
         self._signals.finished.connect(self._on_loop_finished)
 
     def _setup_shortcuts(self):
@@ -4441,7 +4416,6 @@ class MainWindow(QMainWindow):
             with self._loop._rules_lock:
                 save_task(self._current_task, self._rules)
                 save_groups(self._groups, task_path)
-                self._loop._rules_dirty = False
                 self._loop._load_rules()
         else:
             save_task(self._current_task, self._rules)
@@ -5545,28 +5519,6 @@ class MainWindow(QMainWindow):
         self._update_edit_enabled(True)
         self._status_bar.showMessage("🛑 緊急停止 — 按「啟動」重新開始")
         self._update_rule_status()
-
-    # === Compare log ===
-    def _toggle_compare_log(self):
-        visible = self._compare_log_toggle.isChecked()
-        self._compare_log_widget.setVisible(visible)
-        self._compare_log_toggle.setText("▾ 比較輪次日誌" if visible else "▸ 比較輪次日誌")
-
-    def _toggle_trigger_log(self):
-        visible = self._trigger_log_toggle.isChecked()
-        self._trigger_log_widget.setVisible(visible)
-        self._trigger_log_toggle.setText("▾ 觸發記錄" if visible else "▸ 觸發記錄")
-
-    def _on_trigger_log_received(self, log):
-        ts = time.strftime("%H:%M:%S", time.localtime(log.timestamp))
-        text = f"[{ts}] {log.rule_name} → ({log.click_x}, {log.click_y})「{log.matched_text}」"
-        self._trigger_log_widget.insertItem(0, text)
-        while self._trigger_log_widget.count() > 20:
-            self._trigger_log_widget.takeItem(self._trigger_log_widget.count() - 1)
-        if not self._trigger_log_toggle.isChecked():
-            self._trigger_log_toggle.setChecked(True)
-            self._trigger_log_widget.setVisible(True)
-            self._trigger_log_toggle.setText("▾ 觸發記錄")
 
     # === Sponsor ===
     def _open_sponsor(self):

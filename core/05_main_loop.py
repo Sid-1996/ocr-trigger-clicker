@@ -4,7 +4,6 @@ import re
 import sys as _sys
 import threading
 import time
-from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -104,16 +103,6 @@ def poll_roi_value(
 
 
 @dataclass
-class TriggerLog:
-    timestamp: float
-    rule_id: str
-    rule_name: str
-    matched_text: str
-    click_x: int
-    click_y: int
-
-
-@dataclass
 class StepContext:
     img: np.ndarray
     rect: dict
@@ -151,8 +140,6 @@ class MainLoop:
         self._pause_event = threading.Event()
         self._emergency_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
-        self._logs: deque = deque(maxlen=200)
-        self._logs_lock = threading.Lock()
 
         self._prev_frame: Optional[np.ndarray] = None
         self._frame_diff_ratio: float = 0.0
@@ -166,8 +153,6 @@ class MainLoop:
         self._rule_in_group_ptr: int = 0
         self._rule_map: dict[str, Rule] = {}
         self._group_rounds_completed: dict[str, int] = {}
-        self._rules_dirty: bool = False
-        self._save_period_counter: int = 0
         self._process_counter: int = 0
         self._match_image_warn_counter: dict[str, int] = {}
         self._fail_since: dict[
@@ -177,7 +162,6 @@ class MainLoop:
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
 
-        self.on_trigger: Optional[Callable[[TriggerLog], None]] = None
         self.on_error: Optional[Callable[[str], None]] = None
         self.on_warning: Optional[Callable[[str], None]] = None
         self.on_info: Optional[Callable[[str], None]] = None
@@ -235,14 +219,6 @@ class MainLoop:
 
     def _can_perform_action(self) -> bool:
         return self._perf.check_rate_limit()
-
-    def _emit_trigger_log(
-        self, rule: Rule, matched_text: str = "", screen_x: int = 0, screen_y: int = 0
-    ) -> None:
-        self._emit_trigger(self._make_trigger_log(rule, matched_text, screen_x, screen_y))
-
-        with self._rules_lock:
-            self._rules_dirty = True
 
     def _update_has_detect(self):
         self._has_detect_rules = any(
@@ -319,22 +295,6 @@ class MainLoop:
         if px <= 1.0 and py <= 1.0:
             return int(round(px * W)), int(round(py * H))
         return int(px), int(py)
-
-    def _make_trigger_log(self, rule, text: str, x: int, y: int) -> TriggerLog:
-        return TriggerLog(
-            timestamp=time.time(),
-            rule_id=rule.id,
-            rule_name=rule.name,
-            matched_text=text,
-            click_x=x,
-            click_y=y,
-        )
-
-    def _emit_trigger(self, log: TriggerLog):
-        with self._logs_lock:
-            self._logs.append(log)
-        if self.on_trigger:
-            self.on_trigger(log)
 
     # ── Step handlers ──
 
@@ -591,7 +551,6 @@ class MainLoop:
             self._perf.record_click()
             ctx.triggered = True
             self._log(f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」")
-            self._emit_trigger_log(rule, matched_text, sx, sy)
 
         return StepResult("continue")
 
@@ -618,7 +577,6 @@ class MainLoop:
             self._perf.record_click()
             ctx.triggered = True
             self._log(f"規則「{rule.name}」按鍵「{key}」")
-            self._emit_trigger_log(rule)
 
         return StepResult("continue")
 
@@ -665,7 +623,6 @@ class MainLoop:
         self._perf.record_click()
         ctx.triggered = True
         self._log(f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})")
-        self._emit_trigger_log(rule, "", ssx, ssy)
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -692,7 +649,6 @@ class MainLoop:
         self._perf.record_click()
         ctx.triggered = True
         self._log(f"規則「{rule.name}」滾輪 {direction} x{amount}")
-        self._emit_trigger_log(rule)
         return StepResult("continue")
 
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -956,14 +912,6 @@ class MainLoop:
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
 
-                    self._save_period_counter += 1
-                    if self._save_period_counter >= 20:
-                        self._save_period_counter = 0
-                        with self._rules_lock:
-                            if self._rules_dirty:
-                                save_rules(self._rules, self._rules_path)
-                                self._rules_dirty = False
-
                     if loop_elapsed > 2000:
                         self._log(
                             f"慢循環: {loop_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
@@ -997,10 +945,6 @@ class MainLoop:
 
     def stop(self) -> None:
         log_main("循環停止")
-        with self._rules_lock:
-            if self._rules_dirty:
-                save_rules(self._rules, self._rules_path)
-                self._rules_dirty = False
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
@@ -1023,10 +967,6 @@ class MainLoop:
     @property
     def is_paused(self) -> bool:
         return self._pause_event.is_set()
-
-    def get_logs(self, limit: int = 50) -> list[TriggerLog]:
-        with self._logs_lock:
-            return list(self._logs)[-limit:]
 
     def reload_rules(self) -> None:
         with self._rules_lock:
@@ -1162,7 +1102,6 @@ if __name__ == "__main__":
     ml._window_lock = threading.RLock()
     ml._process_counter = 0
     ml._rules_dirty = False
-    ml._save_period_counter = 0
     ml._tracking_hwnd = None
     ml._tool_hwnd = None
     ml._verbose = False
@@ -1182,9 +1121,6 @@ if __name__ == "__main__":
     ml._pause_event = threading.Event()
     ml._emergency_event = threading.Event()
     ml._perf = _perf.PerformanceMonitor()
-    ml._logs = deque(maxlen=200)
-    ml._logs_lock = threading.Lock()
-    ml.on_trigger = None
     ml.on_error = None
     ml.on_warning = None
     ml.on_info = None
@@ -1463,18 +1399,7 @@ if __name__ == "__main__":
     assert not ml._should_process_static_frame(), "disabled rule should NOT process static frame"
     print("  [OK] _should_process_static_frame logic (group-based)")
 
-    # ── Test 13: _emit_trigger_log ──
-    trigger_events = []
-    ml.on_trigger = lambda log: trigger_events.append(log)
-    ml.rules_dirty = False
-    test_rule.name = "測試觸發"
-    ml._emit_trigger_log(test_rule, "matched_text", 100, 200)
-    assert len(trigger_events) == 1
-    assert trigger_events[0].rule_name == "測試觸發"
-    assert trigger_events[0].matched_text == "matched_text"
-    print("  [OK] _emit_trigger_log")
-
-    # ── Test 14: _handle_wait interrupt by stop event ──
+    # ── Test 13: _handle_wait interrupt by stop event ──
     interrupted = []
     ml._stop_event.set()
     result = ml._handle_wait({"ms": 10000}, ctx, test_rule)
@@ -1482,7 +1407,7 @@ if __name__ == "__main__":
     assert result.action == "stop", "wait should be interrupted by stop event"
     print("  [OK] _handle_wait stop-event interrupt")
 
-    # ── Test 15: _handle_match_image ──
+    # ── Test 14: _handle_match_image ──
     import tempfile as _tf
 
     import cv2 as _cv2
@@ -1531,7 +1456,7 @@ if __name__ == "__main__":
     Path(_mi_tmp.name).unlink(missing_ok=True)
     print("  [OK] _handle_match_image")
 
-    # ── Test 16: _handle_on_fail skip action ──
+    # ── Test 15: _handle_on_fail skip action ──
     _skip_result = ml._handle_on_fail({"on_fail": {"action": "skip", "skip_to": 3}}, ctx, test_rule)
     assert _skip_result.action == "jump_step"
     assert _skip_result.step_index == 3
@@ -1541,7 +1466,7 @@ if __name__ == "__main__":
     assert _key_result.action == "continue"
     print("  [OK] _handle_on_fail skip")
 
-    # ── Test 17: Single group once mode finishes and stops (via _advance_rule_in_group) ──
+    # ── Test 16: Single group once mode finishes and stops (via _advance_rule_in_group) ──
     ml._rules = [
         Rule(id="r1", name="R1", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
         Rule(id="r2", name="R2", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
@@ -1562,7 +1487,7 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "once mode should stop after group done"
     print("  [OK] Single group once mode stops after completion")
 
-    # ── Test 18: Multiple groups execute sequentially ──
+    # ── Test 17: Multiple groups execute sequentially ──
     ml._groups = [
         RuleGroup(id="ga", name="Group A", mode="once", rule_ids=["r1"]),
         RuleGroup(id="gb", name="Group B", mode="once", rule_ids=["r2"]),
@@ -1584,7 +1509,7 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "all groups done → stop"
     print("  [OK] Multiple groups execute sequentially")
 
-    # ── Test 19: Jump within same group succeeds ──
+    # ── Test 18: Jump within same group succeeds ──
     ml._rules = [
         Rule(
             id="j1",
@@ -1612,7 +1537,7 @@ if __name__ == "__main__":
     assert ml._rule_in_group_ptr == 1, "jump within group should advance ptr"
     print("  [OK] Jump within same group succeeds")
 
-    # ── Test 20: Jump across groups returns stop ──
+    # ── Test 19: Jump across groups returns stop ──
     ml._rules = [
         Rule(
             id="xa",
@@ -1639,7 +1564,7 @@ if __name__ == "__main__":
     ml._test_handler.close()
     (Path(__file__).resolve().parent.parent / "logs" / "test.log").unlink(missing_ok=True)
 
-    # ── Test 21: Background rules prevent stop when groups are done ──
+    # ── Test 20: Background rules prevent stop when groups are done ──
     ml._rules = [
         Rule(
             id="bg1",
@@ -1674,7 +1599,7 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "no background → should stop after group done"
     print("  [OK] No background → stops normally")
 
-    # ── Test 22: _resolve_roi ratio conversion ──
+    # ── Test 21: _resolve_roi ratio conversion ──
     rect = {"w": 1920, "h": 1080}
     # ratio input → pixel output
     r = ml._resolve_roi({"x": 0.1, "y": 0.2, "w": 0.5, "h": 0.3}, rect)
@@ -1691,7 +1616,7 @@ if __name__ == "__main__":
     assert r == {"x": 100, "y": 200, "w": 300, "h": 400}
     print("  [OK] _resolve_roi absolute pixels → passthrough")
 
-    # ── Test 24: _resolve_point ratio conversion ──
+    # ── Test 22: _resolve_point ratio conversion ──
     px, py = ml._resolve_point(0.5, 0.25, rect)
     assert (px, py) == (960, 270), f"{(px, py)}"
     print("  [OK] _resolve_point ratio → pixels")
@@ -1701,7 +1626,7 @@ if __name__ == "__main__":
     assert (px, py) == (123, 456)
     print("  [OK] _resolve_point absolute → passthrough")
 
-    # ── Test 25: fail_duration_sec prevents subsequent step execution ──
+    # ── Test 23: fail_duration_sec prevents subsequent step execution ──
     import time as _time25
 
     import cv2 as _cv225
@@ -1797,4 +1722,4 @@ if __name__ == "__main__":
     ml._groups = []
     print("  [OK] fail_duration_sec elapsed → on_fail notify fires")
 
-    print("\n=== All 25 tests passed ===")
+    print("\n=== All 24 tests passed ===")
