@@ -2559,6 +2559,8 @@ class MainWindow(QMainWindow):
             self._refresh_task_list()
             self._maybe_show_startup_guide()
 
+            QTimer.singleShot(3000, lambda: self._check_version(force=False))
+
             config = self._load_config()
             updated_ver = config.pop("just_updated", None)
             if updated_ver:
