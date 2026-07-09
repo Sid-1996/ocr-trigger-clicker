@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.0.8] - 2026-07-09
+
+### 新增
+- 自動更新系統正式實裝：獨立 `updater.exe`，以 `WaitForSingleObject` 精準等待母進程結束後取代檔案
+- `build.py` 打包主程式後自動產生 `updater.exe`
+- `release.ps1` ZIP 同時包含 `ocr-trigger-clicker.exe` 與 `updater.exe`
+
+### 修正
+- 更新後暫存目錄殘留：updater 清理改為逐檔刪除，略過自身 exe（Windows 不能刪正在執行的檔案）
+- `Process.wait()` timeout 改為 `WaitForSingleObject`，解決等待母進程退出不可靠問題
+
+### 改善
+- 移除了臨時診斷腳本（IsProcessInJob／輪詢測試等）
+- 重整專案結構：刪除過時計畫文檔、舊壓力測試、殘留資料
+- 補上 GitHub Pages（`docs/`）與更新架構文件說明
+
 ## [v0.0.7] - 2026-07-09
 
 ### 改善
