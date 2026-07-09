@@ -5843,24 +5843,14 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     import sys
     import traceback
-    from logging.handlers import TimedRotatingFileHandler
+    from pathlib import Path
+
+    from _loader import load_sibling
+    _log_cfg = load_sibling("logging_config", "core/00_logging_config.py")
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    _log_dir = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs"
-    _log_dir.mkdir(parents=True, exist_ok=True)
-    _log_handler = TimedRotatingFileHandler(
-        _log_dir / "debug.log",
-        when="midnight",
-        backupCount=7,
-        encoding="utf-8",
-    )
-    _log_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    )
-    _log_handler.setLevel(logging.DEBUG)
-    logging.getLogger().addHandler(_log_handler)
-    logging.getLogger().setLevel(logging.DEBUG)
+    _log_cfg.get_logger("gui")  # ensure root handler is set up
 
     try:
         app = QApplication(sys.argv)
@@ -5869,6 +5859,6 @@ if __name__ == "__main__":
         win.show()
         sys.exit(app.exec())
     except Exception:
-        with open("startup_error.log", "w", encoding="utf-8") as f:
+        with open(_log_cfg.get_log_dir() / "startup_error.log", "w", encoding="utf-8") as f:
             traceback.print_exc(file=f)
         raise

@@ -140,7 +140,7 @@ def apply_update(new_exe_path: Path) -> Path:
             "\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0"
         )
 
-    debug_log_path = Path(_os.environ["LOCALAPPDATA"]) / "ocr-trigger-clicker" / "update_debug.log"
+    debug_log_path = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs" / "update_debug.log"
     debug_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     creationflags_variants = [

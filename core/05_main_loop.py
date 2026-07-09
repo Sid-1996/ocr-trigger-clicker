@@ -6,7 +6,6 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -51,28 +50,11 @@ _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
 img_to_b64 = _tmpl.img_to_b64
-
-
-_main_handler: Optional[TimedRotatingFileHandler] = None
+_logging_config = load_sibling("logging_config", "core/00_logging_config.py")
 
 
 def _ensure_main_logger() -> logging.Logger:
-    global _main_handler
-    logger = logging.getLogger("main_loop")
-    if _main_handler is not None:
-        return logger
-    log_dir = Path(__file__).resolve().parent.parent / "logs"
-    log_dir.mkdir(exist_ok=True)
-    _main_handler = TimedRotatingFileHandler(
-        log_dir / "main.log", when="midnight", backupCount=7, encoding="utf-8"
-    )
-    _main_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-    )
-    logger.addHandler(_main_handler)
-    logger.setLevel(logging.INFO)
-    logger.handler = _main_handler
-    return logger
+    return _logging_config.get_logger("main_loop")
 
 
 def log_main(msg: str):
