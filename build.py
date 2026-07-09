@@ -68,6 +68,7 @@ def main():
 
     # 核心模組 ─ 保留 core/ gui/ 目錄結構
     py_datas = [
+        ("core/00_logging_config.py", "core"),
         ("core/01_screenshot.py", "core"),
         ("core/02_ocr_engine.py", "core"),
         ("core/03_ahk_socket.py", "core"),
