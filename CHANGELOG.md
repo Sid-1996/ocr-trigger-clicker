@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.0.9] - 2026-07-10
+
+### 新增
+- 啟動加速：UI 優先顯示，OCR 引擎與 AHK 初始化改為背景 deferred init
+- 啟動 3 秒後自動檢查更新（遵循 `skip_update_check` 設定）
+- 主頁增加「日誌」按鈕，點擊開啟日誌目錄
+
+### 修正
+- 規則拖曳到另一規則上時 UI 項目消失（Qt InternalMove 幽靈清除）
+- 樹狀拖曳多重修正：阻擋 rule 成為 child、自動改為 sibling、支援背景規則群組
+- `_init_ahk_async` QThread GC 導致閃退
+- `_match_image_warn_counter` 無界字典隨規則重載清除
+- 關鍵錯誤路徑從 `print()` 遷移至 `logging`，補上遺失的 traceback
+
+### 改善
+- 統一日誌至單一 `app.log`，移除 `main.log` / `debug.log` 分散寫入
+- 清理過時 docstring 及舊路徑 `update_debug.log` 殘留
+- 降低主循環常規 log 等級（info → debug）
+
+### 移除
+- 全面移除「觸發紀錄」與「比較輪次日誌」UI 面板及底層資料通道
+- 移除 `_rules_dirty` 及相關週期存檔 dead code
+
 ## [v0.0.8] - 2026-07-09
 
 ### 新增
@@ -97,6 +120,8 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.0.9]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.9
+[v0.0.8]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.8
 [v0.0.7]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.7
 [v0.0.6]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.6
 [v0.0.5]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.5
