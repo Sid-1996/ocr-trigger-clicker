@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.0.7] - 2026-07-09
+
+### 改善
+- 自動更新改用獨立 `updater.exe`（`WaitForSingleObject` 精準等待母進程結束）
+- `build.py` 打包主程式後自動產生 `updater.exe`
+- `release.ps1` ZIP 同時包含 `ocr-trigger-clicker.exe` 與 `updater.exe`
+- 移除舊批次腳本、Job Object 診斷等暫時性程式碼
+
 ## [v0.0.6] - 2026-07-08
 
 ### 改善
@@ -73,6 +81,7 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.0.7]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.7
 [v0.0.6]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.6
 [v0.0.5]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.5
 [v0.0.4]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.4

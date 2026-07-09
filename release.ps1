@@ -21,7 +21,7 @@ git push origin master
 
 # 3. 打包
 python build.py
-Compress-Archive -Path dist\ocr-trigger-clicker.exe -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
+Compress-Archive -Path dist\ocr-trigger-clicker.exe, dist\updater.exe -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
 
 # 4. tag + release
 git tag v$Version

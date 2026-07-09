@@ -8,6 +8,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
+import os as _os
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ RAW_VERSION_URL = (
     "/master/latest_version.txt"
 )
 ASSET_NAME = "ocr-trigger-clicker.zip"
+UPDATER_EXE_NAME = "updater.exe"
 
 
 @dataclass
@@ -106,6 +108,13 @@ def download_update(
             with zf.open(target) as src, open(exe_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
 
+            updater_entries = [n for n in zf.namelist() if n == UPDATER_EXE_NAME]
+            if not updater_entries:
+                raise RuntimeError("ZIP \u5185\u7f3a\u5c11 updater.exe")
+            updater_dst = tmp_dir / UPDATER_EXE_NAME
+            with zf.open(UPDATER_EXE_NAME) as src, open(updater_dst, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+
         with open(exe_path, "rb") as f:
             if f.read(2) != b"MZ":
                 raise RuntimeError(
@@ -122,58 +131,39 @@ def download_update(
 
 def apply_update(new_exe_path: Path) -> Path:
     if not is_frozen():
-        raise RuntimeError(
-            "\u539f\u59cb\u78bc\u6a21\u5f0f\u4e0d\u652f\u63f4\u81ea\u52d5\u66f4\u65b0"
-        )
+        raise RuntimeError("\u539f\u59cb\u78bc\u6a21\u5f0f\u4e0d\u652f\u63f4\u81ea\u52d5\u66f4\u65b0")
 
     old_exe = current_exe_path()
-    old_dir = old_exe.parent
+    updater_exe = new_exe_path.parent / UPDATER_EXE_NAME
+    if not updater_exe.exists():
+        raise RuntimeError("\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0")
 
-    old_str = str(old_exe).replace("%", "%%")
-    new_str = str(new_exe_path).replace("%", "%%")
-    log_file = new_exe_path.parent / "_update_error.log"
-    log_str = str(log_file).replace("%", "%%")
+    debug_log_path = Path(_os.environ["LOCALAPPDATA"]) / "ocr-trigger-clicker" / "update_debug.log"
+    debug_log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    bat_path = new_exe_path.parent / "_update.bat"
-    bat_content = (
-        "@echo off\n"
-        "setlocal\n"
-        f'set "OLD={old_str}"\n'
-        f'set "NEW={new_str}"\n'
-        f'set "LOG={log_str}"\n'
-        "set COUNT=0\n"
-        "set DELAY=5\n"
-        "\n"
-        ":retry\n"
-        "timeout /t %DELAY% /nobreak >nul\n"
-        'copy /Y "%NEW%" "%OLD%" >nul 2>&1\n'
-        "if %errorlevel% equ 0 goto done\n"
-        "set /a COUNT+=1\n"
-        "if %COUNT% lss 5 goto retry\n"
-        "\n"
-        "echo [ERROR] Update failed after 5 attempts > \"%LOG%\"\n"
-        "echo OLD=%OLD% >> \"%LOG%\"\n"
-        "echo NEW=%NEW% >> \"%LOG%\"\n"
-        "echo. >> \"%LOG%\"\n"
-        "echo Open the paths above and replace manually. >> \"%LOG%\"\n"
-        "exit /b 1\n"
-        "\n"
-        ":done\n"
-        'start "" "%OLD%"\n'
-        "\n"
-        f'rmdir /s /q "{new_exe_path.parent}" >nul 2>&1\n'
-        'del "%~f0"\n'
-    )
+    creationflags_variants = [
+        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS | subprocess.CREATE_BREAKAWAY_FROM_JOB,
+        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+    ]
+    launched = False
+    for flags in creationflags_variants:
+        try:
+            subprocess.Popen(
+                [str(updater_exe), "--old", str(old_exe), "--new", str(new_exe_path),
+                 "--pid", str(_os.getpid()), "--log", str(debug_log_path)],
+                cwd=str(old_exe.parent),
+                creationflags=flags,
+                close_fds=True,
+            )
+            launched = True
+            break
+        except OSError:
+            continue
 
-    bat_path.write_text(bat_content, encoding="utf-8-sig")
+    if not launched:
+        raise RuntimeError("\u7121\u6cd5\u555f\u52d5 updater.exe")
 
-    subprocess.Popen(
-        ["cmd", "/c", str(bat_path)],
-        cwd=str(old_dir),
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-        close_fds=True,
-    )
-    return bat_path
+    return updater_exe
 
 
 def demo():

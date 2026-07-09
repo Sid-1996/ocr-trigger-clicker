@@ -213,8 +213,35 @@ def main():
         import shutil
 
         shutil.rmtree(here / "build", ignore_errors=True)
+        build_updater()
     else:
         print("\n打包失敗")
+
+
+def build_updater():
+    import PyInstaller.__main__
+
+    here = Path(__file__).parent
+    args = [
+        "--onefile",
+        "--windowed",
+        "--name=updater",
+        "--distpath=" + str(here / "dist"),
+        "--workpath=" + str(here / "build_updater"),
+        "--specpath=" + str(here),
+        "--noconfirm",
+        str(here / "updater_main.py"),
+    ]
+    print("\n=== 打包獨立 updater.exe ===")
+    PyInstaller.__main__.run(args)
+    updater_exe = here / "dist" / "updater.exe"
+    if updater_exe.exists():
+        print(f"updater 打包成功: {updater_exe}")
+        import shutil
+
+        shutil.rmtree(here / "build_updater", ignore_errors=True)
+    else:
+        print("updater 打包失敗")
 
 
 if __name__ == "__main__":
