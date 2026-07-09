@@ -297,6 +297,7 @@ class _RuleTreeWidget(QTreeWidget):
                 parent.insertChild(insert_pos, taken)
                 self.setCurrentItem(taken)
                 self.reordered.emit()
+                event.setDropAction(Qt.DropAction.IgnoreAction)
                 event.accept()
                 return
 
@@ -329,6 +330,7 @@ class _RuleTreeWidget(QTreeWidget):
             event.ignore()
             return
         src_data = src.data(0, Qt.ItemDataRole.UserRole)
+
         if src_data and src_data[0] == "group":
             pos = event.position().toPoint()
             target = self.itemAt(pos)
