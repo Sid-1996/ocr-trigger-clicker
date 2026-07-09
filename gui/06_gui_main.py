@@ -3007,8 +3007,8 @@ class MainWindow(QMainWindow):
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.addWidget(self._saved_label)
         btn_layout.addWidget(self._edit_test_btn)
-        btn_layout.addWidget(self._open_log_btn)
         btn_layout.addStretch()
+        btn_layout.addWidget(self._open_log_btn)
         edit_layout.addWidget(btn_row)
 
         scroll.setWidget(self._edit_panel)
