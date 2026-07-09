@@ -260,6 +260,12 @@ class _RuleTreeWidget(QTreeWidget):
         indicator = self.dropIndicatorPosition()
         target_item = self.itemAt(pos)
 
+        if src_data and src_data[0] == "rule" and target_item:
+            tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
+            if tgt_data and tgt_data[0] == "rule":
+                event.ignore()
+                return
+
         if indicator == QAbstractItemView.DropIndicatorPosition.OnItem:
             if src_data and src_data[0] == "rule" and target_item:
                 tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
