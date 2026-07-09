@@ -79,6 +79,7 @@ def download_update(
     exe_path = tmp_dir / "ocr-trigger-clicker.exe"
 
     try:
+        log.info("開始下載更新 v%s", info.version)
         req = Request(info.download_url, headers={"User-Agent": _USER_AGENT})
         with urlopen(req, timeout=60) as resp:
             total = int(resp.headers.get("Content-Length", 0))
@@ -123,12 +124,14 @@ def download_update(
         return exe_path
 
     except Exception:
+        log.exception("下載更新失敗")
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
 
 
 def apply_update(new_exe_path: Path) -> Path:
     if not is_frozen():
+        log.error("原始碼模式不支援自動更新")
         raise RuntimeError(
             "\u539f\u59cb\u78bc\u6a21\u5f0f\u4e0d\u652f\u63f4\u81ea\u52d5\u66f4\u65b0"
         )
@@ -136,11 +139,16 @@ def apply_update(new_exe_path: Path) -> Path:
     old_exe = current_exe_path()
     updater_exe = new_exe_path.parent / UPDATER_EXE_NAME
     if not updater_exe.exists():
+        log.error("找不到 updater.exe，無法套用更新")
         raise RuntimeError(
             "\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0"
         )
 
-    debug_log_path = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs" / "update_debug.log"
+    log.info("套用更新: old=%s new=%s", old_exe, new_exe_path)
+
+    debug_log_path = (
+        Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs" / "update_debug.log"
+    )
     debug_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     creationflags_variants = [
@@ -174,8 +182,10 @@ def apply_update(new_exe_path: Path) -> Path:
             continue
 
     if not launched:
+        log.error("無法啟動 updater.exe（所有 creationflags 組合皆失敗）")
         raise RuntimeError("\u7121\u6cd5\u555f\u52d5 updater.exe")
 
+    log.info("updater.exe 啟動成功: %s", updater_exe)
     return updater_exe
 
 

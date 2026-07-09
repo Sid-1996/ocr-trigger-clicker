@@ -1,3 +1,4 @@
+import logging
 import threading
 import time
 
@@ -264,7 +265,7 @@ class OcrDebugPanel(QWidget):
         self._capture_source = src
 
         if raw is None:
-            print(f"[_take_snapshot] capture failed for '{self._window_title}'")
+            logging.warning("capture failed for '%s'", self._window_title)
             self._status_bar.showMessage(f"無法擷取視窗「{self._window_title}」")
             self._capture_btn.setText("拍一張")
             self._capture_btn.setEnabled(True)
@@ -282,11 +283,8 @@ class OcrDebugPanel(QWidget):
             results = recognize(img, **opts)
             elapsed = (time.monotonic() - t0) * 1000
             self._signals.ocr_done.emit(results, elapsed, request_id)
-        except Exception as e:
-            print(f"[_do_ocr] {e}")
-            import traceback
-
-            traceback.print_exc()
+        except Exception:
+            logging.exception("_do_ocr failed")
             self._capture_btn.setText("拍一張")
             self._capture_btn.setEnabled(True)
         finally:
@@ -319,11 +317,8 @@ class OcrDebugPanel(QWidget):
             self._status_bar.showMessage(
                 f"[{self._capture_source}] {w}×{h} | {len(results)} 個區塊 | {elapsed_ms:.0f} ms"
             )
-        except Exception as e:
-            print(f"[_on_ocr_done] {e}")
-            import traceback
-
-            traceback.print_exc()
+        except Exception:
+            logging.exception("_on_ocr_done failed")
 
     def _populate_table(self):
         self._result_table.blockSignals(True)
@@ -357,8 +352,8 @@ class OcrDebugPanel(QWidget):
             self._update_step_btn_state()
             self._rebuild_annotated()
             self._update_display()
-        except Exception as e:
-            print(f"[_on_table_selection_changed] {e}")
+        except Exception:
+            logging.exception("_on_table_selection_changed failed")
 
     def _on_image_clicked(self, label_x: int, label_y: int):
         if self._latest_raw is None or not self._ocr_results:
@@ -631,8 +626,8 @@ class OcrDebugPanel(QWidget):
             painter.end()
             self._annotated_pixmap = pixmap
             self._update_crop_preview()
-        except Exception as e:
-            print(f"[_rebuild_annotated] {e}")
+        except Exception:
+            logging.exception("_rebuild_annotated failed")
             self._annotated_pixmap = None
             self._crop_pixmap = None
 
@@ -687,11 +682,8 @@ class OcrDebugPanel(QWidget):
                 f"座標：x={r.x}, y={r.y}, w={r.w}, h={r.h}\n"
                 f"信心度：{int(r.confidence * 100)}%"
             )
-        except Exception as e:
-            print(f"[_update_crop_preview] {e}")
-            import traceback
-
-            traceback.print_exc()
+        except Exception:
+            logging.exception("_update_crop_preview failed")
 
     def _update_display(self):
         if self._annotated_pixmap is None:

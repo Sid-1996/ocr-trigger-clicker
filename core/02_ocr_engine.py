@@ -47,7 +47,7 @@ def _incr_ocr_failure():
         _OCR_FAILURE_COUNT += 1
         if _OCR_FAILURE_COUNT >= _OCR_MAX_FAILURES:
             msg = f"OCR 連續失敗 {_OCR_FAILURE_COUNT} 次，正在重啟引擎"
-            print(f"[ocr_health] {msg}")
+            logging.warning("OCR 連續失敗 %d 次，正在重啟引擎", _OCR_FAILURE_COUNT)
             with _engine_lock:
                 _engine = None
             init_engine()

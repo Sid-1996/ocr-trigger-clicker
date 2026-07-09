@@ -194,7 +194,7 @@ def _launch_ahk(port: int = 12345) -> bool:
     ahk_script = getattr(_launch_ahk, "ahk_path", _find_ahk())
     exe_path = _find_ahk_executable()
     if not exe_path:
-        print("錯誤：找不到 AutoHotkey 執行檔，請確認已安裝 AutoHotkey v2")
+        logging.error("找不到 AutoHotkey 執行檔，請確認已安裝 AutoHotkey v2")
         return False
     try:
         _ahk_process = subprocess.Popen(
@@ -202,8 +202,8 @@ def _launch_ahk(port: int = 12345) -> bool:
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         return True
-    except Exception as e:
-        print(f"啟動 AutoHotkey 失敗：{e}")
+    except Exception:
+        logging.exception("啟動 AutoHotkey 失敗")
         return False
 
 
@@ -289,7 +289,7 @@ def _emergency_stop():
     _heartbeat_event.set()
     with _lock:
         _close_all()
-    print("AHK 通訊永久失效，停止重啟")
+    logging.error("AHK 通訊永久失效，停止重啟")
 
 
 def _accept_loop():
@@ -382,7 +382,7 @@ def _validate_coords(x: int, y: int) -> bool:
         or x >= bounds["x"] + bounds["w"]
         or y >= bounds["y"] + bounds["h"]
     ):
-        print(f"[安全] 拒絕超出螢幕的點擊: ({x}, {y}) 螢幕={bounds}")
+        logging.warning("拒絕超出螢幕的點擊: (%d, %d) 螢幕=%s", x, y, bounds)
         return False
     return True
 
@@ -419,7 +419,7 @@ def send_hold_key(key: str, duration_ms: int = 0) -> bool:
 
 def send_emergency_stop() -> bool:
     global _conn
-    print("[安全] 發送緊急停止指令 (ESTOP)")
+    logging.warning("發送緊急停止指令 (ESTOP)")
     with _lock:
         if _conn is None:
             return False

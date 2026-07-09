@@ -2670,7 +2670,7 @@ class MainWindow(QMainWindow):
 
             QTimer.singleShot(100, self._init_ahk_async)
         except Exception as e:
-            logging.error("deferred init failed: %s", e)
+            logging.exception("deferred init failed")
             self._status_bar.showMessage(f"⚠ 部分初始化失敗：{e}")
 
     def _init_ahk_async(self):
@@ -5846,6 +5846,7 @@ if __name__ == "__main__":
     from pathlib import Path
 
     from _loader import load_sibling
+
     _log_cfg = load_sibling("logging_config", "core/00_logging_config.py")
 
     if hasattr(sys.stdout, "reconfigure"):

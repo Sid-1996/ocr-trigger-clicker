@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import threading
 import time
 from ctypes import wintypes
@@ -124,6 +125,7 @@ def capture(title: str) -> np.ndarray | None:
         arr = np.array(img)
         return arr[:, :, :3]
     except Exception:
+        logging.warning("mss capture failed for '%s'", title, exc_info=True)
         return None
 
 
@@ -186,6 +188,7 @@ def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
         img = np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)
         return cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
     except Exception:
+        logging.warning("GDI capture failed for hwnd=%s", hwnd, exc_info=True)
         return None
     finally:
         if hbitmap:
