@@ -67,6 +67,8 @@ def main():
         print(f"找到 {len(list(custom_dir.iterdir()))} 個自訂模型檔")
 
     # 核心模組 ─ 保留 core/ gui/ 目錄結構
+    # _loader.load_sibling() 動態載入的 .py 必須列在此處
+    # 缺漏 → EXE 啟動 FileNotFoundError（PyInstaller 靜態分析無法追蹤）
     py_datas = [
         ("core/00_logging_config.py", "core"),
         ("core/01_screenshot.py", "core"),
