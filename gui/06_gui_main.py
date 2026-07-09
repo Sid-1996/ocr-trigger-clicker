@@ -2554,55 +2554,7 @@ class MainWindow(QMainWindow):
 
             _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
 
-            self._refresh_window_list()
-            self._restore_last_state()
-            self._refresh_task_list()
-            self._maybe_show_startup_guide()
-
-            QTimer.singleShot(3000, lambda: self._check_version(force=False))
-
-            config = self._load_config()
-            updated_ver = config.pop("just_updated", None)
-            if updated_ver:
-                self._save_config(config)
-                QTimer.singleShot(
-                    4000,
-                    lambda v=updated_ver: (
-                        self._status_bar.showMessage(
-                            f"✅ 已更新至 v{v}！若有問題，請前往 GitHub 回報", 8000
-                        ),
-                        self._notif_stack.push(f"已更新至 v{v}"),
-                    ),
-                )
-
-            if not _ahk_mod.is_ahk_available():
-                reply = QMessageBox.question(
-                    self,
-                    "安裝 AutoHotkey",
-                    "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
-                    "是否自動下載並安裝？（約 3MB，不需管理員權限）",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                )
-                if reply == QMessageBox.StandardButton.Yes:
-                    self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
-                    QApplication.processEvents()
-                    _ahk_mod.set_ahk_health_callback(
-                        lambda msg: self._status_bar.showMessage(f"⚠ {msg}")
-                    )
-                    if _ahk_mod.download_ahk():
-                        self._status_bar.showMessage("AutoHotkey 下載完成")
-                    else:
-                        QMessageBox.critical(
-                            self,
-                            "AutoHotkey 下載失敗",
-                            "AutoHotkey 下載失敗，請手動下載並安裝：\n"
-                            "https://www.autohotkey.com\n\n"
-                            "安裝後重新啟動工具即可自動偵測。",
-                        )
-
-            self._ahk_ready = _ahk_mod.init_ahk()
-            if not self._ahk_ready:
-                self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
+            QTimer.singleShot(0, self._deferred_init)
         except Exception as e:
             QMessageBox.critical(self, "啟動失敗", f"初始化過程中發生錯誤：\n{e}")
             raise
@@ -2625,18 +2577,102 @@ class MainWindow(QMainWindow):
         self._tray.show()
 
     def _load_config(self) -> dict:
-        try:
-            with open(self._config_path, encoding="utf-8") as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            return {}
+        if not hasattr(self, "_config_cache"):
+            try:
+                with open(self._config_path, encoding="utf-8") as f:
+                    self._config_cache = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError, OSError):
+                self._config_cache = {}
+        return self._config_cache
+
+    def _invalidate_config_cache(self):
+        if hasattr(self, "_config_cache"):
+            del self._config_cache
 
     def _save_config(self, data: dict):
         try:
             with open(self._config_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+            self._config_cache = data
         except OSError:
             pass
+
+    def _deferred_init(self):
+        try:
+            self._status_bar.showMessage("正在載入視窗列表…")
+            self._refresh_window_list()
+
+            self._status_bar.showMessage("正在載入任務…")
+            self._refresh_task_list()
+
+            self._restore_last_state()
+            self._maybe_show_startup_guide()
+
+            config = self._load_config()
+            updated_ver = config.pop("just_updated", None)
+            if updated_ver:
+                self._save_config(config)
+                QTimer.singleShot(
+                    4000,
+                    lambda v=updated_ver: (
+                        self._status_bar.showMessage(
+                            f"✅ 已更新至 v{v}！若有問題，請前往 GitHub 回報", 8000
+                        ),
+                        self._notif_stack.push(f"已更新至 v{v}"),
+                    ),
+                )
+
+            QTimer.singleShot(3000, lambda: self._check_version(force=False))
+
+            QTimer.singleShot(100, self._init_ahk_async)
+        except Exception as e:
+            logging.error("deferred init failed: %s", e)
+            self._status_bar.showMessage(f"⚠ 部分初始化失敗：{e}")
+
+    def _init_ahk_async(self):
+        if not _ahk_mod.is_ahk_available():
+            reply = QMessageBox.question(
+                self,
+                "安裝 AutoHotkey",
+                "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
+                "是否自動下載並安裝？（約 3MB，不需管理員權限）",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
+                QApplication.processEvents()
+                _ahk_mod.set_ahk_health_callback(
+                    lambda msg: self._status_bar.showMessage(f"⚠ {msg}")
+                )
+                if not _ahk_mod.download_ahk():
+                    QMessageBox.critical(
+                        self,
+                        "AutoHotkey 下載失敗",
+                        "AutoHotkey 下載失敗，請手動下載並安裝：\n"
+                        "https://www.autohotkey.com\n\n"
+                        "安裝後重新啟動工具即可自動偵測。",
+                    )
+                    return
+
+        class _AhkWorker(QThread):
+            done = pyqtSignal(bool)
+
+            def run(self):
+                ok = _ahk_mod.init_ahk()
+                self.done.emit(ok)
+
+        def _on_ahk_done(ok):
+            self._ahk_ready = ok
+            if not ok:
+                self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
+            else:
+                self._status_bar.showMessage("AHK 已就緒", 3000)
+
+        self._status_bar.showMessage("正在啟動 AHK…")
+        self._ahk_ready = False
+        w = _AhkWorker()
+        w.done.connect(_on_ahk_done)
+        w.start()
 
     def _maybe_show_startup_guide(self):
         config = self._load_config()
