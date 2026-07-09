@@ -433,10 +433,15 @@ def load_groups(path: str) -> list[RuleGroup]:
     groups = data.get("groups", [])
     if not isinstance(groups, list):
         return []
-    return [_dict_to_group(g) for g in groups]
+    groups = [_dict_to_group(g) for g in groups]
+    logging.info("[load_groups] loaded=%s", [(g.id, list(g.rule_ids)) for g in groups])
+    return groups
 
 
 def save_groups(groups: list[RuleGroup], path: str) -> bool:
+    logging.info(
+        "[save_groups] path=%s groups=%s", path, [(g.id, list(g.rule_ids)) for g in groups]
+    )
     tmp_path: str = ""
     try:
         data = {"groups": [_group_to_dict(g) for g in groups]}
@@ -585,12 +590,21 @@ def load_rules(path: str) -> list[Rule]:
         except Exception as e:
             log_main(f"規則項目解析失敗，已略過: {e}")
             continue
+    logging.info(
+        "[load_rules] loaded=%d background=%s", len(rules), [r.id for r in rules if r.background]
+    )
     return rules
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
     bg_ids = [r.id for r in rules if r.background]
     logging.info("[save] save_rules: rules=%d, background=%s, path=%s", len(rules), bg_ids, path)
+    logging.info(
+        "[save_rules] rules(%d) names=%s background_ids=%s",
+        len(rules),
+        [r.name for r in rules],
+        bg_ids,
+    )
     tmp_path: str = ""
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}

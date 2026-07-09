@@ -76,7 +76,7 @@ def _ensure_main_logger() -> logging.Logger:
 
 
 def log_main(msg: str):
-    _ensure_main_logger().info(msg)
+    _ensure_main_logger().debug(msg)
 
 
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
@@ -220,7 +220,7 @@ class MainLoop:
     def _log(self, msg: str):
         if self._verbose:
             print(f"[主循環] {msg}")
-        self._logger.info(msg)
+        self._logger.debug(msg)
 
     def _load_rules(self):
         with self._rules_lock:

@@ -3591,6 +3591,13 @@ class MainWindow(QMainWindow):
                 if prev_rule:
                     prev_rule.name = self._edit_name.text()
                     prev_rule.enabled = self._edit_enabled.isChecked()
+                    logging.info(
+                        "[_on_rule_selected] prev=%s checkbox=%s prev_bg=%s groups=%s",
+                        prev_rule.name,
+                        self._edit_background.isChecked(),
+                        prev_rule.background,
+                        [(g.id, list(g.rule_ids)) for g in self._groups],
+                    )
                     prev_rule.background = self._edit_background.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
                     self._flush_save()
@@ -3612,6 +3619,9 @@ class MainWindow(QMainWindow):
         self._show_rule_detail(None)
 
     def _on_rules_reordered(self):
+        logging.warning(
+            "[_on_rules_reordered] FIRED topLevelCount=%d", self._rule_list.topLevelItemCount()
+        )
         new_order = []
         seen = set()
         new_group_ids = []
@@ -3699,6 +3709,15 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
+        _before_groups = [(g.id, list(g.rule_ids)) for g in self._groups]
+        logging.info(
+            "[background_changed] rule=%s background=%s state=%s _selected=%s groups_before=%s",
+            rule.name,
+            rule.background,
+            state,
+            self._selected_rule_id,
+            _before_groups,
+        )
         rule.background = bool(state)
         if rule.background:
             for g in self._groups:
@@ -3715,6 +3734,11 @@ class MainWindow(QMainWindow):
                 self._groups.remove(target)
                 self._groups.append(target)
             self._status_bar.showMessage(f"「{rule.name}」已移至未歸類", 4000)
+        logging.info(
+            "[background_changed] AFTER rules_bg=%s groups=%s",
+            [(r.name, r.background) for r in self._rules],
+            [(g.id, list(g.rule_ids)) for g in self._groups],
+        )
         self._flush_save()
         if self._loop:
             self._loop.reload_rules()
@@ -4345,6 +4369,12 @@ class MainWindow(QMainWindow):
         if not self._current_task:
             return
         task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
+        logging.info(
+            "[_do_debounced_save] rules(%d)=%s groups=%s",
+            len(self._rules),
+            [r.name for r in self._rules],
+            [(g.id, list(g.rule_ids)) for g in self._groups],
+        )
         if self._loop:
             with self._loop._rules_lock:
                 save_task(self._current_task, self._rules)
