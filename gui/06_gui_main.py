@@ -2998,11 +2998,16 @@ class MainWindow(QMainWindow):
         self._edit_test_btn = QPushButton("▶ 測試")
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setVisible(False)
+        self._open_log_btn = QPushButton("📂 日誌")
+        self._open_log_btn.setToolTip("開啟日誌目錄")
+        self._open_log_btn.setStyleSheet("color: #888888;")
+        self._open_log_btn.clicked.connect(self._open_log_dir)
         btn_row = QWidget()
         btn_layout = QHBoxLayout(btn_row)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.addWidget(self._saved_label)
         btn_layout.addWidget(self._edit_test_btn)
+        btn_layout.addWidget(self._open_log_btn)
         btn_layout.addStretch()
         edit_layout.addWidget(btn_row)
 
@@ -5581,6 +5586,10 @@ class MainWindow(QMainWindow):
             lambda: webbrowser.open("https://afdian.com/a/sid-1996")
         )
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
+
+    def _open_log_dir(self):
+        log_path = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs"
+        os.startfile(log_path)
 
     # === About & Version ===
     def _show_about(self):
