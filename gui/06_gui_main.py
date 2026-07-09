@@ -256,10 +256,51 @@ class _RuleTreeWidget(QTreeWidget):
             event.ignore()
             return
         src_data = src.data(0, Qt.ItemDataRole.UserRole)
-        pos = event.position().toPoint()
         indicator = self.dropIndicatorPosition()
-        target_item = self.itemAt(pos)
+        target_item = self.itemAt(event.position().toPoint())
 
+        # ── 通用攔截：src=rule 且 target=rule，一律手動插為 sibling ──
+        if target_item and src_data and src_data[0] == "rule":
+            tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
+            if tgt_data and tgt_data[0] == "rule":
+                if src == target_item:
+                    event.ignore()
+                    return
+                parent = target_item.parent()
+                if parent is None:
+                    event.ignore()
+                    return
+                target_idx = parent.indexOfChild(target_item)
+
+                if indicator == QAbstractItemView.DropIndicatorPosition.AboveItem:
+                    insert_pos = target_idx
+                elif indicator == QAbstractItemView.DropIndicatorPosition.BelowItem:
+                    insert_pos = target_idx + 1
+                else:
+                    rect = self.visualItemRect(target_item)
+                    mouse_y = event.position().toPoint().y()
+                    insert_pos = (
+                        target_idx
+                        if mouse_y < (rect.top() + rect.height() // 2)
+                        else target_idx + 1
+                    )
+
+                old_parent = src.parent()
+                if old_parent is None:
+                    event.ignore()
+                    return
+                old_idx = old_parent.indexOfChild(src)
+                taken = old_parent.takeChild(old_idx)
+                if old_parent == parent and old_idx < insert_pos:
+                    insert_pos -= 1
+                insert_pos = max(0, min(insert_pos, parent.childCount()))
+                parent.insertChild(insert_pos, taken)
+                self.setCurrentItem(taken)
+                self.reordered.emit()
+                event.accept()
+                return
+
+        # ── OnItem：rule → bg_group/group ──
         if indicator == QAbstractItemView.DropIndicatorPosition.OnItem:
             if src_data and src_data[0] == "rule" and target_item:
                 tgt_data = target_item.data(0, Qt.ItemDataRole.UserRole)
@@ -270,26 +311,6 @@ class _RuleTreeWidget(QTreeWidget):
                     super().dropEvent(event)
                     self.reordered.emit()
                     return
-                if tgt_data and tgt_data[0] == "rule":
-                    if src == target_item:
-                        event.ignore()
-                        return
-                    parent = target_item.parent()
-                    target_idx = parent.indexOfChild(target_item)
-                    rect = self.visualItemRect(target_item)
-                    mouse_y = event.position().toPoint().y()
-                    insert_above = mouse_y < (rect.top() + rect.height() // 2)
-                    old_parent = src.parent()
-                    old_idx = old_parent.indexOfChild(src)
-                    taken = old_parent.takeChild(old_idx)
-                    if old_parent == parent and old_idx < target_idx:
-                        target_idx -= 1
-                    insert_idx = target_idx if insert_above else target_idx + 1
-                    parent.insertChild(insert_idx, taken)
-                    self.setCurrentItem(taken)
-                    self.reordered.emit()
-                    event.accept()
-                    return
             event.ignore()
             return
 
@@ -298,6 +319,7 @@ class _RuleTreeWidget(QTreeWidget):
             self.reordered.emit()
             return
 
+        # 不該進到這裡（規則的 Above/Below 已被上方攔截）
         super().dropEvent(event)
         self.reordered.emit()
 
