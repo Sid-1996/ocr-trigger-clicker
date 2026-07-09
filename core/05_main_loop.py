@@ -211,6 +211,8 @@ class MainLoop:
             self._groups = load_groups(self._rules_path)
             self._rule_pointer = 0
             self._group_rounds_completed.clear()
+            self._match_image_warn_counter.clear()
+            self._fail_since.clear()
             self._update_has_detect()
 
     def _current_group(self) -> RuleGroup | None:
