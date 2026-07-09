@@ -3662,6 +3662,16 @@ class MainWindow(QMainWindow):
                             rule = next((r for r in self._rules if r.id == rid), None)
                             if rule:
                                 new_order.append(rule)
+            elif gdata and gdata[0] == "bg_group":
+                for j in range(group_item.childCount()):
+                    child = group_item.child(j)
+                    cdata = child.data(0, Qt.ItemDataRole.UserRole)
+                    if cdata and cdata[0] == "rule" and cdata[1] not in seen:
+                        seen.add(cdata[1])
+                        rule = next((r for r in self._rules if r.id == cdata[1]), None)
+                        if rule:
+                            new_order.append(rule)
+                continue
         group_map = {g.id: g for g in self._groups}
         self._groups = [group_map[gid] for gid in new_group_ids if gid in group_map]
         self._rules = new_order

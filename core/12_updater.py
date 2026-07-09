@@ -1,4 +1,5 @@
 import logging
+import os as _os
 import re
 import shutil
 import subprocess
@@ -8,7 +9,6 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import Request, urlopen
-import os as _os
 
 log = logging.getLogger(__name__)
 
@@ -16,8 +16,7 @@ _GITHUB_OWNER = "Sid-1996"
 _GITHUB_REPO = "ocr-trigger-clicker"
 _USER_AGENT = "ocr-trigger-clicker-updater/1.0"
 RAW_VERSION_URL = (
-    f"https://raw.githubusercontent.com/{_GITHUB_OWNER}/{_GITHUB_REPO}"
-    "/master/latest_version.txt"
+    f"https://raw.githubusercontent.com/{_GITHUB_OWNER}/{_GITHUB_REPO}/master/latest_version.txt"
 )
 ASSET_NAME = "ocr-trigger-clicker.zip"
 UPDATER_EXE_NAME = "updater.exe"
@@ -65,8 +64,7 @@ def check_for_update(current_version: str) -> UpdateInfo | None:
             f"/releases/download/v{version_str}/{ASSET_NAME}"
         ),
         release_url=(
-            f"https://github.com/{_GITHUB_OWNER}/{_GITHUB_REPO}"
-            f"/releases/tag/v{version_str}"
+            f"https://github.com/{_GITHUB_OWNER}/{_GITHUB_REPO}/releases/tag/v{version_str}"
         ),
     )
 
@@ -131,26 +129,41 @@ def download_update(
 
 def apply_update(new_exe_path: Path) -> Path:
     if not is_frozen():
-        raise RuntimeError("\u539f\u59cb\u78bc\u6a21\u5f0f\u4e0d\u652f\u63f4\u81ea\u52d5\u66f4\u65b0")
+        raise RuntimeError(
+            "\u539f\u59cb\u78bc\u6a21\u5f0f\u4e0d\u652f\u63f4\u81ea\u52d5\u66f4\u65b0"
+        )
 
     old_exe = current_exe_path()
     updater_exe = new_exe_path.parent / UPDATER_EXE_NAME
     if not updater_exe.exists():
-        raise RuntimeError("\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0")
+        raise RuntimeError(
+            "\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0"
+        )
 
     debug_log_path = Path(_os.environ["LOCALAPPDATA"]) / "ocr-trigger-clicker" / "update_debug.log"
     debug_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     creationflags_variants = [
-        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS | subprocess.CREATE_BREAKAWAY_FROM_JOB,
+        subprocess.CREATE_NEW_PROCESS_GROUP
+        | subprocess.DETACHED_PROCESS
+        | subprocess.CREATE_BREAKAWAY_FROM_JOB,
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
     ]
     launched = False
     for flags in creationflags_variants:
         try:
             subprocess.Popen(
-                [str(updater_exe), "--old", str(old_exe), "--new", str(new_exe_path),
-                 "--pid", str(_os.getpid()), "--log", str(debug_log_path)],
+                [
+                    str(updater_exe),
+                    "--old",
+                    str(old_exe),
+                    "--new",
+                    str(new_exe_path),
+                    "--pid",
+                    str(_os.getpid()),
+                    "--log",
+                    str(debug_log_path),
+                ],
                 cwd=str(old_exe.parent),
                 creationflags=flags,
                 close_fds=True,
