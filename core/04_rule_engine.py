@@ -5,7 +5,7 @@ import sys
 import tempfile
 import uuid
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -20,6 +20,12 @@ from _loader import load_sibling, log_main  # noqa: E402
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
 find_text = _ocr_mod.find_text
+
+_models = load_sibling("rule_models", "core/rule_models.py")
+ImportPreview = _models.ImportPreview
+Step = _models.Step
+Rule = _models.Rule
+RuleGroup = _models.RuleGroup
 
 _FORMAT_VERSION = 1
 _IMPORT_DESCRIPTION_MAX = 200
@@ -39,45 +45,6 @@ def _replace_file(tmp_path: str, dst: str) -> None:
         except OSError:
             pass
         raise
-
-
-@dataclass
-class ImportPreview:
-    meta: dict
-    rule_names: list[str]
-    rule_count: int
-    warnings: list[str]
-    raw_data: dict
-
-
-# ── New dataclasses ──
-
-
-@dataclass
-class Step:
-    type: str
-    params: dict
-
-
-@dataclass
-class Rule:
-    id: str
-    name: str
-    enabled: bool
-    steps: list[Step]
-    background: bool = False
-
-
-@dataclass
-class RuleGroup:
-    id: str
-    name: str
-    enabled: bool = True
-    mode: str = "once"
-    repeat_times: int = 1
-    between_rounds_sec: int = 0
-    rule_ids: list[str] = field(default_factory=list)
-    order: str = "sequential"
 
 
 _STEP_DEFAULTS = {

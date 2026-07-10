@@ -75,6 +75,7 @@ def main():
         ("core/02_ocr_engine.py", "core"),
         ("core/03_ahk_socket.py", "core"),
         ("core/04_rule_engine.py", "core"),
+        ("core/rule_models.py", "core"),
         ("core/05_main_loop.py", "core"),
         ("core/10_performance_monitor.py", "core"),
         ("core/11_template_matching.py", "core"),
