@@ -2327,6 +2327,9 @@ OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
 _group_settings_mod = load_sibling("group_settings_controller", "gui/group_settings_controller.py")
 GroupSettingsController = _group_settings_mod.GroupSettingsController
 
+_screenshot_mod = load_sibling("screenshot_controller", "gui/screenshot_controller.py")
+ScreenshotController = _screenshot_mod.ScreenshotController
+
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
@@ -2590,6 +2593,7 @@ class MainWindow(QMainWindow):
             self._pending_update_ver = ""
 
             self._group_settings_ctrl = GroupSettingsController()
+            self._screenshot_ctrl = ScreenshotController(self)
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
@@ -2957,8 +2961,8 @@ class MainWindow(QMainWindow):
         edit_layout.addWidget(QLabel("步驟列表:"))
 
         self._step_list = _StepListWidget()
-        self._step_list.set_roi_callback(self._open_roi_selector)
-        self._step_list.set_capture_callback(self._open_capture_region)
+        self._step_list.set_roi_callback(self._screenshot_ctrl.open_roi_selector)
+        self._step_list.set_capture_callback(self._screenshot_ctrl.open_capture_region)
         self._step_list.set_click_pick_callback(self._on_pick_coord)
         self._step_list.set_rules_provider(lambda: list(self._rules))
         self._step_list.set_groups_provider(lambda: self._groups)
@@ -4385,130 +4389,10 @@ class MainWindow(QMainWindow):
 
     # === ROI selector ===
     def _open_roi_selector(self):
-        """Open ROI selector overlay, return window-relative ROI dict or None."""
-        title = self._window_combo.currentText()
-        if title:
-            activate_window(title)
-        mod = load_sibling("roi", "gui/07_gui_roi.py")
-        result = mod.select_roi(parent_window=self)
-        if not result:
-            return None
-        if title:
-            screen = QApplication.primaryScreen()
-            ratio = screen.devicePixelRatio()
-            result["x"] = int(result["x"] * ratio)
-            result["y"] = int(result["y"] * ratio)
-            wr = get_window_rect(title)
-            if wr:
-                result["x"] -= wr["x"]
-                result["y"] -= wr["y"]
-        self._edit_stack.setCurrentIndex(1)
-        self._status_bar.showMessage(
-            f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
-        )
-        # Convert to client-relative ratio before storing
-        if title and wr and wr["w"] > 0 and wr["h"] > 0:
-            chrome = get_window_client_offset(title) or (0, 0)
-            cx, cy = chrome
-            client_w = wr["w"] - cx
-            client_h = wr["h"] - cy
-            if client_w > 0 and client_h > 0:
-                result = {
-                    "x": max(0.0, (result["x"] - cx) / client_w),
-                    "y": max(0.0, (result["y"] - cy) / client_h),
-                    "w": min(1.0, result["w"] / client_w),
-                    "h": min(1.0, result["h"] / client_h),
-                    "roi_coord": "client",
-                }
-            else:
-                result = {
-                    "x": result["x"] / wr["w"],
-                    "y": result["y"] / wr["h"],
-                    "w": result["w"] / wr["w"],
-                    "h": result["h"] / wr["h"],
-                }
-        return result
-
-    def _capture_rect_to_roi(self, rect: dict, title: str) -> dict | None:
-        if not title:
-            return None
-        wr = get_window_rect(title)
-        if not wr or wr["w"] <= 0 or wr["h"] <= 0:
-            return None
-        cx, cy = rect["x"] + rect["w"] // 2, rect["y"] + rect["h"] // 2
-        dpr = 1.0
-        for screen in QApplication.screens():
-            g = screen.geometry()
-            if g.x() <= cx < g.x() + g.width() and g.y() <= cy < g.y() + g.height():
-                dpr = screen.devicePixelRatio()
-                break
-        px = int(rect["x"] * dpr) - wr["x"]
-        py = int(rect["y"] * dpr) - wr["y"]
-        pw = int(rect["w"] * dpr)
-        ph = int(rect["h"] * dpr)
-        chrome = get_window_client_offset(title) or (0, 0)
-        client_px = px - chrome[0]
-        client_py = py - chrome[1]
-        client_w = wr["w"] - chrome[0]
-        client_h = wr["h"] - chrome[1]
-        if client_w <= 0 or client_h <= 0:
-            return _pixels_to_ratio_expanded(px, py, pw, ph, wr["w"], wr["h"])
-        roi = _pixels_to_ratio_expanded(client_px, client_py, pw, ph, client_w, client_h)
-        roi["roi_coord"] = "client"
-        return roi
+        return self._screenshot_ctrl.open_roi_selector()
 
     def _open_capture_region(self):
-        """Capture a screen region from the target window as template image."""
-        title = self._window_combo.currentText()
-        if title:
-            activate_window(title)
-        mod = load_sibling("capture_region", "gui/14_capture_region.py")
-        task_path = (
-            str(Path(_tasks_dir()) / f"{self._current_task}.json") if self._current_task else ""
-        )
-        rect = mod.capture_region(parent_window=self, task_path=task_path, window_title=title)
-        if not rect:
-            return None
-        b64 = rect.get("template_b64")
-        if b64:
-            self._status_bar.showMessage("已截取範本")
-            self._edit_stack.setCurrentIndex(1)
-            roi_ratio = self._capture_rect_to_roi(rect, title)
-            return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
-        if title:
-            screen = QApplication.primaryScreen()
-            ratio = screen.devicePixelRatio()
-            rx = int(rect["x"] * ratio)
-            ry = int(rect["y"] * ratio)
-            rw = int(rect["w"] * ratio)
-            rh = int(rect["h"] * ratio)
-            wr = get_window_rect(title)
-            if wr:
-                rx -= wr["x"]
-                ry -= wr["y"]
-            if wr:
-                chrome = get_window_client_offset(title) or (0, 0)
-                client_rx = rx - chrome[0]
-                client_ry = ry - chrome[1]
-                client_w = wr["w"] - chrome[0]
-                client_h = wr["h"] - chrome[1]
-                if client_w > 0 and client_h > 0:
-                    roi_ratio = _pixels_to_ratio_expanded(
-                        client_rx, client_ry, rw, rh, client_w, client_h
-                    )
-                    roi_ratio["roi_coord"] = "client"
-                else:
-                    roi_ratio = _pixels_to_ratio_expanded(rx, ry, rw, rh, wr["w"], wr["h"])
-            else:
-                roi_ratio = None
-            img = capture(title)
-            if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
-                crop = img[ry : ry + rh, rx : rx + rw]
-                b64 = img_to_b64(crop)
-                self._status_bar.showMessage(f"已截取範本 ({crop.shape[1]}×{crop.shape[0]})")
-                self._edit_stack.setCurrentIndex(1)
-                return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
-        return None
+        return self._screenshot_ctrl.open_capture_region()
 
     # === Test rule ===
     def _on_test_rule(self):
