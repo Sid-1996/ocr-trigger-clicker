@@ -1,21 +1,11 @@
-import json
-import logging
-import os
 import sys
-import tempfile
-import uuid
-from copy import deepcopy
-from dataclasses import asdict
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
-# Ensure project root is on sys.path for _loader
 _here = Path(__file__).resolve().parent.parent
 if str(_here) not in sys.path:
     sys.path.insert(0, str(_here))
 
-from _loader import load_sibling, log_main  # noqa: E402
+from _loader import load_sibling  # noqa: E402
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
@@ -27,918 +17,51 @@ Step = _models.Step
 Rule = _models.Rule
 RuleGroup = _models.RuleGroup
 
-_FORMAT_VERSION = 1
-_IMPORT_DESCRIPTION_MAX = 200
-
-
-def _replace_file(tmp_path: str, dst: str) -> None:
-    """Windows-safe atomic replace: unlink + rename (raises OSError on failure)."""
-    try:
-        os.unlink(dst)
-    except FileNotFoundError:
-        pass
-    try:
-        os.rename(tmp_path, dst)
-    except OSError:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
-
-
-_STEP_DEFAULTS = {
-    "detect": {
-        "text": "",
-        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "match_mode": "fuzzy",
-        "fuzzy_threshold": 0.8,
-        "on_fail": "stop",
-    },
-    "click": {
-        "target": "text_center",
-        "x": 0,
-        "y": 0,
-        "button": "left",
-        "random_offset": 3,
-    },
-    "key": {"key": "", "hold_ms": 0},
-    "drag": {
-        "target": "text_center",
-        "x": 0,
-        "y": 0,
-        "text": "",
-        "dx": 0,
-        "dy": 0,
-        "button": "left",
-    },
-    "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
-    "wait": {"ms": 1000},
-    "jump": {"rule_id": ""},
-    "compare": {
-        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "pattern": r"-?\d+\.?\d*",
-        "operator": ">=",
-        "value": 0.0,
-        "on_fail": "stop",
-    },
-    "match_image": {
-        "template": "",
-        "template_data": "",
-        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "threshold": 0.8,
-        "match_color": False,
-        "color_tolerance": 100,  # 0~255，預設 100 可過濾明顯色差（如灰 vs 白），同時保留正常亮度差異
-        "on_fail": "stop",
-    },
-    "notify": {"message": ""},
-}
-
-
-# ── Helpers ──
-
-
-def _as_int(value, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _as_float(value, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _sanitize_roi(roi: dict | None) -> dict:
-    roi = roi if isinstance(roi, dict) else {}
-    result = {
-        "x": max(0.0, _as_float(roi.get("x", 0))),
-        "y": max(0.0, _as_float(roi.get("y", 0))),
-        "w": max(0.0, _as_float(roi.get("w", 0))),
-        "h": max(0.0, _as_float(roi.get("h", 0))),
-    }
-    if roi.get("roi_coord") == "client":
-        result["roi_coord"] = "client"
-    return result
-
-
-def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
-    action = action if isinstance(action, dict) else {}
-    action_type = str(action.get("type", default_type))
-    if action_type == "click":
-        return {
-            "type": "click",
-            "x": _as_int(action.get("x", 0), 0),
-            "y": _as_int(action.get("y", 0), 0),
-            "button": str(action.get("button", "left")),
-        }
-    if action_type == "jump":
-        return {"type": "jump", "rule_id": str(action.get("rule_id", ""))}
-    return {"type": "key", "key": str(action.get("key", ""))}
-
-
-def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
-    if isinstance(raw, dict):
-        action = str(raw.get("action", "stop"))
-        fd = raw.get("fail_duration_sec", 0)
-        try:
-            fd = float(fd)
-        except (TypeError, ValueError):
-            fd = 0.0
-        if action == "notify":
-            result: dict = {
-                "action": "notify",
-                "message": str(raw.get("message", "")).strip(),
-                "stop_groups": [str(g) for g in raw.get("stop_groups", []) if g],
-            }
-        elif action == "key":
-            result = {"action": "key", "key": str(raw.get("key", ""))}
-        elif action == "skip" and allow_skip:
-            result = {"action": "skip", "skip_to": max(0, int(raw.get("skip_to", 0)))}
-        elif action == "jump":
-            result = {"action": "jump", "rule_id": str(raw.get("rule_id", ""))}
-        else:
-            return "stop"
-        if fd > 0:
-            result["fail_duration_sec"] = fd
-        return result
-    return str(raw) if str(raw) in ("key", "stop") else "stop"
-
-
-def _normalize_step_params(step_type: str, params: dict | None) -> dict:
-    base = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
-    params = params if isinstance(params, dict) else {}
-    base.update(params)
-
-    if step_type == "detect":
-        base["text"] = str(base.get("text", "")).strip()
-        base["roi"] = _sanitize_roi(base.get("roi"))
-        base["match_mode"] = str(base.get("match_mode", "fuzzy"))
-        base["fuzzy_threshold"] = max(
-            0.0, min(1.0, _as_float(base.get("fuzzy_threshold", 0.8), 0.8))
-        )
-        base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
-    elif step_type in ("click", "drag"):
-        base["target"] = str(base.get("target", "text_center"))
-        base["x"] = _as_float(base.get("x", 0), 0)
-        base["y"] = _as_float(base.get("y", 0), 0)
-        base["text"] = str(base.get("text", "")).strip()
-        base["button"] = str(base.get("button", "left"))
-        if step_type == "click":
-            base["random_offset"] = max(0, _as_int(base.get("random_offset", 3), 3))
-        else:
-            base["dx"] = _as_int(base.get("dx", 0), 0)
-            base["dy"] = _as_int(base.get("dy", 0), 0)
-    elif step_type == "key":
-        base["key"] = str(base.get("key", ""))
-        base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
-    elif step_type == "scroll":
-        base["direction"] = str(base.get("direction", "WheelDown"))
-        base["amount"] = max(1, _as_int(base.get("amount", 1), 1))
-        base["delay_ms"] = max(0, _as_int(base.get("delay_ms", 30), 30))
-    elif step_type == "wait":
-        base["ms"] = max(0, _as_int(base.get("ms", 1000), 1000))
-    elif step_type == "jump":
-        base["rule_id"] = str(base.get("rule_id", ""))
-    elif step_type == "compare":
-        base["roi"] = _sanitize_roi(base.get("roi"))
-        base["pattern"] = str(base.get("pattern", r"-?\d+\.?\d*"))
-        base["operator"] = str(base.get("operator", ">="))
-        base["value"] = _as_float(base.get("value", 0.0), 0.0)
-        base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
-    elif step_type == "match_image":
-        base["template"] = str(base.get("template", "")).strip()
-        base["template_data"] = str(base.get("template_data", ""))
-        base["roi"] = _sanitize_roi(base.get("roi"))
-        base["threshold"] = max(0.0, min(1.0, _as_float(base.get("threshold", 0.8), 0.8)))
-        base["match_color"] = bool(base.get("match_color", False))
-        base["color_tolerance"] = max(0, min(255, _as_int(base.get("color_tolerance", 100), 100)))
-        base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
-        if base["template"] and not base["template_data"]:
-            p = Path(base["template"])
-            if p.exists():
-                import base64 as _b64
-
-                import cv2 as _cv2
-
-                _tmp_img = _cv2.imread(str(p), _cv2.IMREAD_COLOR)
-                if _tmp_img is not None:
-                    _, _buf = _cv2.imencode(".png", _tmp_img)
-                    base["template_data"] = _b64.b64encode(_buf).decode("ascii")
-    return base
-
-
-def _parse_depends_on(value: object) -> list[str]:
-    if isinstance(value, list):
-        return [str(v) for v in value if v]
-    if isinstance(value, str) and value:
-        return [value]
-    return []
-
-
-# ── Migration helpers ──
-
-
-def _build_detect_params(old: dict) -> dict:
-    # backward compat: old rules store fuzzy bool instead of match_mode
-    if "match_mode" in old:
-        match_mode_ = str(old["match_mode"])
-    elif "fuzzy" in old:
-        match_mode_ = "fuzzy" if bool(old["fuzzy"]) else "contains"
-    else:
-        match_mode_ = "contains"
-    on_fail = old.get("on_fail", "stop")
-    if isinstance(on_fail, dict):
-        action = str(on_fail.get("action", "stop"))
-        if action == "key":
-            on_fail = {"action": "key", "key": str(on_fail.get("key", ""))}
-        else:
-            on_fail = "stop"
-    else:
-        on_fail = str(on_fail) if str(on_fail) in ("key", "stop") else "stop"
-    return {
-        "text": str(old.get("target_text", "")).strip(),
-        "roi": _sanitize_roi(old.get("roi")),
-        "match_mode": match_mode_,
-        "fuzzy_threshold": max(0.0, min(1.0, _as_float(old.get("fuzzy_threshold", 0.8), 0.8))),
-        "on_fail": on_fail,
-    }
-
-
-def _build_confirm_action(old: dict) -> dict:
-    if str(old.get("confirm_action_type", "key")) == "click":
-        return {
-            "type": "click",
-            "x": _as_int(old.get("confirm_x", 0), 0),
-            "y": _as_int(old.get("confirm_y", 0), 0),
-            "button": str(old.get("click_button", "left")),
-        }
-    return {"type": "key", "key": str(old.get("confirm_key", ""))}
-
-
-def _migrate_v1_to_v2(old: dict) -> dict:
-    """Convert old-format rule dict to new-format dict with steps."""
-    steps: list[dict] = []
-
-    if str(old.get("rule_type", "trigger")) == "compare":
-        # Compare rule → convert to detect + click/key
-        if str(old.get("target_text", "")).strip():
-            steps.append({"type": "detect", "params": _build_detect_params(old)})
-
-        confirm_action = _build_confirm_action(old)
-        if confirm_action["type"] == "click":
-            steps.append({"type": "click", "params": confirm_action})
-        elif confirm_action.get("key", ""):
-            steps.append({"type": "key", "params": confirm_action})
-    else:
-        # Trigger rule
-        steps.append({"type": "detect", "params": _build_detect_params(old)})
-
-        # Correction 1: sub_target_text → additional detect step
-        sub_text = str(old.get("sub_target_text", "")).strip()
-        if sub_text:
-            sub_roi = _sanitize_roi(old.get("sub_roi"))
-            if all(sub_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
-                sub_roi = _sanitize_roi(old.get("roi"))
-            sub_params = _build_detect_params(old)
-            sub_params["text"] = sub_text
-            sub_params["roi"] = sub_roi
-            steps.append({"type": "detect", "params": sub_params})
-
-        # Action step
-        if str(old.get("action_type", "click")) == "key" and str(old.get("key", "")):
-            steps.append({"type": "key", "params": {"key": str(old.get("key", ""))}})
-        else:
-            steps.append(
-                {
-                    "type": "click",
-                    "params": {
-                        "target": str(old.get("click_position", "text_center")),
-                        "x": _as_int(old.get("custom_x", 0), 0),
-                        "y": _as_int(old.get("custom_y", 0), 0),
-                        "button": str(old.get("click_button", "left")),
-                        "random_offset": max(0, _as_int(old.get("random_offset", 3), 3)),
-                    },
-                }
-            )
-
-        # Post-delay wait
-        post_delay = max(0, _as_int(old.get("post_delay_ms", 0), 0))
-        if post_delay > 0:
-            steps.append({"type": "wait", "params": {"ms": post_delay}})
-
-    # depends_on → skip (sequencing via rule ordering in new model)
-
-    return {
-        "id": str(old.get("id", "")),
-        "name": str(old.get("name", "")),
-        "enabled": bool(old.get("enabled", True)),
-        "steps": steps,
-    }
-
-
-# ── Serialization ──
-
-
-def _dict_to_rule(d: dict) -> Rule:
-    if "steps" not in d:
-        d = _migrate_v1_to_v2(d)
-    steps = [
-        Step(
-            type=str(s.get("type", "")),
-            params=_normalize_step_params(str(s.get("type", "")), s.get("params")),
-        )
-        for s in d.get("steps", [])
-    ]
-    return Rule(
-        id=str(d.get("id", "")),
-        name=str(d.get("name", "")),
-        enabled=bool(d.get("enabled", True)),
-        steps=steps,
-        background=bool(d.get("background", False)),
-    )
-
-
-def _rule_to_dict(r: Rule) -> dict:
-    d = asdict(r)
-    d.pop("trigger_count", None)
-    d.pop("last_trigger_time", None)
-    return d
-
-
-def _dict_to_group(d: dict) -> RuleGroup:
-    return RuleGroup(
-        id=str(d.get("id", "")),
-        name=str(d.get("name", "")),
-        enabled=bool(d.get("enabled", True)),
-        mode=str(d.get("mode", "once")),
-        repeat_times=int(d.get("repeat_times", 1)),
-        between_rounds_sec=int(d.get("between_rounds_sec", 0)),
-        rule_ids=[str(r) for r in d.get("rule_ids", []) if r],
-        order=str(d.get("order", "sequential")),
-    )
-
-
-def _group_to_dict(g: RuleGroup) -> dict:
-    return asdict(g)
-
-
-def load_groups(path: str) -> list[RuleGroup]:
-    p = Path(path)
-    if not p.exists():
-        return []
-    try:
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return []
-    if "groups" not in data:
-        data = migrate_v2_to_v3(data)
-    groups = data.get("groups", [])
-    if not isinstance(groups, list):
-        return []
-    groups = [_dict_to_group(g) for g in groups]
-    logging.info("[load_groups] loaded=%s", [(g.id, list(g.rule_ids)) for g in groups])
-    return groups
-
-
-def save_groups(groups: list[RuleGroup], path: str) -> bool:
-    logging.info(
-        "[save_groups] path=%s groups=%s", path, [(g.id, list(g.rule_ids)) for g in groups]
-    )
-    tmp_path: str = ""
-    try:
-        data = {"groups": [_group_to_dict(g) for g in groups]}
-        p = Path(path)
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    existing = json.load(f)
-                for k, v in existing.items():
-                    if k != "groups":
-                        data[k] = v
-            except (json.JSONDecodeError, OSError):
-                pass
-        with tempfile.NamedTemporaryFile(
-            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            tmp_path = f.name
-        _replace_file(tmp_path, str(p))
-        return True
-    except OSError:
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
-        return False
-
-
-def migrate_v2_to_v3(data: dict) -> dict:
-    mode = str(data.get("run_mode", "once"))
-    repeat_times = int(data.get("repeat_times", 1))
-    between_rounds_sec = int(data.get("between_rounds_sec", 0))
-
-    normal_ids = []
-    for r in data.get("rules", []):
-        if isinstance(r, dict) and not r.get("background", False):
-            normal_ids.append(str(r.get("id", "")))
-
-    data["groups"] = [
-        {
-            "id": "__default__",
-            "name": "Default",
-            "mode": mode,
-            "repeat_times": repeat_times,
-            "between_rounds_sec": between_rounds_sec,
-            "rule_ids": normal_ids,
-            "order": "sequential",
-        }
-    ]
-    data.pop("run_mode", None)
-    data.pop("repeat_times", None)
-    data.pop("between_rounds_sec", None)
-    return data
-
-
-def _migrate_roi_to_ratio(data: dict) -> dict:
-    cap = data.get("capture_size")
-    if not cap or len(cap) < 2:
-        return data
-    W, H = cap[0], cap[1]
-    if W <= 0 or H <= 0:
-        return data
-
-    for rule in data.get("rules", []):
-        for step in rule.get("steps", []):
-            if step.get("type") in ("detect", "compare", "match_image"):
-                if "roi" in step.get("params", {}):
-                    roi = step["params"]["roi"]
-                    x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
-                    if not (x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0):
-                        step["params"]["roi"] = {"x": x / W, "y": y / H, "w": w / W, "h": h / H}
-            elif step.get("type") == "click":
-                p = step.get("params", {})
-                px, py = p.get("x", 0), p.get("y", 0)
-                if not (px <= 1.0 and py <= 1.0):
-                    step["params"] = {**p, "x": px / W, "y": py / H}
-            elif step.get("type") == "drag":
-                p = step.get("params", {})
-                px, py = p.get("x", 0), p.get("y", 0)
-                if px > 1.0 or py > 1.0:
-                    step["params"] = {**p, "x": px / W, "y": py / H}
-    data["ratio_coords"] = True
-    return data
-
-
-def _migrate_roi_coord(data: dict) -> dict:
-    for rule in data.get("rules", []):
-        for step in rule.get("steps", []):
-            if step.get("type") not in ("detect", "compare", "match_image"):
-                continue
-            roi = step.get("params", {}).get("roi", {})
-            if not isinstance(roi, dict):
-                continue
-            if "roi_coord" in roi:
-                continue
-            x = roi.get("x", 0)
-            if not (isinstance(x, (int, float)) and x <= 1.0 and x >= 0):
-                continue
-            roi["roi_coord"] = "client"
-    return data
-
-
-def load_rules(path: str) -> list[Rule]:
-    p = Path(path)
-    if not p.exists():
-        return []
-    try:
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError, KeyError) as e:
-        log_main(f"規則檔案載入失敗「{path}」: {e}")
-        return []
-
-    if "groups" not in data:
-        data = migrate_v2_to_v3(data)
-        tmp_path = ""
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-            ) as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                tmp_path = f.name
-            _replace_file(tmp_path, str(p))
-        except OSError:
-            if tmp_path:
-                Path(tmp_path).unlink(missing_ok=True)
-
-    if not data.get("ratio_coords"):
-        data = _migrate_roi_to_ratio(data)
-        tmp_path = ""
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-            ) as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                tmp_path = f.name
-            _replace_file(tmp_path, str(p))
-        except OSError:
-            if tmp_path:
-                Path(tmp_path).unlink(missing_ok=True)
-
-    data = _migrate_roi_coord(data)
-
-    rules: list[Rule] = []
-    for raw in data.get("rules", []):
-        try:
-            rules.append(_dict_to_rule(raw))
-        except Exception as e:
-            log_main(f"規則項目解析失敗，已略過: {e}")
-            continue
-    logging.info(
-        "[load_rules] loaded=%d background=%s", len(rules), [r.id for r in rules if r.background]
-    )
-    return rules
-
-
-def save_rules(rules: list[Rule], path: str) -> bool:
-    bg_ids = [r.id for r in rules if r.background]
-    logging.info("[save] save_rules: rules=%d, background=%s, path=%s", len(rules), bg_ids, path)
-    logging.info(
-        "[save_rules] rules(%d) names=%s background_ids=%s",
-        len(rules),
-        [r.name for r in rules],
-        bg_ids,
-    )
-    tmp_path: str = ""
-    try:
-        data = {"rules": [_rule_to_dict(r) for r in rules]}
-        p = Path(path)
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    existing = json.load(f)
-                for k, v in existing.items():
-                    if k != "rules":
-                        data[k] = v
-            except (json.JSONDecodeError, OSError):
-                pass
-        with tempfile.NamedTemporaryFile(
-            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            tmp_path = f.name
-        _replace_file(tmp_path, str(p))
-        return True
-    except OSError:
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
-        return False
-
-
-# ── Task management ──
-
-
-def _tasks_base() -> Path:
-    try:
-        from build import get_data_path
-
-        raw = get_data_path("_")
-        return Path(raw).parent
-    except ImportError:
-        return Path(__file__).resolve().parent.parent
-
-
-def get_tasks_dir() -> Path:
-    tasks_dir = _tasks_base() / "tasks"
-    tasks_dir.mkdir(parents=True, exist_ok=True)
-    return tasks_dir
-
-
-def list_tasks() -> list[str]:
-    names = []
-    for f in sorted(get_tasks_dir().glob("*.json")):
-        if f.stem:
-            names.append(f.stem)
-    return names
-
-
-def load_task(name: str) -> list[Rule]:
-    return load_rules(str(get_tasks_dir() / f"{name}.json"))
-
-
-def save_task(name: str, rules: list[Rule]) -> bool:
-    return save_rules(rules, str(get_tasks_dir() / f"{name}.json"))
-
-
-def delete_task(name: str) -> bool:
-    try:
-        (get_tasks_dir() / f"{name}.json").unlink(missing_ok=True)
-        return True
-    except OSError:
-        return False
-
-
-def rename_task(old_name: str, new_name: str) -> bool:
-    old_p = get_tasks_dir() / f"{old_name}.json"
-    new_p = get_tasks_dir() / f"{new_name}.json"
-    if new_p.exists():
-        return False
-    try:
-        old_p.rename(new_p)
-        return True
-    except OSError:
-        return False
-
-
-def _export_meta() -> dict:
-    try:
-        from _version import __version__
-    except ImportError:
-        __version__ = "0.0.0"
-    return {
-        "format_version": _FORMAT_VERSION,
-        "app_version": __version__,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
-    if not isinstance(raw.get("id"), str) or not raw["id"]:
-        warnings.append("規則缺少 id，已略過")
-        return False
-    if not isinstance(raw.get("name"), str) or not raw["name"]:
-        warnings.append(f"規則 {raw.get('id', '?')} 缺少 name，已略過")
-        return False
-    steps = raw.get("steps")
-    if not isinstance(steps, list) or len(steps) == 0:
-        warnings.append(f"規則「{raw.get('name', '?')}」缺少 steps，已略過")
-        return False
-    valid_types = {
-        "detect",
-        "click",
-        "key",
-        "wait",
-        "jump",
-        "drag",
-        "scroll",
-        "match_image",
-        "compare",
-        "notify",
-    }
-    for i, s in enumerate(steps):
-        if not isinstance(s, dict):
-            warnings.append(f"規則「{raw['name']}」步驟 {i} 格式錯誤，已略過")
-            return False
-        if s.get("type") not in valid_types:
-            warnings.append(f"規則「{raw['name']}」步驟 {i} 未知類型「{s.get('type')}」，已略過")
-            return False
-    return True
-
-
-def export_task(name: str, dest_path: str) -> bool:
-    src = get_tasks_dir() / f"{name}.json"
-    if not src.exists():
-        return False
-    try:
-        data = json.loads(src.read_text(encoding="utf-8"))
-        data["_meta"] = _export_meta()
-        Path(dest_path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        return True
-    except (OSError, json.JSONDecodeError):
-        return False
-
-
-_MAX_IMPORT_SIZE = 10 * 1024 * 1024
-
-
-def preview_import_task(src_path: str) -> Optional[ImportPreview]:
-    """Read & validate a task file, return preview info without writing anything."""
-    src = Path(src_path)
-    if not src.exists():
-        return None
-    try:
-        if src.stat().st_size > _MAX_IMPORT_SIZE:
-            return None
-    except OSError:
-        return None
-    try:
-        data = json.loads(src.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    if not isinstance(data, dict) or "rules" not in data:
-        return None
-    if not isinstance(data["rules"], list):
-        return None
-
-    meta = data.get("_meta", {})
-    if not isinstance(meta, dict):
-        meta = {}
-
-    warnings: list[str] = []
-    valid_rules = []
-    for raw in data["rules"]:
-        if isinstance(raw, dict) and _validate_rule_structure(raw, warnings):
-            valid_rules.append(raw)
-
-    rule_names = [r.get("name", "?") for r in valid_rules]
-    dropped = len(data["rules"]) - len(valid_rules)
-    if dropped:
-        warnings.append(
-            f"共 {len(data['rules'])} 條規則，{len(valid_rules)} 條格式正確，{dropped} 條已略過"
-        )
-
-    valid_ids = {r["id"] for r in valid_rules}
-    valid_groups = []
-    for g in data.get("groups", []):
-        gid = g.get("id", "")
-        gname = g.get("name", "")
-        if not isinstance(gid, str) or not gid:
-            warnings.append("群組缺少 id，已略過")
-            continue
-        if not isinstance(gname, str) or not gname:
-            warnings.append(f"群組 {gid} 缺少 name，已略過")
-            continue
-        raw_ids = g.get("rule_ids", [])
-        if not isinstance(raw_ids, list):
-            raw_ids = []
-        filtered = [rid for rid in raw_ids if isinstance(rid, str) and rid in valid_ids]
-        if len(filtered) < len(raw_ids):
-            warnings.append(f"群組「{gname}」部分 rule_ids 指向無效規則，已自動過濾")
-        g["rule_ids"] = filtered
-        valid_groups.append(g)
-
-    raw_data: dict = {"rules": valid_rules}
-    if valid_groups:
-        raw_data["groups"] = valid_groups
-
-    return ImportPreview(
-        meta=meta,
-        rule_names=rule_names,
-        rule_count=len(valid_rules),
-        warnings=warnings,
-        raw_data=raw_data,
-    )
-
-
-def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
-    preview = preview_import_task(src_path)
-    if preview is None or preview.rule_count == 0:
-        return None
-    data = preview.raw_data
-    if regenerate_uuids:
-        id_map: dict[str, str] = {}
-        for r in data["rules"]:
-            old_id = r["id"]
-            new_id = uuid.uuid4().hex[:12]
-            id_map[old_id] = new_id
-            r["id"] = new_id
-        for r in data["rules"]:
-            for s in r.get("steps", []):
-                p = s.get("params", {})
-                if s["type"] in ("wait_rule", "jump"):
-                    rid = p.get("rule_id", "")
-                    if rid in id_map:
-                        p["rule_id"] = id_map[rid]
-                if s["type"] in ("detect", "match_image") and isinstance(p.get("on_fail"), dict):
-                    rid = p["on_fail"].get("rule_id", "") or p["on_fail"].get("jump_rule_id", "")
-                    if rid in id_map:
-                        p["on_fail"]["rule_id"] = id_map[rid]
-                    p["on_fail"].pop("jump_rule_id", None)
-                if s["type"] == "collect_rounds":
-                    oaf = p.get("on_all_fail", {})
-                    if isinstance(oaf, dict):
-                        rid = oaf.get("rule_id", "")
-                        if rid in id_map:
-                            oaf["rule_id"] = id_map[rid]
-        for g in data.get("groups", []):
-            g["rule_ids"] = [id_map.get(rid, rid) for rid in g.get("rule_ids", [])]
-
-    src_name = Path(src_path).stem
-    dest = get_tasks_dir() / f"{src_name}.json"
-    suffix = 1
-    while dest.exists():
-        dest = get_tasks_dir() / f"{src_name}_{suffix}.json"
-        suffix += 1
-    try:
-        dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        return dest.stem
-    except OSError:
-        return None
-
-
-def get_task_window(path: str) -> str | None:
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        title = data.get("window_title", "")
-        return title if title else None
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def set_task_window(path: str, title: str) -> bool:
-    tmp_path: str = ""
-    try:
-        p = Path(path)
-        if p.exists():
-            with open(p, encoding="utf-8") as f:
-                data = json.load(f)
-        else:
-            data = {}
-        data["window_title"] = title
-        with tempfile.NamedTemporaryFile(
-            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            tmp_path = f.name
-        _replace_file(tmp_path, str(p))
-        return True
-    except (OSError, json.JSONDecodeError):
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-        return False
-
-
-def get_run_mode(path: str) -> dict:
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return {"mode": "once", "repeat_times": 1, "between_rounds_sec": 0}
-    return {
-        "mode": str(data.get("run_mode", "once")),
-        "repeat_times": int(data.get("repeat_times", 1)),
-        "between_rounds_sec": int(data.get("between_rounds_sec", 0)),
-    }
-
-
-def set_run_mode(path: str, mode: str, repeat_times: int = 1, between_rounds_sec: int = 0) -> bool:
-    tmp_path: str = ""
-    try:
-        p = Path(path)
-        if p.exists():
-            with open(p, encoding="utf-8") as f:
-                data = json.load(f)
-        else:
-            data = {}
-        data["run_mode"] = mode
-        data["repeat_times"] = repeat_times
-        data["between_rounds_sec"] = between_rounds_sec
-        with tempfile.NamedTemporaryFile(
-            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            tmp_path = f.name
-        _replace_file(tmp_path, str(p))
-        return True
-    except (OSError, json.JSONDecodeError):
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-        return False
-
-
-def get_capture_size(path: str) -> list | None:
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        cs = data.get("capture_size")
-        if isinstance(cs, list) and len(cs) == 2:
-            return [int(cs[0]), int(cs[1])]
-    except (OSError, json.JSONDecodeError, TypeError):
-        pass
-    return None
-
-
-def set_capture_size(path: str, w: int, h: int) -> bool:
-    tmp_path: str = ""
-    try:
-        p = Path(path)
-        if p.exists():
-            with open(p, encoding="utf-8") as f:
-                data = json.load(f)
-        else:
-            data = {}
-        data["capture_size"] = [w, h]
-        with tempfile.NamedTemporaryFile(
-            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            tmp_path = f.name
-        _replace_file(tmp_path, str(p))
-        return True
-    except (OSError, json.JSONDecodeError):
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
-        return False
+_migration = load_sibling("rule_migration", "core/rule_migration.py")
+_as_int = _migration._as_int
+_as_float = _migration._as_float
+_sanitize_roi = _migration._sanitize_roi
+_normalize_action = _migration._normalize_action
+_normalize_on_fail = _migration._normalize_on_fail
+_normalize_step_params = _migration._normalize_step_params
+_parse_depends_on = _migration._parse_depends_on
+_build_detect_params = _migration._build_detect_params
+_build_confirm_action = _migration._build_confirm_action
+_migrate_v1_to_v2 = _migration._migrate_v1_to_v2
+migrate_v2_to_v3 = _migration.migrate_v2_to_v3
+_migrate_roi_to_ratio = _migration._migrate_roi_to_ratio
+_migrate_roi_coord = _migration._migrate_roi_coord
+_STEP_DEFAULTS = _migration._STEP_DEFAULTS
+
+_serial = load_sibling("rule_serialization", "core/rule_serialization.py")
+_dict_to_rule = _serial._dict_to_rule
+_rule_to_dict = _serial._rule_to_dict
+_dict_to_group = _serial._dict_to_group
+_group_to_dict = _serial._group_to_dict
+load_groups = _serial.load_groups
+save_groups = _serial.save_groups
+load_rules = _serial.load_rules
+save_rules = _serial.save_rules
+
+_tasks = load_sibling("task_management", "core/task_management.py")
+get_tasks_dir = _tasks.get_tasks_dir
+list_tasks = _tasks.list_tasks
+load_task = _tasks.load_task
+save_task = _tasks.save_task
+delete_task = _tasks.delete_task
+rename_task = _tasks.rename_task
+export_task = _tasks.export_task
+preview_import_task = _tasks.preview_import_task
+import_task = _tasks.import_task
+_MAX_IMPORT_SIZE = _tasks._MAX_IMPORT_SIZE
+
+_config = load_sibling("run_config", "core/run_config.py")
+get_task_window = _config.get_task_window
+set_task_window = _config.set_task_window
+get_run_mode = _config.get_run_mode
+set_run_mode = _config.set_run_mode
+get_capture_size = _config.get_capture_size
+set_capture_size = _config.set_capture_size
 
 
 def migrate_old_rules():
@@ -949,13 +72,16 @@ def migrate_old_rules():
 
         old_path = Path(get_data_path("rules.json"))
     except ImportError:
-        old_path = _tasks_base() / "rules.json"
+        old_path = get_tasks_dir().parent / "rules.json"
     if old_path.exists():
         rules = load_rules(str(old_path))
         save_task("預設任務", rules)
 
 
 if __name__ == "__main__":
+    import json
+    import tempfile
+
     print("=== Rule Engine Self-Check ===\n")
 
     # ── Test 1: Trigger rule migration (no more wait_rule/cooldown/trigger_mode/max_triggers) ──
@@ -1075,8 +201,6 @@ if __name__ == "__main__":
     print("  [OK] Round-trip serialization")
 
     # ── Test 4: Old-format load ──
-    import tempfile
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
         json.dump({"rules": [old_trigger, old_compare]}, f, ensure_ascii=False)
         tmp_path = f.name
@@ -1171,20 +295,20 @@ if __name__ == "__main__":
         }
         src_path.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
 
-        _orig_get_tasks_dir = get_tasks_dir
+        _orig_get_tasks_dir = _tasks.get_tasks_dir
 
         def _tmp_tasks_dir() -> Path:
             p = tmp_dir_path / "tasks"
             p.mkdir(parents=True, exist_ok=True)
             return p
 
-        globals()["get_tasks_dir"] = _tmp_tasks_dir
+        _tasks.get_tasks_dir = _tmp_tasks_dir
         try:
             imported_name = import_task(str(src_path), regenerate_uuids=True)
             assert imported_name == "import_me"
             imported = json.loads((tmp_dir_path / "tasks" / "import_me.json").read_text("utf-8"))
         finally:
-            globals()["get_tasks_dir"] = _orig_get_tasks_dir
+            _tasks.get_tasks_dir = _orig_get_tasks_dir
 
         new_ids = {r["id"] for r in imported["rules"]}
         assert "source_a" not in new_ids and "source_b" not in new_ids
