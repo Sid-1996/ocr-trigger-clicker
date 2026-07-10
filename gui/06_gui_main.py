@@ -2330,6 +2330,9 @@ GroupSettingsController = _group_settings_mod.GroupSettingsController
 _screenshot_mod = load_sibling("screenshot_controller", "gui/screenshot_controller.py")
 ScreenshotController = _screenshot_mod.ScreenshotController
 
+_rule_config_mod = load_sibling("rule_config_controller", "gui/rule_config_controller.py")
+RuleConfigController = _rule_config_mod.RuleConfigController
+
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
@@ -2594,6 +2597,7 @@ class MainWindow(QMainWindow):
 
             self._group_settings_ctrl = GroupSettingsController()
             self._screenshot_ctrl = ScreenshotController(self)
+            self._rule_config_ctrl = RuleConfigController()
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
@@ -2627,25 +2631,10 @@ class MainWindow(QMainWindow):
         self._tray.show()
 
     def _load_config(self) -> dict:
-        if not hasattr(self, "_config_cache"):
-            try:
-                with open(self._config_path, encoding="utf-8") as f:
-                    self._config_cache = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError, OSError):
-                self._config_cache = {}
-        return self._config_cache
-
-    def _invalidate_config_cache(self):
-        if hasattr(self, "_config_cache"):
-            del self._config_cache
+        return self._rule_config_ctrl.load_config(self)
 
     def _save_config(self, data: dict):
-        try:
-            with open(self._config_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            self._config_cache = data
-        except OSError:
-            pass
+        self._rule_config_ctrl.save_config(self, data)
 
     def _deferred_init(self):
         try:
@@ -3167,22 +3156,7 @@ class MainWindow(QMainWindow):
 
     # === Task list ===
     def _refresh_task_list(self):
-        self._task_combo.blockSignals(True)
-        self._task_combo.clear()
-        for t in list_tasks():
-            self._task_combo.addItem(t)
-            self._task_combo.setItemData(
-                self._task_combo.count() - 1, t, Qt.ItemDataRole.ToolTipRole
-            )
-        self._task_combo.blockSignals(False)
-        last = self._load_config().get("last_task", "")
-        if last:
-            idx = self._task_combo.findText(last)
-            if idx >= 0:
-                self._task_combo.setCurrentIndex(idx)
-        if self._task_combo.count() == 0:
-            self._on_task_new()
-        self._on_task_changed(self._task_combo.currentText())
+        self._rule_config_ctrl.refresh_task_list(self)
 
     def _on_task_changed(self, name: str):
         if self._loop and self._loop.is_running:
