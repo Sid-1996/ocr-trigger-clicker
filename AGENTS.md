@@ -187,9 +187,9 @@ ruff format "C:\Code play first\ocr-trigger-clicker"
 修改 `core/` 下任何非 trivial 邏輯後，手動執行該檔案的 `__main__` self-check：
 
 ```powershell
-python -c "import core.04_rule_engine; core.04_rule_engine.demo()"
-python -c "import core.05_main_loop; core.05_main_loop.demo()"
-python -c "import core.11_template_matching; core.11_template_matching.demo()"
+python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/04_rule_engine.py', run_name='__main__')"
+python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/05_main_loop.py', run_name='__main__')"
+python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/11_template_matching.py', run_name='__main__')"
 ```
 
 ---

@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.0.10] - 2026-07-10
+
+### 重構
+- MainWindow 拆分：抽出 GroupSettingsController、ScreenshotController、
+  RuleConfigController、TestRunController，MainWindow 從 3260 行降至約一半
+- rule_engine 拆分：core/04_rule_engine.py 從 1439 行拆為
+  rule_models.py / rule_migration.py / rule_serialization.py /
+  task_management.py / run_config.py / file_utils.py，從 1439 行降至約 530 行
+- 純內部重構，無使用者可見功能變更，所有拆分皆經過手動功能驗證
+
 ## [v0.0.9] - 2026-07-10
 
 ### 新增

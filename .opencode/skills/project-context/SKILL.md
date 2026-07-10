@@ -16,7 +16,13 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 - `core/01_screenshot.py` — 視窗截圖核心（mss 截圖含邊框 / GDI 備援僅客戶區）
 - `core/02_ocr_engine.py` — OCR 引擎封裝（RapidOCR），`recognize()` / `find_text()`
 - `core/03_ahk_socket.py` — AutoHotkey TCP 通訊層
-- `core/04_rule_engine.py` — 規則/步驟/群組資料模型、序列化、任務 CRUD、格式遷移
+- `core/04_rule_engine.py` — 規則引擎 re-export hub（委派給 6 個子模組）
+- `core/rule_models.py` — 規則/步驟/群組資料模型（`Rule`、`Step`、`RuleGroup`、`ImportPreview` dataclass）
+- `core/rule_migration.py` — 舊格式 v1→v2/v2→v3 遷移、步驟參數正規化（`_STEP_DEFAULTS`）
+- `core/rule_serialization.py` — 規則/群組 JSON 序列化、檔案讀寫（`load_rules`、`save_rules`、`load_groups`、`save_groups`）
+- `core/task_management.py` — 任務 CRUD、匯入/匯出（`list_tasks`、`load_task`、`save_task`、`import_task`、`export_task`）
+- `core/run_config.py` — 任務視窗標題、執行模式、擷取尺寸存取
+- `core/file_utils.py` — `_replace_file()` 原子檔案寫入（unlink + rename）
 - `core/05_main_loop.py` — 主偵測迴圈，核心邏輯所在（1665 行，整個應用的心臟）
 - `core/10_performance_monitor.py` — FPS/CPU/記憶體監控、全域點擊速率限制
 - `core/11_template_matching.py` — OpenCV 模板比對（多尺度、NMS）

@@ -90,6 +90,10 @@ def main():
         ("gui/09_ocr_debug.py", "gui"),
         ("gui/13_gui_click_picker.py", "gui"),
         ("gui/14_capture_region.py", "gui"),
+        ("gui/group_settings_controller.py", "gui"),
+        ("gui/screenshot_controller.py", "gui"),
+        ("gui/rule_config_controller.py", "gui"),
+        ("gui/test_run_controller.py", "gui"),
         ("build.py", "."),
         ("_loader.py", "."),
     ]

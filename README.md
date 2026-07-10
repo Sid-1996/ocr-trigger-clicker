@@ -214,7 +214,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | `01_screenshot.py` | `mss` 截取視窗畫面，fallback GDI PrintWindow |
 | `02_ocr_engine.py` | RapidOCR 文字辨識、三種比對模式（contains/exact/fuzzy） |
 | `03_ahk_socket.py` | TCP Server，與 AHK 跨行程通訊 |
-| `04_rule_engine.py` | 規則模型、群組管理、步驟系統、任務管理、舊格式遷移 |
+| `04_rule_engine.py` | 規則引擎 re-export hub（已拆分為 rule_models / rule_migration / rule_serialization / task_management / run_config） |
 | `05_main_loop.py` | 主循環：群組兩層指標模型、步驟執行、安全機制 |
 | `06_gui_main.py` | PyQt6 主視窗（規則編輯、群組管理、步驟拖曳排序、任務管理、系統托盤、SettingsDialog） |
 | `07_gui_roi.py` | 全螢幕 ROI 框選覆蓋層 |
