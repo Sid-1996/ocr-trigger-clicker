@@ -15,3 +15,5 @@ tasks/
 *任務*.json
 /images/
 /stderr.txt
+
+graphify-out/
