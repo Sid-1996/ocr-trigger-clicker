@@ -57,8 +57,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from gui.group_settings_controller import GroupSettingsController
-
 if hasattr(sys, "_MEIPASS"):
     _base = Path(sys._MEIPASS)
 else:
@@ -2325,6 +2323,9 @@ _MAX_IMPORT_SIZE = _rule_mod._MAX_IMPORT_SIZE
 
 _ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
+
+_group_settings_mod = load_sibling("group_settings_controller", "gui/group_settings_controller.py")
+GroupSettingsController = _group_settings_mod.GroupSettingsController
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
