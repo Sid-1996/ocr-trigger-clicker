@@ -111,6 +111,8 @@ def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
             result = {"action": "skip", "skip_to": max(0, int(raw.get("skip_to", 0)))}
         elif action == "jump":
             result = {"action": "jump", "rule_id": str(raw.get("rule_id", ""))}
+        elif action == "advance":
+            result = {"action": "advance"}
         else:
             return "stop"
         if fd > 0:

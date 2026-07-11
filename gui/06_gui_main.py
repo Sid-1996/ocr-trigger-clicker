@@ -1075,6 +1075,7 @@ class _MatchImageStepForm(QWidget):
 
         self._of_action = _NoWheelCombo()
         self._of_action.addItem("跳過本次（預設）", "stop")
+        self._of_action.addItem("跳過此規則（換下一條）", "advance")
         self._of_action.addItem("跳至步驟", "skip")
         self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
@@ -1402,6 +1403,11 @@ class _MatchImageStepForm(QWidget):
                 "key": self._of_key.currentData() or self._of_key.currentText(),
                 "fail_duration_sec": fail_duration,
             }
+        elif action == "advance":
+            p["on_fail"] = {
+                "action": "advance",
+                "fail_duration_sec": fail_duration,
+            }
         elif action == "notify":
             selected_ids = self._of_notify_groups.selected_ids()
             p["on_fail"] = {
@@ -1496,6 +1502,7 @@ class _DetectStepForm(QWidget):
         form.addRow(self._advanced_container)
 
         self._of_action.addItem("跳過本次（預設）", "stop")
+        self._of_action.addItem("跳過此規則（換下一條）", "advance")
         self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
         self._of_action.addItem("通知並停止群組", "notify")
@@ -1639,6 +1646,11 @@ class _DetectStepForm(QWidget):
                 "action": "notify",
                 "message": self._of_notify_msg.text().strip(),
                 "stop_groups": selected_ids,
+                "fail_duration_sec": fail_duration,
+            }
+        elif action == "advance":
+            self._step.params["on_fail"] = {
+                "action": "advance",
                 "fail_duration_sec": fail_duration,
             }
 
@@ -1929,6 +1941,7 @@ class _CompareStepForm(QWidget):
         # on_fail section (same as detect/match_image)
         self._of_action = _NoWheelCombo()
         self._of_action.addItem("跳過本次（預設）", "stop")
+        self._of_action.addItem("跳過此規則（換下一條）", "advance")
         self._of_action.addItem("跳至步驟", "skip")
         self._of_action.addItem("跳轉至規則", "jump")
         self._of_action.addItem("按下按鍵後繼續", "key")
@@ -2081,6 +2094,11 @@ class _CompareStepForm(QWidget):
                 "action": "notify",
                 "message": self._of_notify_msg.text().strip(),
                 "stop_groups": selected_ids,
+                "fail_duration_sec": fail_duration,
+            }
+        elif action == "advance":
+            self._step.params["on_fail"] = {
+                "action": "advance",
                 "fail_duration_sec": fail_duration,
             }
 

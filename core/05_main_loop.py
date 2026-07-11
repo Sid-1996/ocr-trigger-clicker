@@ -109,6 +109,7 @@ class StepContext:
     matched_text: Optional[OcrResult] = None
     matched_box: Optional[dict] = None
     triggered: bool = False
+    force_advance: bool = False
     step_idx: int = -1
 
 
@@ -501,6 +502,10 @@ class MainLoop:
                 ctx.triggered = True
             return StepResult("stop")
 
+        if action == "advance":
+            ctx.force_advance = True
+            return StepResult("stop")
+
         return StepResult("stop")
 
     def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -788,7 +793,7 @@ class MainLoop:
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
-        if ctx.triggered:
+        if ctx.triggered or ctx.force_advance:
             self._advance_rule_in_group()
 
     def _advance_rule_in_group(self):
@@ -1722,4 +1727,67 @@ if __name__ == "__main__":
     ml._groups = []
     print("  [OK] fail_duration_sec elapsed → on_fail notify fires")
 
-    print("\n=== All 24 tests passed ===")
+    # ── Test 25: on_fail advance: fail_duration → force_advance → ptr advance ──
+    _adv_time = time
+    _adv_rule_A = Rule(
+        id="rule_adv_A",
+        name="Advance A",
+        enabled=True,
+        steps=[
+            _rule.Step(type="detect", params={"text": "GHOST", "on_fail": {"action": "advance", "fail_duration_sec": 1.5}}),
+        ],
+    )
+    _adv_rule_B = Rule(
+        id="rule_adv_B",
+        name="Advance B",
+        enabled=True,
+        steps=[
+            _rule.Step(type="wait", params={"ms": 0}),
+        ],
+    )
+    ml._rules = [_adv_rule_A, _adv_rule_B]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="adv_group", name="ADV", rule_ids=["rule_adv_A", "rule_adv_B"], mode="loop")]
+    ml._active_group_ids = ["adv_group"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._fail_since.clear()
+    ml._stop_event.clear()
+    _adv_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    _adv_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+
+    # First run: detect fails → enter tolerance, ptr stays at 0
+    ml._ocr_region = lambda img, roi: []
+    _adv_ctx = StepContext(img=_adv_img, rect=_adv_rect)
+    ml._process_rules(_adv_img, _adv_rect)
+    _adv_key = "rule_adv_A:0"
+    assert _adv_key in ml._fail_since, "advance should record fail_since key on first failure"
+    assert ml._rule_in_group_ptr == 0, "ptr should stay at 0 during tolerance"
+    print("  [OK] advance: first failure enters tolerance, ptr unchanged")
+
+    # Fast-forward past fail_duration
+    ml._fail_since[_adv_key] = _adv_time.monotonic() - 10.0
+    ml._process_rules(_adv_img, _adv_rect)
+    assert _adv_key not in ml._fail_since, "advance should clear fail_since after tolerance"
+    assert ml._rule_in_group_ptr == 1, f"advance should advance ptr to 1, got {ml._rule_in_group_ptr}"
+    print("  [OK] advance: after tolerance, force_advance=True → ptr advances to B")
+
+    # Rule B runs (wait step) → triggered=False → ptr stays at 1 (B still)
+    assert ml._rule_in_group_ptr == 1, "B should be current rule"
+
+    # When B completes (mode=loop) → reset to 0
+    ml._advance_rule_in_group()
+    assert ml._rule_in_group_ptr == 0, "loop mode should reset ptr to 0"
+    assert _adv_key not in ml._fail_since, "fail_since should be clean after group reset"
+    print("  [OK] advance: group loop reset clears ptr and fail_since")
+
+    # Verify A gets fresh tolerance after reset
+    ml._process_rules(_adv_img, _adv_rect)
+    assert _adv_key in ml._fail_since, "A should get fresh fail_since after reset"
+    assert ml._rule_in_group_ptr == 0, "ptr should stay at 0 for fresh tolerance"
+    print("  [OK] advance: A gets fresh tolerance after group loop reset")
+
+    ml._active_group_ids = []
+    print("  [OK] advance: full lifecycle verified")
+
+    print("\n=== All 25 tests passed ===")
