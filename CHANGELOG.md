@@ -1,6 +1,6 @@
 # Changelog
 
-## [未發布]
+## [v0.0.11] - 2026-07-11
 
 ### 新增
 - on_fail 新增動作「跳過此規則（換下一條）」（action: advance）：
@@ -11,6 +11,10 @@
 ### 修正
 - _normalize_on_fail 缺少 "advance" action 分支，導致規則重新載入時
   該設定被靜默降級為 "stop"、fail_duration_sec 遺失（存檔後表現異常）
+
+### 重構
+- 移除三份分散在不同檔案的重複 _tasks_dir() wrapper，
+  統一直接呼叫 get_tasks_dir()
 
 ## [v0.0.10] - 2026-07-10
 
@@ -142,6 +146,8 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.0.11]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.11
+[v0.0.10]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.10
 [v0.0.9]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.9
 [v0.0.8]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.8
 [v0.0.7]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.7
