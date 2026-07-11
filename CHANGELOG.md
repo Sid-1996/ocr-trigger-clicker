@@ -1,5 +1,17 @@
 # Changelog
 
+## [未發布]
+
+### 新增
+- on_fail 新增動作「跳過此規則（換下一條）」（action: advance）：
+  搭配 fail_duration_sec，連續偵測失敗滿 N 秒後跳過該規則、
+  推進到同群組下一條規則（而非原地持續重試），群組重新輪到此規則時
+  會重新獲得完整容忍期
+
+### 修正
+- _normalize_on_fail 缺少 "advance" action 分支，導致規則重新載入時
+  該設定被靜默降級為 "stop"、fail_duration_sec 遺失（存檔後表現異常）
+
 ## [v0.0.10] - 2026-07-10
 
 ### 重構
