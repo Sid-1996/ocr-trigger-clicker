@@ -69,11 +69,18 @@ def check_for_update(current_version: str) -> UpdateInfo | None:
     )
 
 
+def _clean_stale_temp_dirs():
+    for d in Path(tempfile.gettempdir()).glob("ocr_update_*"):
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+
+
 def download_update(
     info: UpdateInfo,
     progress_cb=None,
     cancel_event=None,
 ) -> Path:
+    _clean_stale_temp_dirs()
     tmp_dir = Path(tempfile.mkdtemp(prefix="ocr_update_"))
     zip_path = tmp_dir / ASSET_NAME
     exe_path = tmp_dir / "ocr-trigger-clicker.exe"
