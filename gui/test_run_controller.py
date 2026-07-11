@@ -22,10 +22,6 @@ _rule_engine = load_sibling("rule_engine", "core/04_rule_engine.py")
 get_capture_size = _rule_engine.get_capture_size
 
 
-def _tasks_dir() -> str:
-    return str(_rule_engine.get_tasks_dir())
-
-
 class TestRunController:
     def __init__(self, win, of_summary, resolve_rule_name):
         self._win = win
@@ -446,7 +442,7 @@ class TestRunController:
                     match_color = p.get("match_color", False)
                     color_tolerance = p.get("color_tolerance", 100)
                     task_path = (
-                        str(Path(_tasks_dir()) / f"{win._current_task}.json")
+                        str(_rule_engine.get_tasks_dir() / f"{win._current_task}.json")
                         if win._current_task
                         else None
                     )

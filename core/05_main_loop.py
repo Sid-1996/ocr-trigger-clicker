@@ -1734,7 +1734,13 @@ if __name__ == "__main__":
         name="Advance A",
         enabled=True,
         steps=[
-            _rule.Step(type="detect", params={"text": "GHOST", "on_fail": {"action": "advance", "fail_duration_sec": 1.5}}),
+            _rule.Step(
+                type="detect",
+                params={
+                    "text": "GHOST",
+                    "on_fail": {"action": "advance", "fail_duration_sec": 1.5},
+                },
+            ),
         ],
     )
     _adv_rule_B = Rule(
@@ -1747,7 +1753,9 @@ if __name__ == "__main__":
     )
     ml._rules = [_adv_rule_A, _adv_rule_B]
     ml._rule_map = {r.id: r for r in ml._rules}
-    ml._groups = [RuleGroup(id="adv_group", name="ADV", rule_ids=["rule_adv_A", "rule_adv_B"], mode="loop")]
+    ml._groups = [
+        RuleGroup(id="adv_group", name="ADV", rule_ids=["rule_adv_A", "rule_adv_B"], mode="loop")
+    ]
     ml._active_group_ids = ["adv_group"]
     ml._group_queue_idx = 0
     ml._rule_in_group_ptr = 0
@@ -1769,7 +1777,9 @@ if __name__ == "__main__":
     ml._fail_since[_adv_key] = _adv_time.monotonic() - 10.0
     ml._process_rules(_adv_img, _adv_rect)
     assert _adv_key not in ml._fail_since, "advance should clear fail_since after tolerance"
-    assert ml._rule_in_group_ptr == 1, f"advance should advance ptr to 1, got {ml._rule_in_group_ptr}"
+    assert ml._rule_in_group_ptr == 1, (
+        f"advance should advance ptr to 1, got {ml._rule_in_group_ptr}"
+    )
     print("  [OK] advance: after tolerance, force_advance=True → ptr advances to B")
 
     # Rule B runs (wait step) → triggered=False → ptr stays at 1 (B still)

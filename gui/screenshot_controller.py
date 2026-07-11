@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from PyQt6.QtWidgets import QApplication
 
 from _loader import load_sibling
@@ -13,10 +11,8 @@ capture = _main_loop_mod.capture
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl_mod.img_to_b64
 
-
-def _tasks_dir() -> str:
-    mod = load_sibling("rule_engine", "core/04_rule_engine.py")
-    return str(mod.get_tasks_dir())
+_rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
+get_tasks_dir = _rule_mod.get_tasks_dir
 
 
 def _pixels_to_ratio_expanded(
@@ -114,9 +110,7 @@ class ScreenshotController:
         if title:
             activate_window(title)
         mod = load_sibling("capture_region", "gui/14_capture_region.py")
-        task_path = (
-            str(Path(_tasks_dir()) / f"{win._current_task}.json") if win._current_task else ""
-        )
+        task_path = str(get_tasks_dir() / f"{win._current_task}.json") if win._current_task else ""
         rect = mod.capture_region(parent_window=win, task_path=task_path, window_title=title)
         if not rect:
             return None

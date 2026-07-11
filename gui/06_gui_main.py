@@ -2364,11 +2364,6 @@ _updater_mod = load_sibling("updater", "core/12_updater.py")
 # ── Helpers ──
 
 
-def _tasks_dir() -> str:
-    mod = load_sibling("rule_engine", "core/04_rule_engine.py")
-    return str(mod.get_tasks_dir())
-
-
 def _get_images_dir() -> Path:
     """Return writable images directory — project root in dev, %APPDATA% when packaged."""
     if hasattr(sys, "_MEIPASS"):
@@ -2979,7 +2974,9 @@ class MainWindow(QMainWindow):
         self._step_list.set_window_title_callback(lambda: self._window_combo.currentText())
         self._step_list.set_task_path_callback(
             lambda: (
-                str(Path(_tasks_dir()) / f"{self._current_task}.json") if self._current_task else ""
+                str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+                if self._current_task
+                else ""
             )
         )
         edit_layout.addWidget(self._step_list, 1)
@@ -3131,7 +3128,7 @@ class MainWindow(QMainWindow):
     # === Window list ===
     def _on_window_selected(self, title: str):
         if title and self._current_task:
-            task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
+            task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
             set_task_window(task_path, title)
 
     def _refresh_window_list(self):
@@ -3194,7 +3191,7 @@ class MainWindow(QMainWindow):
         self._current_task = name
         self._rules = load_task(name)
         _main_loop_mod.log_main(f"已載入任務「{name}」，共 {len(self._rules)} 條規則")
-        task_path = str(Path(_tasks_dir()) / f"{name}.json")
+        task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
         self._groups = load_groups(task_path)
         # safety net: remove from uncategorized any rule also in a normal group
         uncat = next((g for g in self._groups if g.id == "__uncategorized__"), None)
@@ -3226,7 +3223,7 @@ class MainWindow(QMainWindow):
             self._debug_panel.clear_results()
         self._status_bar.showMessage(f"任務「{name}」— {len(self._rules)} 條規則")
         # 自動選取任務綁定的視窗
-        task_path = str(Path(_tasks_dir()) / f"{name}.json")
+        task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
         saved_window = get_task_window(task_path)
         if saved_window:
             idx = self._window_combo.findText(saved_window)
@@ -3246,7 +3243,7 @@ class MainWindow(QMainWindow):
             return
         self._groups = [RuleGroup(id="__default__", name="所有規則")]
         save_task(name, [])
-        save_groups(self._groups, str(Path(_tasks_dir()) / f"{name}.json"))
+        save_groups(self._groups, str(_rule_mod.get_tasks_dir() / f"{name}.json"))
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
         if idx >= 0:
@@ -3589,7 +3586,7 @@ class MainWindow(QMainWindow):
         if not self._current_task:
             return
         try:
-            task_path = Path(_tasks_dir()) / f"{self._current_task}.json"
+            task_path = _rule_mod.get_tasks_dir() / f"{self._current_task}.json"
             if task_path.exists():
                 with open(task_path, encoding="utf-8") as f:
                     data = json.load(f)
@@ -4298,7 +4295,7 @@ class MainWindow(QMainWindow):
     def _do_debounced_save(self) -> None:
         if not self._current_task:
             return
-        task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
+        task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         logging.info(
             "[_do_debounced_save] rules(%d)=%s groups=%s",
             len(self._rules),
@@ -4624,7 +4621,7 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
         self._status_bar.showMessage("正在初始化 OCR 引擎…")
-        task_path = str(Path(_tasks_dir()) / f"{self._current_task}.json")
+        task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         self._init_worker = InitWorker(
             str(task_path),
             title,
