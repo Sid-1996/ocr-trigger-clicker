@@ -42,47 +42,53 @@ def main():
     log_path = args.log
     old_path = Path(args.old)
     new_path = Path(args.new)
+    tmp_dir = new_path.parent
 
     _log(log_path, f"updater started, old={old_path}, new={new_path}, waiting pid={args.pid}")
-    _wait_for_pid_exit(args.pid, timeout_sec=30, log_path=log_path)
-
-    success = False
-    last_err = None
-    for i in range(10):
-        try:
-            shutil.copyfile(str(new_path), str(old_path))
-            success = True
-            break
-        except (PermissionError, OSError) as e:
-            last_err = e
-            _log(log_path, f"copy attempt {i + 1}/10 failed: {e}")
-            time.sleep(1)
-
-    if not success:
-        _log(log_path, f"copy failed after all retries: {last_err}")
-        sys.exit(1)
-
-    _log(log_path, "copy success, relaunching old exe")
     try:
-        subprocess.Popen([str(old_path)], cwd=str(old_path.parent))
-    except Exception as e:
-        _log(log_path, f"relaunch failed: {e}")
+        _wait_for_pid_exit(args.pid, timeout_sec=30, log_path=log_path)
 
-    try:
-        for _entry in Path(new_path).parent.iterdir():
-            if _entry.name == Path(sys.executable).name:
-                continue
+        success = False
+        last_err = None
+        for i in range(10):
             try:
-                if _entry.is_file():
-                    _entry.unlink()
-                elif _entry.is_dir():
-                    shutil.rmtree(str(_entry), ignore_errors=True)
-            except Exception:
-                pass
-    except Exception as e:
-        _log(log_path, f"cleanup failed: {e}")
+                shutil.copyfile(str(new_path), str(old_path))
+                success = True
+                break
+            except (PermissionError, OSError) as e:
+                last_err = e
+                _log(log_path, f"copy attempt {i + 1}/10 failed: {e}")
+                time.sleep(1)
 
-    _log(log_path, "updater finished successfully")
+        if not success:
+            _log(log_path, f"copy failed after all retries: {last_err}")
+            sys.exit(1)
+
+        _log(log_path, "copy success, relaunching old exe")
+        try:
+            subprocess.Popen([str(old_path)], cwd=str(old_path.parent))
+        except Exception as e:
+            _log(log_path, f"relaunch failed: {e}")
+
+        _log(log_path, "updater finished successfully")
+    finally:
+        try:
+            for _entry in tmp_dir.iterdir():
+                if _entry.name == Path(sys.executable).name:
+                    continue
+                try:
+                    if _entry.is_file():
+                        _entry.unlink()
+                    elif _entry.is_dir():
+                        shutil.rmtree(str(_entry), ignore_errors=True)
+                except Exception:
+                    pass
+        except Exception as e:
+            _log(log_path, f"cleanup failed: {e}")
+        try:
+            tmp_dir.rmdir()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

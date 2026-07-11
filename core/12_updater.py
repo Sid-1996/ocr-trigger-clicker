@@ -158,35 +158,40 @@ def apply_update(new_exe_path: Path) -> Path:
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
     ]
     launched = False
-    for flags in creationflags_variants:
-        try:
-            subprocess.Popen(
-                [
-                    str(updater_exe),
-                    "--old",
-                    str(old_exe),
-                    "--new",
-                    str(new_exe_path),
-                    "--pid",
-                    str(_os.getpid()),
-                    "--log",
-                    str(debug_log_path),
-                ],
-                cwd=str(old_exe.parent),
-                creationflags=flags,
-                close_fds=True,
-            )
-            launched = True
-            break
-        except OSError:
-            continue
+    tmp_dir = new_exe_path.parent
+    try:
+        for flags in creationflags_variants:
+            try:
+                subprocess.Popen(
+                    [
+                        str(updater_exe),
+                        "--old",
+                        str(old_exe),
+                        "--new",
+                        str(new_exe_path),
+                        "--pid",
+                        str(_os.getpid()),
+                        "--log",
+                        str(debug_log_path),
+                    ],
+                    cwd=str(old_exe.parent),
+                    creationflags=flags,
+                    close_fds=True,
+                )
+                launched = True
+                break
+            except OSError:
+                continue
 
-    if not launched:
-        log.error("無法啟動 updater.exe（所有 creationflags 組合皆失敗）")
-        raise RuntimeError("\u7121\u6cd5\u555f\u52d5 updater.exe")
+        if not launched:
+            log.error("無法啟動 updater.exe（所有 creationflags 組合皆失敗）")
+            raise RuntimeError("\u7121\u6cd5\u555f\u52d5 updater.exe")
 
-    log.info("updater.exe 啟動成功: %s", updater_exe)
-    return updater_exe
+        log.info("updater.exe 啟動成功: %s", updater_exe)
+        return updater_exe
+    finally:
+        if not launched:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def demo():

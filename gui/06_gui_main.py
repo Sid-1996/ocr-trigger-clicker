@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -4904,6 +4905,8 @@ class MainWindow(QMainWindow):
                     "更新失敗",
                     f"無法套用更新：{e}\n\n請手動下載並取代檔案。",
                 )
+        else:
+            shutil.rmtree(exe_path.parent, ignore_errors=True)
 
     def _on_download_error(self, msg):
         self._progress.close()
