@@ -8,6 +8,18 @@ from datetime import datetime
 from pathlib import Path
 
 
+class _UpdaterParser(argparse.ArgumentParser):
+    def error(self, message):
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"參數錯誤：{message}\n\n請勿直接執行 updater.exe，"
+            "此檔案由 OCR Trigger Clicker 自動更新時呼叫。",
+            "更新錯誤",
+            0,
+        )
+        sys.exit(2)
+
+
 def _log(log_path, msg):
     if not log_path:
         return
@@ -32,7 +44,7 @@ def _wait_for_pid_exit(pid: int, timeout_sec: int, log_path):
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = _UpdaterParser()
     parser.add_argument("--old", required=True)
     parser.add_argument("--new", required=True)
     parser.add_argument("--pid", type=int, required=True)
