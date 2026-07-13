@@ -2362,6 +2362,11 @@ b64_to_img = _tmpl_mod.b64_to_img
 
 _updater_mod = load_sibling("updater", "core/12_updater.py")
 
+_hk_mod = load_sibling("global_hotkey", "core/00_global_hotkey.py")
+GlobalHotkeyFilter = _hk_mod.GlobalHotkeyFilter
+_hk_register = _hk_mod.register
+_hk_unregister = _hk_mod.unregister
+
 # ── Helpers ──
 
 
@@ -2605,6 +2610,7 @@ class MainWindow(QMainWindow):
             self._groups: list[RuleGroup] = []
             self._collapsed_groups: set[str] = set()
             self._simplified_mode = False
+            self._is_starting = False
             self._notif_stack = _NotificationStack()
             self._updating = False
             self._downloading = False
@@ -2646,6 +2652,12 @@ class MainWindow(QMainWindow):
         self._tray.setContextMenu(_tray_menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
+
+        # ── Global hotkeys ──
+        self._hk_filter = GlobalHotkeyFilter()
+        self._hk_filter.triggered.connect(self._on_hotkey)
+        QApplication.instance().installNativeEventFilter(self._hk_filter)
+        _hk_register(int(self.winId()))
 
     def _load_config(self) -> dict:
         return self._rule_config_ctrl.load_config(self)
@@ -4581,7 +4593,16 @@ class MainWindow(QMainWindow):
             return None
         return [cb.property("gid") for cb in checks if cb.isChecked()]
 
+    def _on_hotkey(self, hid: int):
+        if hid == 1:
+            self._restore_window()
+            self._toggle_start()
+        elif hid == 2:
+            self._quit_app()
+
     def _toggle_start(self):
+        if self._is_starting:
+            return
         if self._window_lost:
             self._stop_loop()
         elif self._loop is not None and self._loop.is_running:
@@ -4618,6 +4639,7 @@ class MainWindow(QMainWindow):
         if not group_ids:
             QMessageBox.warning(self, "警告", "請至少選取一個群組。")
             return
+        self._is_starting = True
         activate_window(title)
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText("初始化中...")
@@ -4634,6 +4656,7 @@ class MainWindow(QMainWindow):
 
     def _on_init_finished(self, success: bool, error_msg: str):
         self._btn_toggle.setEnabled(True)
+        self._is_starting = False
         if success:
             self._loop = self._init_worker.loop
             self._loop.set_tool_hwnd(int(self.winId()))
@@ -4647,6 +4670,7 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(f"初始化失敗 — {error_msg}")
 
     def _stop_loop(self):
+        self._is_starting = False
         self._status_timer.stop()
         if self._loop:
             self._loop.stop()
@@ -4961,6 +4985,8 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def _quit_app(self):
+        _hk_unregister(int(self.winId()))
+        QApplication.instance().removeNativeEventFilter(self._hk_filter)
         self._flush_save()
         self._status_timer.stop()
         if self._loop:

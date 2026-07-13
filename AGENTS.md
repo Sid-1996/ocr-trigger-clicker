@@ -19,21 +19,39 @@
 
 每個獨立任務完成後應立即單獨 commit，不得累積多個不相關任務到同一個 commit。若同一輪對話涉及多個檔案的不同修改目的（例如同時改了架構文件又改了授權檔案），必須拆成多次 git add + commit，逐一提交，不要合併成一個 commit message 帶過。
 
-每次完成任何程式碼修改後，**必須主動執行以下步驟，不得等待使用者提醒**：
+每次完成任何程式碼修改後，**必須主動依序跑完以下檢查清單，不得等待使用者提醒**。使用者是 vibe coding，不會提醒你做這些事——這份清單就是你的提醒：
 
-1. 用 pwsh 執行以下整段（一次完成 add + commit + push）：
+1. **Lint / 格式化**（本次有改 `.py` 檔才需要，純文件/設定變更跳過）：
+   ```powershell
+   pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; ruff check --fix .; ruff format ."
+   ```
+   確認無殘留 error 才進下一步。
 
-```powershell
-pwsh -Command "
-  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-  Set-Location 'C:\Code play first\ocr-trigger-clicker'
-  git add -A
-  '類型: 說明' | Out-File -FilePath __commit_msg.txt -Encoding utf8
-  git commit -F __commit_msg.txt
-  Remove-Item __commit_msg.txt
-  git push origin master
-"
-```
+2. **自檢測試**（本次有改 `core/` 或 `gui/` 下任何非 trivial 邏輯——有分支、迴圈、解析、信任邊界/資料安全路徑——才需要）：
+   檢查該檔案是否有 `if __name__ == "__main__":` self-check，有就執行：
+   ```powershell
+   python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<改動的檔案路徑>', run_name='__main__')"
+   ```
+   把 `<改動的檔案路徑>` 換成實際修改的檔案（例如 `core/04_rule_engine.py`）。單行 trivial 變更、或該檔案本來就沒有 self-check，跳過。不要依賴任何寫死的檔名清單——用「這次改了什麼檔」來判斷，而不是查表。
+
+3. **更新知識圖譜**（本次有改程式碼檔才需要，純文件/CHANGELOG/設定變更跳過）：
+   ```powershell
+   pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; graphify update ."
+   ```
+   純程式碼變動不吃 LLM/API，近乎免費。判斷細節見下方「graphify」章節。
+
+4. **add + commit + push**（一次完成）：
+   ```powershell
+   pwsh -Command "
+     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+     Set-Location 'C:\Code play first\ocr-trigger-clicker'
+     git add -A
+     '類型: 說明' | Out-File -FilePath __commit_msg.txt -Encoding utf8
+     git commit -F __commit_msg.txt
+     Remove-Item __commit_msg.txt
+     git push origin master
+   "
+   ```
 
 commit 訊息格式：`feat` / `fix` / `refactor` / `docs` / `chore` + 冒號 + 中文說明。
 
@@ -168,7 +186,7 @@ rg "pattern" -n -i
 ```
 
 ### Ruff
-**Lint 和格式化一律用 `ruff`，不用 flake8 / black / isort。**
+**Lint 和格式化一律用 `ruff`，不用 flake8 / black / isort。**強制執行時機見上方「工作完成規範」清單第 1 步，這裡只列常用指令：
 
 ```powershell
 # 檢查整個專案
@@ -181,15 +199,11 @@ ruff check --fix "C:\Code play first\ocr-trigger-clicker"
 ruff format "C:\Code play first\ocr-trigger-clicker"
 ```
 
-修改程式碼後，commit 前先跑 `ruff check --fix` + `ruff format`，確認無 error 才提交。
-
 ### 自檢測試
-修改 `core/` 下任何非 trivial 邏輯後，手動執行該檔案的 `__main__` self-check：
+強制執行時機與判斷方式見上方「工作完成規範」清單第 2 步（依實際改動的檔案動態判斷，不要對照固定清單）。單一檔案的執行語法：
 
 ```powershell
-python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/04_rule_engine.py', run_name='__main__')"
-python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/05_main_loop.py', run_name='__main__')"
-python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/11_template_matching.py', run_name='__main__')"
+python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路徑>', run_name='__main__')"
 ```
 
 ---
@@ -229,13 +243,39 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('core/11_tem
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships. The user is vibe coding — they will never type `/graphify` or any flag themselves. You decide when to use it, based on the rules below. Don't ask for permission first.
 
-When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
+**Do NOT default to graphify for everything.** It's a tool for when you'd otherwise have to grep/read multiple files to understand how something connects. Using it on questions you can already answer from the file currently open, or on generic programming questions unrelated to this codebase, is wasted latency and tool calls for no benefit — skip it and just answer.
 
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+### When to query (read-only, cheap — use freely within the rule below)
+
+Run `graphify query "<question>"` first, before grepping or reading multiple files by hand, ONLY when the question genuinely needs cross-file/architectural context, e.g.:
+- "how does X flow through the app", "what calls Y", "why does Z break when W changes"
+- non-trivial refactor/debug tasks where you don't already know the affected call sites
+
+Skip it (just answer directly or use `rg`) when:
+- The answer is fully visible in the file already open or just discussed
+- It's a one-file, one-function question ("what does this line do")
+- It's a generic Python/library question with nothing project-specific about it
+
+Use `graphify path "<A>" "<B>"` for a specific relationship, `graphify explain "<concept>"` for one node — both cheaper and more scoped than a full query.
+
+### When to update (near-free for code-only changes — bake into the commit step)
+
+`graphify update .` only re-extracts changed files and needs no LLM/API cost when every changed file is code (this project always is). Because of that, run it once as part of the commit workflow above — right before `git add -A` — not after every individual edit:
+
+```powershell
+pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; graphify update ."
+```
+
+Skip this step for pure non-code commits (docs-only, CHANGELOG, config) — nothing structural changed, nothing for the graph to catch.
+
+### When to fully rebuild (expensive — never automatic)
+
+`/graphify .` (no flags) reruns the entire pipeline: reclustering, community relabeling, full report regen. Only do this if the user explicitly asks for a full rebuild, or `graphify update .` reports the graph is stale/corrupt beyond what update can fix. Never trigger it just because a session started or because update "might as well" be a full run.
+
+### Misc
+
+- If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
+- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review, or when query/path/explain don't surface enough context.
+- Dirty `graphify-out/` files after hooks/incremental updates are expected — not a reason to skip graphify.
