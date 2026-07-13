@@ -1,7 +1,7 @@
 import ctypes
 from ctypes import wintypes
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QAbstractNativeEventFilter, QObject, pyqtSignal
 
 WM_HOTKEY = 0x0312
 MOD_NOREPEAT = 0x4000
@@ -12,7 +12,7 @@ _HOTKEYS = {
 }
 
 
-class GlobalHotkeyFilter(QObject):
+class GlobalHotkeyFilter(QObject, QAbstractNativeEventFilter):
     triggered = pyqtSignal(int)
 
     def nativeEventFilter(self, eventType, message):
