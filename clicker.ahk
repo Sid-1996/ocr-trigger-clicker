@@ -2,16 +2,7 @@
 #SingleInstance
 CoordMode "Mouse", "Screen"
 
-F12:: {
-    Send "{Click Up}"
-    Send "{LButton Up}"
-    Send "{RButton Up}"
-    Send "{MButton Up}"
-    ToolTip "緊急停止!"
-    Sleep 1000
-    ToolTip
-    ExitApp
-}
+; F12 handled by Python via RegisterHotKey — see core/00_global_hotkey.py
 
 ; === Winsock TCP Client ===
 WSAData := Buffer(400)
