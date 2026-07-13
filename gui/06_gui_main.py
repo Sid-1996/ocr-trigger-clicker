@@ -4600,8 +4600,6 @@ class MainWindow(QMainWindow):
         if hid == 1:
             self._restore_window()
             self._toggle_start()
-        elif hid == 2:
-            self._quit_app()
 
     def _toggle_start(self):
         if self._is_starting:
