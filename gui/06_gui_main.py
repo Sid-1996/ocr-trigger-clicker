@@ -2363,9 +2363,9 @@ b64_to_img = _tmpl_mod.b64_to_img
 _updater_mod = load_sibling("updater", "core/12_updater.py")
 
 _hk_mod = load_sibling("global_hotkey", "core/00_global_hotkey.py")
-GlobalHotkeyFilter = _hk_mod.GlobalHotkeyFilter
 _hk_register = _hk_mod.register
 _hk_unregister = _hk_mod.unregister
+_hk_handle_native = _hk_mod.handle_native_event
 
 # ── Helpers ──
 
@@ -2654,9 +2654,6 @@ class MainWindow(QMainWindow):
         self._tray.show()
 
         # ── Global hotkeys ──
-        self._hk_filter = GlobalHotkeyFilter()
-        self._hk_filter.triggered.connect(self._on_hotkey)
-        QApplication.instance().installNativeEventFilter(self._hk_filter)
         _hk_register(int(self.winId()))
 
     def _load_config(self) -> dict:
@@ -4593,6 +4590,12 @@ class MainWindow(QMainWindow):
             return None
         return [cb.property("gid") for cb in checks if cb.isChecked()]
 
+    def nativeEvent(self, eventType, message):
+        handled, result, hid = _hk_handle_native(eventType, message)
+        if hid is not None:
+            self._on_hotkey(hid)
+        return handled, result
+
     def _on_hotkey(self, hid: int):
         if hid == 1:
             self._restore_window()
@@ -4986,7 +4989,6 @@ class MainWindow(QMainWindow):
 
     def _quit_app(self):
         _hk_unregister(int(self.winId()))
-        QApplication.instance().removeNativeEventFilter(self._hk_filter)
         self._flush_save()
         self._status_timer.stop()
         if self._loop:
