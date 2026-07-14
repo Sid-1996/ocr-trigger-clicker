@@ -225,7 +225,10 @@ class MainLoop:
 
     def _update_has_detect(self):
         self._has_detect_rules = any(
-            r.enabled and any(s.type in ("detect", "match_image") for s in r.steps)
+            r.enabled
+            and (
+                bool(r.condition_list) or any(s.type in ("detect", "match_image") for s in r.steps)
+            )
             for r in self._rules
         )
 
@@ -713,13 +716,14 @@ class MainLoop:
                 if self._condition_hit_counts[key] >= consecutive:
                     self._condition_hit_counts.pop(key, None)
                     action = c.get("action", {})
-                    if action:
-                        action_step = _rule.Step(
-                            type=action.get("type", ""), params=action.get("params", {})
-                        )
-                        ctx = StepContext(img=img, rect=rect)
-                        ctx.matched_text = matches[0]
-                        self._run_step(action_step, ctx, rule)
+                    if not action or not action.get("type"):
+                        continue
+                    action_step = _rule.Step(
+                        type=action.get("type", ""), params=action.get("params", {})
+                    )
+                    ctx = StepContext(img=img, rect=rect)
+                    ctx.matched_text = matches[0]
+                    self._run_step(action_step, ctx, rule)
                     return True
             else:
                 self._condition_hit_counts.pop(key, None)
@@ -748,7 +752,7 @@ class MainLoop:
     ) -> None:
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
-        if rule.condition_list is not None:
+        if rule.use_condition_list:
             matched = self._run_condition_list(rule, img, rect)
             if matched:
                 ctx.triggered = True
@@ -1854,6 +1858,7 @@ if __name__ == "__main__":
         name="條件測試",
         enabled=True,
         steps=[],
+        use_condition_list=True,
         condition_list=[
             {
                 "text": "TEST",
@@ -1911,6 +1916,7 @@ if __name__ == "__main__":
         name="T27A",
         enabled=True,
         steps=[],
+        use_condition_list=True,
         condition_list=[
             {"text": "HI", "action": {"type": "click", "params": {"target": "text_center"}}}
         ],
@@ -1928,6 +1934,7 @@ if __name__ == "__main__":
         name="T27B",
         enabled=True,
         steps=[],
+        use_condition_list=True,
         condition_list=[
             {"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}
         ],
@@ -1947,6 +1954,7 @@ if __name__ == "__main__":
         name="T27C",
         enabled=True,
         steps=[],
+        use_condition_list=True,
         condition_list=[
             {"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}
         ],
@@ -1961,4 +1969,24 @@ if __name__ == "__main__":
     ml._ocr_region = _t27_orig_ocr
     ml._handle_click = _t27_orig_click
 
-    print("\n=== All 27 tests passed ===")
+    # ── Test 28: use_condition_list=True with condition_list=None (no crash) ──
+    _t28_rule = Rule(
+        id="t28",
+        name="T28",
+        enabled=True,
+        steps=[],
+        use_condition_list=True,
+        condition_list=None,
+    )
+    _t28_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    _t28_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    _t28_ctx = StepContext(img=_t28_img, rect=_t28_rect)
+    ml._ocr_region = lambda *a, **kw: [_t27_ocr]
+    try:
+        ml._run_rule(_t28_rule, _t28_img, _t28_rect, _t28_ctx)
+        assert not _t28_ctx.triggered, "28: None condition_list should not trigger"
+        print("  [OK] use_condition_list=True + condition_list=None → no crash, no trigger")
+    except Exception as e:
+        assert False, f"28: use_condition_list=True + condition_list=None crashed: {e}"
+
+    print("\n=== All 28 tests passed ===")

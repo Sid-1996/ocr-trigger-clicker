@@ -23,6 +23,7 @@ class Rule:
     enabled: bool
     steps: list[Step]
     background: bool = False
+    use_condition_list: bool = False
     condition_list: list | None = None
     condition_list_advance_on_no_match: bool = False
 

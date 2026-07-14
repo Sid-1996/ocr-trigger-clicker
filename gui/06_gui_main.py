@@ -2439,6 +2439,8 @@ class _ConditionListWidget(QWidget):
         for i, c in enumerate(self._conditions):
             card = _ConditionCardWidget(c, self._roi_cb, self._pick_cb, i, len(self._conditions))
             card.changed.connect(self._on_card_changed)
+            card.moved_up.connect(lambda idx=i: self._move_condition(idx, -1))
+            card.moved_down.connect(lambda idx=i: self._move_condition(idx, 1))
             card.removed.connect(lambda idx=i: self._remove_card(idx))
             self._cards.append(card)
             self._card_area.addWidget(card)
@@ -2448,6 +2450,15 @@ class _ConditionListWidget(QWidget):
             del self._conditions[idx]
             self._rebuild()
             self._on_card_changed()
+
+    def _move_condition(self, idx: int, direction: int):
+        new_idx = idx + direction
+        if 0 <= new_idx < len(self._conditions):
+            self._conditions[idx], self._conditions[new_idx] = (
+                self._conditions[new_idx],
+                self._conditions[idx],
+            )
+            self._rebuild()
 
     def _on_card_changed(self):
         pass
@@ -3884,8 +3895,9 @@ class MainWindow(QMainWindow):
                             self._condition_list.get_advance_on_no_match()
                         )
                         prev_rule.condition_list = self._condition_list.get_conditions()
+                        prev_rule.use_condition_list = True
                     else:
-                        prev_rule.condition_list = None
+                        prev_rule.use_condition_list = False
                     self._flush_save()
                     prefix = "👁 " if prev_rule.background else ""
                     status = "✓" if prev_rule.enabled else "✗"
@@ -3990,9 +4002,9 @@ class MainWindow(QMainWindow):
         self._edit_background.setChecked(getattr(rule, "background", False))
         self._edit_background.blockSignals(False)
         self._edit_condition_mode.blockSignals(True)
-        self._edit_condition_mode.setChecked(rule.condition_list is not None)
+        self._edit_condition_mode.setChecked(rule.use_condition_list)
         self._edit_condition_mode.blockSignals(False)
-        if rule.condition_list is not None:
+        if rule.use_condition_list:
             self._step_list.setVisible(False)
             self._condition_list.setVisible(True)
             self._condition_list.set_conditions(rule.condition_list)
@@ -4012,6 +4024,7 @@ class MainWindow(QMainWindow):
         if checked:
             if rule.condition_list is None:
                 rule.condition_list = []
+            rule.use_condition_list = True
             self._step_list.setVisible(False)
             self._condition_list.setVisible(True)
             self._condition_list.set_conditions(rule.condition_list)
@@ -4019,7 +4032,7 @@ class MainWindow(QMainWindow):
                 getattr(rule, "condition_list_advance_on_no_match", False)
             )
         else:
-            rule.condition_list = None
+            rule.use_condition_list = False
             self._step_list.setVisible(True)
             self._condition_list.setVisible(False)
             self._step_list.set_steps(rule.steps)
@@ -4627,8 +4640,9 @@ class MainWindow(QMainWindow):
             self._condition_list.save_all()
             rule.condition_list_advance_on_no_match = self._condition_list.get_advance_on_no_match()
             rule.condition_list = self._condition_list.get_conditions()
+            rule.use_condition_list = True
         else:
-            rule.condition_list = None
+            rule.use_condition_list = False
         # 校驗 detect 步驟文字不可為空
         for i, s in enumerate(rule.steps):
             if s.type == "detect" and not s.params.get("text", "").strip():
