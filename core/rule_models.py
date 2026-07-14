@@ -24,6 +24,7 @@ class Rule:
     steps: list[Step]
     background: bool = False
     condition_list: list | None = None
+    condition_list_advance_on_no_match: bool = False
 
 
 @dataclass

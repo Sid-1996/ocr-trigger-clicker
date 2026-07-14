@@ -746,6 +746,13 @@ class MainLoop:
     ) -> None:
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
+        if rule.condition_list is not None:
+            matched = self._run_condition_list(rule, img, rect)
+            if matched:
+                ctx.triggered = True
+            elif rule.condition_list_advance_on_no_match:
+                ctx.triggered = True
+            return
         i = 0
         while i < len(rule.steps):
             ctx.step_idx = i
@@ -1884,4 +1891,53 @@ if __name__ == "__main__":
     )
     print("  [OK] _run_condition_list matched_text propagation")
 
-    print("\n=== All 26 tests passed ===")
+    # ── Test 27: _run_rule dispatches condition_list and sets triggered ──
+    _t27_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    _t27_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    _t27_ocr = OcrResult(text="HI", x=5, y=5, w=10, h=10, confidence=0.9)
+    _t27_orig_ocr = ml._ocr_region
+    _t27_orig_click = ml._handle_click
+
+    # suppress actual click
+    ml._handle_click = lambda p, c, r: StepResult("continue")
+
+    # 27a: condition matches → triggered=True
+    _t27a_rule = Rule(
+        id="t27a", name="T27A", enabled=True, steps=[],
+        condition_list=[{"text": "HI", "action": {"type": "click", "params": {"target": "text_center"}}}],
+        condition_list_advance_on_no_match=False,
+    )
+    _t27a_ctx = StepContext(img=_t27_img, rect=_t27_rect)
+    ml._ocr_region = lambda *a, **kw: [_t27_ocr]
+    ml._run_rule(_t27a_rule, _t27_img, _t27_rect, _t27a_ctx)
+    assert _t27a_ctx.triggered, "27a: condition matched → triggered should be True"
+    print("  [OK] _run_rule condition_list matched → triggered=True")
+
+    # 27b: no match, advance_on_no_match=False → triggered=False
+    _t27b_rule = Rule(
+        id="t27b", name="T27B", enabled=True, steps=[],
+        condition_list=[{"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}],
+        condition_list_advance_on_no_match=False,
+    )
+    _t27b_ctx = StepContext(img=_t27_img, rect=_t27_rect)
+    ml._ocr_region = lambda *a, **kw: []
+    ml._run_rule(_t27b_rule, _t27_img, _t27_rect, _t27b_ctx)
+    assert not _t27b_ctx.triggered, "27b: no match, advance_on_no_match=False → triggered should be False"
+    print("  [OK] _run_rule condition_list no-match → triggered=False")
+
+    # 27c: no match, advance_on_no_match=True → triggered=True
+    _t27c_rule = Rule(
+        id="t27c", name="T27C", enabled=True, steps=[],
+        condition_list=[{"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}],
+        condition_list_advance_on_no_match=True,
+    )
+    _t27c_ctx = StepContext(img=_t27_img, rect=_t27_rect)
+    ml._ocr_region = lambda *a, **kw: []
+    ml._run_rule(_t27c_rule, _t27_img, _t27_rect, _t27c_ctx)
+    assert _t27c_ctx.triggered, "27c: no match, advance_on_no_match=True → triggered should be True"
+    print("  [OK] _run_rule condition_list no-match + advance → triggered=True")
+
+    ml._ocr_region = _t27_orig_ocr
+    ml._handle_click = _t27_orig_click
+
+    print("\n=== All 27 tests passed ===")

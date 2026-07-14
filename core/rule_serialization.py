@@ -41,6 +41,7 @@ def _dict_to_rule(d: dict) -> Rule:
         steps=steps,
         background=bool(d.get("background", False)),
         condition_list=d.get("condition_list"),
+        condition_list_advance_on_no_match=bool(d.get("condition_list_advance_on_no_match", False)),
     )
 
 
