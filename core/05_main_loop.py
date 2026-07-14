@@ -664,9 +664,14 @@ class MainLoop:
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         ms = params.get("ms", 1000)
         if ms > 0:
+            self._log(f"規則「{rule.name}」等待 {ms}ms 開始")
+            t0 = time.monotonic()
             interrupted = self._stop_event.wait(timeout=ms / 1000.0)
+            elapsed = (time.monotonic() - t0) * 1000
             if interrupted:
+                self._log(f"規則「{rule.name}」等待中斷（stop_event），經過 {elapsed:.0f}ms")
                 return StepResult("stop")
+            self._log(f"規則「{rule.name}」等待完成，實際經過 {elapsed:.0f}ms")
         return StepResult("continue")
 
     def _handle_jump(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -931,6 +936,14 @@ class MainLoop:
                     if self._window_hwnd is None:
                         with self._window_lock:
                             self._window_hwnd = get_window_hwnd_orig(self._window_title)
+                    if (
+                        self._foreground_only
+                        and self._window_hwnd
+                        and not is_window_foreground(self._window_hwnd)
+                    ):
+                        self._perf.record_frame()
+                        self._stop_event.wait(self._interval)
+                        continue
                     t0 = time.monotonic()
                     img = capture(self._window_title)
                     if img is None:
