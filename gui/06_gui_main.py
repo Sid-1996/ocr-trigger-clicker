@@ -2361,11 +2361,18 @@ class _ConditionCardWidget(QWidget):
         self._condition["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
         self._condition["consecutive_required"] = self._consecutive.value()
         if self._action_step is not None and hasattr(self._action_step, "params"):
-            item = self._action_form_container.itemAt(0) if self._action_form_container.count() else None
+            item = (
+                self._action_form_container.itemAt(0)
+                if self._action_form_container.count()
+                else None
+            )
             form = item.widget() if item else None
             if form and hasattr(form, "save"):
                 form.save()
-            self._condition["action"] = {"type": self._action_step.type, "params": self._action_step.params}
+            self._condition["action"] = {
+                "type": self._action_step.type,
+                "params": self._action_step.params,
+            }
 
 
 class _ConditionListWidget(QWidget):
@@ -2387,14 +2394,19 @@ class _ConditionListWidget(QWidget):
         layout.addWidget(add_btn)
 
     def _add_condition(self):
-        self._conditions.append({
-            "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-            "text": "",
-            "match_mode": "contains",
-            "fuzzy_threshold": 0.8,
-            "consecutive_required": 1,
-            "action": {"type": "click", "params": {"target": "text_center", "button": "left", "random_offset": 3}},
-        })
+        self._conditions.append(
+            {
+                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+                "text": "",
+                "match_mode": "contains",
+                "fuzzy_threshold": 0.8,
+                "consecutive_required": 1,
+                "action": {
+                    "type": "click",
+                    "params": {"target": "text_center", "button": "left", "random_offset": 3},
+                },
+            }
+        )
         self._rebuild()
 
     def set_conditions(self, conds: list[dict]):
@@ -2427,8 +2439,15 @@ class _ConditionListWidget(QWidget):
         for i, c in enumerate(self._conditions):
             card = _ConditionCardWidget(c, self._roi_cb, self._pick_cb, i, len(self._conditions))
             card.changed.connect(self._on_card_changed)
+            card.removed.connect(lambda idx=i: self._remove_card(idx))
             self._cards.append(card)
             self._card_area.addWidget(card)
+
+    def _remove_card(self, idx: int):
+        if 0 <= idx < len(self._conditions):
+            del self._conditions[idx]
+            self._rebuild()
+            self._on_card_changed()
 
     def _on_card_changed(self):
         pass
@@ -3185,7 +3204,9 @@ class MainWindow(QMainWindow):
         name_row.addWidget(self._edit_background)
         name_row.addWidget(QLabel("模式:"))
         self._edit_condition_mode = QCheckBox("條件清單")
-        self._edit_condition_mode.setToolTip("勾選後，用「若偵測到 X → 做 Y」的條件卡片清單取代原本的步驟序列。兩者資料互不影響，可隨時切換。")
+        self._edit_condition_mode.setToolTip(
+            "勾選後，用「若偵測到 X → 做 Y」的條件卡片清單取代原本的步驟序列。兩者資料互不影響，可隨時切換。"
+        )
         self._edit_condition_mode.toggled.connect(self._on_condition_mode_toggled)
         name_row.addWidget(self._edit_condition_mode)
         edit_layout.addLayout(name_row)
@@ -3208,7 +3229,9 @@ class MainWindow(QMainWindow):
         )
         edit_layout.addWidget(self._step_list, 1)
 
-        self._condition_list = _ConditionListWidget(roi_cb=self._screenshot_ctrl.open_roi_selector, pick_cb=self._on_pick_coord)
+        self._condition_list = _ConditionListWidget(
+            roi_cb=self._screenshot_ctrl.open_roi_selector, pick_cb=self._on_pick_coord
+        )
         edit_layout.addWidget(self._condition_list)
         self._condition_list.setVisible(False)
 
@@ -3857,7 +3880,9 @@ class MainWindow(QMainWindow):
                     prev_rule.steps = self._step_list.get_steps()
                     if self._edit_condition_mode.isChecked():
                         self._condition_list.save_all()
-                        prev_rule.condition_list_advance_on_no_match = self._condition_list.get_advance_on_no_match()
+                        prev_rule.condition_list_advance_on_no_match = (
+                            self._condition_list.get_advance_on_no_match()
+                        )
                         prev_rule.condition_list = self._condition_list.get_conditions()
                     else:
                         prev_rule.condition_list = None
@@ -3971,7 +3996,9 @@ class MainWindow(QMainWindow):
             self._step_list.setVisible(False)
             self._condition_list.setVisible(True)
             self._condition_list.set_conditions(rule.condition_list)
-            self._condition_list.set_advance_on_no_match(getattr(rule, "condition_list_advance_on_no_match", False))
+            self._condition_list.set_advance_on_no_match(
+                getattr(rule, "condition_list_advance_on_no_match", False)
+            )
         else:
             self._step_list.setVisible(True)
             self._condition_list.setVisible(False)
@@ -3988,7 +4015,9 @@ class MainWindow(QMainWindow):
             self._step_list.setVisible(False)
             self._condition_list.setVisible(True)
             self._condition_list.set_conditions(rule.condition_list)
-            self._condition_list.set_advance_on_no_match(getattr(rule, "condition_list_advance_on_no_match", False))
+            self._condition_list.set_advance_on_no_match(
+                getattr(rule, "condition_list_advance_on_no_match", False)
+            )
         else:
             rule.condition_list = None
             self._step_list.setVisible(True)

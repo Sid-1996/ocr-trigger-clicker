@@ -714,7 +714,9 @@ class MainLoop:
                     self._condition_hit_counts.pop(key, None)
                     action = c.get("action", {})
                     if action:
-                        action_step = _rule.Step(type=action.get("type", ""), params=action.get("params", {}))
+                        action_step = _rule.Step(
+                            type=action.get("type", ""), params=action.get("params", {})
+                        )
                         ctx = StepContext(img=img, rect=rect)
                         ctx.matched_text = matches[0]
                         self._run_step(action_step, ctx, rule)
@@ -1848,7 +1850,9 @@ if __name__ == "__main__":
 
     # ── Test 26: _run_condition_list matched_text propagation ──
     _cond_rule = Rule(
-        id="cond_test", name="條件測試", enabled=True,
+        id="cond_test",
+        name="條件測試",
+        enabled=True,
         steps=[],
         condition_list=[
             {
@@ -1903,8 +1907,13 @@ if __name__ == "__main__":
 
     # 27a: condition matches → triggered=True
     _t27a_rule = Rule(
-        id="t27a", name="T27A", enabled=True, steps=[],
-        condition_list=[{"text": "HI", "action": {"type": "click", "params": {"target": "text_center"}}}],
+        id="t27a",
+        name="T27A",
+        enabled=True,
+        steps=[],
+        condition_list=[
+            {"text": "HI", "action": {"type": "click", "params": {"target": "text_center"}}}
+        ],
         condition_list_advance_on_no_match=False,
     )
     _t27a_ctx = StepContext(img=_t27_img, rect=_t27_rect)
@@ -1915,20 +1924,32 @@ if __name__ == "__main__":
 
     # 27b: no match, advance_on_no_match=False → triggered=False
     _t27b_rule = Rule(
-        id="t27b", name="T27B", enabled=True, steps=[],
-        condition_list=[{"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}],
+        id="t27b",
+        name="T27B",
+        enabled=True,
+        steps=[],
+        condition_list=[
+            {"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}
+        ],
         condition_list_advance_on_no_match=False,
     )
     _t27b_ctx = StepContext(img=_t27_img, rect=_t27_rect)
     ml._ocr_region = lambda *a, **kw: []
     ml._run_rule(_t27b_rule, _t27_img, _t27_rect, _t27b_ctx)
-    assert not _t27b_ctx.triggered, "27b: no match, advance_on_no_match=False → triggered should be False"
+    assert not _t27b_ctx.triggered, (
+        "27b: no match, advance_on_no_match=False → triggered should be False"
+    )
     print("  [OK] _run_rule condition_list no-match → triggered=False")
 
     # 27c: no match, advance_on_no_match=True → triggered=True
     _t27c_rule = Rule(
-        id="t27c", name="T27C", enabled=True, steps=[],
-        condition_list=[{"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}],
+        id="t27c",
+        name="T27C",
+        enabled=True,
+        steps=[],
+        condition_list=[
+            {"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}
+        ],
         condition_list_advance_on_no_match=True,
     )
     _t27c_ctx = StepContext(img=_t27_img, rect=_t27_rect)
