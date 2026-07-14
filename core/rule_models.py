@@ -23,6 +23,7 @@ class Rule:
     enabled: bool
     steps: list[Step]
     background: bool = False
+    condition_list: list | None = None
 
 
 @dataclass

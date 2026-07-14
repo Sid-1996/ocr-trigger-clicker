@@ -40,6 +40,7 @@ def _dict_to_rule(d: dict) -> Rule:
         enabled=bool(d.get("enabled", True)),
         steps=steps,
         background=bool(d.get("background", False)),
+        condition_list=d.get("condition_list"),
     )
 
 
