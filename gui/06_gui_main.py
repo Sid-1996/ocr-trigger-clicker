@@ -2222,6 +2222,217 @@ class _NotifyStepForm(QWidget):
         self._step.params["message"] = self._msg.text()
 
 
+class _ConditionCardWidget(QWidget):
+    moved_up = pyqtSignal()
+    moved_down = pyqtSignal()
+    removed = pyqtSignal()
+    changed = pyqtSignal()
+    steps_changed = pyqtSignal()
+
+    def __init__(self, condition: dict, roi_cb, pick_cb, index: int, total: int):
+        super().__init__()
+        self._condition = condition
+        self._roi_cb = roi_cb
+        self._pick_cb = pick_cb
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        card = QWidget()
+        card.setStyleSheet(
+            "QWidget { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }"
+        )
+        form = QFormLayout(card)
+
+        self._text = QLineEdit(condition.get("text", ""))
+        form.addRow("若偵測到文字:", self._text)
+
+        roi = condition.get("roi", {})
+        zero = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        self._roi_label = QLabel("全視窗" if zero else _fmt_roi(roi))
+        roi_btn = QPushButton("框選偵測區域")
+        roi_btn.clicked.connect(self._pick_roi)
+        form.addRow("偵測區域:", self._roi_label)
+        form.addRow("", roi_btn)
+
+        self._match_mode = _NoWheelCombo()
+        self._match_mode.addItem("包含關鍵字", "contains")
+        self._match_mode.addItem("完全符合", "exact")
+        self._match_mode.addItem("近似比對", "fuzzy")
+        self._match_mode.addItem("正規表達式", "regex")
+        idx_mm = self._match_mode.findData(condition.get("match_mode", "contains"))
+        if idx_mm >= 0:
+            self._match_mode.setCurrentIndex(idx_mm)
+        self._match_mode.currentIndexChanged.connect(self._on_match_mode_changed)
+        form.addRow("比對模式:", self._match_mode)
+
+        self._fuzzy_th = _NoWheelSpin()
+        self._fuzzy_th.setRange(1, 100)
+        self._fuzzy_th.setSuffix(" %")
+        self._fuzzy_th.setValue(int(condition.get("fuzzy_threshold", 0.8) * 100))
+        self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
+        form.addRow("精準度:", self._fuzzy_th)
+
+        self._consecutive = _NoWheelSpin()
+        self._consecutive.setRange(1, 30)
+        self._consecutive.setValue(int(condition.get("consecutive_required", 1)))
+        self._consecutive.setToolTip("需連續偵測到 N 次才觸發動作，避免單幀誤判")
+        form.addRow("連續命中次數:", self._consecutive)
+
+        self._action_type = _NoWheelCombo()
+        self._action_type.addItem("點擊", "click")
+        self._action_type.addItem("按鍵", "key")
+        self._action_type.addItem("拖曳", "drag")
+        self._action_type.addItem("滾輪", "scroll")
+        self._action_type.addItem("通知", "notify")
+        action = condition.get("action", {}) or {}
+        action_type = action.get("type", "click")
+        idx_at = self._action_type.findData(action_type)
+        if idx_at >= 0:
+            self._action_type.setCurrentIndex(idx_at)
+        self._action_type.currentIndexChanged.connect(self._on_action_type_changed)
+        form.addRow("符合時執行:", self._action_type)
+
+        self._action_form_container = QVBoxLayout()
+        form.addRow(self._action_form_container)
+        self._action_step = None
+        self._build_action_form(action_type, action.get("params", {}))
+
+        outer.addWidget(card)
+
+        btn_row = QHBoxLayout()
+        up_btn = QPushButton("↑")
+        up_btn.setEnabled(index > 0)
+        up_btn.clicked.connect(self.moved_up.emit)
+        down_btn = QPushButton("↓")
+        down_btn.setEnabled(index < total - 1)
+        down_btn.clicked.connect(self.moved_down.emit)
+        del_btn = QPushButton("刪除此條件")
+        del_btn.clicked.connect(self.removed.emit)
+        btn_row.addWidget(up_btn)
+        btn_row.addWidget(down_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(del_btn)
+        outer.addLayout(btn_row)
+        self.steps_changed.connect(self.changed.emit)
+
+    def _pick_roi(self):
+        if self._roi_cb:
+            result = self._roi_cb()
+            if result:
+                self._condition["roi"] = result
+                z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+                self._roi_label.setText("全視窗" if z else _fmt_roi(result))
+                self.changed.emit()
+
+    def _on_match_mode_changed(self, idx):
+        self._fuzzy_th.setVisible(self._match_mode.itemData(idx) == "fuzzy")
+
+    def _on_action_type_changed(self, idx):
+        action_type = self._action_type.itemData(idx)
+        self._build_action_form(action_type, {})
+
+    def _build_action_form(self, action_type: str, params: dict):
+        while self._action_form_container.count():
+            item = self._action_form_container.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._action_step = Step(type=action_type, params=deepcopy(params))
+        form_widget = self._make_action_form(action_type, self._action_step)
+        if form_widget:
+            self._action_form_container.addWidget(form_widget)
+
+    def _make_action_form(self, action_type: str, step):
+        self._list = self
+        if action_type == "click":
+            return _ClickStepForm(self, step, 0, self._pick_cb, simplified=True)
+        if action_type == "key":
+            return _KeyStepForm(self, step, 0)
+        if action_type == "drag":
+            return _DragStepForm(self, step, 0, self._pick_cb)
+        if action_type == "scroll":
+            return _ScrollStepForm(self, step, 0)
+        if action_type == "notify":
+            return _NotifyStepForm(self, step, 0)
+        return None
+
+    def save(self):
+        self._condition["text"] = self._text.text().strip()
+        self._condition["match_mode"] = self._match_mode.currentData()
+        self._condition["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
+        self._condition["consecutive_required"] = self._consecutive.value()
+        if self._action_step is not None and hasattr(self._action_step, "params"):
+            item = self._action_form_container.itemAt(0) if self._action_form_container.count() else None
+            form = item.widget() if item else None
+            if form and hasattr(form, "save"):
+                form.save()
+            self._condition["action"] = {"type": self._action_step.type, "params": self._action_step.params}
+
+
+class _ConditionListWidget(QWidget):
+    def __init__(self, roi_cb=None, pick_cb=None):
+        super().__init__()
+        self._roi_cb = roi_cb
+        self._pick_cb = pick_cb
+        self._conditions: list[dict] = []
+        self._cards: list[_ConditionCardWidget] = []
+        self._advance_cb = QCheckBox("全部不符合時仍推進到下一規則")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._advance_cb)
+        self._card_area = QVBoxLayout()
+        layout.addLayout(self._card_area)
+        layout.addStretch()
+        add_btn = QPushButton("+ 新增條件")
+        add_btn.clicked.connect(self._add_condition)
+        layout.addWidget(add_btn)
+
+    def _add_condition(self):
+        self._conditions.append({
+            "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+            "text": "",
+            "match_mode": "contains",
+            "fuzzy_threshold": 0.8,
+            "consecutive_required": 1,
+            "action": {"type": "click", "params": {"target": "text_center", "button": "left", "random_offset": 3}},
+        })
+        self._rebuild()
+
+    def set_conditions(self, conds: list[dict]):
+        self._conditions = list(conds) if conds else []
+        self._rebuild()
+
+    def get_conditions(self) -> list[dict]:
+        return list(self._conditions)
+
+    def get_advance_on_no_match(self) -> bool:
+        return self._advance_cb.isChecked()
+
+    def set_advance_on_no_match(self, value: bool):
+        self._advance_cb.blockSignals(True)
+        self._advance_cb.setChecked(bool(value))
+        self._advance_cb.blockSignals(False)
+
+    def save_all(self):
+        for card in self._cards:
+            card.save()
+
+    def _rebuild(self):
+        for card in self._cards:
+            card.deleteLater()
+        self._cards.clear()
+        while self._card_area.count():
+            item = self._card_area.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for i, c in enumerate(self._conditions):
+            card = _ConditionCardWidget(c, self._roi_cb, self._pick_cb, i, len(self._conditions))
+            card.changed.connect(self._on_card_changed)
+            self._cards.append(card)
+            self._card_area.addWidget(card)
+
+    def _on_card_changed(self):
+        pass
+
+
 class _InlineActionEditor(QWidget):
     changed = pyqtSignal()
 
@@ -2971,6 +3182,11 @@ class MainWindow(QMainWindow):
             "常駐監控：每幀獨立偵測，不參與群組流程順序。\n適合隨時需要攔截的條件（如錯誤提示、緊急中斷）"
         )
         name_row.addWidget(self._edit_background)
+        name_row.addWidget(QLabel("模式:"))
+        self._edit_condition_mode = QCheckBox("條件清單")
+        self._edit_condition_mode.setToolTip("勾選後，用「若偵測到 X → 做 Y」的條件卡片清單取代原本的步驟序列。兩者資料互不影響，可隨時切換。")
+        self._edit_condition_mode.toggled.connect(self._on_condition_mode_toggled)
+        name_row.addWidget(self._edit_condition_mode)
         edit_layout.addLayout(name_row)
 
         edit_layout.addWidget(QLabel("步驟列表:"))
@@ -2990,6 +3206,10 @@ class MainWindow(QMainWindow):
             )
         )
         edit_layout.addWidget(self._step_list, 1)
+
+        self._condition_list = _ConditionListWidget(roi_cb=self._screenshot_ctrl.open_roi_selector, pick_cb=self._on_pick_coord)
+        edit_layout.addWidget(self._condition_list)
+        self._condition_list.setVisible(False)
 
         # Add step dropdown
         add_dropdown = QPushButton("+ 新增步驟 ▾")
@@ -3634,6 +3854,12 @@ class MainWindow(QMainWindow):
                     )
                     prev_rule.background = self._edit_background.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
+                    if self._edit_condition_mode.isChecked():
+                        self._condition_list.save_all()
+                        prev_rule.condition_list_advance_on_no_match = self._condition_list.get_advance_on_no_match()
+                        prev_rule.condition_list = self._condition_list.get_conditions()
+                    else:
+                        prev_rule.condition_list = None
                     self._flush_save()
                     prefix = "👁 " if prev_rule.background else ""
                     status = "✓" if prev_rule.enabled else "✗"
@@ -3737,8 +3963,37 @@ class MainWindow(QMainWindow):
         self._edit_background.blockSignals(True)
         self._edit_background.setChecked(getattr(rule, "background", False))
         self._edit_background.blockSignals(False)
-        self._step_list.set_rule_id(rule.id)
-        self._step_list.set_steps(rule.steps)
+        self._edit_condition_mode.blockSignals(True)
+        self._edit_condition_mode.setChecked(rule.condition_list is not None)
+        self._edit_condition_mode.blockSignals(False)
+        if rule.condition_list is not None:
+            self._step_list.setVisible(False)
+            self._condition_list.setVisible(True)
+            self._condition_list.set_conditions(rule.condition_list)
+            self._condition_list.set_advance_on_no_match(getattr(rule, "condition_list_advance_on_no_match", False))
+        else:
+            self._step_list.setVisible(True)
+            self._condition_list.setVisible(False)
+            self._step_list.set_rule_id(rule.id)
+            self._step_list.set_steps(rule.steps)
+
+    def _on_condition_mode_toggled(self, checked: bool):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        if checked:
+            if rule.condition_list is None:
+                rule.condition_list = []
+            self._step_list.setVisible(False)
+            self._condition_list.setVisible(True)
+            self._condition_list.set_conditions(rule.condition_list)
+            self._condition_list.set_advance_on_no_match(getattr(rule, "condition_list_advance_on_no_match", False))
+        else:
+            rule.condition_list = None
+            self._step_list.setVisible(True)
+            self._condition_list.setVisible(False)
+            self._step_list.set_steps(rule.steps)
+        self._flush_save()
 
     def _on_enabled_changed(self, state):
         rule = self._get_current_rule()
@@ -4338,6 +4593,12 @@ class MainWindow(QMainWindow):
         rule.name = self._edit_name.text()
         rule.enabled = self._edit_enabled.isChecked()
         rule.steps = self._step_list.get_steps()
+        if self._edit_condition_mode.isChecked():
+            self._condition_list.save_all()
+            rule.condition_list_advance_on_no_match = self._condition_list.get_advance_on_no_match()
+            rule.condition_list = self._condition_list.get_conditions()
+        else:
+            rule.condition_list = None
         # 校驗 detect 步驟文字不可為空
         for i, s in enumerate(rule.steps):
             if s.type == "detect" and not s.params.get("text", "").strip():
