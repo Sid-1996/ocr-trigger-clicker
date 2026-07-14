@@ -2237,8 +2237,9 @@ class _ConditionCardWidget(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         card = QWidget()
+        card.setObjectName("conditionCard")
         card.setStyleSheet(
-            "QWidget { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }"
+            "QWidget#conditionCard { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }"
         )
         form = QFormLayout(card)
 
