@@ -660,7 +660,7 @@ class MainLoop:
         return StepResult("continue")
 
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
-        ms = params.get("ms", 1000)
+        ms = params.get("ms", 500)
         if ms > 0:
             self._log(f"規則「{rule.name}」等待 {ms}ms 開始")
             t0 = time.monotonic()

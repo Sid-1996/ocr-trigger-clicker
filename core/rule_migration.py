@@ -27,7 +27,7 @@ _STEP_DEFAULTS = {
         "button": "left",
     },
     "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
-    "wait": {"ms": 1000},
+    "wait": {"ms": 500},
     "jump": {"rule_id": ""},
     "compare": {
         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
@@ -159,7 +159,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["amount"] = max(1, _as_int(base.get("amount", 1), 1))
         base["delay_ms"] = max(0, _as_int(base.get("delay_ms", 30), 30))
     elif step_type == "wait":
-        base["ms"] = max(0, _as_int(base.get("ms", 1000), 1000))
+        base["ms"] = max(0, _as_int(base.get("ms", 500), 500))
     elif step_type == "jump":
         base["rule_id"] = str(base.get("rule_id", ""))
     elif step_type == "compare":

@@ -895,13 +895,6 @@ class _StepListWidget(QWidget):
         painter.drawLine(0, y_pos, self.width(), y_pos)
         painter.end()
 
-    def add_step(self, step_type: str):
-        step = Step(type=step_type, params=deepcopy(_STEP_DEFAULTS.get(step_type, {})))
-        self._steps.append(step)
-        self._rebuild()
-        self._toggle_expand(len(self._steps) - 1)
-        self.steps_changed.emit()
-
     def _build_form(self, idx: int, step) -> Optional[QWidget]:
         t = step.type
         if t == "detect":
@@ -4286,14 +4279,7 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
 
     def _add_step(self, step_type: str):
-        if step_type == "condition_list":
-            default_params = {
-                "conditions": [],
-                "advance_on_no_match": False,
-                "loop": True,
-            }
-        else:
-            default_params = {}
+        default_params = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
         step = Step(type=step_type, params=default_params)
         rule = self._get_current_rule()
         if rule is None:
@@ -4630,11 +4616,26 @@ class MainWindow(QMainWindow):
                         return
         # 檢查 jump 參照的規則是否存在
         valid_ids = {r.id for r in self._rules}
-        for s in rule.steps:
+        warnings = []
+        for i, s in enumerate(rule.steps):
             if s.type == "jump":
                 tid = s.params.get("rule_id", "")
                 if tid and tid not in valid_ids:
-                    self._status_bar.showMessage(f"⚠ 步驟「{s.type}」參照的規則已不存在", 5000)
+                    warnings.append(f"步驟 {i + 1} (跳轉)：參照的規則已不存在")
+            elif s.type == "match_image" and not s.params.get("template", "").strip():
+                warnings.append(f"步驟 {i + 1} (圖示辨識)：尚未設定範本圖片")
+            elif (
+                s.type == "click"
+                and s.params.get("target") == "click_text"
+                and not s.params.get("text", "").strip()
+            ):
+                warnings.append(f"步驟 {i + 1} (點擊)：目標文字為空")
+            elif s.type == "notify" and not s.params.get("message", "").strip():
+                warnings.append(f"步驟 {i + 1} (提示訊息)：訊息為空")
+            elif s.type == "compare" and not s.params.get("pattern", "").strip():
+                warnings.append(f"步驟 {i + 1} (數字比較)：正規表達式為空，將匹配所有數字")
+        if warnings:
+            self._status_bar.showMessage("⚠ " + "；".join(warnings), 8000)
         self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
