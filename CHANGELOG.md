@@ -1,5 +1,29 @@
 # Changelog
 
+## [v0.0.14] - 2026-07-15
+
+### 新增
+- OCR 診斷面板新增「建立為模板」按鈕：選取辨識結果後一鍵截圖裁切為模板，
+  建立 match_image + click + wait 規則（模板用 OCR 精確邊框，ROI 維持 pad=20 搜尋範圍）
+- OCR 診斷面板新增「加入模板步驟」按鈕：將辨識區塊截圖追加為現有規則的 match_image 步驟
+- 步驟卡片顏色區分：10 種步驟類型各配對應顏色（`_STEP_COLORS`）
+- 規則圓點顯示 5 種狀態：停用（灰）、就緒（綠）、運行中（藍）、失敗（紅）、已完成（深藍）
+- 狀態欄常駐 AHK 🟢/🔴 連接指示器
+- 步驟參數即時校驗：detect 文字、notify 訊息、compare 步驟紅色邊框提示
+- 步驟列表支援 Del 快捷鍵刪除選中步驟
+
+### 修正
+- 步驟列表 Del 快捷鍵改用 `WidgetShortcut` context，避免攔截規則列表的 Del 刪除功能
+- OCR 診斷面板模板截圖色彩空間：`_latest_raw` 為 RGB，裁切後轉 BGR 再編碼，
+  避免 match_template 執行時 R↔B 互換導致比對失敗
+- `_step_summary` 補充 `template_center` 摘要顯示（後改用統一 `text_center`）
+
+### 重構
+- OCR 診斷面板提取 `_compute_roi()` 輔助方法，`_on_add_rule`、`_on_set_sub_target`、
+  `_on_add_template`、`_on_add_template_step` 四處共用 ROI 計算邏輯
+- 移除多餘的 `template_center` click target，match_image 規則統一用 `text_center`，
+  runtime 已透過 `ctx.matched_text` 介面兼容 detect 與 match_image
+
 ## [v0.0.13] - 2026-07-15
 
 ### 移除
@@ -175,6 +199,7 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.0.14]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.14
 [v0.0.13]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.13
 [v0.0.12]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.12
 [v0.0.11]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.11
