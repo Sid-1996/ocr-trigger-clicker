@@ -97,22 +97,21 @@ pwsh -Command "
 
 ## 座標系統
 
-所有 ROI / 點擊座標統一儲存為**視窗相對座標**（window-relative）。
+所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。
 
 | 來源 | 原始座標系 | 轉換方式 |
 |---|---|---|
-| OCR 辨識結果 | 視窗相對（OCR 在截圖上執行，截圖 = 視窗內容） | 不轉換 |
-| debug panel「建立為新規則」 | 視窗相對（同上） | 不轉換 |
-| 框選偵測區域 (ROI selector) | 螢幕絕對 | `- win_rect` 轉為視窗相對 |
-| 選取點擊座標 (click picker) | 螢幕絕對 | `- win_rect` 轉為視窗相對 |
+| OCR 辨識結果 | 視窗相對（OCR 在截圖上執行） | ÷ win_size → 比例座標 |
+| debug panel「建立為新規則」 | 視窗相對（同上） | ÷ win_size → 比例座標 |
+| 框選偵測區域 (ROI selector) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
+| 選取點擊座標 (click picker) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
 
 ### 主循環處理
 
 1. `capture()` 透過 mss 截取全視窗（含邊框標題列），回傳影像 = 全視窗大小
 2. 若 mss 失敗，fallback `capture_window_content()` 只取得 client area
    - 自動填補黑邊到全視窗大小（使用 `get_window_client_offset` 計算 chrome offset）
-3. `_process_rules` 對每個規則：裁切 ROI → OCR 裁切區域 → 補回 offset → 比對 → 點擊
-   - ROI 座標直接作為影像裁切索引，不需額外轉換
+3. `_process_rules` 對每個規則：`_resolve_roi()` 將比例座標 × 當前尺寸 → 像素 → 裁切 ROI → OCR → 比對 → `_resolve_point()` → AHK 點擊
 
 ### 通用 UI 流程（兩者一致）
 
