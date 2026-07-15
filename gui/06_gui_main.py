@@ -677,7 +677,12 @@ class _StepListWidget(QWidget):
         self._rule_id: str = ""
         self._drag_indicator_idx: int = -1
         self._simplified_mode: bool = False
-        QShortcut(QKeySequence("Delete"), self, self._delete_selected_step)
+        QShortcut(
+            QKeySequence("Delete"),
+            self,
+            self._delete_selected_step,
+            context=Qt.ShortcutContext.WidgetShortcut,
+        )
 
     def set_roi_callback(self, cb):
         self._roi_callback = cb
