@@ -70,6 +70,7 @@ def main():
     # _loader.load_sibling() 動態載入的 .py 必須列在此處
     # 缺漏 → EXE 啟動 FileNotFoundError（PyInstaller 靜態分析無法追蹤）
     py_datas = [
+        ("core/00_global_hotkey.py", "core"),
         ("core/00_logging_config.py", "core"),
         ("core/01_screenshot.py", "core"),
         ("core/02_ocr_engine.py", "core"),
