@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
-    [string]$Notes = ""
+    [string]$Notes = "",
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,7 +24,15 @@ git push origin master
 python build.py
 Compress-Archive -Path dist\ocr-trigger-clicker.exe, dist\updater.exe -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
 
-# 4. tag + release
+# 4. 清理既有 tag + release（-Force 模式）
+if ($Force) {
+    $tagName = "v$Version"
+    Write-Output "清理既有 tag 與 release: $tagName"
+    git push origin --delete $tagName 2>$null
+    gh release delete $tagName --yes 2>$null
+}
+
+# 5. tag + release
 git tag v$Version
 git push origin v$Version
 
