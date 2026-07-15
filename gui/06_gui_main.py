@@ -2675,6 +2675,9 @@ class MainWindow(QMainWindow):
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
             self._debug_panel.step_requested.connect(self._on_debug_step_requested)
             self._debug_panel.template_requested.connect(self._on_debug_template_requested)
+            self._debug_panel.template_step_requested.connect(
+                self._on_debug_template_step_requested
+            )
             self._debug_page_layout.addWidget(self._debug_panel, 1)
             self._connect_signals()
             self._setup_shortcuts()
@@ -4709,6 +4712,28 @@ class MainWindow(QMainWindow):
         self._debug_btn.setText("OCR 診斷")
         self._show_rule_detail(rule)
         self._status_bar.showMessage(f"已從 OCR 診斷建立模板規則：「{data.get('name', '')}」")
+
+    def _on_debug_template_step_requested(self, data: dict):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.steps.append(
+            Step(
+                type="match_image",
+                params={
+                    "template_data": data.get("template_data", ""),
+                    "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
+                    "threshold": 0.8,
+                    "match_color": False,
+                    "color_tolerance": 100,
+                },
+            )
+        )
+        self._flush_save()
+        self._step_list.set_steps(rule.steps)
+        self._main_stack.setCurrentIndex(0)
+        self._debug_btn.setText("OCR 診斷")
+        self._status_bar.showMessage(f"已加入模板步驟：「{data.get('name', '')}」")
 
     # === Start / Pause ===
     def _show_group_selection_dialog(self) -> Optional[list[str]]:

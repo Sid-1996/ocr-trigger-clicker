@@ -59,6 +59,7 @@ class OcrDebugPanel(QWidget):
     rule_requested = pyqtSignal(dict)
     step_requested = pyqtSignal(dict)
     template_requested = pyqtSignal(dict)
+    template_step_requested = pyqtSignal(dict)
 
     _OCR_MODES = {
         "完整測試": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
@@ -179,6 +180,12 @@ class OcrDebugPanel(QWidget):
         self._set_sub_target_btn.setToolTip("將選取文字新增為目前規則的偵測步驟")
         self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
         right_layout.addWidget(self._set_sub_target_btn)
+
+        self._add_template_step_btn = QPushButton("加入模板步驟(&T)")
+        self._add_template_step_btn.setEnabled(False)
+        self._add_template_step_btn.setToolTip("將選取的區塊截圖新增為目前規則的圖片比對步驟")
+        self._add_template_step_btn.clicked.connect(self._on_add_template_step)
+        right_layout.addWidget(self._add_template_step_btn)
 
         right_scroll = QScrollArea()
         right_scroll.setWidgetResizable(True)
@@ -414,6 +421,7 @@ class OcrDebugPanel(QWidget):
     def _update_step_btn_state(self):
         enabled = self._selected_index >= 0 and self._has_active_rule
         self._set_sub_target_btn.setEnabled(enabled)
+        self._add_template_step_btn.setEnabled(enabled)
 
     def _compute_roi(self):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
@@ -524,6 +532,40 @@ class OcrDebugPanel(QWidget):
         self._status_bar.showMessage(
             f"✓ 已加入偵測步驟：「{r.text}」  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
         )
+
+    def _on_add_template_step(self):
+        result = self._compute_roi()
+        if result is None:
+            return
+        roi, _px_x, _px_y, _px_w, _px_h = result
+        r = self._ocr_results[self._selected_index]
+
+        import cv2 as _cv2
+
+        from _loader import load_sibling
+
+        _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
+
+        img_h, img_w = self._latest_raw.shape[:2]
+        t_x = max(0, r.x)
+        t_y = max(0, r.y)
+        t_w = min(img_w - t_x, r.w)
+        t_h = min(img_h - t_y, r.h)
+        if t_w < 1 or t_h < 1:
+            return
+        crop = self._latest_raw[t_y : t_y + t_h, t_x : t_x + t_w].copy()
+        crop_bgr = _cv2.cvtColor(crop, _cv2.COLOR_RGB2BGR)
+        template_b64 = _tmpl.img_to_b64(crop_bgr)
+
+        self.template_step_requested.emit(
+            {
+                "template_data": template_b64,
+                "roi": roi,
+                "name": r.text,
+            }
+        )
+
+        self._status_bar.showMessage(f"✓ 已加入模板步驟：「{r.text}」  模板: {t_w}×{t_h}px")
 
     def _on_click_test(self):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
