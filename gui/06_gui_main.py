@@ -2669,6 +2669,7 @@ class MainWindow(QMainWindow):
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
             self._debug_panel.step_requested.connect(self._on_debug_step_requested)
+            self._debug_panel.template_requested.connect(self._on_debug_template_requested)
             self._debug_page_layout.addWidget(self._debug_panel, 1)
             self._connect_signals()
             self._setup_shortcuts()
@@ -4639,6 +4640,70 @@ class MainWindow(QMainWindow):
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
+
+    def _on_debug_template_requested(self, data: dict):
+        import uuid
+
+        rule = Rule(
+            id=f"rule_{uuid.uuid4().hex[:8]}",
+            name=data.get("name", "模板規則"),
+            enabled=True,
+            steps=[
+                Step(
+                    type="match_image",
+                    params={
+                        "template_data": data.get("template_data", ""),
+                        "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
+                        "threshold": 0.8,
+                        "match_color": False,
+                        "color_tolerance": 100,
+                    },
+                ),
+                Step(
+                    type="click",
+                    params={
+                        "target": "template_center",
+                        "button": "left",
+                        "random_offset": 3,
+                        "x": 0,
+                        "y": 0,
+                    },
+                ),
+                Step(
+                    type="wait",
+                    params={"ms": 100},
+                ),
+            ],
+        )
+        self._rules.append(rule)
+        _main_loop_mod.log_main(f"規則「{rule.name}」從 OCR 診斷新建為模板 (id={rule.id})")
+        target_group = None
+        item = self._rule_list.currentItem()
+        if item:
+            item_data = item.data(0, Qt.ItemDataRole.UserRole)
+            if item_data:
+                if item_data[0] == "group":
+                    gid = item_data[1]
+                else:
+                    parent = item.parent()
+                    if parent:
+                        pdata = parent.data(0, Qt.ItemDataRole.UserRole)
+                        gid = pdata[1] if pdata and pdata[0] == "group" else None
+                    else:
+                        gid = None
+                if gid:
+                    target_group = next((g for g in self._groups if g.id == gid), None)
+        if target_group is None and self._groups:
+            target_group = self._groups[0]
+        if target_group:
+            target_group.rule_ids.append(rule.id)
+        self._flush_save()
+        self._selected_rule_id = rule.id
+        self._refresh_rule_list(target_group.id if target_group else None)
+        self._main_stack.setCurrentIndex(0)
+        self._debug_btn.setText("OCR 診斷")
+        self._show_rule_detail(rule)
+        self._status_bar.showMessage(f"已從 OCR 診斷建立模板規則：「{data.get('name', '')}」")
 
     # === Start / Pause ===
     def _show_group_selection_dialog(self) -> Optional[list[str]]:

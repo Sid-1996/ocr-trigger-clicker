@@ -58,6 +58,7 @@ class _OcrSignals(QObject):
 class OcrDebugPanel(QWidget):
     rule_requested = pyqtSignal(dict)
     step_requested = pyqtSignal(dict)
+    template_requested = pyqtSignal(dict)
 
     _OCR_MODES = {
         "完整測試": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
@@ -167,6 +168,12 @@ class OcrDebugPanel(QWidget):
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
+        self._template_btn = QPushButton("建立為模板(&M)")
+        self._template_btn.setEnabled(False)
+        self._template_btn.setToolTip("將選取的區塊截圖建立為圖片比對規則 (match_image)")
+        self._template_btn.clicked.connect(self._on_add_template)
+        right_layout.addWidget(self._template_btn)
+
         self._set_sub_target_btn = QPushButton("加入偵測步驟(&A)")
         self._set_sub_target_btn.setEnabled(False)
         self._set_sub_target_btn.setToolTip("將選取文字新增為目前規則的偵測步驟")
@@ -258,6 +265,7 @@ class OcrDebugPanel(QWidget):
         self._info_label.setText("")
         self._selected_index = -1
         self._add_rule_btn.setEnabled(False)
+        self._template_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
         self._update_step_btn_state()
 
@@ -344,10 +352,12 @@ class OcrDebugPanel(QWidget):
             if rows:
                 self._selected_index = rows[0].row()
                 self._add_rule_btn.setEnabled(True)
+                self._template_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
             else:
                 self._selected_index = -1
                 self._add_rule_btn.setEnabled(False)
+                self._template_btn.setEnabled(False)
                 self._click_test_btn.setEnabled(False)
             self._update_step_btn_state()
             self._rebuild_annotated()
@@ -387,6 +397,7 @@ class OcrDebugPanel(QWidget):
                 self._result_table.selectRow(i)
                 self._result_table.blockSignals(False)
                 self._add_rule_btn.setEnabled(True)
+                self._template_btn.setEnabled(True)
                 self._click_test_btn.setEnabled(True)
                 self._update_step_btn_state()
                 try:
@@ -404,15 +415,14 @@ class OcrDebugPanel(QWidget):
         enabled = self._selected_index >= 0 and self._has_active_rule
         self._set_sub_target_btn.setEnabled(enabled)
 
-    def _on_add_rule(self):
+    def _compute_roi(self):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
-            return
+            return None
         r = self._ocr_results[self._selected_index]
-
-        pad = 20
         img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
         if img_w < 1 or img_h < 1:
-            return
+            return None
+        pad = 20
         px_x = max(0, r.x - pad)
         px_y = max(0, r.y - pad)
         px_w = min(img_w - px_x, r.w + pad * 2)
@@ -439,6 +449,14 @@ class OcrDebugPanel(QWidget):
                 "h": min(1.0, px_h / client_h) if client_h > 0 else 0.0,
                 "roi_coord": "client",
             }
+        return roi, px_x, px_y, px_w, px_h
+
+    def _on_add_rule(self):
+        result = self._compute_roi()
+        if result is None:
+            return
+        roi, px_x, px_y, px_w, px_h = result
+        r = self._ocr_results[self._selected_index]
 
         self.rule_requested.emit(
             {
@@ -453,41 +471,39 @@ class OcrDebugPanel(QWidget):
             f"✓ 已建立新規則：「{r.text}」  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
         )
 
-    def _on_set_sub_target(self):
-        if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
+    def _on_add_template(self):
+        result = self._compute_roi()
+        if result is None:
             return
+        roi, px_x, px_y, px_w, px_h = result
         r = self._ocr_results[self._selected_index]
 
-        pad = 20
-        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
-        if img_w < 1 or img_h < 1:
-            return
-        px_x = max(0, r.x - pad)
-        px_y = max(0, r.y - pad)
-        px_w = min(img_w - px_x, r.w + pad * 2)
-        px_h = min(img_h - px_y, r.h + pad * 2)
+        import cv2 as _cv2
 
-        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
-        cx, cy = chrome
-        is_gdi = self._capture_source == "GDI 截圖"
-        if is_gdi or (cx <= 0 and cy <= 0):
-            roi = {
-                "x": px_x / img_w,
-                "y": px_y / img_h,
-                "w": px_w / img_w,
-                "h": px_h / img_h,
-                "roi_coord": "client",
+        from _loader import load_sibling
+
+        _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
+
+        crop = self._latest_raw[px_y : px_y + px_h, px_x : px_x + px_w].copy()
+        crop_bgr = _cv2.cvtColor(crop, _cv2.COLOR_RGB2BGR)
+        template_b64 = _tmpl.img_to_b64(crop_bgr)
+
+        self.template_requested.emit(
+            {
+                "template_data": template_b64,
+                "roi": roi,
+                "name": r.text,
             }
-        else:
-            client_w = img_w - cx
-            client_h = img_h - cy
-            roi = {
-                "x": max(0.0, (px_x - cx) / client_w) if client_w > 0 else 0.0,
-                "y": max(0.0, (px_y - cy) / client_h) if client_h > 0 else 0.0,
-                "w": min(1.0, px_w / client_w) if client_w > 0 else 0.0,
-                "h": min(1.0, px_h / client_h) if client_h > 0 else 0.0,
-                "roi_coord": "client",
-            }
+        )
+
+        self._status_bar.showMessage(f"✓ 已建立模板規則：「{r.text}」  模板: {px_w}×{px_h}px")
+
+    def _on_set_sub_target(self):
+        result = self._compute_roi()
+        if result is None:
+            return
+        roi, px_x, px_y, px_w, px_h = result
+        r = self._ocr_results[self._selected_index]
 
         self.step_requested.emit(
             {
