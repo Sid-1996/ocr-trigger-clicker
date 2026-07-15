@@ -4598,22 +4598,6 @@ class MainWindow(QMainWindow):
                         f"步驟 {i + 1} (點擊)：自訂座標 (0,0) 可能未設定正確，請選取座標",
                     )
                     return
-            if s.type == "condition_list":
-                conds = s.params.get("conditions", [])
-                if not conds:
-                    QMessageBox.warning(
-                        self, "儲存失敗", f"步驟 {i + 1} (條件清單)：至少需要一個條件"
-                    )
-                    return
-                for j, c in enumerate(conds):
-                    text = c.get("detect", {}).get("text", "").strip()
-                    if not text:
-                        QMessageBox.warning(
-                            self,
-                            "儲存失敗",
-                            f"步驟 {i + 1} (條件清單)：條件 {j + 1} 的偵測文字不可為空",
-                        )
-                        return
         # 檢查 jump 參照的規則是否存在
         valid_ids = {r.id for r in self._rules}
         warnings = []
@@ -4634,6 +4618,15 @@ class MainWindow(QMainWindow):
                 warnings.append(f"步驟 {i + 1} (提示訊息)：訊息為空")
             elif s.type == "compare" and not s.params.get("pattern", "").strip():
                 warnings.append(f"步驟 {i + 1} (數字比較)：正規表達式為空，將匹配所有數字")
+            elif s.type == "condition_list":
+                conds = s.params.get("conditions", [])
+                if not conds:
+                    warnings.append(f"步驟 {i + 1} (條件清單)：尚未設定任何條件")
+                else:
+                    for j, c in enumerate(conds):
+                        text = c.get("detect", {}).get("text", "").strip()
+                        if not text:
+                            warnings.append(f"步驟 {i + 1} (條件清單)：條件 {j + 1} 的偵測文字為空")
         if warnings:
             self._status_bar.showMessage("⚠ " + "；".join(warnings), 8000)
         self._schedule_save()
