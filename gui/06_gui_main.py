@@ -372,6 +372,19 @@ _STEP_TYPE_LABELS = {
     "notify": "提示訊息",
 }
 
+_STEP_COLORS = {
+    "detect": "#4A90D9",
+    "click": "#27AE60",
+    "key": "#F39C12",
+    "wait": "#95A5A6",
+    "jump": "#9B59B6",
+    "compare": "#1ABC9C",
+    "match_image": "#E91E63",
+    "notify": "#F1C40F",
+    "scroll": "#2C3E50",
+    "drag": "#E74C3C",
+}
+
 
 def _resolve_rule_name(rule_id: str, rules_provider=None) -> str:
     if not rule_id or not rules_provider:
@@ -664,6 +677,7 @@ class _StepListWidget(QWidget):
         self._rule_id: str = ""
         self._drag_indicator_idx: int = -1
         self._simplified_mode: bool = False
+        QShortcut(QKeySequence("Delete"), self, self._delete_selected_step)
 
     def set_roi_callback(self, cb):
         self._roi_callback = cb
@@ -737,6 +751,9 @@ class _StepListWidget(QWidget):
         hl.addWidget(num)
 
         icon = QLabel(_STEP_TYPE_ICONS.get(step.type, "?"))
+        _color = _STEP_COLORS.get(step.type)
+        if _color:
+            icon.setStyleSheet(f"color: {_color};")
         hl.addWidget(icon)
 
         label = _STEP_TYPE_LABELS.get(step.type, step.type)
@@ -833,6 +850,10 @@ class _StepListWidget(QWidget):
         self._steps.pop(idx)
         self._rebuild()
         self.steps_changed.emit()
+
+    def _delete_selected_step(self):
+        if self._expanded_idx is not None and 0 <= self._expanded_idx < len(self._steps):
+            self._delete_step(self._expanded_idx)
 
     # drag-drop reorder with insertion indicator
     def dragEnterEvent(self, e):
@@ -1440,6 +1461,7 @@ class _DetectStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._text = QLineEdit(p.get("text", ""))
+        self._text.editingFinished.connect(self._validate_text)
         form.addRow("目標文字:", self._text)
 
         self._advanced_container = QWidget()
@@ -1582,6 +1604,14 @@ class _DetectStepForm(QWidget):
 
     def _on_match_mode_changed(self, idx):
         self._fuzzy_th.setVisible(self._match_mode.itemData(idx) == "fuzzy")
+
+    def _validate_text(self):
+        if not self._text.text().strip():
+            self._text.setStyleSheet("border: 1px solid #E74C3C;")
+            self._text.setToolTip("目標文字不可為空")
+        else:
+            self._text.setStyleSheet("")
+            self._text.setToolTip("")
 
     def _toggle_on_fail(self):
         self._on_fail_expanded = not self._on_fail_expanded
@@ -1927,6 +1957,7 @@ class _CompareStepForm(QWidget):
 
         self._pattern = QLineEdit()
         self._pattern.setText(p.get("pattern", r"-?\d+\.?\d*"))
+        self._pattern.editingFinished.connect(self._validate_pattern)
         self._pattern.setToolTip(
             "從 OCR 文字中擷取數字用的正則表達式，預設值 -?\\d+\\.?\\d* 可匹配正負整數與小數"
         )
@@ -2114,6 +2145,17 @@ class _CompareStepForm(QWidget):
             "▼ 進階：比對規則與失敗處理" if not expanded else "▶ 進階：比對規則與失敗處理"
         )
 
+    def _validate_pattern(self):
+        import re as _re
+
+        try:
+            _re.compile(self._pattern.text())
+            self._pattern.setStyleSheet("")
+            self._pattern.setToolTip("")
+        except _re.error:
+            self._pattern.setStyleSheet("border: 1px solid #E74C3C;")
+            self._pattern.setToolTip("無效的正則表達式")
+
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
         self._of_skip_row.setVisible(action == "skip")
@@ -2208,8 +2250,17 @@ class _NotifyStepForm(QWidget):
         self._msg = QLineEdit()
         self._msg.setText(step.params.get("message", ""))
         self._msg.setPlaceholderText("請輸入要顯示的訊息…")
-        self._msg.editingFinished.connect(lambda: self._list.steps_changed.emit())
+        self._msg.editingFinished.connect(self._validate_msg)
         form.addRow("訊息文字:", self._msg)
+
+    def _validate_msg(self):
+        if not self._msg.text().strip():
+            self._msg.setStyleSheet("border: 1px solid #E74C3C;")
+            self._msg.setToolTip("訊息文字不可為空")
+        else:
+            self._msg.setStyleSheet("")
+            self._msg.setToolTip("")
+        self._list.steps_changed.emit()
 
     def save(self):
         self._step.params["message"] = self._msg.text()
@@ -2717,7 +2768,12 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
             QApplication.processEvents()
-            _ahk_mod.set_ahk_health_callback(lambda msg: self._status_bar.showMessage(f"⚠ {msg}"))
+
+            def _ahk_health_cb(msg):
+                self._status_bar.showMessage(f"⚠ {msg}")
+                self._update_ahk_status(False)
+
+            _ahk_mod.set_ahk_health_callback(_ahk_health_cb)
             if not _ahk_mod.download_ahk():
                 QMessageBox.critical(
                     self,
@@ -2744,6 +2800,7 @@ class MainWindow(QMainWindow):
     def _on_ahk_init_done(self, ok):
         self._ahk_worker = None
         self._ahk_ready = ok
+        self._update_ahk_status(ok)
         if not ok:
             self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
         else:
@@ -3056,6 +3113,9 @@ class MainWindow(QMainWindow):
         self._perf_label = QLabel("FPS:-- | CPU:--% | MEM:--MB | 點擊:--/s")
         self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._status_bar.addPermanentWidget(self._perf_label)
+        self._ahk_status_label = QLabel("🔴 AHK")
+        self._ahk_status_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
+        self._status_bar.addPermanentWidget(self._ahk_status_label)
         self._perf_timer = QTimer()
         self._perf_timer.timeout.connect(self._update_perf_display)
         self._perf_timer.start(1000)
@@ -3126,6 +3186,18 @@ class MainWindow(QMainWindow):
 
     def _on_ocr_health(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
+
+    def _update_ahk_status(self, connected: bool):
+        if connected:
+            self._ahk_status_label.setText("🟢 AHK")
+            self._ahk_status_label.setStyleSheet(
+                "color: #27AE60; font-size: 11px; padding-right: 8px;"
+            )
+        else:
+            self._ahk_status_label.setText("🔴 AHK")
+            self._ahk_status_label.setStyleSheet(
+                "color: #E74C3C; font-size: 11px; padding-right: 8px;"
+            )
 
     # === Window list ===
     def _on_window_selected(self, title: str):
@@ -3554,7 +3626,14 @@ class MainWindow(QMainWindow):
             if st is None:
                 return
             enabled = st["enabled"]
-            icon_color = (0, 180, 0) if enabled else (160, 160, 160)
+            if st.get("failed"):
+                icon_color = (220, 50, 50)
+            elif st.get("group_done"):
+                icon_color = (30, 100, 180)
+            elif enabled:
+                icon_color = (0, 180, 0)
+            else:
+                icon_color = (160, 160, 160)
             base = f"{'👁 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
             if item.text(0) != base:
                 item.setText(0, base)

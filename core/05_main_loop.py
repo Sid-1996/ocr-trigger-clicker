@@ -1064,6 +1064,8 @@ class MainLoop:
             group = self._current_group()
             if group and self._rule_in_group_ptr < len(group.rule_ids):
                 current_rule_id = group.rule_ids[self._rule_in_group_ptr]
+            active_group_ids = set(self._active_group_ids)
+            current_group_id = group.id if group else None
             return [
                 {
                     "id": r.id,
@@ -1071,6 +1073,13 @@ class MainLoop:
                     "enabled": r.enabled,
                     "background": r.background,
                     "pointer": r.id == current_rule_id,
+                    "failed": any(k.startswith(f"{r.id}:") for k in self._fail_since),
+                    "group_done": (
+                        r.id not in (group.rule_ids if group else [])
+                        and not r.background
+                        and current_group_id is not None
+                        and current_group_id not in active_group_ids
+                    ),
                 }
                 for r in self._rules
             ]
