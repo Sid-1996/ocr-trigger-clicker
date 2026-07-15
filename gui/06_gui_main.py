@@ -462,6 +462,8 @@ def _step_summary(step, rules_provider=None) -> str:
         target = p.get("target", "text_center")
         if target == "text_center":
             return "點擊辨識目標"
+        if target == "template_center":
+            return "點擊模板位置"
         if target == "custom":
             return f"點擊 {_fmt_point(p.get('x', 0), p.get('y', 0))}"
         if target == "click_text":
