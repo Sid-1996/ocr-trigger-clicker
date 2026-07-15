@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.0.13] - 2026-07-15
+
+### 移除
+- 移除 `condition_list` 步驟類型（條件清單），其功能已由 `detect` + `click`/`key`/`jump` 步驟組合完全取代
+- 移除相關 GUI 元件（`_CondCardWidget`、`_ConditionListStepForm`）、引擎 handler（`_handle_condition_list`）、
+  資料模型（`Condition`、`ConditionListParams`）、遷移函式（`_migrate_condition_list_to_step`）
+- 清理 tasks JSON 中的 legacy null 欄位（`use_condition_list`、`condition_list`、`condition_list_advance_on_no_match`）
+- 無任何實際任務使用此步驟，移除不影響現有功能
+
 ## [v0.0.12] - 2026-07-15
 
 ### 重構

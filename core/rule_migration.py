@@ -46,11 +46,6 @@ _STEP_DEFAULTS = {
         "on_fail": "stop",
     },
     "notify": {"message": ""},
-    "condition_list": {
-        "conditions": [],
-        "advance_on_no_match": False,
-        "loop": True,
-    },
 }
 
 
@@ -187,41 +182,6 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
                 if _tmp_img is not None:
                     _, _buf = _cv2.imencode(".png", _tmp_img)
                     base["template_data"] = _b64.b64encode(_buf).decode("ascii")
-    elif step_type == "condition_list":
-        base["conditions"] = (
-            base.get("conditions", []) if isinstance(base.get("conditions"), list) else []
-        )
-        base["advance_on_no_match"] = bool(base.get("advance_on_no_match", False))
-        base["loop"] = bool(base.get("loop", True))
-        normalized_conds = []
-        for cond in base["conditions"]:
-            if not isinstance(cond, dict):
-                continue
-            detect = cond.get("detect", {})
-            if not isinstance(detect, dict):
-                detect = {}
-            detect["text"] = str(detect.get("text", "")).strip()
-            detect["roi"] = _sanitize_roi(detect.get("roi"))
-            detect["match_mode"] = str(detect.get("match_mode", "fuzzy"))
-            detect["fuzzy_threshold"] = max(
-                0.0, min(1.0, _as_float(detect.get("fuzzy_threshold", 0.8), 0.8))
-            )
-            action = cond.get("action", {})
-            if isinstance(action, dict) and action.get("type"):
-                action = _normalize_action(action)
-            else:
-                action = {"type": "key", "key": ""}
-            on_match = str(cond.get("on_match", "next_step"))
-            if on_match not in ("next_step", "repeat", "stop"):
-                on_match = "next_step"
-            normalized_conds.append(
-                {
-                    "detect": detect,
-                    "action": action,
-                    "on_match": on_match,
-                }
-            )
-        base["conditions"] = normalized_conds
     return base
 
 

@@ -357,7 +357,6 @@ _STEP_TYPE_ICONS = {
     "drag": "↗",
     "scroll": "↕",
     "notify": "💬",
-    "condition_list": "📋",
 }
 
 _STEP_TYPE_LABELS = {
@@ -371,7 +370,6 @@ _STEP_TYPE_LABELS = {
     "drag": "拖曳",
     "scroll": "滾輪",
     "notify": "提示訊息",
-    "condition_list": "條件清單",
 }
 
 
@@ -484,19 +482,6 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "notify":
         msg = p.get("message", "")
         return f"💬「{msg}」" if msg else "💬 (空白)"
-    if t == "condition_list":
-        conds = p.get("conditions", [])
-        count = len(conds)
-        if count == 0:
-            return "條件清單 (空)"
-        labels = []
-        for c in conds[:3]:
-            txt = c.get("detect", {}).get("text", "")
-            labels.append(f"「{txt}」" if txt else "未設定")
-        summary = ", ".join(labels)
-        if count > 3:
-            summary += f" …+{count - 3}"
-        return f"條件 ×{count} {summary}"
     return t
 
 
@@ -950,10 +935,6 @@ class _StepListWidget(QWidget):
             )
         if t == "notify":
             return _NotifyStepForm(self, step, idx)
-        if t == "condition_list":
-            return _ConditionListStepForm(
-                self, step, idx, roi_cb=self._roi_callback, pick_cb=self._click_pick_callback
-            )
         return None
 
 
@@ -2234,249 +2215,6 @@ class _NotifyStepForm(QWidget):
         self._step.params["message"] = self._msg.text()
 
 
-class _CondCardWidget(QWidget):
-    moved_up = pyqtSignal()
-    moved_down = pyqtSignal()
-    removed = pyqtSignal()
-    changed = pyqtSignal()
-
-    def __init__(self, cond: dict, roi_cb, pick_cb, index: int, total: int):
-        super().__init__()
-        self._cond = cond
-        self._roi_cb = roi_cb
-        self._pick_cb = pick_cb
-        card = QWidget()
-        card.setObjectName("condCard")
-        card.setStyleSheet(
-            "QWidget#condCard { background: palette(base); border: 1px solid palette(mid); border-radius: 6px; }"
-        )
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        form = QFormLayout(card)
-
-        detect = cond.get("detect", {})
-        self._text = QLineEdit(detect.get("text", ""))
-        self._text.setPlaceholderText("目標文字…")
-        form.addRow("偵測文字:", self._text)
-
-        roi = detect.get("roi", {})
-        zero = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel("全視窗" if zero else _fmt_roi(roi))
-        roi_btn = QPushButton("框選偵測區域")
-        roi_btn.clicked.connect(self._pick_roi)
-        form.addRow("偵測區域:", self._roi_label)
-        form.addRow("", roi_btn)
-
-        self._match_mode = _NoWheelCombo()
-        self._match_mode.addItem("包含關鍵字", "contains")
-        self._match_mode.addItem("完全符合", "exact")
-        self._match_mode.addItem("近似比對", "fuzzy")
-        idx_mm = self._match_mode.findData(detect.get("match_mode", "fuzzy"))
-        if idx_mm >= 0:
-            self._match_mode.setCurrentIndex(idx_mm)
-        self._match_mode.currentIndexChanged.connect(self._on_mm_changed)
-        form.addRow("比對模式:", self._match_mode)
-
-        self._fuzzy_th = _NoWheelSpin()
-        self._fuzzy_th.setRange(1, 100)
-        self._fuzzy_th.setSuffix(" %")
-        self._fuzzy_th.setValue(int(detect.get("fuzzy_threshold", 0.8) * 100))
-        self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
-        form.addRow("精準度:", self._fuzzy_th)
-
-        action = cond.get("action", {})
-        self._action_type = _NoWheelCombo()
-        self._action_type.addItem("點擊", "click")
-        self._action_type.addItem("按鍵", "key")
-        self._action_type.addItem("跳轉規則", "jump")
-        idx_at = self._action_type.findData(action.get("type", "click"))
-        if idx_at >= 0:
-            self._action_type.setCurrentIndex(idx_at)
-        self._action_type.currentIndexChanged.connect(self._on_action_changed)
-        form.addRow("執行動作:", self._action_type)
-
-        self._action_container = QVBoxLayout()
-        form.addRow(self._action_container)
-        self._action_step = None
-        self._build_action_form(action.get("type", "click"), action)
-
-        self._on_match = _NoWheelCombo()
-        self._on_match.addItem("下一步 (next_step)", "next_step")
-        self._on_match.addItem("停留重試 (repeat)", "repeat")
-        self._on_match.addItem("停止 (stop)", "stop")
-        idx_om = self._on_match.findData(cond.get("on_match", "next_step"))
-        if idx_om >= 0:
-            self._on_match.setCurrentIndex(idx_om)
-        form.addRow("符合後:", self._on_match)
-
-        outer.addWidget(card)
-
-        btn_row = QHBoxLayout()
-        up_btn = QPushButton("↑")
-        up_btn.setEnabled(index > 0)
-        up_btn.clicked.connect(self.moved_up.emit)
-        down_btn = QPushButton("↓")
-        down_btn.setEnabled(index < total - 1)
-        down_btn.clicked.connect(self.moved_down.emit)
-        del_btn = QPushButton("刪除此條件")
-        del_btn.clicked.connect(self.removed.emit)
-        btn_row.addWidget(up_btn)
-        btn_row.addWidget(down_btn)
-        btn_row.addStretch()
-        btn_row.addWidget(del_btn)
-        outer.addLayout(btn_row)
-
-    def _pick_roi(self):
-        if self._roi_cb:
-            result = self._roi_cb()
-            if result:
-                self._cond.setdefault("detect", {})["roi"] = result
-                z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                self._roi_label.setText("全視窗" if z else _fmt_roi(result))
-                self.changed.emit()
-
-    def _on_mm_changed(self, idx):
-        self._fuzzy_th.setVisible(self._match_mode.itemData(idx) == "fuzzy")
-
-    def _on_action_changed(self, idx):
-        action_type = self._action_type.itemData(idx)
-        self._build_action_form(action_type, {})
-
-    def _build_action_form(self, action_type: str, action: dict):
-        while self._action_container.count():
-            item = self._action_container.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        flat = {k: v for k, v in action.items() if k != "type"}
-        self._action_step = Step(type=action_type, params=deepcopy(flat))
-        if action_type == "click":
-            w = _ClickStepForm(self, self._action_step, 0, self._pick_cb, simplified=True)
-        elif action_type == "key":
-            w = _KeyStepForm(self, self._action_step, 0)
-        elif action_type == "jump":
-            w = _JumpStepForm(self, self._action_step, 0)
-        else:
-            w = None
-        if w:
-            self._action_container.addWidget(w)
-
-    def save(self):
-        detect = self._cond.setdefault("detect", {})
-        detect["text"] = self._text.text().strip()
-        detect["match_mode"] = self._match_mode.currentData()
-        detect["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
-        if self._action_step is not None:
-            item = self._action_container.itemAt(0)
-            form = item.widget() if item else None
-            if form and hasattr(form, "save"):
-                form.save()
-            self._cond["action"] = {
-                "type": self._action_step.type,
-                **self._action_step.params,
-            }
-        self._cond["on_match"] = self._on_match.currentData()
-
-
-class _ConditionListStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, roi_cb=None, pick_cb=None):
-        super().__init__()
-        self._list = parent_list
-        self._step = step
-        self._roi_cb = roi_cb
-        self._pick_cb = pick_cb
-        self._cards: list[_CondCardWidget] = []
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 6, 12, 6)
-
-        opts = QHBoxLayout()
-        self._loop_cb = QCheckBox("循環檢查 (loop)")
-        self._loop_cb.setChecked(step.params.get("loop", True))
-        self._loop_cb.setToolTip("符合任一條件後，重新從第一個條件再檢查一次")
-        opts.addWidget(self._loop_cb)
-        self._advance_cb = QCheckBox("全部不符合時仍推進")
-        self._advance_cb.setChecked(step.params.get("advance_on_no_match", False))
-        self._advance_cb.setToolTip("所有條件都不符合時，仍視為已觸發（推進群組）")
-        opts.addWidget(self._advance_cb)
-        opts.addStretch()
-        layout.addLayout(opts)
-
-        self._card_area = QVBoxLayout()
-        layout.addLayout(self._card_area)
-
-        self._rebuild_cards()
-
-        add_btn = QPushButton("+ 新增條件")
-        add_btn.clicked.connect(self._add_condition)
-        layout.addWidget(add_btn)
-
-    def _add_condition(self):
-        conditions = self._step.params.setdefault("conditions", [])
-        conditions.append(
-            {
-                "detect": {
-                    "text": "",
-                    "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                    "match_mode": "fuzzy",
-                    "fuzzy_threshold": 0.8,
-                },
-                "action": {"type": "click", "target": "text_center"},
-                "on_match": "next_step",
-            }
-        )
-        self._rebuild_cards()
-        self._list.steps_changed.emit()
-        QTimer.singleShot(0, self._scroll_to_last_card)
-
-    def _scroll_to_last_card(self):
-        if not self._cards:
-            return
-        card = self._cards[-1]
-        sa = self.parent()
-        while sa and not isinstance(sa, QScrollArea):
-            sa = sa.parent()
-        if sa:
-            sa.ensureWidgetVisible(card)
-
-    def _rebuild_cards(self):
-        for c in self._cards:
-            c.deleteLater()
-        self._cards.clear()
-        while self._card_area.count():
-            item = self._card_area.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        conditions = self._step.params.get("conditions", [])
-        for i, cond in enumerate(conditions):
-            card = _CondCardWidget(cond, self._roi_cb, self._pick_cb, i, len(conditions))
-            card.changed.connect(self._list.steps_changed.emit)
-            card.moved_up.connect(lambda idx=i: self._move(idx, -1))
-            card.moved_down.connect(lambda idx=i: self._move(idx, 1))
-            card.removed.connect(lambda idx=i: self._remove(idx))
-            self._cards.append(card)
-            self._card_area.addWidget(card)
-
-    def _move(self, idx: int, direction: int):
-        conds = self._step.params.get("conditions", [])
-        new_idx = idx + direction
-        if 0 <= new_idx < len(conds):
-            conds[idx], conds[new_idx] = conds[new_idx], conds[idx]
-            self._rebuild_cards()
-            self._list.steps_changed.emit()
-
-    def _remove(self, idx: int):
-        conds = self._step.params.get("conditions", [])
-        if 0 <= idx < len(conds):
-            del conds[idx]
-            self._rebuild_cards()
-            self._list.steps_changed.emit()
-
-    def save(self):
-        for card in self._cards:
-            card.save()
-        self._step.params["loop"] = self._loop_cb.isChecked()
-        self._step.params["advance_on_no_match"] = self._advance_cb.isChecked()
-
-
 class _InlineActionEditor(QWidget):
     changed = pyqtSignal()
 
@@ -3262,7 +3000,6 @@ class MainWindow(QMainWindow):
             ("wait", "⏱ 等待"),
             ("jump", "↩ 跳轉規則"),
             ("notify", "💬 提示訊息"),
-            ("condition_list", "📋 條件清單"),
         ]
         for st, label in step_types:
             action = add_menu.addAction(label)
@@ -4629,15 +4366,6 @@ class MainWindow(QMainWindow):
                 warnings.append(f"步驟 {i + 1} (提示訊息)：訊息為空")
             elif s.type == "compare" and not s.params.get("pattern", "").strip():
                 warnings.append(f"步驟 {i + 1} (數字比較)：正規表達式為空，將匹配所有數字")
-            elif s.type == "condition_list":
-                conds = s.params.get("conditions", [])
-                if not conds:
-                    warnings.append(f"步驟 {i + 1} (條件清單)：尚未設定任何條件")
-                else:
-                    for j, c in enumerate(conds):
-                        text = c.get("detect", {}).get("text", "").strip()
-                        if not text:
-                            warnings.append(f"步驟 {i + 1} (條件清單)：條件 {j + 1} 的偵測文字為空")
         if warnings:
             self._status_bar.showMessage("⚠ " + "；".join(warnings), 8000)
         self._schedule_save()
