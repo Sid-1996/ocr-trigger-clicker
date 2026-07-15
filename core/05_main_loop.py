@@ -717,22 +717,27 @@ class MainLoop:
                     )
                     matched = bool(matches)
                 if matched:
-                    found_match = True
-                    matched_any = True
-                    ctx.triggered = True
                     action = cond.get("action", {})
                     if not action or not action.get("type"):
                         continue
+                    found_match = True
+                    matched_any = True
                     action_params = {k: v for k, v in action.items() if k != "type"}
                     action_step = _rule.Step(type=str(action.get("type", "")), params=action_params)
                     ctx.matched_text = matches[0]
-                    self._run_step(action_step, ctx, rule)
                     on_match = cond.get("on_match", "next_step")
                     if on_match == "repeat":
-                        break
+                        saved_triggered = ctx.triggered
+                        self._run_step(action_step, ctx, rule)
+                        ctx.triggered = saved_triggered
+                        return StepResult("stop")
                     elif on_match == "stop":
+                        ctx.triggered = True
+                        self._run_step(action_step, ctx, rule)
                         return StepResult("stop")
                     else:
+                        ctx.triggered = True
+                        self._run_step(action_step, ctx, rule)
                         return StepResult("continue")
             if not found_match or not loop:
                 break

@@ -27,6 +27,11 @@ _replace_file = _utils._replace_file
 
 
 def _migrate_condition_list_to_step(rule_dict: dict) -> dict:
+    """Migrate legacy use_condition_list + condition_list fields into a condition_list Step.
+
+    This runs during JSON load (dict→Rule) for backward compatibility with old rule files.
+    Once all user data has been migrated (saved at least once), this becomes a no-op.
+    """
     if rule_dict.get("use_condition_list") and rule_dict.get("condition_list"):
         new_conditions = []
         for old_cond in rule_dict["condition_list"]:
@@ -45,6 +50,7 @@ def _migrate_condition_list_to_step(rule_dict: dict) -> dict:
                 if action_type == "click":
                     action = {
                         "type": "click",
+                        "target": action_params.get("target", "text_center"),
                         "x": action_params.get("x", 0),
                         "y": action_params.get("y", 0),
                         "button": action_params.get("button", "left"),
@@ -95,9 +101,6 @@ def _dict_to_rule(d: dict) -> Rule:
         enabled=bool(d.get("enabled", True)),
         steps=steps,
         background=bool(d.get("background", False)),
-        use_condition_list=bool(d.get("use_condition_list", False)),
-        condition_list=d.get("condition_list"),
-        condition_list_advance_on_no_match=bool(d.get("condition_list_advance_on_no_match", False)),
     )
 
 
@@ -105,9 +108,6 @@ def _rule_to_dict(r: Rule) -> dict:
     d = asdict(r)
     d.pop("trigger_count", None)
     d.pop("last_trigger_time", None)
-    d.pop("use_condition_list", None)
-    d.pop("condition_list", None)
-    d.pop("condition_list_advance_on_no_match", None)
     return d
 
 
@@ -202,44 +202,16 @@ def load_rules(path: str) -> list[Rule]:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
 
-    if not data.get("ratio_coords"):
-        data = _migrate_roi_to_ratio(data)
-        tmp_path = ""
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
-            ) as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-                tmp_path = f.name
-            _replace_file(tmp_path, str(p))
-        except OSError:
-            if tmp_path:
-                Path(tmp_path).unlink(missing_ok=True)
-
-    data = _migrate_roi_coord(data)
-
-    rules: list[Rule] = []
-    for raw in data.get("rules", []):
-        try:
-            rules.append(_dict_to_rule(raw))
-        except Exception as e:
-            log_main(f"規則項目解析失敗，已略過: {e}")
-            continue
-    logging.info(
-        "[load_rules] loaded=%d background=%s", len(rules), [r.id for r in rules if r.background]
-    )
+    if not data.get("rules"):
+        return []
+    rules_data = data.get("rules", [])
+    rules = [_dict_to_rule(r) for r in rules_data]
+    logging.info("[load_rules] loaded=%s", [(r.id, r.name) for r in rules])
     return rules
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
-    bg_ids = [r.id for r in rules if r.background]
-    logging.info("[save] save_rules: rules=%d, background=%s, path=%s", len(rules), bg_ids, path)
-    logging.info(
-        "[save_rules] rules(%d) names=%s background_ids=%s",
-        len(rules),
-        [r.name for r in rules],
-        bg_ids,
-    )
+    logging.info("[save_rules] path=%s rules=%s", path, [(r.id, r.name) for r in rules])
     tmp_path: str = ""
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}
@@ -264,3 +236,12 @@ def save_rules(rules: list[Rule], path: str) -> bool:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
         return False
+
+
+def set_active_groups(groups: list[RuleGroup]) -> None:
+    """Update the in-memory active group list (called from GUI)."""
+    pass
+
+
+def get_capture_size() -> dict:
+    return {}

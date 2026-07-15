@@ -87,6 +87,7 @@ def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
     if action_type == "click":
         return {
             "type": "click",
+            "target": str(action.get("target", "text_center")),
             "x": _as_int(action.get("x", 0), 0),
             "y": _as_int(action.get("y", 0), 0),
             "button": str(action.get("button", "left")),
