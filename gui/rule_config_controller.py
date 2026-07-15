@@ -42,5 +42,21 @@ class RuleConfigController:
             if idx >= 0:
                 win._task_combo.setCurrentIndex(idx)
         if win._task_combo.count() == 0:
-            win._on_task_new()
+            from _loader import load_sibling
+
+            _tm_mod = load_sibling("task_management", "core/task_management.py")
+            _rule_mod2 = load_sibling("rule_engine", "core/04_rule_engine.py")
+            _groups_mod = load_sibling(
+                "group_settings_controller", "gui/group_settings_controller.py"
+            )
+            default_name = "我的任務"
+            _tm_mod.save_task(default_name, [])
+            from core.rule_models import RuleGroup
+
+            _tm_mod.save_groups(
+                [RuleGroup(id="__default__", name="所有規則")],
+                str(_rule_mod2.get_tasks_dir() / f"{default_name}.json"),
+            )
+            win._task_combo.addItem(default_name)
+            win._task_combo.setCurrentIndex(0)
         win._on_task_changed(win._task_combo.currentText())

@@ -2947,28 +2947,9 @@ class MainWindow(QMainWindow):
 
     def _init_ahk_async(self):
         if not _ahk_mod.is_ahk_available():
-            reply = QMessageBox.question(
-                self,
-                "安裝 AutoHotkey",
-                "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
-                "是否自動下載並安裝？（約 3MB，不需管理員權限）",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
-                QApplication.processEvents()
-                _ahk_mod.set_ahk_health_callback(
-                    lambda msg: self._status_bar.showMessage(f"⚠ {msg}")
-                )
-                if not _ahk_mod.download_ahk():
-                    QMessageBox.critical(
-                        self,
-                        "AutoHotkey 下載失敗",
-                        "AutoHotkey 下載失敗，請手動下載並安裝：\n"
-                        "https://www.autohotkey.com\n\n"
-                        "安裝後重新啟動工具即可自動偵測。",
-                    )
-                    return
+            self._status_bar.showMessage("⚠ AHK 未安裝，點擊功能將無法使用（點此安裝）", 0)
+            self._status_bar.mousePressEvent = lambda e: self._prompt_ahk_install()
+            return
 
         class _AhkWorker(QThread):
             done = pyqtSignal(bool)
@@ -2983,6 +2964,41 @@ class MainWindow(QMainWindow):
         self._ahk_worker.done.connect(self._on_ahk_init_done)
         self._ahk_worker.start()
 
+    def _prompt_ahk_install(self):
+        reply = QMessageBox.question(
+            self,
+            "安裝 AutoHotkey",
+            "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
+            "是否自動下載並安裝？（約 3MB，不需管理員權限）",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
+            QApplication.processEvents()
+            _ahk_mod.set_ahk_health_callback(lambda msg: self._status_bar.showMessage(f"⚠ {msg}"))
+            if not _ahk_mod.download_ahk():
+                QMessageBox.critical(
+                    self,
+                    "AutoHotkey 下載失敗",
+                    "AutoHotkey 下載失敗，請手動下載並安裝：\n"
+                    "https://www.autohotkey.com\n\n"
+                    "安裝後重新啟動工具即可自動偵測。",
+                )
+                return
+
+            class _AhkWorker(QThread):
+                done = pyqtSignal(bool)
+
+                def run(self):
+                    ok = _ahk_mod.init_ahk()
+                    self.done.emit(ok)
+
+            self._status_bar.showMessage("正在啟動 AHK…")
+            self._ahk_ready = False
+            self._ahk_worker = _AhkWorker()
+            self._ahk_worker.done.connect(self._on_ahk_init_done)
+            self._ahk_worker.start()
+
     def _on_ahk_init_done(self, ok):
         self._ahk_worker = None
         self._ahk_ready = ok
@@ -2995,26 +3011,9 @@ class MainWindow(QMainWindow):
         config = self._load_config()
         if config.get("hide_startup_guide", False):
             return
-
-        box = QMessageBox(self)
-        box.setWindowTitle("新手導覽")
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setText("要先看一次新手教學嗎？")
-        box.setInformativeText(
-            "教學頁會帶你完成第一次使用：選視窗、建立規則、看 OCR 診斷、再啟動。\n"
-            "你也可以之後從「新手教學」按鈕打開。"
-        )
-        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        box.button(QMessageBox.StandardButton.Yes).setText("打開教學")
-        box.button(QMessageBox.StandardButton.No).setText("先略過")
-        checkbox = QCheckBox("不再顯示此提示")
-        box.setCheckBox(checkbox)
-        result = box.exec()
-        if checkbox.isChecked():
-            config["hide_startup_guide"] = True
-            self._save_config(config)
-        if result == QMessageBox.StandardButton.Yes:
-            self._open_guide()
+        config["hide_startup_guide"] = True
+        self._save_config(config)
+        self._notif_stack.push("新手教學？ 視窗右上角「？」按鈕可隨時打開")
 
     def _restore_last_state(self):
         config = self._load_config()
@@ -5090,30 +5089,17 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage("已是最新版本", 3000)
             return
 
-        cb = QCheckBox("不再提醒此次版本的更新")
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle("發現新版本")
-        box.setText(f"新版本 v{info.version} 已發布（目前 v{__version__}）")
-        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        box.button(QMessageBox.StandardButton.Yes).setText("立即更新")
-        box.button(QMessageBox.StandardButton.No).setText("稍後再說")
-        box.layout().addWidget(cb)
-
-        if box.exec() != QMessageBox.StandardButton.Yes:
-            if cb.isChecked():
-                config = self._load_config()
-                config["skip_update_check"] = True
-                self._save_config(config)
-            return
-
-        if cb.isChecked():
-            config = self._load_config()
-            config["skip_update_check"] = True
-            self._save_config(config)
-
+        self._status_bar.showMessage(f"發現新版本 v{info.version}（點此更新）", 0)
         self._pending_update_ver = info.version
-        self._start_download(info)
+        self._pending_update_info = info
+        orig_press = self._status_bar.mousePressEvent
+
+        def _on_click(e):
+            self._status_bar.mousePressEvent = orig_press
+            self._status_bar.showMessage("")
+            self._start_download(info)
+
+        self._status_bar.mousePressEvent = _on_click
 
     def _on_update_error(self, msg, forced=False):
         self._updating = False
