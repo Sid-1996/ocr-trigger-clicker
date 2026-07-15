@@ -2425,6 +2425,17 @@ class _ConditionListStepForm(QWidget):
         )
         self._rebuild_cards()
         self._list.steps_changed.emit()
+        QTimer.singleShot(0, self._scroll_to_last_card)
+
+    def _scroll_to_last_card(self):
+        if not self._cards:
+            return
+        card = self._cards[-1]
+        sa = self.parent()
+        while sa and not isinstance(sa, QScrollArea):
+            sa = sa.parent()
+        if sa:
+            sa.ensureWidgetVisible(card)
 
     def _rebuild_cards(self):
         for c in self._cards:
