@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.0.12] - 2026-07-15
+
+### 重構
+- 條件清單與 Step 系統合併：將獨立的「條件清單」模式併入 Step 系統，
+  新增 `condition_list` Step 類型，消除雙軌架構
+- 舊格式任務檔（`use_condition_list` + `condition_list`）自動遷移為
+  新的 `condition_list` Step，無需手動轉換
+- GUI 移除「條件清單」勾選框，改為在步驟下拉選單中新增
+- 執行引擎從兩套獨立路徑（`_run_condition_list` / `_execute_steps`）
+  統一為單一 `_run_step` 分派，`condition_list` 由 `_handle_condition_list` 處理
+
 ## [v0.0.11] - 2026-07-11
 
 ### 新增

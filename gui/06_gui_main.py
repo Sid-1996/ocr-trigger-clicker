@@ -357,6 +357,7 @@ _STEP_TYPE_ICONS = {
     "drag": "↗",
     "scroll": "↕",
     "notify": "💬",
+    "condition_list": "📋",
 }
 
 _STEP_TYPE_LABELS = {
@@ -370,6 +371,7 @@ _STEP_TYPE_LABELS = {
     "drag": "拖曳",
     "scroll": "滾輪",
     "notify": "提示訊息",
+    "condition_list": "條件清單",
 }
 
 
@@ -3213,13 +3215,6 @@ class MainWindow(QMainWindow):
             "常駐監控：每幀獨立偵測，不參與群組流程順序。\n適合隨時需要攔截的條件（如錯誤提示、緊急中斷）"
         )
         name_row.addWidget(self._edit_background)
-        name_row.addWidget(QLabel("模式:"))
-        self._edit_condition_mode = QCheckBox("條件清單")
-        self._edit_condition_mode.setToolTip(
-            "勾選後，用「若偵測到 X → 做 Y」的條件卡片清單取代原本的步驟序列。兩者資料互不影響，可隨時切換。"
-        )
-        self._edit_condition_mode.toggled.connect(self._on_condition_mode_toggled)
-        name_row.addWidget(self._edit_condition_mode)
         edit_layout.addLayout(name_row)
 
         edit_layout.addWidget(QLabel("步驟列表:"))
@@ -3263,6 +3258,7 @@ class MainWindow(QMainWindow):
             ("wait", "⏱ 等待"),
             ("jump", "↩ 跳轉規則"),
             ("notify", "💬 提示訊息"),
+            ("condition_list", "📋 條件清單"),
         ]
         for st, label in step_types:
             action = add_menu.addAction(label)
@@ -3889,15 +3885,6 @@ class MainWindow(QMainWindow):
                     )
                     prev_rule.background = self._edit_background.isChecked()
                     prev_rule.steps = self._step_list.get_steps()
-                    if self._edit_condition_mode.isChecked():
-                        self._condition_list.save_all()
-                        prev_rule.condition_list_advance_on_no_match = (
-                            self._condition_list.get_advance_on_no_match()
-                        )
-                        prev_rule.condition_list = self._condition_list.get_conditions()
-                        prev_rule.use_condition_list = True
-                    else:
-                        prev_rule.use_condition_list = False
                     self._flush_save()
                     prefix = "👁 " if prev_rule.background else ""
                     status = "✓" if prev_rule.enabled else "✗"
@@ -4001,42 +3988,13 @@ class MainWindow(QMainWindow):
         self._edit_background.blockSignals(True)
         self._edit_background.setChecked(getattr(rule, "background", False))
         self._edit_background.blockSignals(False)
-        self._edit_condition_mode.blockSignals(True)
-        self._edit_condition_mode.setChecked(rule.use_condition_list)
-        self._edit_condition_mode.blockSignals(False)
-        if rule.use_condition_list:
-            self._step_list.setVisible(False)
-            self._condition_list.setVisible(True)
-            self._condition_list.set_conditions(rule.condition_list)
-            self._condition_list.set_advance_on_no_match(
-                getattr(rule, "condition_list_advance_on_no_match", False)
-            )
-        else:
-            self._step_list.setVisible(True)
-            self._condition_list.setVisible(False)
-            self._step_list.set_rule_id(rule.id)
-            self._step_list.set_steps(rule.steps)
+        self._step_list.setVisible(True)
+        self._condition_list.setVisible(False)
+        self._step_list.set_rule_id(rule.id)
+        self._step_list.set_steps(rule.steps)
 
     def _on_condition_mode_toggled(self, checked: bool):
-        rule = self._get_current_rule()
-        if rule is None:
-            return
-        if checked:
-            if rule.condition_list is None:
-                rule.condition_list = []
-            rule.use_condition_list = True
-            self._step_list.setVisible(False)
-            self._condition_list.setVisible(True)
-            self._condition_list.set_conditions(rule.condition_list)
-            self._condition_list.set_advance_on_no_match(
-                getattr(rule, "condition_list_advance_on_no_match", False)
-            )
-        else:
-            rule.use_condition_list = False
-            self._step_list.setVisible(True)
-            self._condition_list.setVisible(False)
-            self._step_list.set_steps(rule.steps)
-        self._flush_save()
+        pass
 
     def _on_enabled_changed(self, state):
         rule = self._get_current_rule()
@@ -4332,7 +4290,15 @@ class MainWindow(QMainWindow):
             self._loop.reload_rules()
 
     def _add_step(self, step_type: str):
-        step = Step(type=step_type, params={})
+        if step_type == "condition_list":
+            default_params = {
+                "conditions": [],
+                "advance_on_no_match": False,
+                "loop": True,
+            }
+        else:
+            default_params = {}
+        step = Step(type=step_type, params=default_params)
         rule = self._get_current_rule()
         if rule is None:
             return
@@ -4636,13 +4602,6 @@ class MainWindow(QMainWindow):
         rule.name = self._edit_name.text()
         rule.enabled = self._edit_enabled.isChecked()
         rule.steps = self._step_list.get_steps()
-        if self._edit_condition_mode.isChecked():
-            self._condition_list.save_all()
-            rule.condition_list_advance_on_no_match = self._condition_list.get_advance_on_no_match()
-            rule.condition_list = self._condition_list.get_conditions()
-            rule.use_condition_list = True
-        else:
-            rule.use_condition_list = False
         # 校驗 detect 步驟文字不可為空
         for i, s in enumerate(rule.steps):
             if s.type == "detect" and not s.params.get("text", "").strip():

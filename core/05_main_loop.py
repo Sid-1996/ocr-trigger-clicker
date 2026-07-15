@@ -226,9 +226,7 @@ class MainLoop:
     def _update_has_detect(self):
         self._has_detect_rules = any(
             r.enabled
-            and (
-                bool(r.condition_list) or any(s.type in ("detect", "match_image") for s in r.steps)
-            )
+            and (any(s.type in ("detect", "match_image", "condition_list") for s in r.steps))
             for r in self._rules
         )
 
@@ -695,44 +693,53 @@ class MainLoop:
                 self.on_warning(msg)
         return StepResult("continue")
 
-    def _run_condition_list(self, rule: Rule, img: np.ndarray, rect: dict) -> bool:
-        conds = rule.condition_list
-        if not conds:
-            return False
-        for i, c in enumerate(conds):
-            text = c.get("text", "")
-            if not text.strip():
-                continue
-            roi = self._resolve_roi(c.get("roi", {}), rect)
-            results = self._ocr_region(img, roi)
-            matched = False
-            if results:
-                matches = find_text(
-                    results,
-                    text,
-                    c.get("match_mode", "contains"),
-                    c.get("fuzzy_threshold", 0.8),
-                )
-                matched = bool(matches)
-            key = (rule.id, i)
-            consecutive = c.get("consecutive_required", 1)
-            if matched:
-                self._condition_hit_counts[key] = self._condition_hit_counts.get(key, 0) + 1
-                if self._condition_hit_counts[key] >= consecutive:
-                    self._condition_hit_counts.pop(key, None)
-                    action = c.get("action", {})
+    def _handle_condition_list(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        conditions = params.get("conditions", [])
+        advance_on_no_match = params.get("advance_on_no_match", False)
+        loop = params.get("loop", True)
+        matched_any = False
+        while True:
+            found_match = False
+            for cond in conditions:
+                detect = cond.get("detect", {})
+                text = detect.get("text", "")
+                if not text.strip():
+                    continue
+                roi = self._resolve_roi(detect.get("roi", {}), ctx.rect)
+                results = self._ocr_region(ctx.img, roi)
+                matched = False
+                if results:
+                    matches = find_text(
+                        results,
+                        text,
+                        detect.get("match_mode", "fuzzy"),
+                        detect.get("fuzzy_threshold", 0.8),
+                    )
+                    matched = bool(matches)
+                if matched:
+                    found_match = True
+                    matched_any = True
+                    ctx.triggered = True
+                    action = cond.get("action", {})
                     if not action or not action.get("type"):
                         continue
-                    action_step = _rule.Step(
-                        type=action.get("type", ""), params=action.get("params", {})
-                    )
-                    ctx = StepContext(img=img, rect=rect)
+                    action_params = {k: v for k, v in action.items() if k != "type"}
+                    action_step = _rule.Step(type=str(action.get("type", "")), params=action_params)
                     ctx.matched_text = matches[0]
                     self._run_step(action_step, ctx, rule)
-                    return True
-            else:
-                self._condition_hit_counts.pop(key, None)
-        return False
+                    on_match = cond.get("on_match", "next_step")
+                    if on_match == "repeat":
+                        break
+                    elif on_match == "stop":
+                        return StepResult("stop")
+                    else:
+                        return StepResult("continue")
+            if not found_match or not loop:
+                break
+        if not matched_any:
+            if advance_on_no_match:
+                ctx.triggered = True
+        return StepResult("stop")
 
     def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
         handlers = {
@@ -746,6 +753,7 @@ class MainLoop:
             "match_image": self._handle_match_image,
             "compare": self._handle_compare,
             "notify": self._handle_notify,
+            "condition_list": self._handle_condition_list,
         }
         handler = handlers.get(step.type)
         if handler is None:
@@ -757,13 +765,6 @@ class MainLoop:
     ) -> None:
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
-        if rule.use_condition_list:
-            matched = self._run_condition_list(rule, img, rect)
-            if matched:
-                ctx.triggered = True
-            elif rule.condition_list_advance_on_no_match:
-                ctx.triggered = True
-            return
         i = 0
         while i < len(rule.steps):
             ctx.step_idx = i
@@ -1865,22 +1866,31 @@ if __name__ == "__main__":
     ml._active_group_ids = []
     print("  [OK] advance: full lifecycle verified")
 
-    # ── Test 26: _run_condition_list matched_text propagation ──
+    # ── Test 26: condition_list step matched_text propagation ──
     _cond_rule = Rule(
         id="cond_test",
         name="條件測試",
         enabled=True,
-        steps=[],
-        use_condition_list=True,
-        condition_list=[
-            {
-                "text": "TEST",
-                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                "match_mode": "contains",
-                "fuzzy_threshold": 0.8,
-                "consecutive_required": 1,
-                "action": {"type": "click", "params": {"target": "text_center"}},
-            }
+        steps=[
+            _rule.Step(
+                type="condition_list",
+                params={
+                    "conditions": [
+                        {
+                            "detect": {
+                                "text": "TEST",
+                                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+                                "match_mode": "contains",
+                                "fuzzy_threshold": 0.8,
+                            },
+                            "action": {"type": "click", "target": "text_center"},
+                            "on_match": "next_step",
+                        }
+                    ],
+                    "advance_on_no_match": False,
+                    "loop": True,
+                },
+            )
         ],
     )
     _cond_img = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -1901,19 +1911,20 @@ if __name__ == "__main__":
 
     ml._ocr_region = _cond_mock_ocr
     ml._handle_click = _cond_track_click
-    _cond_result = ml._run_condition_list(_cond_rule, _cond_img, _cond_rect)
+    _cond_ctx = StepContext(img=_cond_img, rect=_cond_rect)
+    ml._run_rule(_cond_rule, _cond_img, _cond_rect, _cond_ctx)
     ml._ocr_region = _cond_orig_ocr
     ml._handle_click = _cond_orig_handle_click
 
-    assert _cond_result, "_run_condition_list should return True when condition matches"
+    assert _cond_ctx.triggered, "condition_list step should set triggered when condition matches"
     assert _cond_click_check["called"], "_handle_click should have been called"
     assert _cond_click_check["matched_text"] is not None, "matched_text should be set on ctx"
     assert _cond_click_check["matched_text"].text == "TEST", (
         f"expected text 'TEST', got '{_cond_click_check['matched_text'].text}'"
     )
-    print("  [OK] _run_condition_list matched_text propagation")
+    print("  [OK] condition_list step matched_text propagation")
 
-    # ── Test 27: _run_rule dispatches condition_list and sets triggered ──
+    # ── Test 27: _run_rule dispatches condition_list step and sets triggered ──
     _t27_img = np.zeros((100, 100, 3), dtype=np.uint8)
     _t27_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
     _t27_ocr = OcrResult(text="HI", x=5, y=5, w=10, h=10, confidence=0.9)
@@ -1928,12 +1939,22 @@ if __name__ == "__main__":
         id="t27a",
         name="T27A",
         enabled=True,
-        steps=[],
-        use_condition_list=True,
-        condition_list=[
-            {"text": "HI", "action": {"type": "click", "params": {"target": "text_center"}}}
+        steps=[
+            _rule.Step(
+                type="condition_list",
+                params={
+                    "conditions": [
+                        {
+                            "detect": {"text": "HI", "roi": {"x": 0, "y": 0, "w": 0, "h": 0}},
+                            "action": {"type": "click", "target": "text_center"},
+                            "on_match": "next_step",
+                        }
+                    ],
+                    "advance_on_no_match": False,
+                    "loop": True,
+                },
+            )
         ],
-        condition_list_advance_on_no_match=False,
     )
     _t27a_ctx = StepContext(img=_t27_img, rect=_t27_rect)
     ml._ocr_region = lambda *a, **kw: [_t27_ocr]
@@ -1946,12 +1967,22 @@ if __name__ == "__main__":
         id="t27b",
         name="T27B",
         enabled=True,
-        steps=[],
-        use_condition_list=True,
-        condition_list=[
-            {"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}
+        steps=[
+            _rule.Step(
+                type="condition_list",
+                params={
+                    "conditions": [
+                        {
+                            "detect": {"text": "BYE", "roi": {"x": 0, "y": 0, "w": 0, "h": 0}},
+                            "action": {"type": "click", "target": "text_center"},
+                            "on_match": "next_step",
+                        }
+                    ],
+                    "advance_on_no_match": False,
+                    "loop": True,
+                },
+            )
         ],
-        condition_list_advance_on_no_match=False,
     )
     _t27b_ctx = StepContext(img=_t27_img, rect=_t27_rect)
     ml._ocr_region = lambda *a, **kw: []
@@ -1966,12 +1997,22 @@ if __name__ == "__main__":
         id="t27c",
         name="T27C",
         enabled=True,
-        steps=[],
-        use_condition_list=True,
-        condition_list=[
-            {"text": "BYE", "action": {"type": "click", "params": {"target": "text_center"}}}
+        steps=[
+            _rule.Step(
+                type="condition_list",
+                params={
+                    "conditions": [
+                        {
+                            "detect": {"text": "BYE", "roi": {"x": 0, "y": 0, "w": 0, "h": 0}},
+                            "action": {"type": "click", "target": "text_center"},
+                            "on_match": "next_step",
+                        }
+                    ],
+                    "advance_on_no_match": True,
+                    "loop": True,
+                },
+            )
         ],
-        condition_list_advance_on_no_match=True,
     )
     _t27c_ctx = StepContext(img=_t27_img, rect=_t27_rect)
     ml._ocr_region = lambda *a, **kw: []
@@ -1982,14 +2023,21 @@ if __name__ == "__main__":
     ml._ocr_region = _t27_orig_ocr
     ml._handle_click = _t27_orig_click
 
-    # ── Test 28: use_condition_list=True with condition_list=None (no crash) ──
+    # ── Test 28: condition_list step with empty conditions (no crash) ──
     _t28_rule = Rule(
         id="t28",
         name="T28",
         enabled=True,
-        steps=[],
-        use_condition_list=True,
-        condition_list=None,
+        steps=[
+            _rule.Step(
+                type="condition_list",
+                params={
+                    "conditions": [],
+                    "advance_on_no_match": False,
+                    "loop": True,
+                },
+            )
+        ],
     )
     _t28_img = np.zeros((100, 100, 3), dtype=np.uint8)
     _t28_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
@@ -1997,9 +2045,9 @@ if __name__ == "__main__":
     ml._ocr_region = lambda *a, **kw: [_t27_ocr]
     try:
         ml._run_rule(_t28_rule, _t28_img, _t28_rect, _t28_ctx)
-        assert not _t28_ctx.triggered, "28: None condition_list should not trigger"
-        print("  [OK] use_condition_list=True + condition_list=None → no crash, no trigger")
+        assert not _t28_ctx.triggered, "28: empty conditions should not trigger"
+        print("  [OK] condition_list step with empty conditions → no crash, no trigger")
     except Exception as e:
-        assert False, f"28: use_condition_list=True + condition_list=None crashed: {e}"
+        assert False, f"28: condition_list step with empty conditions crashed: {e}"
 
     print("\n=== All 28 tests passed ===")

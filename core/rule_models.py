@@ -17,6 +17,20 @@ class Step:
 
 
 @dataclass
+class Condition:
+    detect: dict
+    action: dict
+    on_match: str = "next_step"
+
+
+@dataclass
+class ConditionListParams:
+    conditions: list[Condition]
+    advance_on_no_match: bool = False
+    loop: bool = True
+
+
+@dataclass
 class Rule:
     id: str
     name: str

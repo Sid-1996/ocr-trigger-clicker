@@ -19,14 +19,69 @@ _models = load_sibling("rule_models", "core/rule_models.py")
 Rule = _models.Rule
 Step = _models.Step
 RuleGroup = _models.RuleGroup
+Condition = _models.Condition
+ConditionListParams = _models.ConditionListParams
 
 _utils = load_sibling("file_utils", "core/file_utils.py")
 _replace_file = _utils._replace_file
 
 
+def _migrate_condition_list_to_step(rule_dict: dict) -> dict:
+    if rule_dict.get("use_condition_list") and rule_dict.get("condition_list"):
+        new_conditions = []
+        for old_cond in rule_dict["condition_list"]:
+            if not isinstance(old_cond, dict):
+                continue
+            detect = {
+                "text": old_cond.get("text", ""),
+                "roi": old_cond.get("roi", {}),
+                "match_mode": old_cond.get("match_mode", "fuzzy"),
+                "fuzzy_threshold": old_cond.get("fuzzy_threshold", 0.8),
+            }
+            old_action = old_cond.get("action", {})
+            if isinstance(old_action, dict):
+                action_type = old_action.get("type", "key")
+                action_params = old_action.get("params", {})
+                if action_type == "click":
+                    action = {
+                        "type": "click",
+                        "x": action_params.get("x", 0),
+                        "y": action_params.get("y", 0),
+                        "button": action_params.get("button", "left"),
+                    }
+                elif action_type == "jump":
+                    action = {"type": "jump", "rule_id": action_params.get("rule_id", "")}
+                else:
+                    action = {"type": "key", "key": action_params.get("key", "")}
+            else:
+                action = {"type": "key", "key": ""}
+            new_conditions.append(
+                {
+                    "detect": detect,
+                    "action": action,
+                    "on_match": "next_step",
+                }
+            )
+        condition_step = {
+            "type": "condition_list",
+            "params": {
+                "conditions": new_conditions,
+                "advance_on_no_match": rule_dict.get("condition_list_advance_on_no_match", False),
+                "loop": True,
+            },
+        }
+        if "steps" not in rule_dict:
+            rule_dict["steps"] = []
+        rule_dict["steps"].append(condition_step)
+        for key in ["use_condition_list", "condition_list", "condition_list_advance_on_no_match"]:
+            rule_dict.pop(key, None)
+    return rule_dict
+
+
 def _dict_to_rule(d: dict) -> Rule:
     if "steps" not in d:
         d = _migrate_v1_to_v2(d)
+    d = _migrate_condition_list_to_step(d)
     steps = [
         Step(
             type=str(s.get("type", "")),
@@ -50,6 +105,9 @@ def _rule_to_dict(r: Rule) -> dict:
     d = asdict(r)
     d.pop("trigger_count", None)
     d.pop("last_trigger_time", None)
+    d.pop("use_condition_list", None)
+    d.pop("condition_list", None)
+    d.pop("condition_list_advance_on_no_match", None)
     return d
 
 
