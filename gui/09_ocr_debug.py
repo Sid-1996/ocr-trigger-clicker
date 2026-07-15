@@ -475,7 +475,7 @@ class OcrDebugPanel(QWidget):
         result = self._compute_roi()
         if result is None:
             return
-        roi, px_x, px_y, px_w, px_h = result
+        roi, _px_x, _px_y, _px_w, _px_h = result
         r = self._ocr_results[self._selected_index]
 
         import cv2 as _cv2
@@ -484,7 +484,14 @@ class OcrDebugPanel(QWidget):
 
         _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 
-        crop = self._latest_raw[px_y : px_y + px_h, px_x : px_x + px_w].copy()
+        img_h, img_w = self._latest_raw.shape[:2]
+        t_x = max(0, r.x)
+        t_y = max(0, r.y)
+        t_w = min(img_w - t_x, r.w)
+        t_h = min(img_h - t_y, r.h)
+        if t_w < 1 or t_h < 1:
+            return
+        crop = self._latest_raw[t_y : t_y + t_h, t_x : t_x + t_w].copy()
         crop_bgr = _cv2.cvtColor(crop, _cv2.COLOR_RGB2BGR)
         template_b64 = _tmpl.img_to_b64(crop_bgr)
 
@@ -496,7 +503,9 @@ class OcrDebugPanel(QWidget):
             }
         )
 
-        self._status_bar.showMessage(f"✓ 已建立模板規則：「{r.text}」  模板: {px_w}×{px_h}px")
+        self._status_bar.showMessage(
+            f"✓ 已建立模板規則：「{r.text}」  模板: {t_w}×{t_h}px  ROI: {_px_w}×{_px_h}px"
+        )
 
     def _on_set_sub_target(self):
         result = self._compute_roi()
