@@ -698,6 +698,7 @@ class MainLoop:
         advance_on_no_match = params.get("advance_on_no_match", False)
         loop = params.get("loop", True)
         matched_any = False
+        rechecked = False
         while True:
             found_match = False
             for cond in conditions:
@@ -730,6 +731,9 @@ class MainLoop:
                         saved_triggered = ctx.triggered
                         self._run_step(action_step, ctx, rule)
                         ctx.triggered = saved_triggered
+                        if loop and not rechecked:
+                            rechecked = True
+                            break
                         return StepResult("stop")
                     elif on_match == "stop":
                         ctx.triggered = True
@@ -2055,4 +2059,68 @@ if __name__ == "__main__":
     except Exception as e:
         assert False, f"28: condition_list step with empty conditions crashed: {e}"
 
-    print("\n=== All 28 tests passed ===")
+    # ── Test 29: condition_list loop=True + on_match=repeat re-checks once ──
+    _t29_rule = Rule(
+        id="t29",
+        name="loop repeat test",
+        enabled=True,
+        steps=[
+            _rule.Step(
+                type="condition_list",
+                params={
+                    "conditions": [
+                        {
+                            "detect": {
+                                "text": "A",
+                                "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+                                "match_mode": "contains",
+                                "fuzzy_threshold": 0.8,
+                            },
+                            "action": {"type": "click", "target": "text_center"},
+                            "on_match": "repeat",
+                        }
+                    ],
+                    "advance_on_no_match": False,
+                    "loop": True,
+                },
+            )
+        ],
+    )
+    _t29_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    _t29_rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    _t29_call_count = [0]
+    _t29_ocr_results = [
+        [OcrResult(text="A", x=10, y=10, w=20, h=20, confidence=0.9)],
+        [],
+    ]
+
+    def _t29_mock_ocr(*a, **kw):
+        idx = min(_t29_call_count[0], len(_t29_ocr_results) - 1)
+        _t29_call_count[0] += 1
+        return _t29_ocr_results[idx]
+
+    _t29_orig_ocr = ml._ocr_region
+    _t29_orig_click = ml._handle_click
+    _t29_click_count = [0]
+
+    def _t29_track_click(params, ctx, rule):
+        _t29_click_count[0] += 1
+        return StepResult("continue")
+
+    ml._ocr_region = _t29_mock_ocr
+    ml._handle_click = _t29_track_click
+    _t29_ctx = StepContext(img=_t29_img, rect=_t29_rect)
+    ml._run_rule(_t29_rule, _t29_img, _t29_rect, _t29_ctx)
+    ml._ocr_region = _t29_orig_ocr
+    ml._handle_click = _t29_orig_click
+
+    assert _t29_click_count[0] == 1, (
+        f"29: loop+repeat should execute action once then re-check and stop, got {_t29_click_count[0]} calls"
+    )
+    assert not _t29_ctx.triggered, "29: loop+repeat should not set triggered (repeat returns stop)"
+    assert _t29_call_count[0] == 2, (
+        f"29: should OCR twice (initial + re-check), got {_t29_call_count[0]}"
+    )
+    print("  [OK] condition_list loop=True + on_match=repeat re-checks once then stops")
+
+    print("\n=== All 29 tests passed ===")

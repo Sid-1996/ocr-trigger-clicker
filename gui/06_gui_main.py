@@ -484,6 +484,19 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "notify":
         msg = p.get("message", "")
         return f"💬「{msg}」" if msg else "💬 (空白)"
+    if t == "condition_list":
+        conds = p.get("conditions", [])
+        count = len(conds)
+        if count == 0:
+            return "條件清單 (空)"
+        labels = []
+        for c in conds[:3]:
+            txt = c.get("detect", {}).get("text", "")
+            labels.append(f"「{txt}」" if txt else "未設定")
+        summary = ", ".join(labels)
+        if count > 3:
+            summary += f" …+{count - 3}"
+        return f"條件 ×{count} {summary}"
     return t
 
 
@@ -3980,9 +3993,6 @@ class MainWindow(QMainWindow):
         self._step_list.set_rule_id(rule.id)
         self._step_list.set_steps(rule.steps)
 
-    def _on_condition_mode_toggled(self, checked: bool):
-        pass
-
     def _on_enabled_changed(self, state):
         rule = self._get_current_rule()
         if rule is None:
@@ -4603,6 +4613,22 @@ class MainWindow(QMainWindow):
                         f"步驟 {i + 1} (點擊)：自訂座標 (0,0) 可能未設定正確，請選取座標",
                     )
                     return
+            if s.type == "condition_list":
+                conds = s.params.get("conditions", [])
+                if not conds:
+                    QMessageBox.warning(
+                        self, "儲存失敗", f"步驟 {i + 1} (條件清單)：至少需要一個條件"
+                    )
+                    return
+                for j, c in enumerate(conds):
+                    text = c.get("detect", {}).get("text", "").strip()
+                    if not text:
+                        QMessageBox.warning(
+                            self,
+                            "儲存失敗",
+                            f"步驟 {i + 1} (條件清單)：條件 {j + 1} 的偵測文字不可為空",
+                        )
+                        return
         # 檢查 jump 參照的規則是否存在
         valid_ids = {r.id for r in self._rules}
         for s in rule.steps:
