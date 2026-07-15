@@ -10,6 +10,15 @@
 - GUI 移除「條件清單」勾選框，改為在步驟下拉選單中新增
 - 執行引擎從兩套獨立路徑（`_run_condition_list` / `_execute_steps`）
   統一為單一 `_run_step` 分派，`condition_list` 由 `_handle_condition_list` 處理
+- 條件清單驗證從阻塞彈窗（QMessageBox）改為狀態列非阻塞警告
+- 新增條件後自動捲動至新卡片可見區域
+
+### 新增
+- 首次啟動自動建立預設任務「我的任務」
+- 新手教學改為狀態列輕量提示（toast），不再阻塞啟動
+- AHK 未安裝時改為狀態列點擊安裝，不再彈窗
+- 版本檢查改為狀態列點擊更新，不再彈窗
+- 步驟初始化使用 `_STEP_DEFAULTS` 預設值，新增等待/條件清單等步驟不再空白
 
 ## [v0.0.11] - 2026-07-11
 
@@ -157,6 +166,7 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.0.12]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.12
 [v0.0.11]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.11
 [v0.0.10]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.10
 [v0.0.9]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.9
