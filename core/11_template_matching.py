@@ -1,4 +1,5 @@
 import base64
+import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -6,6 +7,8 @@ from typing import Optional
 
 import cv2
 import numpy as np
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,13 +83,16 @@ def match_template(
         template_bgr = b64_to_img(template_data)
         tmpl_name = "inline"
         if template_bgr is None:
+            log.warning("模板 base64 解碼失敗")
             return []
     else:
         resolved = _resolve_template(template_path)
         if resolved is None:
+            log.warning("模板檔案不存在: %s", template_path)
             return []
         template_bgr = cv2.imread(str(resolved), cv2.IMREAD_COLOR)
         if template_bgr is None:
+            log.warning("模板讀取失敗: %s", resolved)
             return []
         tmpl_name = Path(template_path).stem
 
@@ -157,6 +163,7 @@ def match_template(
             )
 
     if not matches:
+        log.debug("模板「%s」無匹配結果", tmpl_name)
         return []
 
     # non-maximum suppression across all scales
@@ -202,6 +209,10 @@ def match_template(
                 filtered.append(m)
         kept = filtered
 
+    if kept:
+        log.debug("模板「%s」匹配 %d 個結果 (最高 conf=%.3f)", tmpl_name, len(kept), kept[0].confidence)
+    else:
+        log.debug("模板「%s」顏色過濾後無結果", tmpl_name)
     return kept
 
 

@@ -4647,6 +4647,9 @@ class MainWindow(QMainWindow):
         self._step_list.set_steps(rule.steps)
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
+        _main_loop_mod.log_main(
+            f"規則「{rule.name}」從 OCR 診斷加入偵測步驟「{data.get('target_text', '')}」(id={rule.id})"
+        )
         self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
 
     def _on_debug_template_requested(self, data: dict):
@@ -4733,6 +4736,9 @@ class MainWindow(QMainWindow):
         self._step_list.set_steps(rule.steps)
         self._main_stack.setCurrentIndex(0)
         self._debug_btn.setText("OCR 診斷")
+        _main_loop_mod.log_main(
+            f"規則「{rule.name}」從 OCR 診斷加入模板步驟「{data.get('name', '')}」(id={rule.id})"
+        )
         self._status_bar.showMessage(f"已加入模板步驟：「{data.get('name', '')}」")
 
     # === Start / Pause ===

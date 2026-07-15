@@ -1,0 +1,17 @@
+## 新增
+- OCR 診斷面板「建立為模板」與「加入模板步驟」按鈕
+- 步驟卡片顏色區分（10 種類型）
+- 規則圓點 5 種執行狀態
+- 狀態欄常駐 AHK 連接指示器
+- 步驟參數即時校驗
+- 步驟列表 Del 快捷鍵
+
+## 修正
+- Del 快捷鍵規則/步驟衝突
+- 模板截圖 RGB→BGR 色彩空間
+- step_summary 缺少 template_center
+- build.py 補上遺漏的 core/00_global_hotkey.py
+
+## 重構
+- OCR 診斷面板 ROI 計算提取共用方法
+- 移除多餘 template_center，統一 text_center
