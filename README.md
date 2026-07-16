@@ -101,7 +101,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | `background` | bool | 常駐監控模式（獨立於群組流程外） |
 | `steps` | list[Step] | 有序步驟陣列，依序執行 |
 
-步驟（Step）是規則的執行單元，支援以下類型：
+步驟（Step）是規則的執行單元，支援以下類型。**優先選用 `match_image`（圖示比對），比 OCR 快 10~50 倍且抗背景文字干擾；只有在模板無法區分時才改用 `detect`（OCR）。**
 
 | 步驟類型 | 用途 | 關鍵參數 |
 |----------|------|----------|
@@ -111,7 +111,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | 數值比對（擷取 ROI 內數字後比較） | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
-| `match_image` | 圖示模板比對（可選顏色比對） | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
+| `match_image` | 圖示模板比對（比 OCR 快 10~50 倍，建議優先選用；可選顏色比對） | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
 | `notify` | 提示訊息彈窗 | `message` |
 | `scroll` | 滑鼠滾輪 | `direction`, `amount`, `delay_ms` |
 | `drag` | 滑鼠拖曳 | `target`, `dx`, `dy`, `button` |

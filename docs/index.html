@@ -152,7 +152,7 @@
   <ul>
     <li><strong>OCR 文字辨識</strong> — 基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI（感興趣區域）精確比對，避免全螢幕干擾。</li>
     <li><strong>群組系統</strong> — 規則依群組執行，支援循環執行／執行一次／重複 N 次，可獨立停用。</li>
-    <li><strong>Steps 步驟系統</strong> — 每條規則由有序步驟組成：偵測（detect）、點擊（click）、按鍵（key）、等待（wait）、跳轉（jump）、數值比對（compare）、圖像比對（match_image）、滾輪（scroll）、拖曳（drag）。</li>
+    <li><strong>Steps 步驟系統</strong> — 每條規則由有序步驟組成：偵測（detect）、點擊（click）、按鍵（key）、等待（wait）、跳轉（jump）、數值比對（compare）、圖像比對（match_image）、滾輪（scroll）、拖曳（drag）。<strong>建議優先選用 match_image（圖示比對），比 OCR 快 10~50 倍、抗背景文字干擾；只有在模板無法區分時才改用 OCR detect。</strong></li>
     <li><strong>常駐監控</strong> — 不受群組流程影響，每幀獨立執行，適合錯誤攔截。</li>
     <li><strong>多任務管理</strong> — 不同場景（不同遊戲、不同表單）可建立獨立任務，規則完全隔離，快速切換。</li>
     <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字及其位置與信心度，大幅降低 ROI 設定難度。</li>
@@ -250,7 +250,7 @@
   </ol>
 
   <h3 id="tool-match">match_image 圖像比對</h3>
-  <p>以圖找圖，適合偵測無文字的按鈕或圖示。</p>
+  <p>以圖找圖，適合偵測無文字的按鈕或圖示。<strong>效能約為 OCR（detect）的 10~50 倍，且不受背景文字干擾；建議優先選用。</strong></p>
   <ol>
     <li>在步驟中選擇「match_image（圖像比對）」。</li>
     <li>按「選取範本圖片」載入你要比對的圖片（例如按鈕截圖）。</li>
