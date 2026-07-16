@@ -210,7 +210,9 @@ def match_template(
         kept = filtered
 
     if kept:
-        log.debug("模板「%s」匹配 %d 個結果 (最高 conf=%.3f)", tmpl_name, len(kept), kept[0].confidence)
+        log.debug(
+            "模板「%s」匹配 %d 個結果 (最高 conf=%.3f)", tmpl_name, len(kept), kept[0].confidence
+        )
     else:
         log.debug("模板「%s」顏色過濾後無結果", tmpl_name)
     return kept

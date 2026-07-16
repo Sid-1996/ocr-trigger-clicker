@@ -1064,6 +1064,13 @@ class MainLoop:
             group = self._current_group()
             if group and self._rule_in_group_ptr < len(group.rule_ids):
                 current_rule_id = group.rule_ids[self._rule_in_group_ptr]
+            # ponytail: parallel group runs every rule each frame, so the
+            # single _rule_in_group_ptr is meaningless; highlight the whole group
+            pointer_ids = set()
+            if group is not None and group.order == "parallel":
+                pointer_ids.update(group.rule_ids)
+            elif current_rule_id is not None:
+                pointer_ids.add(current_rule_id)
             active_group_ids = set(self._active_group_ids)
             current_group_id = group.id if group else None
             return [
@@ -1072,7 +1079,7 @@ class MainLoop:
                     "name": r.name,
                     "enabled": r.enabled,
                     "background": r.background,
-                    "pointer": r.id == current_rule_id,
+                    "pointer": r.id in pointer_ids,
                     "failed": any(k.startswith(f"{r.id}:") for k in self._fail_since),
                     "group_done": (
                         r.id not in (group.rule_ids if group else [])
@@ -1343,6 +1350,45 @@ if __name__ == "__main__":
         f"wait-only rule should NOT advance (trigger=False), got {ml._rule_in_group_ptr}"
     )
     print("  [OK] wait-only rule does not advance without trigger")
+
+    # ── Test 10b: get_rules_status highlights whole parallel group ──
+    ml._stop_event.clear()
+    ml._rules = [
+        Rule(
+            id="pa", name="並行A", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]
+        ),
+        Rule(
+            id="pb", name="並行B", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]
+        ),
+        Rule(
+            id="pc", name="並行C", enabled=False, steps=[_rule.Step(type="wait", params={"ms": 0})]
+        ),
+        Rule(
+            id="pd",
+            name="背景",
+            enabled=True,
+            background=True,
+            steps=[_rule.Step(type="wait", params={"ms": 0})],
+        ),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="gp", name="GP", order="parallel", rule_ids=["pa", "pb", "pc"])]
+    ml.set_active_groups(["gp"])
+    ml._rule_in_group_ptr = 0
+    statuses = {s["id"]: s for s in ml.get_rules_status()}
+    assert statuses["pa"]["pointer"], "parallel rule A should be highlighted"
+    assert statuses["pb"]["pointer"], "parallel rule B should be highlighted"
+    assert statuses["pc"]["pointer"], "parallel disabled rule C still part of group, highlighted"
+    assert not statuses["pd"]["pointer"], "background rule must NOT be highlighted"
+    # sequential group must still highlight only the pointer rule
+    ml._groups = [RuleGroup(id="gs", name="GS", rule_ids=["pa", "pb"])]
+    ml.set_active_groups(["gs"])
+    ml._rule_in_group_ptr = 0
+    statuses = {s["id"]: s for s in ml.get_rules_status()}
+    assert statuses["pa"]["pointer"] and not statuses["pb"]["pointer"], (
+        "sequential group should highlight only pointer rule"
+    )
+    print("  [OK] get_rules_status highlights whole parallel group, single rule for sequential")
 
     # ── Test 11: disabled rule is skipped via _advance_rule_in_group ──
     ml._rules = [
