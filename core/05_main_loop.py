@@ -205,8 +205,15 @@ class MainLoop:
     def _current_group(self) -> RuleGroup | None:
         if not self._active_group_ids or self._group_queue_idx >= len(self._active_group_ids):
             return None
-        gid = self._active_group_ids[self._group_queue_idx]
-        return next((g for g in self._groups if g.id == gid), None)
+        # ponytail: skip over loop+parallel groups — they run in the preamble
+        idx = self._group_queue_idx
+        while idx < len(self._active_group_ids):
+            gid = self._active_group_ids[idx]
+            g = next((g for g in self._groups if g.id == gid), None)
+            if g is not None and not (g.mode == "loop" and g.order == "parallel"):
+                return g
+            idx += 1
+        return None
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
         return _ahk.send_click(x, y, button)
@@ -753,32 +760,23 @@ class MainLoop:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
                 self._rule_pointer = saved_ptr
 
-        # ── Group-based rule pointer ──
+        # ── Loop+parallel groups: run every frame, independent of queue ──
+        for g in self._groups:
+            if (
+                g.enabled
+                and g.id in self._active_group_ids
+                and g.mode == "loop"
+                and g.order == "parallel"
+            ):
+                self._run_parallel_group(g, img, rect)
+
+        # ── Group-based rule pointer (sequential / once / repeat) ──
         group = self._current_group()
         if group is None:
             return
 
         if group.order == "parallel":
-            triggered = False
-            for rid in group.rule_ids:
-                if triggered:
-                    break
-                r = self._rule_map.get(rid)
-                if r is None or not r.enabled:
-                    continue
-                r_ctx = StepContext(img=img, rect=rect)
-                self._process_counter += 1
-                try:
-                    self._run_rule(r, img, rect, r_ctx)
-                except Exception as e:
-                    self._log(f"並行規則「{r.name}」異常: {e}")
-                    if self.on_warning:
-                        self.on_warning(f"並行規則「{r.name}」異常: {e}")
-                if r_ctx.triggered:
-                    self._last_active_rule_id = r.id
-                    triggered = True
-            if triggered and group.mode == "once":
-                self._advance_group_queue()
+            self._run_parallel_group(group, img, rect)
             return
 
         if self._rule_in_group_ptr >= len(group.rule_ids):
@@ -804,6 +802,28 @@ class MainLoop:
         if ctx.triggered or ctx.force_advance:
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
+
+    def _run_parallel_group(self, group: RuleGroup, img: np.ndarray, rect: dict) -> None:
+        triggered = False
+        for rid in group.rule_ids:
+            if triggered:
+                break
+            r = self._rule_map.get(rid)
+            if r is None or not r.enabled:
+                continue
+            r_ctx = StepContext(img=img, rect=rect)
+            self._process_counter += 1
+            try:
+                self._run_rule(r, img, rect, r_ctx)
+            except Exception as e:
+                self._log(f"並行規則「{r.name}」異常: {e}")
+                if self.on_warning:
+                    self.on_warning(f"並行規則「{r.name}」異常: {e}")
+            if r_ctx.triggered:
+                self._last_active_rule_id = r.id
+                triggered = True
+        if triggered and group.mode == "once":
+            self._advance_group_queue()
 
     def _advance_rule_in_group(self):
         group = self._current_group()
@@ -1538,6 +1558,47 @@ if __name__ == "__main__":
     assert ml._stop_event.is_set(), "all groups done → stop"
     print("  [OK] Multiple groups execute sequentially")
 
+    # ── Test 17b: Loop+parallel groups run concurrently ──
+    # Both groups have a trigger-on-first-frame detect step and loop+parallel mode.
+    # _process_rules must run both groups' rules each frame.
+    ml._groups = [
+        RuleGroup(id="gp1", name="P1", mode="loop", order="parallel", rule_ids=["ra", "rb"]),
+        RuleGroup(id="gp2", name="P2", mode="loop", order="parallel", rule_ids=["rc", "rd"]),
+    ]
+    ml._rules = [
+        Rule(id="ra", name="A", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
+        Rule(id="rb", name="B", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
+        Rule(id="rc", name="C", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
+        Rule(id="rd", name="D", enabled=True, steps=[_rule.Step(type="wait", params={"ms": 0})]),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._active_group_ids = ["gp1", "gp2"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    # Both groups run in one _process_rules call — no crash, both groups remain active
+    n_ok = 0
+    for _ in range(10):
+        ml._process_rules(img, rect)
+        n_ok += 1
+    assert "gp1" in ml._active_group_ids, "loop+parallel group gp1 must remain active"
+    assert "gp2" in ml._active_group_ids, "loop+parallel group gp2 must remain active"
+    # Sequential groups after loop+parallel must still work
+    ml._groups.append(RuleGroup(id="g_once", name="Once", mode="once", rule_ids=["ra"]))
+    ml._active_group_ids = ["gp1", "gp2", "g_once"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._group_rounds_completed.clear()
+    ml._process_rules(img, rect)
+    # _current_group should skip past loop+parallel groups and point to g_once
+    # (loop+parallel groups run in the new preamble, not the queue)
+    current = ml._current_group()
+    assert current and current.id == "g_once", (
+        f"queue should point to first non-loop-parallel group, got {current.id if current else None}"
+    )
+    print("  [OK] Loop+parallel groups run concurrently with queue groups")
+
     # ── Test 18: Jump within same group succeeds ──
     ml._rules = [
         Rule(
@@ -1824,4 +1885,4 @@ if __name__ == "__main__":
     ml._active_group_ids = []
     print("  [OK] advance: full lifecycle verified")
 
-    print("\n=== All 25 tests passed ===")
+    print("\n=== All 26 tests passed ===")
