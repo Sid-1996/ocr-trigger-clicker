@@ -3056,20 +3056,21 @@ class MainWindow(QMainWindow):
         )
         add_menu = QMenu(self)
         step_types = [
-            ("detect", "🔍 偵測文字"),
-            ("match_image", "🖼 圖示辨識"),
-            ("compare", "🔢 數字比較"),
-            ("click", "🖱 點擊"),
-            ("key", "⌨ 按鍵"),
-            ("drag", "↗ 拖曳"),
-            ("scroll", "↕ 滾輪"),
-            ("wait", "⏱ 等待"),
-            ("jump", "↩ 跳轉規則"),
-            ("notify", "💬 提示訊息"),
+            ("detect", "🔍 偵測文字", "以 OCR 辨識指定文字，精準但略慢"),
+            ("match_image", "🖼 圖示辨識", "以截圖區塊比對，速度快、抗干擾佳；建議優先選用"),
+            ("compare", "🔢 數字比較", "比對 OCR 數字結果"),
+            ("click", "🖱 點擊", "點擊指定位置"),
+            ("key", "⌨ 按鍵", "送出鍵盤按鍵"),
+            ("drag", "↗ 拖曳", "滑鼠拖曳"),
+            ("scroll", "↕ 滾輪", "滑鼠滾輪"),
+            ("wait", "⏱ 等待", "等待指定毫秒"),
+            ("jump", "↩ 跳轉規則", "跳轉至指定規則"),
+            ("notify", "💬 提示訊息", "顯示通知並可停止群組"),
         ]
-        for st, label in step_types:
+        for st, label, tip in step_types:
             action = add_menu.addAction(label)
             action.setData(st)
+            action.setToolTip(tip)
             action.triggered.connect(lambda checked, t=st: self._add_step(t))
         add_dropdown.setMenu(add_menu)
         edit_layout.addWidget(add_dropdown)
