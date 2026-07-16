@@ -720,7 +720,7 @@ class MainLoop:
             ctx.step_idx = i
             result = self._run_step(rule.steps[i], ctx, rule)
             if result.action == "stop":
-                break
+                return
             if result.action == "jump_step":
                 idx = result.step_index
                 if idx < 0:
@@ -732,7 +732,6 @@ class MainLoop:
                 i = idx
                 continue
             i += 1
-        self._last_active_rule_id = rule.id
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()
@@ -776,6 +775,7 @@ class MainLoop:
                     if self.on_warning:
                         self.on_warning(f"並行規則「{r.name}」異常: {e}")
                 if r_ctx.triggered:
+                    self._last_active_rule_id = r.id
                     triggered = True
             if triggered and group.mode == "once":
                 self._advance_group_queue()
@@ -802,6 +802,7 @@ class MainLoop:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
         if ctx.triggered or ctx.force_advance:
+            self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
     def _advance_rule_in_group(self):
