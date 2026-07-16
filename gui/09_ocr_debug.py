@@ -163,17 +163,23 @@ class OcrDebugPanel(QWidget):
         self._style_card(self._selected_detail, dark=True)
         right_layout.addWidget(self._selected_detail)
 
-        self._add_rule_btn = QPushButton("建立為新規則(&N)")
-        self._add_rule_btn.setEnabled(False)
-        self._add_rule_btn.setToolTip("將選取的文字與位置直接建立為一條新的偵測規則")
-        self._add_rule_btn.clicked.connect(self._on_add_rule)
-        right_layout.addWidget(self._add_rule_btn)
-
         self._template_btn = QPushButton("建立為模板(&M)")
         self._template_btn.setEnabled(False)
         self._template_btn.setToolTip("將選取的區塊截圖建立為圖片比對規則 (match_image)")
         self._template_btn.clicked.connect(self._on_add_template)
         right_layout.addWidget(self._template_btn)
+
+        self._add_template_step_btn = QPushButton("加入模板步驟(&T)")
+        self._add_template_step_btn.setEnabled(False)
+        self._add_template_step_btn.setToolTip("將選取的區塊截圖新增為目前規則的圖片比對步驟")
+        self._add_template_step_btn.clicked.connect(self._on_add_template_step)
+        right_layout.addWidget(self._add_template_step_btn)
+
+        self._add_rule_btn = QPushButton("建立為新規則(&N)")
+        self._add_rule_btn.setEnabled(False)
+        self._add_rule_btn.setToolTip("將選取的文字與位置直接建立為一條新的偵測規則")
+        self._add_rule_btn.clicked.connect(self._on_add_rule)
+        right_layout.addWidget(self._add_rule_btn)
 
         self._set_sub_target_btn = QPushButton("加入偵測步驟(&A)")
         self._set_sub_target_btn.setEnabled(False)
@@ -181,11 +187,13 @@ class OcrDebugPanel(QWidget):
         self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
         right_layout.addWidget(self._set_sub_target_btn)
 
-        self._add_template_step_btn = QPushButton("加入模板步驟(&T)")
-        self._add_template_step_btn.setEnabled(False)
-        self._add_template_step_btn.setToolTip("將選取的區塊截圖新增為目前規則的圖片比對步驟")
-        self._add_template_step_btn.clicked.connect(self._on_add_template_step)
-        right_layout.addWidget(self._add_template_step_btn)
+        # keep a single list for enable/disable iteration
+        self._add_buttons = [
+            self._template_btn,
+            self._add_template_step_btn,
+            self._add_rule_btn,
+            self._set_sub_target_btn,
+        ]
 
         right_scroll = QScrollArea()
         right_scroll.setWidgetResizable(True)
