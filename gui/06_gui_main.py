@@ -3910,20 +3910,24 @@ class MainWindow(QMainWindow):
         group = next((g for g in self._groups if g.id == gid), None)
         if group and group.id == "__uncategorized__":
             return w
-        enabled = group.enabled if group else True
-        toggle = QPushButton("✓" if enabled else "■")
+        running = self._loop is not None
+        g_enabled = group.enabled if group else True
+        toggle = QPushButton("✓" if g_enabled else "■")
         toggle.setFixedSize(22, 22)
-        toggle.setToolTip("停用群組" if enabled else "啟用群組")
-        toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
+        toggle.setToolTip("停用群組" if g_enabled else "啟用群組")
+        toggle.setStyleSheet("color: #4a4;" if g_enabled else "color: #888;")
+        toggle.setEnabled(not running)
         toggle.clicked.connect(lambda: self._toggle_group(gid))
         layout.addWidget(toggle)
         up = QPushButton("▲")
         up.setFixedSize(22, 22)
         up.setToolTip("上移群組")
+        up.setEnabled(not running)
         up.clicked.connect(lambda: self._move_group_up(gid))
         down = QPushButton("▼")
         down.setFixedSize(22, 22)
         down.setToolTip("下移群組")
+        down.setEnabled(not running)
         down.clicked.connect(lambda: self._move_group_down(gid))
         layout.addWidget(up)
         layout.addWidget(down)
