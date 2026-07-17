@@ -4887,22 +4887,12 @@ class MainWindow(QMainWindow):
             self._stop_loop()
 
     def _update_edit_enabled(self, enabled: bool):
-        self._rule_list.setDragDropMode(
-            QAbstractItemView.DragDropMode.InternalMove
-            if enabled
-            else QAbstractItemView.DragDropMode.NoDragDrop
-        )
-        self._rule_list.setContextMenuPolicy(
-            Qt.ContextMenuPolicy.CustomContextMenu
-            if enabled
-            else Qt.ContextMenuPolicy.NoContextMenu
-        )
-        for i in range(self._rule_list.topLevelItemCount()):
-            it = self._rule_list.topLevelItem(i)
-            if it and it.data(0, Qt.ItemDataRole.UserRole) == "group":
-                w = self._rule_list.itemWidget(it, 1)
-                if w:
-                    w.setEnabled(enabled)
+        if enabled:
+            self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+            self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        else:
+            self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+            self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._add_group_btn.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
