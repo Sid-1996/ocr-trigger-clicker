@@ -3597,6 +3597,7 @@ class MainWindow(QMainWindow):
                     item.setExpanded(gid not in self._collapsed_groups)
         self._rule_list.blockSignals(False)
         self._rule_hint.setVisible(len(self._rules) == 0)
+        self._sync_group_buttons_enabled()
 
         if selected_item:
             self._rule_list.setCurrentItem(selected_item)
@@ -4890,6 +4891,15 @@ class MainWindow(QMainWindow):
         if self._loop is not None:
             self._stop_loop()
 
+    def _sync_group_buttons_enabled(self):
+        running = self._loop is not None
+        for i in range(self._rule_list.topLevelItemCount()):
+            it = self._rule_list.topLevelItem(i)
+            if it and it.data(0, Qt.ItemDataRole.UserRole) == "group":
+                w = self._rule_list.itemWidget(it, 1)
+                if w:
+                    w.setEnabled(not running)
+
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setDragDropMode(
             QAbstractItemView.DragDropMode.InternalMove
@@ -4901,12 +4911,7 @@ class MainWindow(QMainWindow):
             if enabled
             else Qt.ContextMenuPolicy.NoContextMenu
         )
-        for i in range(self._rule_list.topLevelItemCount()):
-            it = self._rule_list.topLevelItem(i)
-            if it and it.data(0, Qt.ItemDataRole.UserRole) == "group":
-                w = self._rule_list.itemWidget(it, 1)
-                if w:
-                    w.setEnabled(enabled)
+        self._sync_group_buttons_enabled()
         self._add_group_btn.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
