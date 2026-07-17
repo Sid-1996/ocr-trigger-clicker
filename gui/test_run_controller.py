@@ -108,10 +108,17 @@ class TestRunController:
                 return px
             return roi
 
-        def _resolve_point(px, py):
+        def _resolve_point(px, py, roi_coord=None):
             W, H = img.shape[1], img.shape[0]
             if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
-                return int(px * W), int(py * H)
+                if roi_coord == "client":
+                    chrome = get_window_client_offset(win._window_combo.currentText()) or (0, 0)
+                    cx, cy = chrome
+                    client_w = W - cx
+                    client_h = H - cy
+                    if client_w > 0 and client_h > 0:
+                        return int(round(px * client_w)) + cx, int(round(py * client_h)) + cy
+                return int(round(px * W)), int(round(py * H))
             return int(px), int(py)
 
         markers = []
@@ -209,7 +216,7 @@ class TestRunController:
                     target = p.get("target", "text_center")
                     cx, cy = None, None
                     if target == "custom":
-                        cx, cy = _resolve_point(p.get("x", 0), p.get("y", 0))
+                        cx, cy = _resolve_point(p.get("x", 0), p.get("y", 0), p.get("roi_coord"))
                     elif target == "text_center":
                         if last_center:
                             cx, cy = last_center
@@ -247,7 +254,7 @@ class TestRunController:
                     target = p.get("target", "text_center")
                     sx, sy = None, None
                     if target == "custom":
-                        sx, sy = _resolve_point(p.get("x", 0), p.get("y", 0))
+                        sx, sy = _resolve_point(p.get("x", 0), p.get("y", 0), p.get("roi_coord"))
                     elif target == "text_center":
                         if last_center:
                             sx, sy = last_center
