@@ -4887,6 +4887,7 @@ class MainWindow(QMainWindow):
             self._stop_loop()
 
     def _update_edit_enabled(self, enabled: bool):
+        self._rule_list.setEnabled(enabled)
         if enabled:
             self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
             self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
