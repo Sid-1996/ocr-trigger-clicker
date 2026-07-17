@@ -1,5 +1,3 @@
-from PyQt6.QtWidgets import QApplication
-
 from _loader import load_sibling
 
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
@@ -42,10 +40,6 @@ class ScreenshotController:
         if not result:
             return None
         if title:
-            screen = QApplication.primaryScreen()
-            ratio = screen.devicePixelRatio()
-            result["x"] = int(result["x"] * ratio)
-            result["y"] = int(result["y"] * ratio)
             wr = get_window_rect(title)
             if wr:
                 result["x"] -= wr["x"]
@@ -82,17 +76,10 @@ class ScreenshotController:
         wr = get_window_rect(title)
         if not wr or wr["w"] <= 0 or wr["h"] <= 0:
             return None
-        cx, cy = rect["x"] + rect["w"] // 2, rect["y"] + rect["h"] // 2
-        dpr = 1.0
-        for screen in QApplication.screens():
-            g = screen.geometry()
-            if g.x() <= cx < g.x() + g.width() and g.y() <= cy < g.y() + g.height():
-                dpr = screen.devicePixelRatio()
-                break
-        px = int(rect["x"] * dpr) - wr["x"]
-        py = int(rect["y"] * dpr) - wr["y"]
-        pw = int(rect["w"] * dpr)
-        ph = int(rect["h"] * dpr)
+        px = rect["x"] - wr["x"]
+        py = rect["y"] - wr["y"]
+        pw = rect["w"]
+        ph = rect["h"]
         chrome = get_window_client_offset(title) or (0, 0)
         client_px = px - chrome[0]
         client_py = py - chrome[1]
@@ -121,12 +108,10 @@ class ScreenshotController:
             roi_ratio = self._capture_rect_to_roi(rect, title)
             return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
         if title:
-            screen = QApplication.primaryScreen()
-            ratio = screen.devicePixelRatio()
-            rx = int(rect["x"] * ratio)
-            ry = int(rect["y"] * ratio)
-            rw = int(rect["w"] * ratio)
-            rh = int(rect["h"] * ratio)
+            rx = rect["x"]
+            ry = rect["y"]
+            rw = rect["w"]
+            rh = rect["h"]
             wr = get_window_rect(title)
             if wr:
                 rx -= wr["x"]

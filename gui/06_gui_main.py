@@ -1753,6 +1753,7 @@ class _ClickStepForm(QWidget):
             if result:
                 self._step.params["x"], self._step.params["y"] = result
                 self._step.params["target"] = "custom"
+                self._step.params["roi_coord"] = "client"
                 self._coord_label.setText(_fmt_point(result[0], result[1]))
                 self._target.setCurrentIndex(self._target.findData("custom"))
                 self.save()
@@ -1831,6 +1832,7 @@ class _DragStepForm(QWidget):
             result = self._pick_cb()
             if result:
                 self._step.params["x"], self._step.params["y"] = result
+                self._step.params["roi_coord"] = "client"
                 self._coord_label.setText(_fmt_point(result[0], result[1]))
                 self._target.setCurrentIndex(self._target.findData("custom"))
                 self.save()
@@ -4473,9 +4475,6 @@ class MainWindow(QMainWindow):
         if result is None:
             return None
         if title:
-            screen = QApplication.primaryScreen()
-            ratio = screen.devicePixelRatio()
-            result = (int(result[0] * ratio), int(result[1] * ratio))
             wr = get_window_rect(title)
             if wr:
                 result = (result[0] - wr["x"], result[1] - wr["y"])
@@ -4483,7 +4482,17 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已選取點擊座標: X={result[0]}, Y={result[1]}")
         # Convert to ratio before storing
         if title and wr and wr["w"] > 0 and wr["h"] > 0:
-            result = (result[0] / wr["w"], result[1] / wr["h"])
+            chrome = get_window_client_offset(title) or (0, 0)
+            cx, cy = chrome
+            client_w = wr["w"] - cx
+            client_h = wr["h"] - cy
+            if client_w > 0 and client_h > 0:
+                result = (
+                    max(0.0, (result[0] - cx) / client_w),
+                    max(0.0, (result[1] - cy) / client_h),
+                )
+            else:
+                result = (result[0] / wr["w"], result[1] / wr["h"])
         return result
 
     # === ROI selector ===

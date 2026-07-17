@@ -298,11 +298,20 @@ class MainLoop:
             }
         return roi
 
-    def _resolve_point(self, px: float, py: float, rect: dict) -> tuple[int, int]:
+    def _resolve_point(
+        self, px: float, py: float, rect: dict, roi_coord: str | None = None
+    ) -> tuple[int, int]:
         W, H = rect["w"], rect["h"]
         if W <= 0 or H <= 0:
             return int(px), int(py)
         if px <= 1.0 and py <= 1.0:
+            if roi_coord == "client":
+                chrome = get_window_client_offset(self._window_title) or (0, 0)
+                cx, cy = chrome
+                client_w = W - cx
+                client_h = H - cy
+                if client_w > 0 and client_h > 0:
+                    return int(round(px * client_w)) + cx, int(round(py * client_h)) + cy
             return int(round(px * W)), int(round(py * H))
         return int(px), int(py)
 
@@ -530,7 +539,9 @@ class MainLoop:
             cy = ctx.matched_text.center_y + dy
             matched_text = ctx.matched_text.text
         elif target == "custom":
-            cx, cy = self._resolve_point(params.get("x", 0), params.get("y", 0), ctx.rect)
+            cx, cy = self._resolve_point(
+                params.get("x", 0), params.get("y", 0), ctx.rect, params.get("roi_coord")
+            )
             cx += dx
             cy += dy
             matched_text = ""
@@ -602,7 +613,9 @@ class MainLoop:
             sx = ctx.matched_text.center_x
             sy = ctx.matched_text.center_y
         elif target == "custom":
-            sx, sy = self._resolve_point(params.get("x", 0), params.get("y", 0), ctx.rect)
+            sx, sy = self._resolve_point(
+                params.get("x", 0), params.get("y", 0), ctx.rect, params.get("roi_coord")
+            )
         elif target == "click_text":
             click_text = params.get("text", "")
             if not click_text:
