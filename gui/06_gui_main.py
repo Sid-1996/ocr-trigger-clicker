@@ -2952,6 +2952,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(QLabel("規則列表"))
 
         self._rule_list = _RuleTreeWidget()
+        self._rule_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._rule_list.setMinimumWidth(180)
         self._rule_list.setHeaderHidden(True)
         self._rule_list.setAnimated(True)
@@ -4886,7 +4887,12 @@ class MainWindow(QMainWindow):
             self._stop_loop()
 
     def _update_edit_enabled(self, enabled: bool):
-        self._rule_list.setEnabled(enabled)
+        if enabled:
+            self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+            self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        else:
+            self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
+            self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._add_group_btn.setEnabled(enabled)
         self._add_rule_btn.setEnabled(enabled)
         self._del_rule_btn.setEnabled(enabled)
