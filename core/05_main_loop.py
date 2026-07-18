@@ -50,6 +50,7 @@ MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
 img_to_b64 = _tmpl.img_to_b64
 _logging_config = load_sibling("logging_config", "core/00_logging_config.py")
+_trigger_log = load_sibling("trigger_log", "core/trigger_log.py")
 
 
 def _ensure_main_logger() -> logging.Logger:
@@ -765,12 +766,16 @@ class MainLoop:
             if rule.enabled and rule.background:
                 self._process_counter += 1
                 saved_ptr = self._rule_pointer
+                bg_ctx = StepContext(img=img, rect=rect)
                 try:
-                    self._run_rule(rule, img, rect)
+                    self._run_rule(rule, img, rect, bg_ctx)
                 except Exception as e:
                     self._log(f"背景規則「{rule.name}」異常: {e}")
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
+                if bg_ctx.triggered:
+                    task_name = Path(self._rules_path).stem if self._rules_path else ""
+                    _trigger_log.log_trigger(rule.id, rule.name, task_name, "background")
                 self._rule_pointer = saved_ptr
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
@@ -813,6 +818,14 @@ class MainLoop:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
         if ctx.triggered or ctx.force_advance:
+            if ctx.triggered:
+                task_name = Path(self._rules_path).stem if self._rules_path else ""
+                _trigger_log.log_trigger(
+                    rule.id,
+                    rule.name,
+                    task_name,
+                    group.id,
+                )
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
@@ -833,6 +846,8 @@ class MainLoop:
                 if self.on_warning:
                     self.on_warning(f"並行規則「{r.name}」異常: {e}")
             if r_ctx.triggered:
+                task_name = Path(self._rules_path).stem if self._rules_path else ""
+                _trigger_log.log_trigger(r.id, r.name, task_name, group.id)
                 self._last_active_rule_id = r.id
                 triggered = True
         if triggered and group.mode == "once":
