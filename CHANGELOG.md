@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增
+- 高 DPI 螢幕 overlay 座標修正：ROI 框選、點擊座標選取、截圖區域三個 overlay
+  均乘以 `devicePixelRatioF()` 轉換為實體座標，解決高 DPI 下框選偏移問題
+- 自動化測試框架：新增 `tests/` 目錄，87 項 pytest 測試涵蓋規則引擎、主迴圈、
+  模板比對、任務管理、序列化、觸發紀錄
+- 規則備註欄位（notes）：Rule 資料模型新增 `notes: str` 欄位，GUI 規則編輯器
+  新增備註文字框，向後相容（舊任務檔自動填入空字串）
+- 觸發歷史紀錄：每次規則觸發時寫入 `logs/triggers.jsonl`（JSONL 格式），
+  記錄時間戳、規則 ID、規則名稱、任務名稱、群組 ID
+
+### 修正
+- 捕捉區域 overlay 1:1 模式下顯示文字改為物理像素尺寸（乘以 `devicePixelRatioF`）
+
 ## [v0.0.14] - 2026-07-15
 
 ### 新增
