@@ -6,6 +6,9 @@ pygetwindow>=0.0.9
 rapidocr-onnxruntime>=1.4
 PyQt6>=6.6
 
+# ===== 測試 =====
+pytest>=8.0
+
 # ===== 開發／打包工具（選用） =====
 # pyinstaller>=6.0
 # ruff>=0.15
