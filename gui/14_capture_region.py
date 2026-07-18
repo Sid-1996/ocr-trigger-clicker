@@ -61,11 +61,12 @@ class CaptureRegionSelector(QWidget):
     def _set_result_from_rect(self):
         rect = self._get_rect()
         if rect:
+            dpr = self.devicePixelRatioF()
             self._result = {
-                "x": rect.x(),
-                "y": rect.y(),
-                "w": rect.width(),
-                "h": rect.height(),
+                "x": int(rect.x() * dpr),
+                "y": int(rect.y() * dpr),
+                "w": int(rect.width() * dpr),
+                "h": int(rect.height() * dpr),
             }
 
     def paintEvent(self, event):
@@ -96,7 +97,10 @@ class CaptureRegionSelector(QWidget):
         font.setPointSize(16)
         painter.setFont(font)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        dim = f"  |  尺寸: {rect.width()}×{rect.height()}" if rect else ""
+        dpr = self.devicePixelRatioF()
+        dim_w = int(rect.width() / dpr) if rect else 0
+        dim_h = int(rect.height() / dpr) if rect else 0
+        dim = f"  |  尺寸: {dim_w}×{dim_h}" if rect else ""
         painter.drawText(
             16,
             self.rect().height() - 32,

@@ -43,7 +43,8 @@ class ClickPicker(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.globalPosition().toPoint()
-            self._result = (pos.x(), pos.y())
+            dpr = self.devicePixelRatioF()
+            self._result = (int(pos.x() * dpr), int(pos.y() * dpr))
             self.finished.emit()
             self.close()
 
