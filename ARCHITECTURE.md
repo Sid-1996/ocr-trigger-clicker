@@ -541,14 +541,10 @@ MainLoop.emergency_stop()
 
 | 函式 | 來源 | 回傳格式 |
 |------|------|----------|
-| `capture()` | mss BGRA → `arr[:,:,:3]` | **BGR**（不做轉換） |
+| `capture()` | mss BGRA → `arr[:,:,:3]` | **BGR** |
 | `capture_window_content()` | GDI BGRA → `cv2.cvtColor(COLOR_BGRA2RGB)` | **RGB** |
 
-`02_ocr_engine.py` 的 `_prepare_image()` 以 `COLOR_RGB2GRAY` 處理影像，因此：
-- 若走主要路徑 `capture()`（BGR），通道順序與權重不符，但實務上對 OCR 結果影響極小
-- 若走備援路徑 `capture_window_content()`（RGB），轉換正確
-
-由於 RapidOCR 內部統一轉灰階，此差異**不影響最終辨識結果**。
+`02_ocr_engine.py` 的 `_prepare_image()` 以 `COLOR_RGB2GRAY` 處理影像（以 RGB 權重加權），因此主要路徑 `capture()` 回傳的 BGR 會被視為 RGB 處理——色道權重略有偏差，但 RapidOCR 內部再轉一次灰階，實務上**不影響辨識結果**。
 
 ### _loader 的跨模組呼叫
 
