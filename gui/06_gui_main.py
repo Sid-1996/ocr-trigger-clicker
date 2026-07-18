@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QProgressDialog,
     QPushButton,
     QScrollArea,
@@ -3034,6 +3035,14 @@ class MainWindow(QMainWindow):
         name_row.addWidget(self._edit_background)
         edit_layout.addLayout(name_row)
 
+        notes_row = QHBoxLayout()
+        notes_row.addWidget(QLabel("備註:"))
+        self._edit_notes = QPlainTextEdit()
+        self._edit_notes.setPlaceholderText("規則備註（選填）")
+        self._edit_notes.setMaximumHeight(60)
+        notes_row.addWidget(self._edit_notes, 1)
+        edit_layout.addLayout(notes_row)
+
         edit_layout.addWidget(QLabel("步驟列表:"))
 
         self._step_list = _StepListWidget()
@@ -3158,6 +3167,7 @@ class MainWindow(QMainWindow):
         self._edit_test_btn.clicked.connect(self._test_ctrl.on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._edit_background.stateChanged.connect(self._on_background_changed)
+        self._edit_notes.textChanged.connect(self._on_notes_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
         self._debug_back_btn.clicked.connect(self._switch_to_rules)
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
@@ -3717,6 +3727,7 @@ class MainWindow(QMainWindow):
                         [(g.id, list(g.rule_ids)) for g in self._groups],
                     )
                     prev_rule.background = self._edit_background.isChecked()
+                    prev_rule.notes = self._edit_notes.toPlainText()
                     prev_rule.steps = self._step_list.get_steps()
                     self._flush_save()
                     prefix = "👁 " if prev_rule.background else ""
@@ -3821,6 +3832,9 @@ class MainWindow(QMainWindow):
         self._edit_background.blockSignals(True)
         self._edit_background.setChecked(getattr(rule, "background", False))
         self._edit_background.blockSignals(False)
+        self._edit_notes.blockSignals(True)
+        self._edit_notes.setPlainText(getattr(rule, "notes", ""))
+        self._edit_notes.blockSignals(False)
         self._step_list.setVisible(True)
         self._step_list.set_rule_id(rule.id)
         self._step_list.set_steps(rule.steps)
@@ -3875,6 +3889,13 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.reload_rules()
         self._refresh_rule_list()
+
+    def _on_notes_changed(self):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.notes = self._edit_notes.toPlainText()
+        self._schedule_save()
 
     def _clear_uncategorized(self):
         target = next((g for g in self._groups if g.id == "__uncategorized__"), None)
@@ -4423,6 +4444,7 @@ class MainWindow(QMainWindow):
             return
         rule.name = self._edit_name.text()
         rule.enabled = self._edit_enabled.isChecked()
+        rule.notes = self._edit_notes.toPlainText()
         rule.steps = self._step_list.get_steps()
         # 校驗 detect 步驟文字不可為空
         for i, s in enumerate(rule.steps):

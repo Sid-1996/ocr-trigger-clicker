@@ -23,6 +23,7 @@ class Rule:
     enabled: bool
     steps: list[Step]
     background: bool = False
+    notes: str = ""
 
 
 @dataclass

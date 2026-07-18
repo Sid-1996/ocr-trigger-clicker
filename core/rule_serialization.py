@@ -41,6 +41,7 @@ def _dict_to_rule(d: dict) -> Rule:
         enabled=bool(d.get("enabled", True)),
         steps=steps,
         background=bool(d.get("background", False)),
+        notes=str(d.get("notes", "")),
     )
 
 
