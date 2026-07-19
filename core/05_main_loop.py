@@ -187,9 +187,7 @@ class MainLoop:
         )
 
     def _log(self, msg: str):
-        if self._verbose:
-            print(f"[主循環] {msg}")
-        self._logger.debug(msg)
+        self._logger.info(msg)
 
     def _load_rules(self):
         with self._rules_lock:
@@ -561,10 +559,10 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
-            self._log(f"規則「{rule.name}」點擊略過：CPS 速率限制")
+            self._logger.debug("規則「%s」點擊略過：CPS 速率限制", rule.name)
             return StepResult("stop")
         if self._is_tool_foreground():
-            self._log(f"規則「{rule.name}」點擊略過：工具處於前景")
+            self._logger.debug("規則「%s」點擊略過：工具處於前景", rule.name)
             return StepResult("stop")
 
         button = params.get("button", "left")
@@ -586,10 +584,10 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
-            self._log(f"規則「{rule.name}」按鍵略過：CPS 速率限制")
+            self._logger.debug("規則「%s」按鍵略過：CPS 速率限制", rule.name)
             return StepResult("stop")
         if self._is_tool_foreground():
-            self._log(f"規則「{rule.name}」按鍵略過：工具處於前景")
+            self._logger.debug("規則「%s」按鍵略過：工具處於前景", rule.name)
             return StepResult("stop")
 
         activate_window(self._window_title)
@@ -631,10 +629,10 @@ class MainLoop:
             return StepResult("stop")
 
         if not self._can_perform_action():
-            self._log(f"規則「{rule.name}」拖曳略過：CPS 速率限制")
+            self._logger.debug("規則「%s」拖曳略過：CPS 速率限制", rule.name)
             return StepResult("stop")
         if self._is_tool_foreground():
-            self._log(f"規則「{rule.name}」拖曳略過：工具處於前景")
+            self._logger.debug("規則「%s」拖曳略過：工具處於前景", rule.name)
             return StepResult("stop")
 
         dx = params.get("dx", 0)
@@ -655,10 +653,10 @@ class MainLoop:
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         if not self._can_perform_action():
-            self._log(f"規則「{rule.name}」滾輪略過：CPS 速率限制")
+            self._logger.debug("規則「%s」滾輪略過：CPS 速率限制", rule.name)
             return StepResult("stop")
         if self._is_tool_foreground():
-            self._log(f"規則「{rule.name}」滾輪略過：工具處於前景")
+            self._logger.debug("規則「%s」滾輪略過：工具處於前景", rule.name)
             return StepResult("stop")
 
         direction = params.get("direction", "WheelDown")
@@ -964,7 +962,7 @@ class MainLoop:
                         change_ratio = np.mean(diff) / 255.0
                         self._frame_diff_ratio = change_ratio
                         if change_ratio < 0.02 and not self._should_process_static_frame():
-                            if self._verbose and iteration % 30 == 0:
+                            if iteration % 30 == 0:
                                 self._log(f"畫面無變化 ({change_ratio:.4f})，跳過 OCR")
                             if iteration % 10 == 0 and self.on_info:
                                 self.on_info("畫面靜止，等待變化")

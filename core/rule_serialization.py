@@ -84,12 +84,12 @@ def load_groups(path: str) -> list[RuleGroup]:
     if not isinstance(groups, list):
         return []
     groups = [_dict_to_group(g) for g in groups]
-    logging.info("[load_groups] loaded=%s", [(g.id, list(g.rule_ids)) for g in groups])
+    logging.debug("[load_groups] loaded=%s", [(g.id, list(g.rule_ids)) for g in groups])
     return groups
 
 
 def save_groups(groups: list[RuleGroup], path: str) -> bool:
-    logging.info(
+    logging.debug(
         "[save_groups] path=%s groups=%s", path, [(g.id, list(g.rule_ids)) for g in groups]
     )
     tmp_path: str = ""
@@ -147,12 +147,12 @@ def load_rules(path: str) -> list[Rule]:
         return []
     rules_data = data.get("rules", [])
     rules = [_dict_to_rule(r) for r in rules_data]
-    logging.info("[load_rules] loaded=%s", [(r.id, r.name) for r in rules])
+    logging.debug("[load_rules] loaded=%s", [(r.id, r.name) for r in rules])
     return rules
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
-    logging.info("[save_rules] path=%s rules=%s", path, [(r.id, r.name) for r in rules])
+    logging.debug("[save_rules] path=%s rules=%s", path, [(r.id, r.name) for r in rules])
     tmp_path: str = ""
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}

@@ -24,6 +24,10 @@ def _log(log_path, msg):
     if not log_path:
         return
     try:
+        p = Path(log_path)
+        if p.exists() and p.stat().st_size > 1_000_000:
+            lines = p.read_text(encoding="utf-8").splitlines()[-500:]
+            p.write_text("\n".join(lines) + "\n", encoding="utf-8")
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"{datetime.now()} [updater] {msg}\n")
     except Exception:

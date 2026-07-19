@@ -5235,6 +5235,6 @@ if __name__ == "__main__":
         win.show()
         sys.exit(app.exec())
     except Exception:
-        with open(_log_cfg.get_log_dir() / "startup_error.log", "w", encoding="utf-8") as f:
+        with open(_log_cfg.get_log_dir() / "startup_error.log", "a", encoding="utf-8") as f:
             traceback.print_exc(file=f)
         raise

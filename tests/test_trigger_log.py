@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from core.trigger_log import log_trigger
 

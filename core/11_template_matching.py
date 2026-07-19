@@ -163,7 +163,6 @@ def match_template(
             )
 
     if not matches:
-        log.debug("模板「%s」無匹配結果", tmpl_name)
         return []
 
     # non-maximum suppression across all scales
