@@ -2545,8 +2545,6 @@ class SettingsDialog(QDialog):
         self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check"))
         form.addRow("", self._auto_update)
 
-        layout.addLayout(form)
-
         # ── 自動化 / 辨識分頁 ──
         auto = QWidget()
         aform = QFormLayout(auto)
@@ -2593,11 +2591,9 @@ class SettingsDialog(QDialog):
         aform.addRow("顏色容差:", self._color_tol)
 
         tabs = QTabWidget()
-        tabs.addTab(QWidget(), "一般")
-        tabs.setTabText(0, "一般")
-        # Replace the empty general widget with our form
-        general = tabs.widget(0)
+        general = QWidget()
         general.setLayout(form)
+        tabs.addTab(general, "一般")
         tabs.addTab(auto, "自動化 / 辨識")
         layout.addWidget(tabs)
 
