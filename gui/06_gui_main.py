@@ -2442,6 +2442,7 @@ class InitWorker(QThread):
         signals: WorkerSignals,
         verbose: bool = True,
         active_group_ids: Optional[list[str]] = None,
+        config_path: str = "",
     ):
         super().__init__()
         self._rules_path = rules_path
@@ -2449,6 +2450,8 @@ class InitWorker(QThread):
         self._signals = signals
         self._verbose = verbose
         self._active_group_ids = active_group_ids or []
+        self._config_path = config_path
+        self._rule_config_ctrl = RuleConfigController()
         self.loop: Optional[MainLoop] = None
 
     def run(self):
@@ -2495,20 +2498,17 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("偏好設定")
         self.setMinimumWidth(420)
 
-        tabs = QTabWidget(self)
         layout = QVBoxLayout(self)
-        layout.addWidget(tabs)
 
         # ── 一般分頁 ──
-        general = QWidget()
-        gform = QFormLayout(general)
-        gform.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._max_cps = QSpinBox()
         self._max_cps.setRange(1, 20)
         self._max_cps.setValue(self._ctrl.get_setting(win, "max_cps"))
         self._max_cps.setToolTip("每秒最多點幾下，防遊戲判定外掛封號。建議 3~10。")
-        gform.addRow("點擊速度限制 (CPS):", self._max_cps)
+        form.addRow("點擊速度限制 (CPS):", self._max_cps)
 
         self._scan_interval = QSpinBox()
         self._scan_interval.setRange(100, 2000)
@@ -2516,7 +2516,7 @@ class SettingsDialog(QDialog):
         self._scan_interval.setSuffix(" ms")
         self._scan_interval.setValue(self._ctrl.get_setting(win, "scan_interval_ms"))
         self._scan_interval.setToolTip("每隔幾毫秒看一次畫面。越小反應越快但越費 CPU。預設 500ms。")
-        gform.addRow("掃描間隔:", self._scan_interval)
+        form.addRow("掃描間隔:", self._scan_interval)
 
         self._match_mode = QComboBox()
         self._match_mode.addItem("包含關鍵字", "contains")
@@ -2526,9 +2526,26 @@ class SettingsDialog(QDialog):
         idx = self._match_mode.findData(self._ctrl.get_setting(win, "default_match_mode"))
         self._match_mode.setCurrentIndex(max(0, idx))
         self._match_mode.setToolTip("文字怎麼算「符合」：包含/完全一樣/近似/正則。")
-        gform.addRow("預設比對模式:", self._match_mode)
+        form.addRow("預設比對模式:", self._match_mode)
 
-        tabs.addTab(general, "一般")
+        self._close_behavior = QComboBox()
+        self._close_behavior.addItem("最小化至系統托盤", "tray")
+        self._close_behavior.addItem("直接關閉程式", "quit")
+        idx = self._close_behavior.findData(self._ctrl.get_setting(win, "close_behavior"))
+        self._close_behavior.setCurrentIndex(max(0, idx))
+        self._close_behavior.setToolTip("按視窗右上角 X 時的行為。")
+        form.addRow("關閉按鈕行為:", self._close_behavior)
+
+        self._show_close_confirm = QCheckBox("關閉前顯示確認對話框")
+        self._show_close_confirm.setChecked(self._ctrl.get_setting(win, "show_close_confirm"))
+        self._show_close_confirm.setToolTip("按 X 時是否彈出確認視窗。")
+        form.addRow("", self._show_close_confirm)
+
+        self._auto_update = QCheckBox("啟動時自動檢查更新")
+        self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check"))
+        form.addRow("", self._auto_update)
+
+        layout.addLayout(form)
 
         # ── 自動化 / 辨識分頁 ──
         auto = QWidget()
@@ -2575,71 +2592,14 @@ class SettingsDialog(QDialog):
         self._color_tol.setToolTip("模板比對時，顏色允許差多少才算「同色」。0~50。")
         aform.addRow("顏色容差:", self._color_tol)
 
+        tabs = QTabWidget()
+        tabs.addTab(QWidget(), "一般")
+        tabs.setTabText(0, "一般")
+        # Replace the empty general widget with our form
+        general = tabs.widget(0)
+        general.setLayout(form)
         tabs.addTab(auto, "自動化 / 辨識")
-
-        # ── 進階分頁（預設收合） ──
-        adv = QWidget()
-        adv_layout = QVBoxLayout(adv)
-        adv_layout.setContentsMargins(0, 0, 0, 0)
-
-        self._adv_btn = QPushButton("▶ 進階設定（需重啟生效）")
-        self._adv_btn.setCheckable(True)
-        self._adv_btn.setChecked(False)
-        self._adv_btn.toggled.connect(self._on_adv_toggled)
-        adv_layout.addWidget(self._adv_btn)
-
-        self._adv_panel = QWidget()
-        adv_panel_layout = QFormLayout(self._adv_panel)
-        adv_panel_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self._adv_panel.setVisible(False)
-        adv_layout.addWidget(self._adv_panel)
-
-        self._theme = QComboBox()
-        self._theme.addItem("跟隨系統", "system")
-        self._theme.addItem("淺色", "light")
-        self._theme.addItem("深色", "dark")
-        idx = self._theme.findData(self._ctrl.get_setting(win, "theme"))
-        self._theme.setCurrentIndex(max(0, idx))
-        self._theme.setToolTip("淺色 / 深色 / 跟隨 Windows。需重啟生效。")
-        adv_panel_layout.addRow("介面主題:", self._theme)
-
-        self._lang = QComboBox()
-        self._lang.addItem("繁體中文", "zh_TW")
-        self._lang.addItem("簡體中文", "zh_CN")
-        self._lang.addItem("English", "en")
-        idx = self._lang.findData(self._ctrl.get_setting(win, "language"))
-        self._lang.setCurrentIndex(max(0, idx))
-        self._lang.setToolTip("介面語言。需重啟生效。")
-        adv_panel_layout.addRow("介面語言:", self._lang)
-
-        from build import get_data_path
-
-        default_data_dir = str(get_data_path(""))
-        self._data_dir = QLineEdit()
-        self._data_dir.setText(self._ctrl.get_setting(win, "data_dir", default_data_dir))
-        self._data_dir.setReadOnly(True)
-        browse_btn = QPushButton("瀏覽...")
-        browse_btn.clicked.connect(self._browse_data_dir)
-        hbox = QHBoxLayout()
-        hbox.addWidget(self._data_dir)
-        hbox.addWidget(browse_btn)
-        adv_panel_layout.addRow("資料儲存位置:", hbox)
-        hint = QLabel("改完需重啟。預設在 %APPDATA%\\ocr-trigger-clicker。可改到雲端同步資料夾。")
-        hint.setStyleSheet("color: #888; font: 8pt;")
-        hint.setWordWrap(True)
-        adv_panel_layout.addRow("", hint)
-
-        self._gpu = QCheckBox("GPU 加速")
-        self._gpu.setChecked(self._ctrl.get_setting(win, "gpu_acceleration", False))
-        self._gpu.setToolTip("用顯示卡加速辨識。筆電建議關閉。需重啟生效。")
-        adv_panel_layout.addRow("", self._gpu)
-
-        self._auto_update = QCheckBox("啟動時自動檢查更新")
-        self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check", False))
-        adv_panel_layout.addRow("", self._auto_update)
-
-        adv_layout.addStretch()
-        tabs.addTab(adv, "進階")
+        layout.addWidget(tabs)
 
         # 底部按鈕
         buttons = QDialogButtonBox(
@@ -2649,31 +2609,20 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def _on_adv_toggled(self, checked: bool):
-        self._adv_panel.setVisible(checked)
-        self._adv_btn.setText("▼ 進階設定（需重啟生效）" if checked else "▶ 進階設定（需重啟生效）")
-
-    def _browse_data_dir(self):
-        from PyQt6.QtWidgets import QFileDialog
-
-        d = QFileDialog.getExistingDirectory(self, "選擇資料儲存資料夾", self._data_dir.text())
-        if d:
-            self._data_dir.setText(d)
-
     def _on_accept(self):
         self._ctrl.set_setting(self._win, "max_cps", self._max_cps.value())
         self._ctrl.set_setting(self._win, "scan_interval_ms", self._scan_interval.value())
         self._ctrl.set_setting(self._win, "default_match_mode", self._match_mode.currentData())
+        self._ctrl.set_setting(self._win, "close_behavior", self._close_behavior.currentData())
+        self._ctrl.set_setting(
+            self._win, "show_close_confirm", self._show_close_confirm.isChecked()
+        )
+        self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
         self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
         self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
-        self._ctrl.set_setting(self._win, "theme", self._theme.currentData())
-        self._ctrl.set_setting(self._win, "language", self._lang.currentData())
-        self._ctrl.set_setting(self._win, "data_dir", self._data_dir.text())
-        self._ctrl.set_setting(self._win, "gpu_acceleration", self._gpu.isChecked())
-        self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self.accept()
 
 
@@ -4997,6 +4946,7 @@ class MainWindow(QMainWindow):
             title,
             self._signals,
             active_group_ids=group_ids,
+            config_path=self._config_path,
         )
         self._init_worker.finished.connect(self._on_init_finished)
         self._init_worker.start()
@@ -5284,6 +5234,7 @@ class MainWindow(QMainWindow):
         SettingsDialog(self).exec()
 
     def closeEvent(self, event):
+        self._rule_config_ctrl._config_cache = None
         config = self._load_config()
         behavior = config.get("close_behavior", "tray")
         show_confirm = config.get("show_close_confirm", True)
