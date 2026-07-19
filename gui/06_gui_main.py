@@ -677,7 +677,6 @@ class _StepListWidget(QWidget):
         self._task_path_cb: Optional[callable] = None  # () -> str
         self._rule_id: str = ""
         self._drag_indicator_idx: int = -1
-        self._simplified_mode: bool = False
         QShortcut(
             QKeySequence("Delete"),
             self,
@@ -708,9 +707,6 @@ class _StepListWidget(QWidget):
 
     def set_rule_id(self, rule_id: str):
         self._rule_id = rule_id
-
-    def set_simplified_mode(self, enabled: bool):
-        self._simplified_mode = enabled
 
     def set_steps(self, steps: list):
         self._steps = list(steps)
@@ -826,8 +822,7 @@ class _StepListWidget(QWidget):
             self._expanded_idx = idx
             self._expanded_form = form
             self._layout.insertWidget(self._rows.index(self._rows[idx]) + 1, form)
-            if not self._simplified_mode:
-                self._expand_advanced(form)
+            self._expand_advanced(form)
 
     def _collapse(self):
         if self._expanded_form:
@@ -917,13 +912,10 @@ class _StepListWidget(QWidget):
                 self._roi_callback,
                 self._rules_provider,
                 self._rule_id,
-                simplified=self._simplified_mode,
                 groups_provider=self._groups_provider,
             )
         if t == "click":
-            return _ClickStepForm(
-                self, step, idx, self._click_pick_callback, simplified=self._simplified_mode
-            )
+            return _ClickStepForm(self, step, idx, self._click_pick_callback)
         if t == "key":
             return _KeyStepForm(self, step, idx)
         if t == "wait":
@@ -956,7 +948,6 @@ class _StepListWidget(QWidget):
                 self._roi_callback,
                 self._rules_provider,
                 self._rule_id,
-                simplified=self._simplified_mode,
                 step_count=len(self._steps),
                 groups_provider=self._groups_provider,
             )
@@ -1451,11 +1442,9 @@ class _DetectStepForm(QWidget):
         roi_cb,
         rules_provider=None,
         exclude_rule_id="",
-        simplified=False,
         groups_provider=None,
     ):
-        super().__init__()
-        self._list = parent_list
+        super().__init__(parent_list)
         self._step = step
         self._idx = idx
         self._roi_cb = roi_cb
@@ -1520,7 +1509,7 @@ class _DetectStepForm(QWidget):
 
         self._of_action = _NoWheelCombo()
 
-        self._advanced_container.setVisible(not simplified)
+        form.addRow(self._advanced_container)
         form.addRow(self._advanced_container)
 
         self._of_action.addItem("跳過本次（預設）", "stop")
@@ -1686,7 +1675,7 @@ class _DetectStepForm(QWidget):
 
 
 class _ClickStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, pick_cb, simplified=False):
+    def __init__(self, parent_list, step, idx, pick_cb):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -1740,7 +1729,6 @@ class _ClickStepForm(QWidget):
         self._offset.setValue(p.get("random_offset", 3))
         adv_form.addRow("隨機抖動:", self._offset)
 
-        self._adv_container.setVisible(not simplified)
         form.addRow(self._adv_container)
 
     def _on_target_changed(self, idx):
@@ -1892,7 +1880,6 @@ class _CompareStepForm(QWidget):
         roi_cb,
         rules_provider=None,
         exclude_rule_id="",
-        simplified=False,
         step_count=0,
         groups_provider=None,
     ):
@@ -2067,7 +2054,7 @@ class _CompareStepForm(QWidget):
         form.addRow(self._adv_container)
 
         self._on_of_action_changed()
-        self._adv_container.setVisible(not simplified)
+        form.addRow(self._adv_container)
         self._on_fail_container = self._adv_container
 
     def _populate_skip_combo(self, current_skip_to: int):
@@ -2661,7 +2648,6 @@ class MainWindow(QMainWindow):
             self._current_task: str = ""
             self._groups: list[RuleGroup] = []
             self._collapsed_groups: set[str] = set()
-            self._simplified_mode = False
             self._is_starting = False
             self._notif_stack = _NotificationStack()
             self._updating = False
@@ -2845,15 +2831,6 @@ class MainWindow(QMainWindow):
             if idx >= 0:
                 self._task_combo.setCurrentIndex(idx)
 
-        simplified = config.get("simplified_mode", False)
-        if simplified:
-            self._simplified_btn.setChecked(True)
-            self._simplified_btn.setText("簡易")
-            self._simplified_btn.setToolTip("目前為簡易模式，點擊切換至進階模式")
-            self._simplified_mode = True
-            self._step_list.set_simplified_mode(True)
-            self._step_list._rebuild()
-
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -2931,12 +2908,6 @@ class MainWindow(QMainWindow):
         self._update_btn.setToolTip("檢查 GitHub 是否有新版本釋出")
         self._update_btn.clicked.connect(lambda: self._check_version(force=True))
         toolbar.addWidget(self._update_btn)
-        self._simplified_btn = QPushButton("進階")
-        self._simplified_btn.setCheckable(True)
-        self._simplified_btn.setChecked(False)
-        self._simplified_btn.setToolTip("目前為進階模式，點擊切換至簡易模式")
-        self._simplified_btn.clicked.connect(self._toggle_simplified_mode)
-        toolbar.addWidget(self._simplified_btn)
         layout.addLayout(toolbar)
 
         # === Middle: stacked pages (rules / OCR debug) ===
@@ -3192,20 +3163,6 @@ class MainWindow(QMainWindow):
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, self._add_rule)
         QShortcut(QKeySequence("Delete"), self, self._delete_rule)
-
-    def _toggle_simplified_mode(self):
-        self._simplified_mode = self._simplified_btn.isChecked()
-        self._step_list.set_simplified_mode(self._simplified_mode)
-        self._step_list._rebuild()
-        if self._simplified_mode:
-            self._simplified_btn.setText("簡易")
-            self._simplified_btn.setToolTip("目前為簡易模式，點擊切換至進階模式")
-        else:
-            self._simplified_btn.setText("進階")
-            self._simplified_btn.setToolTip("目前為進階模式，點擊切換至簡易模式")
-        config = self._load_config()
-        config["simplified_mode"] = self._simplified_mode
-        self._save_config(config)
 
     def _on_ocr_health(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
