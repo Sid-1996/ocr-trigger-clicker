@@ -18,8 +18,13 @@ class RuleConfigController:
         "theme": "system",
         "scan_interval_ms": 500,
         "default_fuzzy_threshold": 0.8,
+        "default_template_threshold": 0.85,
+        "default_color_tolerance": 10,
         "default_mouse_button": "left",
         "default_random_offset": 3,
+        "language": "zh_TW",
+        "data_dir": "",
+        "gpu_acceleration": False,
     }
 
     def __init__(self):
