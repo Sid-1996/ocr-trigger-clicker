@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Downloads](https://img.shields.io/github/downloads/Sid-1996/ocr-trigger-clicker/total?label=%E4%B8%8B%E8%BC%89%E6%AC%A1%E6%95%B8&color=238636)
 
-> 透過 OCR 即時偵測螢幕文字，自動執行滑鼠點擊的 Windows 開源工具。  
+> 免寫程式的 Windows 遊戲自動點擊工具 — 透過 OCR 即時偵測螢幕文字，自動執行滑鼠點擊與鍵盤操作。  
 > Author: Sid
 
 ---
@@ -21,9 +21,28 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 ### 應用場景
 
-- 遊戲中自動點擊「確認」、「領取」等按鈕
-- 重複性表單填寫與提交自動化
-- 監控應用程式特定文字事件的觸發回應
+- **遊戲自動點擊** — 自動點擊「確認」、「領取」、「開始戰鬥」等重複按鈕，解放雙手
+- **掛機腳本** — 手遊模擬器（雷電、夜神、BlueStacks）或 PC 遊戲長時間掛機自動化
+- **自動對話 / 跳過劇情** — 偵測對話框文字，自動點擊「下一步」或「跳過」
+- **自動領取獎勵** — 定時偵測獎勵畫面，一鍵領取所有獎勵
+- **錯誤彈窗自動關閉** — 偵測錯誤提示、維護公告等彈窗，自動關閉或通知
+- **數值監控觸發** — 偵測血量、魔力、金幣等數值變化，低於閾值自動使用道具
+- **重複性表單操作** — 自動填寫、提交、翻頁等桌面重複性工作
+- **定時搶購 / 搶票** — 偵測頁面文字變化，第一時間自動點擊搶購
+- **批次操作自動化** — 多規則組合：偵測→點擊→等待→再偵測，複雜流程一條龍
+- **跨解析度相容** — 腳本在 1080p、4K、不同縮放比例下皆可正常運作，無需重寫
+
+### 與其他工具比較
+
+| 特性 | OCR Trigger Clicker | AutoHotkey | Airtest | AutoIt |
+|------|:---:|:---:|:---:|:---:|
+| 上手門檻 | ✅ 圖形化介面，免寫碼 | ❌ 需手寫指令碼 | ⚠️ 需 Python 基礎 | ❌ 需手寫指令碼 |
+| OCR 文字偵測 | ✅ 內建，支援繁中 | ❌ 需外掛 | ⚠️ 有，但配置複雜 | ❌ 無 |
+| 跨解析度 | ✅ 比例座標，自動適應 | ❌ 像素座標，換螢幕就壞 | ❌ 同左 | ❌ 同左 |
+| 圖像模板比對 | ✅ 內建 OpenCV + NMS | ❌ 需外掛 | ✅ 有 | ❌ 無 |
+| 滑鼠 / 鍵盤模擬 | ✅ AHK v2 TCP 通訊 | ✅ 原生支援 | ✅ 有 | ✅ 原生支援 |
+| 多規則群組管理 | ✅ 拖曳排序、循環、跳轉 | ❌ 需手寫邏輯 | ❌ 需手寫邏輯 | ❌ 需手寫邏輯 |
+| 開源免費 | ✅ AGPLv3 | ✅ 免費 | ✅ Apache 2.0 | ✅ 免費 |
 
 ---
 
@@ -308,6 +327,26 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 - 🐛 **問題回報** — 遇到 bug 或想要新功能，請到 [Issues](https://github.com/Sid-1996/ocr-trigger-clicker/issues) 回報。
 - ⭐ 如果這套工具對你有幫助，歡迎到 [GitHub 專案](https://github.com/Sid-1996/ocr-trigger-clicker) 給一顆 Star 支持開發！
 - ☕ **贊助開發者** — [ECPAY](https://p.ecpay.com.tw/E0E3A) / [PayPal](https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6) / [愛發電](https://afdian.com/a/sid-1996)
+
+---
+
+## English
+
+**OCR Trigger Clicker** — A no-code Windows auto clicker powered by OCR. It monitors any window in real time, detects target text on screen, and automatically clicks, presses keys, or performs multi-step sequences. Built for gamers and power users who need game automation, idle scripts, or repetitive task automation without writing a single line of code.
+
+**Key features:** OCR text detection (Traditional Chinese), image template matching (10–50× faster than OCR), window-ratio coordinates (resolution-independent), group-based rule management with drag-and-drop, background monitoring mode, foreground protection, and a full PyQt6 GUI.
+
+**Keywords:** auto clicker, game automation, Windows automation, no-code automation, OCR automation, screen recognition, text recognition click, idle script, repetitive task automation, Python automation tool, AutoHotkey alternative
+
+---
+
+## 简体中文
+
+**OCR Trigger Clicker** — 免写代码的 Windows 自动点击工具，基于 OCR 实时检测屏幕文字，自动执行鼠标点击与键盘操作。适用于游戏自动化、挂机脚本、重复性操作自动化等场景。
+
+**核心功能：** OCR 文字检测（繁体中文）、图像模板比对（比 OCR 快 10~50 倍）、窗口比例坐标（跨分辨率兼容）、群组规则管理（拖拽排序）、后台监控模式、前景保护、完整图形化界面。
+
+**关键词：** 自动点击器、游戏自动化、Windows 自动化、免代码自动化、OCR 自动化、屏幕文字识别、自动点击脚本、挂机辅助工具、Python 自动化、AutoHotkey 替代
 
 ---
 
