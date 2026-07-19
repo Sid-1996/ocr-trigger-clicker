@@ -61,7 +61,7 @@ def _make_ml():
     ml._stop_event = threading.Event()
     ml._pause_event = threading.Event()
     ml._emergency_event = threading.Event()
-    ml._perf = _perf.PerformanceMonitor()
+    ml._perf = _perf.PerformanceMonitor(max_cps=5)
     ml.on_error = None
     ml.on_warning = None
     ml.on_info = None

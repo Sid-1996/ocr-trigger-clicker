@@ -51,6 +51,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QStatusBar,
     QSystemTrayIcon,
+    QTabWidget,
     QTextEdit,
     QTreeWidget,
     QTreeWidgetItem,
@@ -2456,6 +2457,7 @@ class InitWorker(QThread):
                 self._rules_path,
                 self._window_title,
                 verbose=self._verbose,
+                max_cps=self._rule_config_ctrl.get_setting(self, "max_cps"),
             )
             if self._active_group_ids:
                 loop.set_active_groups(self._active_group_ids)
@@ -2486,56 +2488,192 @@ def _pixels_to_ratio_expanded(
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, config_path: str, parent=None):
+    def __init__(self, win, parent=None):
         super().__init__(parent)
-        self._config_path = config_path
+        self._win = win
+        self._ctrl = RuleConfigController()
         self.setWindowTitle("偏好設定")
-        self.setMinimumWidth(350)
+        self.setMinimumWidth(420)
 
-        config = self._load_config()
-        form = QFormLayout(self)
+        tabs = QTabWidget(self)
+        layout = QVBoxLayout(self)
+        layout.addWidget(tabs)
 
-        self._behavior = QComboBox()
-        self._behavior.addItem("縮小至系統托盤", "tray")
-        self._behavior.addItem("直接關閉程式", "quit")
-        self._behavior.setCurrentIndex(0 if config.get("close_behavior", "tray") == "tray" else 1)
-        form.addRow("關閉按鈕行為:", self._behavior)
+        # ── 一般分頁 ──
+        general = QWidget()
+        gform = QFormLayout(general)
+        gform.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self._show_confirm = QCheckBox("關閉前顯示確認視窗（可勾選不再提醒）")
-        self._show_confirm.setChecked(config.get("show_close_confirm", True))
-        form.addRow("", self._show_confirm)
+        self._max_cps = QSpinBox()
+        self._max_cps.setRange(1, 20)
+        self._max_cps.setValue(self._ctrl.get_setting(win, "max_cps"))
+        self._max_cps.setToolTip("每秒最多點幾下，防遊戲判定外掛封號。建議 3~10。")
+        gform.addRow("點擊速度限制 (CPS):", self._max_cps)
 
-        self._auto_check = QCheckBox("啟動時自動檢查更新")
-        self._auto_check.setChecked(not config.get("skip_update_check", False))
-        form.addRow("", self._auto_check)
+        self._scan_interval = QSpinBox()
+        self._scan_interval.setRange(100, 2000)
+        self._scan_interval.setSingleStep(50)
+        self._scan_interval.setSuffix(" ms")
+        self._scan_interval.setValue(self._ctrl.get_setting(win, "scan_interval_ms"))
+        self._scan_interval.setToolTip("每隔幾毫秒看一次畫面。越小反應越快但越費 CPU。預設 500ms。")
+        gform.addRow("掃描間隔:", self._scan_interval)
 
+        self._match_mode = QComboBox()
+        self._match_mode.addItem("包含關鍵字", "contains")
+        self._match_mode.addItem("完全符合", "exact")
+        self._match_mode.addItem("近似比對", "fuzzy")
+        self._match_mode.addItem("正則表達式", "regex")
+        idx = self._match_mode.findData(self._ctrl.get_setting(win, "default_match_mode"))
+        self._match_mode.setCurrentIndex(max(0, idx))
+        self._match_mode.setToolTip("文字怎麼算「符合」：包含/完全一樣/近似/正則。")
+        gform.addRow("預設比對模式:", self._match_mode)
+
+        tabs.addTab(general, "一般")
+
+        # ── 自動化 / 辨識分頁 ──
+        auto = QWidget()
+        aform = QFormLayout(auto)
+        aform.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._mouse_btn = QComboBox()
+        self._mouse_btn.addItem("左鍵", "left")
+        self._mouse_btn.addItem("右鍵", "right")
+        self._mouse_btn.addItem("中鍵", "middle")
+        idx = self._mouse_btn.findData(self._ctrl.get_setting(win, "default_mouse_button"))
+        self._mouse_btn.setCurrentIndex(max(0, idx))
+        self._mouse_btn.setToolTip("點擊預設用哪個鍵。大多數遊戲左鍵即可。")
+        aform.addRow("預設滑鼠按鈕:", self._mouse_btn)
+
+        self._random_offset = QSpinBox()
+        self._random_offset.setRange(0, 10)
+        self._random_offset.setSuffix(" px")
+        self._random_offset.setValue(self._ctrl.get_setting(win, "default_random_offset"))
+        self._random_offset.setToolTip("點擊位置隨機偏移幾像素，防機器人判定。0=關閉。")
+        aform.addRow("預設隨機抖動:", self._random_offset)
+
+        self._fuzzy_th = QDoubleSpinBox()
+        self._fuzzy_th.setRange(0.5, 0.95)
+        self._fuzzy_th.setSingleStep(0.05)
+        self._fuzzy_th.setDecimals(2)
+        self._fuzzy_th.setValue(self._ctrl.get_setting(win, "default_fuzzy_threshold"))
+        self._fuzzy_th.setToolTip(
+            "近似比對時，相似度要超過多少才算贏。0.5 寬鬆，0.8 標準，0.95 嚴格。"
+        )
+        aform.addRow("模糊比對門檻:", self._fuzzy_th)
+
+        self._template_th = QDoubleSpinBox()
+        self._template_th.setRange(0.6, 0.98)
+        self._template_th.setSingleStep(0.05)
+        self._template_th.setDecimals(2)
+        self._template_th.setValue(self._ctrl.get_setting(win, "default_template_threshold"))
+        self._template_th.setToolTip("圖片模板比對時，相似度門檻。0.85 標準。")
+        aform.addRow("模板比對門檻:", self._template_th)
+
+        self._color_tol = QSpinBox()
+        self._color_tol.setRange(0, 50)
+        self._color_tol.setValue(self._ctrl.get_setting(win, "default_color_tolerance"))
+        self._color_tol.setToolTip("模板比對時，顏色允許差多少才算「同色」。0~50。")
+        aform.addRow("顏色容差:", self._color_tol)
+
+        tabs.addTab(auto, "自動化 / 辨識")
+
+        # ── 進階分頁（預設收合） ──
+        adv = QWidget()
+        adv_layout = QVBoxLayout(adv)
+        adv_layout.setContentsMargins(0, 0, 0, 0)
+
+        self._adv_btn = QPushButton("▶ 進階設定（需重啟生效）")
+        self._adv_btn.setCheckable(True)
+        self._adv_btn.setChecked(False)
+        self._adv_btn.toggled.connect(self._on_adv_toggled)
+        adv_layout.addWidget(self._adv_btn)
+
+        self._adv_panel = QWidget()
+        adv_panel_layout = QFormLayout(self._adv_panel)
+        adv_panel_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self._adv_panel.setVisible(False)
+        adv_layout.addWidget(self._adv_panel)
+
+        self._theme = QComboBox()
+        self._theme.addItem("跟隨系統", "system")
+        self._theme.addItem("淺色", "light")
+        self._theme.addItem("深色", "dark")
+        idx = self._theme.findData(self._ctrl.get_setting(win, "theme"))
+        self._theme.setCurrentIndex(max(0, idx))
+        self._theme.setToolTip("淺色 / 深色 / 跟隨 Windows。需重啟生效。")
+        adv_panel_layout.addRow("介面主題:", self._theme)
+
+        self._lang = QComboBox()
+        self._lang.addItem("繁體中文", "zh_TW")
+        self._lang.addItem("簡體中文", "zh_CN")
+        self._lang.addItem("English", "en")
+        idx = self._lang.findData(self._ctrl.get_setting(win, "language"))
+        self._lang.setCurrentIndex(max(0, idx))
+        self._lang.setToolTip("介面語言。需重啟生效。")
+        adv_panel_layout.addRow("介面語言:", self._lang)
+
+        from build import get_data_path
+
+        default_data_dir = str(get_data_path(""))
+        self._data_dir = QLineEdit()
+        self._data_dir.setText(self._ctrl.get_setting(win, "data_dir", default_data_dir))
+        self._data_dir.setReadOnly(True)
+        browse_btn = QPushButton("瀏覽...")
+        browse_btn.clicked.connect(self._browse_data_dir)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self._data_dir)
+        hbox.addWidget(browse_btn)
+        adv_panel_layout.addRow("資料儲存位置:", hbox)
+        hint = QLabel("改完需重啟。預設在 %APPDATA%\\ocr-trigger-clicker。可改到雲端同步資料夾。")
+        hint.setStyleSheet("color: #888; font: 8pt;")
+        hint.setWordWrap(True)
+        adv_panel_layout.addRow("", hint)
+
+        self._gpu = QCheckBox("GPU 加速")
+        self._gpu.setChecked(self._ctrl.get_setting(win, "gpu_acceleration", False))
+        self._gpu.setToolTip("用顯示卡加速辨識。筆電建議關閉。需重啟生效。")
+        adv_panel_layout.addRow("", self._gpu)
+
+        self._auto_update = QCheckBox("啟動時自動檢查更新")
+        self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check", False))
+        adv_panel_layout.addRow("", self._auto_update)
+
+        adv_layout.addStretch()
+        tabs.addTab(adv, "進階")
+
+        # 底部按鈕
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
+        layout.addWidget(buttons)
 
-    def _load_config(self) -> dict:
-        try:
-            with open(self._config_path, encoding="utf-8") as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            return {}
+    def _on_adv_toggled(self, checked: bool):
+        self._adv_panel.setVisible(checked)
+        self._adv_btn.setText("▼ 進階設定（需重啟生效）" if checked else "▶ 進階設定（需重啟生效）")
 
-    def _save_config(self, data: dict):
-        try:
-            with open(self._config_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass
+    def _browse_data_dir(self):
+        from PyQt6.QtWidgets import QFileDialog
+
+        d = QFileDialog.getExistingDirectory(self, "選擇資料儲存資料夾", self._data_dir.text())
+        if d:
+            self._data_dir.setText(d)
 
     def _on_accept(self):
-        config = self._load_config()
-        config["close_behavior"] = self._behavior.currentData()
-        config["show_close_confirm"] = self._show_confirm.isChecked()
-        config["skip_update_check"] = not self._auto_check.isChecked()
-        self._save_config(config)
+        self._ctrl.set_setting(self._win, "max_cps", self._max_cps.value())
+        self._ctrl.set_setting(self._win, "scan_interval_ms", self._scan_interval.value())
+        self._ctrl.set_setting(self._win, "default_match_mode", self._match_mode.currentData())
+        self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
+        self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
+        self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
+        self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
+        self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
+        self._ctrl.set_setting(self._win, "theme", self._theme.currentData())
+        self._ctrl.set_setting(self._win, "language", self._lang.currentData())
+        self._ctrl.set_setting(self._win, "data_dir", self._data_dir.text())
+        self._ctrl.set_setting(self._win, "gpu_acceleration", self._gpu.isChecked())
+        self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self.accept()
 
 
@@ -4065,6 +4203,7 @@ class MainWindow(QMainWindow):
 
         import uuid
 
+        cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
             name="新規則",
@@ -4075,8 +4214,8 @@ class MainWindow(QMainWindow):
                     params={
                         "text": "",
                         "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
-                        "match_mode": "fuzzy",
-                        "fuzzy_threshold": 0.8,
+                        "match_mode": cfg.get("default_match_mode", "fuzzy"),
+                        "fuzzy_threshold": cfg.get("default_fuzzy_threshold", 0.8),
                     },
                 )
             ],
@@ -4098,6 +4237,30 @@ class MainWindow(QMainWindow):
 
     def _add_step(self, step_type: str):
         default_params = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
+        if step_type in ("detect", "compare", "match_image"):
+            default_params.setdefault(
+                "match_mode", self._rule_config_ctrl.get_setting(self, "default_match_mode")
+            )
+        if step_type in ("detect",):
+            default_params.setdefault(
+                "fuzzy_threshold",
+                self._rule_config_ctrl.get_setting(self, "default_fuzzy_threshold"),
+            )
+        if step_type in ("match_image",):
+            default_params.setdefault(
+                "threshold", self._rule_config_ctrl.get_setting(self, "default_template_threshold")
+            )
+            default_params.setdefault(
+                "color_tolerance",
+                self._rule_config_ctrl.get_setting(self, "default_color_tolerance"),
+            )
+        if step_type in ("click", "drag"):
+            default_params.setdefault(
+                "button", self._rule_config_ctrl.get_setting(self, "default_mouse_button")
+            )
+            default_params.setdefault(
+                "random_offset", self._rule_config_ctrl.get_setting(self, "default_random_offset")
+            )
         step = Step(type=step_type, params=default_params)
         rule = self._get_current_rule()
         if rule is None:
@@ -5114,7 +5277,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_settings(self):
-        SettingsDialog(self._config_path, self).exec()
+        SettingsDialog(self).exec()
 
     def closeEvent(self, event):
         config = self._load_config()

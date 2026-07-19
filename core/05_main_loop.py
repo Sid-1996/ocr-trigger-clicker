@@ -21,6 +21,8 @@ _ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
+_rule_config = load_sibling("rule_config_controller", "gui/rule_config_controller.py")
+RuleConfigController = _rule_config.RuleConfigController
 get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 
 _MIN_INTERVAL_SEC = 0.1
@@ -126,11 +128,13 @@ class MainLoop:
         rules_path: str,
         window_title: str,
         interval_ms: int = 500,
+        max_cps: int = 5,
         verbose: bool = True,
     ):
         self._rules_path = rules_path
         self._window_title = window_title
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
+        self._max_cps = max_cps
         self._verbose = verbose
         self._window_hwnd = get_window_hwnd_orig(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
@@ -172,7 +176,7 @@ class MainLoop:
         self.on_emergency: Optional[Callable[[], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
 
-        self._perf = PerformanceMonitor()
+        self._perf = PerformanceMonitor(max_cps=self._max_cps)
         self._perf.on_rate_limit_exceeded = self._on_rate_limit_exceeded
         self._perf.on_cpu_warn = self._on_cpu_warn
         self._perf.on_memory_warn = self._on_memory_warn
@@ -906,6 +910,11 @@ class MainLoop:
                     break
                 iteration += 1
                 loop_start = time.monotonic()
+                # 讀取掃描間隔設定（允許即時生效）
+                self._interval = max(
+                    self._rule_config_ctrl.get_setting(self, "scan_interval_ms") / 1000.0,
+                    _MIN_INTERVAL_SEC,
+                )
                 try:
                     if self._pause_event.is_set():
                         self._stop_event.wait(0.1)

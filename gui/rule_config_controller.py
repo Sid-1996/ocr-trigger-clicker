@@ -9,6 +9,19 @@ list_tasks = _rule_mod.list_tasks
 
 
 class RuleConfigController:
+    DEFAULTS = {
+        "close_behavior": "tray",
+        "show_close_confirm": True,
+        "skip_update_check": False,
+        "max_cps": 5,
+        "default_match_mode": "fuzzy",
+        "theme": "system",
+        "scan_interval_ms": 500,
+        "default_fuzzy_threshold": 0.8,
+        "default_mouse_button": "left",
+        "default_random_offset": 3,
+    }
+
     def __init__(self):
         self._config_cache: dict | None = None
 
@@ -20,6 +33,14 @@ class RuleConfigController:
             except (FileNotFoundError, json.JSONDecodeError, OSError):
                 self._config_cache = {}
         return self._config_cache
+
+    def get_setting(self, win, key: str):
+        return self.load_config(win).get(key, self.DEFAULTS.get(key))
+
+    def set_setting(self, win, key: str, value):
+        cfg = self.load_config(win)
+        cfg[key] = value
+        self.save_config(win, cfg)
 
     def save_config(self, win, data: dict):
         try:

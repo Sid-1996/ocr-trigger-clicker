@@ -118,8 +118,9 @@ def is_window_foreground(hwnd: int) -> bool:
 
 
 class PerformanceMonitor:
-    def __init__(self):
+    def __init__(self, max_cps: int = 5):
         self._lock = threading.Lock()
+        self._max_cps = max_cps
 
         self._cpu_samples: deque = deque(maxlen=_CPU_SAMPLES)
         self._fps_history: deque = deque(maxlen=_FPS_WINDOW)
@@ -235,7 +236,7 @@ class PerformanceMonitor:
             while self._click_timestamps and self._click_timestamps[0] < cutoff:
                 self._click_timestamps.popleft()
             cps = len(self._click_timestamps)
-            if cps > _MAX_CPS:
+            if cps > self._max_cps:
                 self._rate_violations += 1
                 if self._rate_violation_window_start == 0:
                     self._rate_violation_window_start = now
