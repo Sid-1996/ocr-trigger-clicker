@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v0.1.0] - 2026-07-19
 
 ### 新增
 - 高 DPI 螢幕 overlay 座標修正：ROI 框選、點擊座標選取、截圖區域三個 overlay
@@ -11,9 +11,27 @@
   新增備註文字框，向後相容（舊任務檔自動填入空字串）
 - 觸發歷史紀錄：每次規則觸發時寫入 `logs/triggers.jsonl`（JSONL 格式），
   記錄時間戳、規則 ID、規則名稱、任務名稱、群組 ID
+- 觸發紀錄 rotation：`triggers.jsonl` 超過 1MB 自動輪替（保留 3 份）
+- 啟動時自動清理版本更新殘留死檔（`debug.log`、`run_stderr.log`）
 
 ### 修正
 - 捕捉區域 overlay 1:1 模式下顯示文字改為物理像素尺寸（乘以 `devicePixelRatioF`）
+- 日誌系統優化：root logger 從 DEBUG 提升至 INFO，消除模板不匹配噪音
+  （每日 log 量從 ~50,000 行降至 ~3,000 行）
+- `_ensure_root_handler()` 加 `threading.Lock` 雙重檢查鎖，修復並發競爭
+- `rule_serialization` load/save 日誌從 INFO 降為 DEBUG，移除完整 rule list dump
+- 主迴圈 rate-limit / 前景略過日誌從 INFO 降為 DEBUG，減少每幀重複輸出
+- 主迴圈 `_log()` 移除 `print()` stdout 輸出，改為純 logging
+- `startup_error.log` 從覆寫模式改為追加模式
+- 刪除 `debug.log`、`run_stderr.log` 等孤立死檔
+
+### 移除
+- 移除「簡易/進階」切換按鈕：進階欄位（ROI、on_fail、滑鼠按鈕等）永遠可見，
+  簡化 UI 結構，減少使用者困惑
+
+### 重構
+- README SEO 優化：擴充適用場景（10 個情境）、新增工具比較表、
+  新增英文與簡體中文關鍵詞段落
 
 ## [v0.0.14] - 2026-07-15
 
@@ -215,6 +233,7 @@
 
 首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
 
+[v0.1.0]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.0
 [v0.0.14]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.14
 [v0.0.13]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.13
 [v0.0.12]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.12

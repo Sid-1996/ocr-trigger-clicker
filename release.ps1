@@ -37,8 +37,7 @@ git tag v$Version
 git push origin v$Version
 
 $title = "v$Version"
-if ($Version -match '^\d+\.\d+\.\d+[a-z]') { $title += " Beta" }
-$args = @("release", "create", "v$Version", "dist/ocr-trigger-clicker.zip", "--title", $title, "--prerelease")
+$args = @("release", "create", "v$Version", "dist/ocr-trigger-clicker.zip", "--title", $title)
 if ($Notes) { $args += "--notes"; $args += $Notes }
 gh @args
 

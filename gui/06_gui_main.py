@@ -4943,8 +4943,7 @@ class MainWindow(QMainWindow):
             f"<h3>OCR Trigger Clicker v{__version__}</h3>"
             f"<p>作者: {__author__}</p>"
             f"<p>專案: <a href='{__github__}'>{__github__}</a></p>"
-            f"<p>新手教學: <a href='{_GUIDE_URL}'>{_GUIDE_URL}</a></p>"
-            f"<hr><p><b>Beta 版本</b> — 可能有未預期的問題</p>",
+            f"<p>新手教學: <a href='{_GUIDE_URL}'>{_GUIDE_URL}</a></p>",
         )
 
     def _open_guide(self):
