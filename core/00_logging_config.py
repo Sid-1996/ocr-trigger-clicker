@@ -13,6 +13,18 @@ def get_log_dir() -> Path:
     return _LOG_DIR
 
 
+_STALE_FILES = ("debug.log", "run_stderr.log")
+
+
+def cleanup_stale_logs() -> None:
+    log_dir = get_log_dir()
+    for name in _STALE_FILES:
+        try:
+            (log_dir / name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def get_logger(name: str) -> logging.Logger:
     _ensure_root_handler()
     return logging.getLogger(name)

@@ -5227,6 +5227,7 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     _log_cfg.get_logger("gui")  # ensure root handler is set up
+    _log_cfg.cleanup_stale_logs()
 
     try:
         app = QApplication(sys.argv)
