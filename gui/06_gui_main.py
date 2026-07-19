@@ -2507,16 +2507,18 @@ class SettingsDialog(QDialog):
         self._max_cps = QSpinBox()
         self._max_cps.setRange(1, 20)
         self._max_cps.setValue(self._ctrl.get_setting(win, "max_cps"))
-        self._max_cps.setToolTip("每秒最多點幾下，防遊戲判定外掛封號。建議 3~10。")
-        form.addRow("點擊速度限制 (CPS):", self._max_cps)
+        self._max_cps.setToolTip("每秒最多自動點幾下。設太高可能被遊戲偵測為外掛，建議 3~10。")
+        form.addRow("每秒點擊上限:", self._max_cps)
 
         self._scan_interval = QSpinBox()
         self._scan_interval.setRange(100, 2000)
         self._scan_interval.setSingleStep(50)
         self._scan_interval.setSuffix(" ms")
         self._scan_interval.setValue(self._ctrl.get_setting(win, "scan_interval_ms"))
-        self._scan_interval.setToolTip("每隔幾毫秒看一次畫面。越小反應越快但越費 CPU。預設 500ms。")
-        form.addRow("掃描間隔:", self._scan_interval)
+        self._scan_interval.setToolTip(
+            "每隔多久看一次畫面來判斷是否觸發。數字越小反應越快，但越耗 CPU。預設 500ms（每秒看 2 次）。"
+        )
+        form.addRow("偵測頻率:", self._scan_interval)
 
         self._match_mode = QComboBox()
         self._match_mode.addItem("包含關鍵字", "contains")
@@ -2525,7 +2527,9 @@ class SettingsDialog(QDialog):
         self._match_mode.addItem("正則表達式", "regex")
         idx = self._match_mode.findData(self._ctrl.get_setting(win, "default_match_mode"))
         self._match_mode.setCurrentIndex(max(0, idx))
-        self._match_mode.setToolTip("文字怎麼算「符合」：包含/完全一樣/近似/正則。")
+        self._match_mode.setToolTip(
+            "文字怎麼算「找到了」：包含關鍵字 / 完全一樣 / 近似（容許小差異）/ 正則（進階選項）。"
+        )
         form.addRow("預設比對模式:", self._match_mode)
 
         self._close_behavior = QComboBox()
@@ -2533,16 +2537,17 @@ class SettingsDialog(QDialog):
         self._close_behavior.addItem("直接關閉程式", "quit")
         idx = self._close_behavior.findData(self._ctrl.get_setting(win, "close_behavior"))
         self._close_behavior.setCurrentIndex(max(0, idx))
-        self._close_behavior.setToolTip("按視窗右上角 X 時的行為。")
+        self._close_behavior.setToolTip("按視窗右上角 X 時，要縮小到右下角小圖示還是直接結束程式。")
         form.addRow("關閉按鈕行為:", self._close_behavior)
 
         self._show_close_confirm = QCheckBox("關閉前顯示確認對話框")
         self._show_close_confirm.setChecked(self._ctrl.get_setting(win, "show_close_confirm"))
-        self._show_close_confirm.setToolTip("按 X 時是否彈出確認視窗。")
+        self._show_close_confirm.setToolTip("按 X 時先問你「確定要關閉嗎？」，避免誤按。")
         form.addRow("", self._show_close_confirm)
 
         self._auto_update = QCheckBox("啟動時自動檢查更新")
         self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check"))
+        self._auto_update.setToolTip("每次開啟程式時，自動到 GitHub 看看有沒有新版本。")
         form.addRow("", self._auto_update)
 
         # ── 自動化 / 辨識分頁 ──
@@ -2563,8 +2568,10 @@ class SettingsDialog(QDialog):
         self._random_offset.setRange(0, 10)
         self._random_offset.setSuffix(" px")
         self._random_offset.setValue(self._ctrl.get_setting(win, "default_random_offset"))
-        self._random_offset.setToolTip("點擊位置隨機偏移幾像素，防機器人判定。0=關閉。")
-        aform.addRow("預設隨機抖動:", self._random_offset)
+        self._random_offset.setToolTip(
+            "每次點擊的位置會隨機偏移幾像素，避免每次都在同一個點被系統偵測。設 0 關閉。"
+        )
+        aform.addRow("點擊隨機偏移:", self._random_offset)
 
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
@@ -2572,23 +2579,27 @@ class SettingsDialog(QDialog):
         self._fuzzy_th.setDecimals(2)
         self._fuzzy_th.setValue(self._ctrl.get_setting(win, "default_fuzzy_threshold"))
         self._fuzzy_th.setToolTip(
-            "近似比對時，相似度要超過多少才算贏。0.5 寬鬆，0.8 標準，0.95 嚴格。"
+            "文字比對的寬嚴程度。數字越大越嚴格（要幾乎一樣才算找到），越小越寬鬆。0.8 為預設。"
         )
-        aform.addRow("模糊比對門檻:", self._fuzzy_th)
+        aform.addRow("模糊比對靈敏度:", self._fuzzy_th)
 
         self._template_th = QDoubleSpinBox()
         self._template_th.setRange(0.6, 0.98)
         self._template_th.setSingleStep(0.05)
         self._template_th.setDecimals(2)
         self._template_th.setValue(self._ctrl.get_setting(win, "default_template_threshold"))
-        self._template_th.setToolTip("圖片模板比對時，相似度門檻。0.85 標準。")
-        aform.addRow("模板比對門檻:", self._template_th)
+        self._template_th.setToolTip(
+            "圖片比對的寬嚴程度。數字越大越嚴格，越小越寬鬆。0.85 為預設。"
+        )
+        aform.addRow("圖片辨識靈敏度:", self._template_th)
 
         self._color_tol = QSpinBox()
         self._color_tol.setRange(0, 50)
         self._color_tol.setValue(self._ctrl.get_setting(win, "default_color_tolerance"))
-        self._color_tol.setToolTip("模板比對時，顏色允許差多少才算「同色」。0~50。")
-        aform.addRow("顏色容差:", self._color_tol)
+        self._color_tol.setToolTip(
+            "圖片比對時，允許顏色偏差多少才算相同。數字越大越寬鬆，0 表示完全一致。"
+        )
+        aform.addRow("顏色容許差異:", self._color_tol)
 
         tabs = QTabWidget()
         general = QWidget()
@@ -5228,6 +5239,7 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self):
         SettingsDialog(self).exec()
+        self._rule_config_ctrl._config_cache = None
 
     def closeEvent(self, event):
         self._rule_config_ctrl._config_cache = None

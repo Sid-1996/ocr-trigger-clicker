@@ -176,6 +176,8 @@ class MainLoop:
         self.on_emergency: Optional[Callable[[], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
 
+        self._rule_config_ctrl = RuleConfigController()
+
         self._perf = PerformanceMonitor(max_cps=self._max_cps)
         self._perf.on_rate_limit_exceeded = self._on_rate_limit_exceeded
         self._perf.on_cpu_warn = self._on_cpu_warn
