@@ -39,8 +39,8 @@ class RuleConfigController:
                 self._config_cache = {}
         return self._config_cache
 
-    def get_setting(self, win, key: str):
-        return self.load_config(win).get(key, self.DEFAULTS.get(key))
+    def get_setting(self, win, key: str, default=None):
+        return self.load_config(win).get(key, self.DEFAULTS.get(key, default))
 
     def set_setting(self, win, key: str, value):
         cfg = self.load_config(win)
