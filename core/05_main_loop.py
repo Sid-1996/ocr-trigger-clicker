@@ -130,9 +130,11 @@ class MainLoop:
         interval_ms: int = 500,
         max_cps: int = 5,
         verbose: bool = True,
+        config_path: str = "",
     ):
         self._rules_path = rules_path
         self._window_title = window_title
+        self._config_path = config_path
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
         self._max_cps = max_cps
         self._verbose = verbose

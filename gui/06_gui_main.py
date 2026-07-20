@@ -2461,6 +2461,7 @@ class InitWorker(QThread):
                 self._window_title,
                 verbose=self._verbose,
                 max_cps=self._rule_config_ctrl.get_setting(self, "max_cps"),
+                config_path=self._config_path,
             )
             if self._active_group_ids:
                 loop.set_active_groups(self._active_group_ids)
