@@ -5,7 +5,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 # ocr-trigger-clicker 架構與陷阱筆記
 
-> 基準版本：git commit `2810a14` (2026-07-20)
+> 基準版本：git commit `2f46fda` (2026-07-20)
 > 本文件內容已逐項對照實際原始碼驗證（見文末驗證記錄），可信度高。
 > 若目前 HEAD 與基準 commit 差距很大，請對涉及的子系統提高警覺，必要時重新核對代碼。
 
