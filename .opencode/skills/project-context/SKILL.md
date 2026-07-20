@@ -5,7 +5,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 # ocr-trigger-clicker 架構與陷阱筆記
 
-> 基準版本：git commit `3f0551a` (2026-07-20)
+> 基準版本：git commit `eb7d452` (2026-07-20)
 > 本文件內容已逐項對照實際原始碼驗證（見文末驗證記錄），可信度高。
 > 若目前 HEAD 與基準 commit 差距很大，請對涉及的子系統提高警覺，必要時重新核對代碼。
 
@@ -13,7 +13,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 實際路徑分兩個子目錄，不是平鋪在根目錄：
 
-- `core/00_global_hotkey.py` — 全域熱鍵註冊（F1 暫停/恢復、F4 停止）
+- `core/00_global_hotkey.py` — 全域熱鍵註冊（F8 切換開始/暫停/停止）
 - `core/00_logging_config.py` — 日誌初始化（rotation、等級、格式）
 - `core/01_screenshot.py` — 視窗截圖核心（mss 截圖含邊框 / GDI 備援僅客戶區）
 - `core/02_ocr_engine.py` — OCR 引擎封裝（RapidOCR），`recognize()` / `find_text()`
@@ -149,9 +149,10 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 
 以下項目已用 `Select-String` 直接對照原始碼第一手確認（非僅憑模型自我審查）：
 
-- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:166-168`，邏輯分布於 327（`_handle_detect`）、348（`_handle_match_image`）、396（`_handle_compare`）、435-456（`_handle_on_fail`）、1124-1137（`get_rules_status`）行。
+- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:166-168`，邏輯分布於 327（`_handle_detect`）、348（`_handle_match_image`）、396（`_handle_compare`）、435-456（`_handle_on_fail`）、1124-1146（`get_rules_status`，`_fail_since` 引用在 1137）行。
 - fail_duration_sec 修正（commit `4cb403c`）與 Test 25（`core/05_main_loop.py:1854-1927`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
 - 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:977` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`，且有對應單元測試（Test 12，1435-1488 行）。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆由 Claude 直接讀取原始碼與執行測試腳本第一手確認，非模型自我審查。
+- 全域熱鍵 — `core/00_global_hotkey.py` 僅註冊 F8（hid=1），對應 `MainWindow._on_hotkey()` → `_toggle_start()`（切換開始/暫停/停止），非 F1/F4。
 
 其餘內容來自 DeepSeek V4 Pro 對代碼的分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。
