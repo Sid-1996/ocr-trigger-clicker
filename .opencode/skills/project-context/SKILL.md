@@ -5,7 +5,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 # ocr-trigger-clicker 架構與陷阱筆記
 
-> 基準版本：git commit `2f46fda` (2026-07-20)
+> 基準版本：git commit `3f0551a` (2026-07-20)
 > 本文件內容已逐項對照實際原始碼驗證（見文末驗證記錄），可信度高。
 > 若目前 HEAD 與基準 commit 差距很大，請對涉及的子系統提高警覺，必要時重新核對代碼。
 
@@ -83,7 +83,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 1. **打包遺漏陷阱**：`build.py` 的 `py_datas` 必須列出所有被 `_loader.load_sibling()` 動態載入的 `.py` 檔案，否則 PyInstaller 不會 bundle 進去，EXE 啟動時噴 `FileNotFoundError`。新增 `core/` 或 `gui/` 下的 `.py` 並用 `load_sibling()` 載入時，記得同步補上 `py_datas` 條目。
 
-2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`_on_test_rule` → `_run_dry_run`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_test_match`）只直接呼叫 `match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
+2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`TestRunController.on_test_rule` → `_run_dry_run`，位於 `gui/test_run_controller.py`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_img_compare_match`，`gui/06_gui_main.py:1228`）只直接呼叫 `_tmpl_mod.match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
 
 3. **背景規則自動脫離群組**：規則標記為 `background=True` 後會自動從所屬群組移除（顯示於樹狀圖「📡 常駐監控」節點），取消標記則移回「未歸類」群組。背景規則內的 `jump` 步驟對群組指標無效（執行前後會 save/restore `_rule_pointer`），但 `on_fail.jump` 仍可作用於同群組規則。
 
@@ -149,7 +149,7 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 
 以下項目已用 `Select-String` 直接對照原始碼第一手確認（非僅憑模型自我審查）：
 
-- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:166-168`，邏輯分布於 343（`_handle_detect`）、391（`_handle_match_image`）、422（`_handle_compare`）、444-456（`_handle_on_fail`）、1137（`get_rules_status`）行。
+- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:166-168`，邏輯分布於 327（`_handle_detect`）、348（`_handle_match_image`）、396（`_handle_compare`）、435-456（`_handle_on_fail`）、1124-1137（`get_rules_status`）行。
 - fail_duration_sec 修正（commit `4cb403c`）與 Test 25（`core/05_main_loop.py:1854-1927`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
 - 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:977` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`，且有對應單元測試（Test 12，1435-1488 行）。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆由 Claude 直接讀取原始碼與執行測試腳本第一手確認，非模型自我審查。
