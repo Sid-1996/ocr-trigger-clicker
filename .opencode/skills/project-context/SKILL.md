@@ -5,7 +5,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 # ocr-trigger-clicker 架構與陷阱筆記
 
-> 基準版本：git commit `e8ebfb8` (2026-07-03)
+> 基準版本：git commit `2810a14` (2026-07-20)
 > 本文件內容已逐項對照實際原始碼驗證（見文末驗證記錄），可信度高。
 > 若目前 HEAD 與基準 commit 差距很大，請對涉及的子系統提高警覺，必要時重新核對代碼。
 
@@ -13,6 +13,8 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 實際路徑分兩個子目錄，不是平鋪在根目錄：
 
+- `core/00_global_hotkey.py` — 全域熱鍵註冊（F1 暫停/恢復、F4 停止）
+- `core/00_logging_config.py` — 日誌初始化（rotation、等級、格式）
 - `core/01_screenshot.py` — 視窗截圖核心（mss 截圖含邊框 / GDI 備援僅客戶區）
 - `core/02_ocr_engine.py` — OCR 引擎封裝（RapidOCR），`recognize()` / `find_text()`
 - `core/03_ahk_socket.py` — AutoHotkey TCP 通訊層
@@ -23,14 +25,20 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 - `core/task_management.py` — 任務 CRUD、匯入/匯出（`list_tasks`、`load_task`、`save_task`、`import_task`、`export_task`）
 - `core/run_config.py` — 任務視窗標題、執行模式、擷取尺寸存取
 - `core/file_utils.py` — `_replace_file()` 原子檔案寫入（unlink + rename）
-- `core/05_main_loop.py` — 主偵測迴圈，核心邏輯所在（1665 行，整個應用的心臟）
+- `core/05_main_loop.py` — 主偵測迴圈，核心邏輯所在（1927 行，整個應用的心臟）
 - `core/10_performance_monitor.py` — FPS/CPU/記憶體監控、全域點擊速率限制
 - `core/11_template_matching.py` — OpenCV 模板比對（多尺度、NMS）
+- `core/12_updater.py` — 自動更新檢查（GitHub Releases 版本比對）
+- `core/trigger_log.py` — 觸發歷史紀錄（JSONL 格式）
 - `gui/06_gui_main.py` — 主視窗，規則樹、步驟編輯器、任務管理
 - `gui/07_gui_roi.py` — ROI 框選覆蓋層
 - `gui/09_ocr_debug.py` — OCR 除錯面板
 - `gui/13_gui_click_picker.py` — 點擊座標選取器
 - `gui/14_capture_region.py` — 模板圖片擷取器（含 base64 編碼、capture_size 記錄）
+- `gui/group_settings_controller.py` — 群組設定對話框邏輯
+- `gui/rule_config_controller.py` — 規則設定對話框邏輯
+- `gui/screenshot_controller.py` — 截圖設定對話框邏輯
+- `gui/test_run_controller.py` — 測試執行對話框邏輯
 - `_loader.py`（根目錄）— 動態載入數字開頭模組的工具，含 RLock 快取
 
 任務檔案實際路徑：`%APPDATA%\ocr-trigger-clicker\tasks\`（不在專案目錄內）。
@@ -47,21 +55,21 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 **主循環執行順序**：每幀先跑所有 `background=True` 規則（獨立於群組、`jump` 步驟無效但 `on_fail.jump` 仍有效）→ 根據群組模式（`sequential` 用 `_rule_in_group_ptr` 指向單一規則 / `parallel` 從頭掃描只執行第一個觸發的規則）執行當前規則 → 規則內逐步驟執行，每步回傳 `continue` / `stop` / `jump_step` → 若 `ctx.triggered == True` 則 `_advance_rule_in_group()` 前進；否則停留原規則下幀重試 → 指標超出範圍時觸發 `_on_group_complete()`（依 `loop`/`once`/`repeat` 決定重置或前進；新建群組預設為 `once`，commit `3b171e6` 前為 `loop`）。
 
-**`fail_duration_sec`（已驗證，05_main_loop.py:164-166, 455-465）**：
+**`fail_duration_sec`（已驗證，05_main_loop.py:166-168, 444-456）**：
 ```python
 self._fail_since: dict[str, float] = {}  # key=f"{rule_id}:{step_idx}" -> first-fail monotonic timestamp
 ```
 邏輯：首次失敗時記錄 `time.monotonic()` 時間戳並回傳 `stop`（不觸發失敗動作，本幀提前結束、不設 triggered、下幀從步驟 0 重試）；後續每幀檢查 `now - first_fail < fail_duration`，未到時長持續回傳 `stop`。修復於 commit `4cb403c`：原本回傳 `continue` 會讓 `_run_rule` 誤判「等待中」為「本步驟已通過」，導致後續步驟（如 click）在容忍期內被誤觸發。成功偵測時（`_handle_detect`/`_handle_match_image`/`_handle_compare` 命中時）會主動 `pop` 該 key 清除失敗計時。`stop` 動作在 0 秒時維持向下相容寫法（純字串 `"stop"`），其餘動作一律帶 `fail_duration_sec` 欄位。
 
-**畫面變化檢測跳幀（已驗證，05_main_loop.py:251-252, 907）**：
+**畫面變化檢測跳幀（已驗證，05_main_loop.py:246-247, 977）**：
 ```python
 if change_ratio < 0.02 and not self._should_process_static_frame():
 ```
-是 AND 條件。`_should_process_static_frame()` 直接回傳 `self._has_detect_rules`（規則含 `detect`/`match_image` 步驟時為 True）。也就是說：畫面靜止且當前沒有需要偵測的規則時才跳過整幀處理。這個機制有單元測試覆蓋（約 1372-1425 行，Test 12）。診斷「規則明明該觸發卻沒反應」時，這是優先排查點之一——尤其當畫面長時間無變化、且規則集中沒有 detect 類步驟時。
+是 AND 條件。`_should_process_static_frame()` 直接回傳 `self._has_detect_rules`（規則含 `detect`/`match_image` 步驟時為 True）。也就是說：畫面靜止且當前沒有需要偵測的規則時才跳過整幀處理。這個機制有單元測試覆蓋（1435-1488 行，Test 12）。診斷「規則明明該觸發卻沒反應」時，這是優先排查點之一——尤其當畫面長時間無變化、且規則集中沒有 detect 類步驟時。
 
-**notify 步驟類型（commit `5f0f187`）。** notify 是新的步驟類型，用於在螢幕右下角疊加顯示提示訊息，不影響規則流程（回傳 `continue`）。`_NotificationStack`（`gui/06_gui_main.py:2422`）使用 label 手動定位取代 QVBoxLayout（commit `e73dc86`），因為多則訊息在 QVBoxLayout 下會互相覆蓋。任務匯入白名單需含 `notify`，否則含此步驟的規則會被拒（commit `c89fdf1`）。
+**notify 步驟類型（commit `5f0f187`）。** notify 是新的步驟類型，用於在螢幕右下角疊加顯示提示訊息，不影響規則流程（回傳 `continue`）。`_NotificationStack`（`gui/06_gui_main.py:2637`）使用 label 手動定位取代 QVBoxLayout（commit `e73dc86`），因為多則訊息在 QVBoxLayout 下會互相覆蓋。任務匯入白名單需含 `notify`，否則含此步驟的規則會被拒（commit `c89fdf1`）。
 
-**match_image 雙階段驗證（commit `0516abc`、`a7394ef`）。** match_image 新增「比對顏色」選項（`match_color`），模板比對通過後再做顏色篩選：灰階只比形狀，啟用比對顏色則保留 BGR 三通道資訊，並以 `color_tolerance`（`core/11_template_matching.py:77`）過濾平均色差超過容許值的候選框。`color_tolerance` 預設值從 40 改為 100（commit `c6f044e`）。`_run_dry_run` 測試按鈕需同步傳遞 `match_color` 參數（commit `1fda9e2`）；圖片比對按鈕改讀 widget 即時值，不依賴 save()（commit `fac2cef`）。
+**match_image 雙階段驗證（commit `0516abc`、`a7394ef`）。** match_image 新增「比對顏色」選項（`match_color`），模板比對通過後再做顏色篩選：灰階只比形狀，啟用比對顏色則保留 BGR 三通道資訊，並以 `color_tolerance`（`core/11_template_matching.py:80`）過濾平均色差超過容許值的候選框。`color_tolerance` 預設值從 40 改為 100（commit `c6f044e`）。`_run_dry_run` 測試按鈕需同步傳遞 `match_color` 參數（commit `1fda9e2`）；圖片比對按鈕改讀 widget 即時值，不依賴 save()（commit `fac2cef`）。
 
 ## GUI 規則樹拖曳排序
 
@@ -85,11 +93,13 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 6. **Qt `model().rowsMoved` 不可靠**：對頂層群組項目的拖曳操作，這個內建訊號可能不觸發或順序不對，導致資料看似拖完了但實際沒存。一律用自訂 `pyqtSignal` 取代，不要依賴它做持久化判斷依據。
 
-## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267`）
+7. **控制器檔案打包遺漏**：`gui/group_settings_controller.py`、`gui/rule_config_controller.py`、`gui/screenshot_controller.py`、`gui/test_run_controller.py` 等非數字開頭的 controller 檔案不會被 `_loader.load_sibling()` 自動載入，但 `build.py` 的 `py_datas` 仍需明確列出它們，否則 PyInstaller 不會 bundle。
 
-**病灶**：`MainLoop` 執行中每 20 次迭代（或停止時），若 `_rules_dirty=True`（規則觸發時設定），會用自己記憶體中的 `self._rules` 快照直接呼叫 `save_rules()` 覆寫任務檔（`05_main_loop.py:940/971`）。GUI 端的一般規則編輯（`_save_current_rule`）在 loop 執行中會被 UI disabled 擋住，但 `_on_background_changed`（勾選「常駐監控」）沒有這層防護，可以在 loop 執行中直接存檔。GUI 的 `save_task()`/`save_groups()` 呼叫完全沒有 acquire `loop._rules_lock`，與 loop 的週期性存檔之間存在檔案層級的 write-write race：GUI 剛寫入的新規則，可能在下一瞬間被 loop 用舊快照覆寫掉。症狀：新建立的「常駐監控」規則，在 loop 執行過幾輪、且使用者編輯過後，重啟工具即消失。
+## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267` + `eda47c2`）
 
-**修復**：`_do_debounced_save()`（`gui/06_gui_main.py:4217`）改為當 `self._loop` 存在時，`save_task` + `save_groups` + 清除 `loop._rules_dirty` + `loop._load_rules()` 全部包在 `with self._loop._rules_lock:` 內原子執行（`_rules_lock` 是 `threading.RLock()`，可重入不會死鎖）。
+**病灶**：`MainLoop` 執行中每 20 次迭代（或停止時），若 `_rules_dirty=True`（規則觸發時設定），會用自己記憶體中的 `self._rules` 快照直接呼叫 `save_rules()` 覆寫任務檔（此邏輯已於 commit `eda47c2` 完全移除，不再存在於目前的 `05_main_loop.py`）。GUI 端的一般規則編輯（`_save_current_rule`）在 loop 執行中會被 UI disabled 擋住，但 `_on_background_changed`（勾選「常駐監控」）沒有這層防護，可以在 loop 執行中直接存檔。GUI 的 `save_task()`/`save_groups()` 呼叫與 loop 的週期性存檔之間存在檔案層級的 write-write race：GUI 剛寫入的新規則，可能在下一瞬間被 loop 用舊快照覆寫掉。症狀：新建立的「常駐監控」規則，在 loop 執行過幾輪、且使用者編輯過後，重啟工具即消失。
+
+**修復歷程**：commit `7974267` 先將 `_do_debounced_save()`（`gui/06_gui_main.py:4493`）改為當 `self._loop` 存在時，`save_task` + `save_groups` + `loop._load_rules()` 全部包在 `with self._loop._rules_lock:` 內原子執行（`_rules_lock` 是 `threading.RLock()`，可重入不會死鎖）。隨後 commit `eda47c2` 進一步移除 loop 的週期性存檔與 `_rules_dirty` 死碼，消除 race 的根本源頭——目前 loop 完全不寫任務檔，GUI 是唯一的寫入者，`_rules_lock` 仍用於保護 GUI 寫入與 loop `_load_rules()` 讀取之間的競爭。
 
 **壓力測試驗證**（真實 threading 併發，非循序模擬，50 次疊代）：修復前規則遺失率 100%（21 條預期→實際 1~6 條存活），修復後 0%（21 條全數存活）。
 
@@ -137,11 +147,11 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 
 ## 驗證記錄
 
-以下兩項已用 `Select-String` 直接對照原始碼第一手確認（非僅憑模型自我審查）：
+以下項目已用 `Select-String` 直接對照原始碼第一手確認（非僅憑模型自我審查）：
 
-- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:164-166`，邏輯分布於 358/401/431/457-463/1122 行。
-- fail_duration_sec 修正（commit `4cb403c`）與 Test 25（`core/05_main_loop.py:1674-1768`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
-- 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:907` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`，且有對應單元測試（Test 12，約 1372-1425 行）。
-- GUI／MainLoop write-write race 與其修復（commit `7974267`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆由 Claude 直接讀取原始碼與執行測試腳本第一手確認，非模型自我審查。
+- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:166-168`，邏輯分布於 343（`_handle_detect`）、391（`_handle_match_image`）、422（`_handle_compare`）、444-456（`_handle_on_fail`）、1137（`get_rules_status`）行。
+- fail_duration_sec 修正（commit `4cb403c`）與 Test 25（`core/05_main_loop.py:1854-1927`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
+- 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:977` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`，且有對應單元測試（Test 12，1435-1488 行）。
+- GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆由 Claude 直接讀取原始碼與執行測試腳本第一手確認，非模型自我審查。
 
 其餘內容來自 DeepSeek V4 Pro 對代碼的分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。
