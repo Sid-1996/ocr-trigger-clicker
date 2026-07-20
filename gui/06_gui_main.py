@@ -59,6 +59,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from i18n import T, set_language
+
 if hasattr(sys, "_MEIPASS"):
     _base = Path(sys._MEIPASS)
 else:
@@ -165,7 +167,7 @@ class _StopGroupsPicker(QWidget):
     def _update_display(self):
         names = [self._name_for_id(gid) for gid in self._selected]
         if not names:
-            self._btn.setText("未選擇")
+            self._btn.setText(T("ui.no_group"))
             self._btn.setStyleSheet(
                 "QPushButton { text-align: left; border: 1px solid #ccc; "
                 "padding: 4px 8px; min-height: 28px; color: #888; }"
@@ -182,19 +184,21 @@ class _StopGroupsPicker(QWidget):
                 "padding: 4px 8px; min-height: 28px; }"
             )
         if names:
-            self._btn.setToolTip("已選：\n" + "\n".join(f"• {n}" for n in names))
+            self._btn.setToolTip(
+                T("tooltip.stop_group_selected", names="\n".join(f"• {n}" for n in names))
+            )
         else:
-            self._btn.setToolTip("未選擇任何群組")
+            self._btn.setToolTip(T("tooltip.stop_group_none"))
 
     def _open_dialog(self):
         dialog = QDialog(self)
-        dialog.setWindowTitle("選取停止群組")
+        dialog.setWindowTitle(T("ui.select_stop_group"))
         dialog.setMinimumWidth(320)
         dialog.setMinimumHeight(400)
         layout = QVBoxLayout(dialog)
 
         search = QLineEdit()
-        search.setPlaceholderText("搜尋群組...")
+        search.setPlaceholderText(T("ui.search_groups"))
         layout.addWidget(search)
 
         list_widget = QListWidget()
@@ -226,8 +230,8 @@ class _StopGroupsPicker(QWidget):
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        ok_btn = QPushButton("確定")
-        cancel_btn = QPushButton("取消")
+        ok_btn = QPushButton(T("ui.confirm"))
+        cancel_btn = QPushButton(T("ui.cancel"))
         btn_layout.addWidget(ok_btn)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
@@ -417,19 +421,19 @@ def _step_summary(step, rules_provider=None) -> str:
         text = p.get("text", "")
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        roi_str = "全視窗" if zero_roi else _fmt_roi(roi)
+        roi_str = T("summary.whole_window") if zero_roi else _fmt_roi(roi)
         mode = p.get("match_mode", "fuzzy")
         th = p.get("fuzzy_threshold", 0.8)
         extra = ""
         if mode == "regex":
-            extra = " [正規]"
+            extra = " [" + T("summary.regex") + "]"
         elif mode == "exact":
-            extra = " [完全]"
+            extra = " [" + T("summary.exact") + "]"
         elif mode == "contains":
-            extra = " [包含]"
+            extra = " [" + T("summary.contains") + "]"
         elif mode == "fuzzy" and th != 0.8:
-            extra = f" [模糊@{th}]"
-        text_label = f"「{text}」" if text else "未設定"
+            extra = " [" + T("summary.fuzzy") + f"@{th}]"
+        text_label = f"「{text}」" if text else T("summary.not_set")
         parts = [text_label + extra]
         parts.append(roi_str)
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
@@ -438,13 +442,17 @@ def _step_summary(step, rules_provider=None) -> str:
         return " ".join(parts)
     if t == "match_image":
         tmpl_data = p.get("template_data", "")
-        tmpl = Path(p.get("template", "")).stem or "內嵌" if tmpl_data.strip() else "未設定"
+        tmpl = (
+            Path(p.get("template", "")).stem or T("summary.embedded")
+            if tmpl_data.strip()
+            else T("summary.not_set")
+        )
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         parts = [f"「{tmpl}」"]
-        parts.append("全視窗" if zero_roi else _fmt_roi(roi))
+        parts.append(T("summary.whole_window") if zero_roi else _fmt_roi(roi))
         th = p.get("threshold", 0.8)
-        parts.append(f"閾值{th}")
+        parts.append(T("summary.format_threshold", threshold=th))
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
@@ -455,7 +463,7 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         parts = [f"{op} {val}"]
-        parts.append("全視窗" if zero_roi else _fmt_roi(roi))
+        parts.append(T("summary.whole_window") if zero_roi else _fmt_roi(roi))
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
@@ -463,18 +471,18 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "click":
         target = p.get("target", "text_center")
         if target == "text_center":
-            return "點擊辨識目標"
+            return T("summary.click_target")
         if target == "custom":
-            return f"點擊 {_fmt_point(p.get('x', 0), p.get('y', 0))}"
+            return T("summary.format_click", point=_fmt_point(p.get("x", 0), p.get("y", 0)))
         if target == "click_text":
-            return f"點擊文字「{p.get('text', '')}」"
+            return T("summary.format_click_text", text=p.get("text", ""))
     if t == "key":
-        return f"按鍵 {p.get('key', '')}"
+        return T("summary.format_key_press", key=p.get("key", ""))
     if t == "wait":
-        return f"等待 {p.get('ms', 500)}ms"
+        return T("summary.format_wait", ms=p.get("ms", 500))
     if t == "jump":
         name = _resolve_rule_name(p.get("rule_id", ""), rules_provider)
-        return f"跳轉規則「{name}」"
+        return T("summary.format_jump", name=name)
     if t == "drag":
         target = p.get("target", "text_center")
         dx, dy = p.get("dx", 0), p.get("dy", 0)
@@ -483,20 +491,20 @@ def _step_summary(step, rules_provider=None) -> str:
             "custom": "座標",
             "click_text": f"文字「{p.get('text', '')}」",
         }.get(target, "?")
-        return f"拖曳 {base} → ({dx:+},{dy:+})"
+        return T("summary.format_drag", base=base, dx=dx, dy=dy)
     if t == "scroll":
         d = p.get("direction", "WheelDown")
         a = p.get("amount", 1)
         dir_label = {
-            "WheelDown": "向下",
-            "WheelUp": "向上",
-            "WheelLeft": "向左",
-            "WheelRight": "向右",
+            "WheelDown": T("summary.down"),
+            "WheelUp": T("summary.up"),
+            "WheelLeft": T("summary.left"),
+            "WheelRight": T("summary.right"),
         }.get(d, d)
-        return f"滾輪 {dir_label} ×{a}"
+        return T("summary.format_scroll", direction=dir_label, times=a)
     if t == "notify":
         msg = p.get("message", "")
-        return f"💬「{msg}」" if msg else "💬 (空白)"
+        return T("summary.format_notify", msg=msg) if msg else T("summary.format_notify_empty")
     return t
 
 
@@ -509,7 +517,11 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
             fail_duration = float(raw.get("fail_duration_sec", 0) or 0)
         except (TypeError, ValueError):
             fail_duration = 0.0
-        prefix = f"[{fail_duration:g}秒]" if fail_duration > 0 else ""
+        prefix = (
+            T("summary.format_fail_duration", seconds=f"{fail_duration:g}")
+            if fail_duration > 0
+            else ""
+        )
         if action == "stop":
             return prefix if prefix else ""
         if action == "key":
@@ -532,7 +544,7 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
 def _make_key_combo(parent=None):
     cb = _KeyCombo(parent)
     for group in [
-        [(f"數字鍵 {i}", str(i)) for i in range(10)],
+        [(T("summary.format_key", i=i), str(i)) for i in range(10)],
         [
             "Enter",
             "Escape",
@@ -1007,7 +1019,7 @@ class _MatchImageStepForm(QWidget):
         label_text = (
             Path(tmpl_path).stem
             if tmpl_path.strip()
-            else ("內嵌圖片" if tmpl_data.strip() else "未選擇")
+            else ("內嵌圖片" if tmpl_data.strip() else T("ui.no_group"))
         )
         self._tmpl_label = QLabel(label_text)
         self._tmpl_btn = QPushButton("選擇圖片")
@@ -1028,7 +1040,7 @@ class _MatchImageStepForm(QWidget):
         # ROI
         roi = p.get("roi", {})
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel("全視窗" if z else _fmt_roi(roi))
+        self._roi_label = QLabel(T("summary.whole_window") if z else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選搜尋區域")
         self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
         self._roi_btn.clicked.connect(self._pick_roi)
@@ -1228,13 +1240,13 @@ class _MatchImageStepForm(QWidget):
     def _img_compare_match(self):
         title = self._window_title_cb() if self._window_title_cb else ""
         if not title:
-            self._img_compare_result.setText("⚠️ 請先選擇目標視窗")
+            self._img_compare_result.setText(T("img_compare.no_window"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
         tmpl_data = self._step.params.get("template_data", "")
         tmpl_path = self._step.params.get("template", "")
         if not tmpl_data.strip() and not tmpl_path.strip():
-            self._img_compare_result.setText("⚠️ 未設定範本圖片")
+            self._img_compare_result.setText(T("img_compare.no_template"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
         roi = self._step.params.get("roi", {})
@@ -1255,7 +1267,7 @@ class _MatchImageStepForm(QWidget):
             win.showNormal()
             win.activateWindow()
         if img is None:
-            self._img_compare_result.setText("⚠️ 無法截取視窗畫面")
+            self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
         h, w = img.shape[:2]
@@ -1307,7 +1319,7 @@ class _MatchImageStepForm(QWidget):
         if results:
             best = results[0]
             pct = int(best.confidence * 100)
-            self._img_compare_result.setText(f"✅ 命中（相似度 {pct}%）")
+            self._img_compare_result.setText(T("img_compare.hit", pct=pct))
             self._img_compare_result.setStyleSheet("color: #4caf50; font-weight: bold;")
         else:
             fallback = _tmpl_mod.match_template(
@@ -1323,7 +1335,7 @@ class _MatchImageStepForm(QWidget):
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
-            self._img_compare_result.setText(f"❌ 未命中（最高 {top_pct}%）")
+            self._img_compare_result.setText(T("img_compare.miss", top_pct=top_pct))
             self._img_compare_result.setStyleSheet("color: #e53935; font-weight: bold;")
 
     def _capture_template(self):
@@ -1335,13 +1347,13 @@ class _MatchImageStepForm(QWidget):
             self._step.params.pop("template", None)
             if data.get("roi"):
                 self._step.params["roi"] = data["roi"]
-            self._tmpl_label.setText("內嵌圖片")
+            self._tmpl_label.setText(T("format.embedded_image"))
             self._update_thumbnail()
             self._list.steps_changed.emit()
         elif data:
             self._step.params["template_data"] = data
             self._step.params.pop("template", None)
-            self._tmpl_label.setText("內嵌圖片")
+            self._tmpl_label.setText(T("format.embedded_image"))
             self._update_thumbnail()
             self._list.steps_changed.emit()
 
@@ -1366,7 +1378,7 @@ class _MatchImageStepForm(QWidget):
             if result:
                 self._step.params["roi"] = result
                 z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                self._roi_label.setText("全視窗" if z else _fmt_roi(result))
+                self._roi_label.setText(T("summary.whole_window") if z else _fmt_roi(result))
                 self.save()
                 self._list.steps_changed.emit()
 
@@ -1466,7 +1478,7 @@ class _DetectStepForm(QWidget):
 
         roi = p.get("roi", {})
         zero = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel("全視窗" if zero else _fmt_roi(roi))
+        self._roi_label = QLabel(T("summary.whole_window") if zero else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選偵測區域")
         self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
         if roi_cb:
@@ -1630,7 +1642,7 @@ class _DetectStepForm(QWidget):
             if result:
                 self._step.params["roi"] = result
                 z = all(result.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-                self._roi_label.setText("全視窗" if z else _fmt_roi(result))
+                self._roi_label.setText(T("summary.whole_window") if z else _fmt_roi(result))
                 self.save()
                 self._list.steps_changed.emit()
 
@@ -1909,7 +1921,7 @@ class _CompareStepForm(QWidget):
         if "roi_coord" in roi:
             self._roi["roi_coord"] = roi["roi_coord"]
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        self._roi_label = QLabel("全視窗" if z else _fmt_roi(roi))
+        self._roi_label = QLabel(T("summary.whole_window") if z else _fmt_roi(roi))
         self._roi_btn = QPushButton("框選偵測區域")
         self._roi_btn.setToolTip("框選要進行 OCR 的區域，不設定時掃描整個視窗")
         self._roi_btn.clicked.connect(self._pick_roi)
@@ -2130,7 +2142,7 @@ class _CompareStepForm(QWidget):
         if result:
             self._roi = dict(result)
             z = all(v == 0 for v in self._roi.values())
-            self._roi_label.setText("全視窗" if z else _fmt_roi(self._roi))
+            self._roi_label.setText(T("summary.whole_window") if z else _fmt_roi(self._roi))
             self.save()
             self._list.steps_changed.emit()
 
@@ -2496,7 +2508,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self._win = win
         self._ctrl = RuleConfigController()
-        self.setWindowTitle("偏好設定")
+        self.setWindowTitle(T("settings.title"))
         self.setMinimumWidth(420)
 
         layout = QVBoxLayout(self)
@@ -2508,47 +2520,53 @@ class SettingsDialog(QDialog):
         self._max_cps = QSpinBox()
         self._max_cps.setRange(1, 20)
         self._max_cps.setValue(self._ctrl.get_setting(win, "max_cps"))
-        self._max_cps.setToolTip("每秒最多自動點幾下。設太高可能被遊戲偵測為外掛，建議 3~10。")
-        form.addRow("每秒點擊上限:", self._max_cps)
+        self._max_cps.setToolTip(T("settings.max_cps.tooltip"))
+        form.addRow(T("settings.max_cps"), self._max_cps)
 
         self._scan_interval = QSpinBox()
         self._scan_interval.setRange(100, 2000)
         self._scan_interval.setSingleStep(50)
         self._scan_interval.setSuffix(" ms")
         self._scan_interval.setValue(self._ctrl.get_setting(win, "scan_interval_ms"))
-        self._scan_interval.setToolTip(
-            "每隔多久看一次畫面來判斷是否觸發。數字越小反應越快，但越耗 CPU。預設 500ms（每秒看 2 次）。"
-        )
-        form.addRow("偵測頻率:", self._scan_interval)
+        self._scan_interval.setToolTip(T("settings.scan_interval.tooltip"))
+        form.addRow(T("settings.scan_interval"), self._scan_interval)
+
+        from i18n import get_language
+
+        self._language = QComboBox()
+        self._language.addItem("繁體中文", "zh_TW")
+        self._language.addItem("简体中文", "zh_CN")
+        lang_idx = self._language.findData(get_language())
+        self._language.setCurrentIndex(max(0, lang_idx))
+        self._language.setToolTip("選擇介面語言，變更後需重新啟動程式才會生效。")
+        form.addRow(T("settings.language"), self._language)
 
         self._match_mode = QComboBox()
-        self._match_mode.addItem("包含關鍵字", "contains")
-        self._match_mode.addItem("完全符合", "exact")
-        self._match_mode.addItem("近似比對", "fuzzy")
-        self._match_mode.addItem("正則表達式", "regex")
+        self._match_mode.addItem(T("combo.contains"), "contains")
+        self._match_mode.addItem(T("combo.exact"), "exact")
+        self._match_mode.addItem(T("combo.fuzzy"), "fuzzy")
+        self._match_mode.addItem(T("combo.regex"), "regex")
         idx = self._match_mode.findData(self._ctrl.get_setting(win, "default_match_mode"))
         self._match_mode.setCurrentIndex(max(0, idx))
-        self._match_mode.setToolTip(
-            "文字怎麼算「找到了」：包含關鍵字 / 完全一樣 / 近似（容許小差異）/ 正則（進階選項）。"
-        )
-        form.addRow("預設比對模式:", self._match_mode)
+        self._match_mode.setToolTip(T("settings.default_match_mode.tooltip"))
+        form.addRow(T("settings.default_match_mode"), self._match_mode)
 
         self._close_behavior = QComboBox()
-        self._close_behavior.addItem("最小化至系統托盤", "tray")
-        self._close_behavior.addItem("直接關閉程式", "quit")
+        self._close_behavior.addItem(T("combo.tray"), "tray")
+        self._close_behavior.addItem(T("combo.quit"), "quit")
         idx = self._close_behavior.findData(self._ctrl.get_setting(win, "close_behavior"))
         self._close_behavior.setCurrentIndex(max(0, idx))
-        self._close_behavior.setToolTip("按視窗右上角 X 時，要縮小到右下角小圖示還是直接結束程式。")
-        form.addRow("關閉按鈕行為:", self._close_behavior)
+        self._close_behavior.setToolTip(T("settings.close_behavior.tooltip"))
+        form.addRow(T("settings.close_behavior"), self._close_behavior)
 
-        self._show_close_confirm = QCheckBox("關閉前顯示確認對話框")
+        self._show_close_confirm = QCheckBox(T("settings.show_close_confirm"))
         self._show_close_confirm.setChecked(self._ctrl.get_setting(win, "show_close_confirm"))
-        self._show_close_confirm.setToolTip("按 X 時先問你「確定要關閉嗎？」，避免誤按。")
+        self._show_close_confirm.setToolTip(T("settings.show_close_confirm.tooltip"))
         form.addRow("", self._show_close_confirm)
 
-        self._auto_update = QCheckBox("啟動時自動檢查更新")
+        self._auto_update = QCheckBox(T("settings.auto_update"))
         self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check"))
-        self._auto_update.setToolTip("每次開啟程式時，自動到 GitHub 看看有沒有新版本。")
+        self._auto_update.setToolTip(T("settings.auto_update.tooltip"))
         form.addRow("", self._auto_update)
 
         # ── 自動化 / 辨識分頁 ──
@@ -2557,56 +2575,48 @@ class SettingsDialog(QDialog):
         aform.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
         self._mouse_btn = QComboBox()
-        self._mouse_btn.addItem("左鍵", "left")
-        self._mouse_btn.addItem("右鍵", "right")
-        self._mouse_btn.addItem("中鍵", "middle")
+        self._mouse_btn.addItem(T("combo.left"), "left")
+        self._mouse_btn.addItem(T("combo.right"), "right")
+        self._mouse_btn.addItem(T("combo.middle"), "middle")
         idx = self._mouse_btn.findData(self._ctrl.get_setting(win, "default_mouse_button"))
         self._mouse_btn.setCurrentIndex(max(0, idx))
-        self._mouse_btn.setToolTip("點擊預設用哪個鍵。大多數遊戲左鍵即可。")
-        aform.addRow("預設滑鼠按鈕:", self._mouse_btn)
+        self._mouse_btn.setToolTip(T("settings.default_mouse_button.tooltip"))
+        aform.addRow(T("settings.default_mouse_button"), self._mouse_btn)
 
         self._random_offset = QSpinBox()
         self._random_offset.setRange(0, 10)
         self._random_offset.setSuffix(" px")
         self._random_offset.setValue(self._ctrl.get_setting(win, "default_random_offset"))
-        self._random_offset.setToolTip(
-            "每次點擊的位置會隨機偏移幾像素，避免每次都在同一個點被系統偵測。設 0 關閉。"
-        )
-        aform.addRow("點擊隨機偏移:", self._random_offset)
+        self._random_offset.setToolTip(T("settings.default_random_offset.tooltip"))
+        aform.addRow(T("settings.default_random_offset"), self._random_offset)
 
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
         self._fuzzy_th.setSingleStep(0.05)
         self._fuzzy_th.setDecimals(2)
         self._fuzzy_th.setValue(self._ctrl.get_setting(win, "default_fuzzy_threshold"))
-        self._fuzzy_th.setToolTip(
-            "文字比對的寬嚴程度。數字越大越嚴格（要幾乎一樣才算找到），越小越寬鬆。0.8 為預設。"
-        )
-        aform.addRow("模糊比對靈敏度:", self._fuzzy_th)
+        self._fuzzy_th.setToolTip(T("settings.default_fuzzy_threshold.tooltip"))
+        aform.addRow(T("settings.default_fuzzy_threshold"), self._fuzzy_th)
 
         self._template_th = QDoubleSpinBox()
         self._template_th.setRange(0.6, 0.98)
         self._template_th.setSingleStep(0.05)
         self._template_th.setDecimals(2)
         self._template_th.setValue(self._ctrl.get_setting(win, "default_template_threshold"))
-        self._template_th.setToolTip(
-            "圖片比對的寬嚴程度。數字越大越嚴格，越小越寬鬆。0.85 為預設。"
-        )
-        aform.addRow("圖片辨識靈敏度:", self._template_th)
+        self._template_th.setToolTip(T("settings.default_template_threshold.tooltip"))
+        aform.addRow(T("settings.default_template_threshold"), self._template_th)
 
         self._color_tol = QSpinBox()
         self._color_tol.setRange(0, 50)
         self._color_tol.setValue(self._ctrl.get_setting(win, "default_color_tolerance"))
-        self._color_tol.setToolTip(
-            "圖片比對時，允許顏色偏差多少才算相同。數字越大越寬鬆，0 表示完全一致。"
-        )
-        aform.addRow("顏色容許差異:", self._color_tol)
+        self._color_tol.setToolTip(T("settings.default_color_tolerance.tooltip"))
+        aform.addRow(T("settings.default_color_tolerance"), self._color_tol)
 
         tabs = QTabWidget()
         general = QWidget()
         general.setLayout(form)
-        tabs.addTab(general, "一般")
-        tabs.addTab(auto, "自動化 / 辨識")
+        tabs.addTab(general, T("settings.tab_general"))
+        tabs.addTab(auto, T("settings.tab_auto"))
         layout.addWidget(tabs)
 
         # 底部按鈕
@@ -2631,6 +2641,7 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
         self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
+        self._ctrl.set_setting(self._win, "language", self._language.currentData())
         self.accept()
 
 
@@ -2770,7 +2781,9 @@ class MainWindow(QMainWindow):
 
             QTimer.singleShot(0, self._deferred_init)
         except Exception as e:
-            QMessageBox.critical(self, "啟動失敗", f"初始化過程中發生錯誤：\n{e}")
+            QMessageBox.critical(
+                self, T("dialog.startup_failed"), T("dialog.startup_failed_msg", error=e)
+            )
             raise
 
         # ── 系統托盤 ──
@@ -2781,11 +2794,11 @@ class MainWindow(QMainWindow):
         self._tray.setIcon(_app_icon)
         self._tray.setToolTip("OCR Trigger Clicker")
         _tray_menu = QMenu(self)
-        _tray_menu.addAction("顯示視窗", self._restore_window)
-        _tray_menu.addAction("設定...", self._open_settings)
-        _tray_menu.addAction("檢查更新", lambda: self._check_version(force=True))
+        _tray_menu.addAction(T("tray.show"), self._restore_window)
+        _tray_menu.addAction(T("tray.settings"), self._open_settings)
+        _tray_menu.addAction(T("tray.check_update"), lambda: self._check_version(force=True))
         _tray_menu.addSeparator()
-        _tray_menu.addAction("離開", self._quit_app)
+        _tray_menu.addAction(T("tray.quit"), self._quit_app)
         self._tray.setContextMenu(_tray_menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
@@ -2801,10 +2814,10 @@ class MainWindow(QMainWindow):
 
     def _deferred_init(self):
         try:
-            self._status_bar.showMessage("正在載入視窗列表…")
+            self._status_bar.showMessage(T("status.loading_windows"))
             self._refresh_window_list()
 
-            self._status_bar.showMessage("正在載入任務…")
+            self._status_bar.showMessage(T("status.loading_task"))
             self._refresh_task_list()
 
             self._restore_last_state()
@@ -2817,9 +2830,7 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(
                     4000,
                     lambda v=updated_ver: (
-                        self._status_bar.showMessage(
-                            f"✅ 已更新至 v{v}！若有問題，請前往 GitHub 回報", 8000
-                        ),
+                        self._status_bar.showMessage(T("status.update_complete", v=v), 8000),
                         self._notif_stack.push(f"已更新至 v{v}"),
                     ),
                 )
@@ -2829,11 +2840,11 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(100, self._init_ahk_async)
         except Exception as e:
             logging.exception("deferred init failed")
-            self._status_bar.showMessage(f"⚠ 部分初始化失敗：{e}")
+            self._status_bar.showMessage(T("status.partial_init_error", e=e))
 
     def _init_ahk_async(self):
         if not _ahk_mod.is_ahk_available():
-            self._status_bar.showMessage("⚠ AHK 未安裝，點擊功能將無法使用（點此安裝）", 0)
+            self._status_bar.showMessage(T("status.ahk_not_installed"), 0)
             self._status_bar.mousePressEvent = lambda e: self._prompt_ahk_install()
             return
 
@@ -2844,7 +2855,7 @@ class MainWindow(QMainWindow):
                 ok = _ahk_mod.init_ahk()
                 self.done.emit(ok)
 
-        self._status_bar.showMessage("正在啟動 AHK…")
+        self._status_bar.showMessage(T("status.ahk_starting"))
         self._ahk_ready = False
         self._ahk_worker = _AhkWorker()
         self._ahk_worker.done.connect(self._on_ahk_init_done)
@@ -2853,13 +2864,12 @@ class MainWindow(QMainWindow):
     def _prompt_ahk_install(self):
         reply = QMessageBox.question(
             self,
-            "安裝 AutoHotkey",
-            "此工具需要 AutoHotkey v2 來執行滑鼠點擊與鍵盤操作。\n"
-            "是否自動下載並安裝？（約 3MB，不需管理員權限）",
+            T("dialog.install_ahk"),
+            T("dialog.install_ahk_msg"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._status_bar.showMessage("正在下載 AutoHotkey v2 ...")
+            self._status_bar.showMessage(T("update.download_ahk"))
             QApplication.processEvents()
 
             def _ahk_health_cb(msg):
@@ -2870,10 +2880,10 @@ class MainWindow(QMainWindow):
             if not _ahk_mod.download_ahk():
                 QMessageBox.critical(
                     self,
-                    "AutoHotkey 下載失敗",
-                    "AutoHotkey 下載失敗，請手動下載並安裝：\n"
-                    "https://www.autohotkey.com\n\n"
-                    "安裝後重新啟動工具即可自動偵測。",
+                    T("update.download_failed"),
+                    T("update.download_failed_manual")
+                    + "https://www.autohotkey.com\n\n"
+                    + T("dialog.install_ahk_success"),
                 )
                 return
 
@@ -2884,7 +2894,7 @@ class MainWindow(QMainWindow):
                     ok = _ahk_mod.init_ahk()
                     self.done.emit(ok)
 
-            self._status_bar.showMessage("正在啟動 AHK…")
+            self._status_bar.showMessage(T("status.ahk_starting"))
             self._ahk_ready = False
             self._ahk_worker = _AhkWorker()
             self._ahk_worker.done.connect(self._on_ahk_init_done)
@@ -2895,9 +2905,9 @@ class MainWindow(QMainWindow):
         self._ahk_ready = ok
         self._update_ahk_status(ok)
         if not ok:
-            self._status_bar.showMessage("⚠ AHK 未啟動，點擊功能將無法使用")
+            self._status_bar.showMessage(T("status.ahk_not_started"))
         else:
-            self._status_bar.showMessage("AHK 已就緒", 3000)
+            self._status_bar.showMessage(T("status.ahk_ready"), 3000)
 
     def _maybe_show_startup_guide(self):
         config = self._load_config()
@@ -2905,7 +2915,7 @@ class MainWindow(QMainWindow):
             return
         config["hide_startup_guide"] = True
         self._save_config(config)
-        self._notif_stack.push("新手教學？ 視窗右上角「？」按鈕可隨時打開")
+        self._notif_stack.push(T("ui.start_guide"))
 
     def _restore_last_state(self):
         config = self._load_config()
@@ -2917,9 +2927,9 @@ class MainWindow(QMainWindow):
                 self._window_combo.setCurrentIndex(idx)
             else:
                 self._window_combo.setPlaceholderText(
-                    f"⚠ 上次的視窗「{last_win}」已不存在，請重新選擇"
+                    T("status.last_window_not_found", title=last_win)
                 )
-                self._status_bar.showMessage(f"⚠ 上次的視窗「{last_win}」已不存在")
+                self._status_bar.showMessage(T("status.last_window_not_found", title=last_win))
         last_task = config.get("last_task", "")
         if last_task:
             idx = self._task_combo.findText(last_task)
@@ -2938,8 +2948,8 @@ class MainWindow(QMainWindow):
         # -- Window section --
         self._window_combo = _WindowCombo(self._refresh_window_list)
         self._window_combo.setMinimumWidth(250)
-        self._window_combo.setPlaceholderText("請選擇目標視窗")
-        toolbar.addWidget(QLabel("視窗:"))
+        self._window_combo.setPlaceholderText(T("status.select_window"))
+        toolbar.addWidget(QLabel(T("main.window")))
         toolbar.addWidget(self._window_combo)
 
         toolbar.addSpacing(8)
@@ -2952,59 +2962,59 @@ class MainWindow(QMainWindow):
         # -- Task section --
         self._task_combo = _NoWheelCombo()
         self._task_combo.setMinimumWidth(160)
-        self._task_combo.setToolTip("切換任務 — 每個任務包含一組獨立的規則")
+        self._task_combo.setToolTip(T("tooltip.task_combo"))
         self._task_new_btn = QPushButton("＋")
         self._task_new_btn.setFixedWidth(28)
-        self._task_new_btn.setToolTip("建立新任務")
+        self._task_new_btn.setToolTip(T("tooltip.task_new"))
         self._task_rename_btn = QPushButton("✏️")
         self._task_rename_btn.setFixedWidth(28)
-        self._task_rename_btn.setToolTip("重新命名當前任務")
+        self._task_rename_btn.setToolTip(T("tooltip.task_rename"))
         self._task_del_btn = QPushButton("🗑")
         self._task_del_btn.setFixedWidth(28)
-        self._task_del_btn.setToolTip("刪除當前任務")
-        self._task_import_btn = QPushButton("📥匯入任務")
-        self._task_import_btn.setToolTip("從 .json 檔案匯入任務")
-        self._task_export_btn = QPushButton("📤匯出任務")
-        self._task_export_btn.setToolTip("將目前任務匯出為 .json 檔案")
-        toolbar.addWidget(QLabel("任務:"))
+        self._task_del_btn.setToolTip(T("tooltip.task_delete"))
+        self._task_import_btn = QPushButton(T("main.import_task"))
+        self._task_import_btn.setToolTip(T("tooltip.task_import"))
+        self._task_export_btn = QPushButton(T("main.export_task"))
+        self._task_export_btn.setToolTip(T("tooltip.task_export"))
+        toolbar.addWidget(QLabel(T("main.task")))
         toolbar.addWidget(self._task_combo)
         toolbar.addWidget(self._task_new_btn)
         toolbar.addWidget(self._task_rename_btn)
         toolbar.addWidget(self._task_del_btn)
         toolbar.addWidget(self._task_import_btn)
         toolbar.addWidget(self._task_export_btn)
-        self._task_share_btn = QPushButton("📂任務分享")
-        self._task_share_btn.setToolTip("瀏覽社群分享的任務檔案")
+        self._task_share_btn = QPushButton(T("main.share_task"))
+        self._task_share_btn.setToolTip(T("tooltip.task_share"))
         self._task_share_btn.clicked.connect(self._open_task_share)
         toolbar.addWidget(self._task_share_btn)
 
         # -- Action section --
         self._btn_toggle = QPushButton("啟動")
         self._btn_toggle.setMinimumWidth(80)
-        self._btn_toggle.setToolTip("開始偵測所選視窗")
-        self._debug_btn = QPushButton("🔍OCR 診斷")
-        self._debug_btn.setToolTip("即時顯示視窗內所有辨識到的文字與位置")
+        self._btn_toggle.setToolTip(T("tooltip.toggle"))
+        self._debug_btn = QPushButton(T("main.ocr_debug"))
+        self._debug_btn.setToolTip(T("tooltip.debug"))
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
         toolbar.addStretch()
-        self._sponsor_btn = QPushButton("☕ 請喝咖啡")
-        self._sponsor_btn.setToolTip("如果這工具有幫助，歡迎請開發者喝杯咖啡 ☕")
+        self._sponsor_btn = QPushButton(T("main.sponsor"))
+        self._sponsor_btn.setToolTip(T("tooltip.sponsor"))
         self._sponsor_btn.clicked.connect(self._open_sponsor)
         toolbar.addWidget(self._sponsor_btn)
-        self._settings_btn = QPushButton("⚙ 設定")
-        self._settings_btn.setToolTip("開啟偏好設定（CPS、比對模式、主題等）")
+        self._settings_btn = QPushButton(T("main.settings"))
+        self._settings_btn.setToolTip(T("tooltip.settings"))
         self._settings_btn.clicked.connect(self._open_settings)
         toolbar.addWidget(self._settings_btn)
-        self._about_btn = QPushButton("關於")
-        self._about_btn.setToolTip(f"OCR Trigger Clicker v{__version__} — 作者: {__author__}")
+        self._about_btn = QPushButton(T("main.about"))
+        self._about_btn.setToolTip(T("tooltip.about", version=__version__, author=__author__))
         self._about_btn.clicked.connect(self._show_about)
         toolbar.addWidget(self._about_btn)
-        self._guide_btn = QPushButton("新手教學")
-        self._guide_btn.setToolTip("開啟 GitHub Pages 的互動式使用指引")
+        self._guide_btn = QPushButton(T("main.guide"))
+        self._guide_btn.setToolTip(T("tooltip.guide"))
         self._guide_btn.clicked.connect(self._open_guide)
         toolbar.addWidget(self._guide_btn)
-        self._update_btn = QPushButton("🔄檢查更新")
-        self._update_btn.setToolTip("檢查 GitHub 是否有新版本釋出")
+        self._update_btn = QPushButton(T("main.update"))
+        self._update_btn.setToolTip(T("tooltip.update"))
         self._update_btn.clicked.connect(lambda: self._check_version(force=True))
         toolbar.addWidget(self._update_btn)
         layout.addLayout(toolbar)
@@ -3020,7 +3030,7 @@ class MainWindow(QMainWindow):
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.addWidget(QLabel("規則列表"))
+        left_layout.addWidget(QLabel(T("main.rule_list")))
 
         self._rule_list = _RuleTreeWidget()
         self._rule_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -3040,17 +3050,17 @@ class MainWindow(QMainWindow):
         self._rule_list.customContextMenuRequested.connect(self._on_rule_context_menu)
         left_layout.addWidget(self._rule_list)
 
-        self._rule_hint = QLabel("← 點擊「新增」建立第一條規則")
+        self._rule_hint = QLabel(T("ui.add_first_rule"))
         self._rule_hint.setStyleSheet("color: #888; font-size: 11px;")
         left_layout.addWidget(self._rule_hint)
 
         rule_btn_bar = QHBoxLayout()
-        self._add_group_btn = QPushButton("+ 群組")
-        self._add_group_btn.setToolTip("新增一個群組")
-        self._add_rule_btn = QPushButton("+ 規則")
-        self._add_rule_btn.setToolTip("新增一條空白規則 (Ctrl+N)")
-        self._del_rule_btn = QPushButton("刪除 (Del)")
-        self._del_rule_btn.setToolTip("刪除目前選取的項目 (Del)")
+        self._add_group_btn = QPushButton(T("main.add_group"))
+        self._add_group_btn.setToolTip(T("tooltip.add_group"))
+        self._add_rule_btn = QPushButton(T("main.add_rule"))
+        self._add_rule_btn.setToolTip(T("tooltip.add_rule"))
+        self._del_rule_btn = QPushButton(T("main.delete"))
+        self._del_rule_btn.setToolTip(T("tooltip.delete_rule"))
         rule_btn_bar.addWidget(self._add_group_btn)
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
@@ -3066,16 +3076,17 @@ class MainWindow(QMainWindow):
         guide_layout = QVBoxLayout(guide_page)
         guide_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         guide_label = QLabel(
-            "使用步驟\n\n"
-            "① 選擇目標視窗\n"
-            "② 點擊「新增」建立規則\n"
-            "③ 設定觸發文字與點擊參數\n"
-            "④ 點擊「儲存規則」\n"
-            "⑤ 點擊「啟動」開始自動偵測\n\n"
-            "框選偵測區域可限制 OCR 範圍\n\n"
-            "▸ 進階技巧：步驟依序執行。每個步驟可設定「找不到時」的動作，\n"
-            "  例如 match_image 沒找到就跳過 detect，直接執行 key。\n"
-            "  試試 match_image → detect → click 三層連鎖！"
+            T("guide.usage")
+            + T("guide.step1")
+            + T("guide.step2")
+            + T("guide.step3")
+            + T("guide.step4")
+            + T("guide.step5")
+            + "框選偵測區域可限制 OCR 範圍\n\n"
+            + "▸ "
+            + T("guide.advanced")
+            + T("guide.advanced2")
+            + T("guide.advanced3")
         )
         guide_label.setStyleSheet("color: #666; font-size: 13px;")
         guide_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -3091,29 +3102,27 @@ class MainWindow(QMainWindow):
 
         # Name + enabled header
         name_row = QHBoxLayout()
-        name_row.addWidget(QLabel("名稱:"))
+        name_row.addWidget(QLabel(T("main.name")))
         self._edit_name = QLineEdit()
         name_row.addWidget(self._edit_name, 1)
-        name_row.addWidget(QLabel("啟用:"))
+        name_row.addWidget(QLabel(T("main.enabled")))
         self._edit_enabled = QCheckBox()
         name_row.addWidget(self._edit_enabled)
-        name_row.addWidget(QLabel("背景:"))
-        self._edit_background = QCheckBox("常駐監控")
-        self._edit_background.setToolTip(
-            "常駐監控：每幀獨立偵測，不參與群組流程順序。\n適合隨時需要攔截的條件（如錯誤提示、緊急中斷）"
-        )
+        name_row.addWidget(QLabel(T("main.background")))
+        self._edit_background = QCheckBox(T("ui.background_monitor"))
+        self._edit_background.setToolTip(T("ui.background_monitor_hint"))
         name_row.addWidget(self._edit_background)
         edit_layout.addLayout(name_row)
 
         notes_row = QHBoxLayout()
-        notes_row.addWidget(QLabel("備註:"))
+        notes_row.addWidget(QLabel(T("main.notes")))
         self._edit_notes = QPlainTextEdit()
-        self._edit_notes.setPlaceholderText("規則備註（選填）")
+        self._edit_notes.setPlaceholderText(T("format.notes"))
         self._edit_notes.setMaximumHeight(60)
         notes_row.addWidget(self._edit_notes, 1)
         edit_layout.addLayout(notes_row)
 
-        edit_layout.addWidget(QLabel("步驟列表:"))
+        edit_layout.addWidget(QLabel(T("main.step_list")))
 
         self._step_list = _StepListWidget()
         self._step_list.set_roi_callback(self._screenshot_ctrl.open_roi_selector)
@@ -3132,10 +3141,8 @@ class MainWindow(QMainWindow):
         edit_layout.addWidget(self._step_list, 1)
 
         # Add step dropdown
-        add_dropdown = QPushButton("+ 新增步驟 ▾")
-        add_dropdown.setToolTip(
-            "新增步驟至規則 — 步驟依序執行，可在進階設定中指定失敗時跳至後續步驟"
-        )
+        add_dropdown = QPushButton(T("ui.add_step"))
+        add_dropdown.setToolTip(T("tooltip.add_step"))
         add_menu = QMenu(self)
         step_types = [
             ("detect", "🔍 偵測文字", "以 OCR 辨識指定文字，精準但略慢"),
@@ -3158,14 +3165,14 @@ class MainWindow(QMainWindow):
         edit_layout.addWidget(add_dropdown)
 
         # Save indicator + Test
-        self._saved_label = QLabel("✓ 已儲存")
+        self._saved_label = QLabel(T("status.saved"))
         self._saved_label.setStyleSheet("color: #4caf50; font-weight: bold;")
         self._saved_label.setVisible(False)
-        self._edit_test_btn = QPushButton("▶ 測試")
+        self._edit_test_btn = QPushButton(T("ui.test"))
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setVisible(False)
-        self._open_log_btn = QPushButton("📂 日誌")
-        self._open_log_btn.setToolTip("開啟日誌目錄")
+        self._open_log_btn = QPushButton(T("main.log"))
+        self._open_log_btn.setToolTip(T("tooltip.open_log"))
         self._open_log_btn.setStyleSheet("color: #888888;")
         self._open_log_btn.clicked.connect(self._open_log_dir)
         btn_row = QWidget()
@@ -3189,7 +3196,7 @@ class MainWindow(QMainWindow):
         debug_page_layout = QVBoxLayout(self._debug_page)
         debug_page_layout.setContentsMargins(0, 0, 0, 0)
         debug_top_bar = QHBoxLayout()
-        self._debug_back_btn = QPushButton("← 返回規則")
+        self._debug_back_btn = QPushButton(T("ui.back_to_rules"))
         debug_top_bar.addWidget(self._debug_back_btn)
         debug_top_bar.addStretch()
         debug_page_layout.addLayout(debug_top_bar)
@@ -3201,8 +3208,8 @@ class MainWindow(QMainWindow):
 
         # === Status bar ===
         self._status_bar = QStatusBar()
-        self._status_bar.showMessage("就緒 — 請選擇視窗並新增規則")
-        self._perf_label = QLabel("FPS:-- | CPU:--% | MEM:--MB | 點擊:--/s")
+        self._status_bar.showMessage(T("main.ready"))
+        self._perf_label = QLabel(T("fps.idle"))
         self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._status_bar.addPermanentWidget(self._perf_label)
         self._ahk_status_label = QLabel("🔴 AHK")
@@ -3256,7 +3263,9 @@ class MainWindow(QMainWindow):
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
         )
         self._signals.warning_signal.connect(self._notif_stack.push)
-        self._signals.error_signal.connect(lambda msg: QMessageBox.warning(self, "引擎錯誤", msg))
+        self._signals.error_signal.connect(
+            lambda msg: QMessageBox.warning(self, T("dialog.engine_error"), msg)
+        )
         self._signals.finished.connect(self._on_loop_finished)
 
     def _setup_shortcuts(self):
@@ -3288,9 +3297,9 @@ class MainWindow(QMainWindow):
         self._window_combo.clear()
         windows = list_windows()
         if not windows:
-            self._window_combo.setPlaceholderText("⚠ 未發現任何視窗，請先開啟目標程式")
+            self._window_combo.setPlaceholderText(T("status.window_not_found"))
         else:
-            self._window_combo.setPlaceholderText("請選擇目標視窗")
+            self._window_combo.setPlaceholderText(T("main.window") + " " + T("status.no_window"))
             for w in windows:
                 self._window_combo.addItem(w)
 
@@ -3307,14 +3316,20 @@ class MainWindow(QMainWindow):
 
     def _update_perf_display(self):
         if self._loop is None:
-            self._perf_label.setText("FPS:-- | CPU:--% | MEM:--MB | 點擊:--/s")
+            self._perf_label.setText(T("fps.idle"))
             return
         stats = self._loop.get_perf_stats()
         fps = stats["fps"]
         cpu = stats["cpu_pct"]
         mem = stats["memory_mb"]
         click_rate = stats["click_rate"]
-        text = f"FPS:{fps:.1f} | CPU:{cpu:.0f}% | MEM:{mem:.0f}MB | 點擊:{click_rate:.0f}/s"
+        text = T(
+            "fps.active",
+            fps=f"{fps:.1f}",
+            cpu=f"{cpu:.0f}",
+            mem=f"{mem:.0f}",
+            click_rate=f"{click_rate:.0f}",
+        )
         if cpu > 80:
             text += " ⚠CPU"
             self._perf_label.setStyleSheet("color: #e67e22; font-size: 11px; padding-right: 8px;")
@@ -3343,7 +3358,7 @@ class MainWindow(QMainWindow):
             return
         self._current_task = name
         self._rules = load_task(name)
-        _main_loop_mod.log_main(f"已載入任務「{name}」，共 {len(self._rules)} 條規則")
+        _main_loop_mod.log_main(T("notif.task_loaded", name=name, count=len(self._rules)))
         task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
         self._groups = load_groups(task_path)
         # safety net: remove from uncategorized any rule also in a normal group
@@ -3357,7 +3372,9 @@ class MainWindow(QMainWindow):
             for rid in dupes:
                 uncat.rule_ids.remove(rid)
             if dupes:
-                _main_loop_mod.log_main(f"從未歸類移除 {len(dupes)} 條重複規則: {', '.join(dupes)}")
+                _main_loop_mod.log_main(
+                    T("notif.duplicates_removed", count=len(dupes), names=", ".join(dupes))
+                )
         # load collapsed state from task file
         self._collapsed_groups = set()
         try:
@@ -3374,7 +3391,7 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel.clear_results()
-        self._status_bar.showMessage(f"任務「{name}」— {len(self._rules)} 條規則")
+        self._status_bar.showMessage(T("format.task_rules", name=name, count=len(self._rules)))
         # 自動選取任務綁定的視窗
         task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
         saved_window = get_task_window(task_path)
@@ -3386,13 +3403,17 @@ class MainWindow(QMainWindow):
     def _on_task_new(self):
         from PyQt6.QtWidgets import QInputDialog
 
-        name, ok = QInputDialog.getText(self, "新任務", "請輸入任務名稱：", text="")
+        name, ok = QInputDialog.getText(
+            self, T("dialog.new_task"), T("dialog.new_task_hint"), text=""
+        )
         if not ok or not name.strip():
             return
         name = name.strip()
         existing = list_tasks()
         if name in existing:
-            QMessageBox.warning(self, "任務已存在", f"任務「{name}」已經存在。")
+            QMessageBox.warning(
+                self, T("dialog.task_exists"), T("dialog.task_exists_msg", name=name)
+            )
             return
         self._groups = [RuleGroup(id="__default__", name="所有規則")]
         save_task(name, [])
@@ -3401,7 +3422,7 @@ class MainWindow(QMainWindow):
         idx = self._task_combo.findText(name)
         if idx >= 0:
             self._task_combo.setCurrentIndex(idx)
-        self._status_bar.showMessage(f"已建立任務「{name}」")
+        self._status_bar.showMessage(T("notif.task_created", name=name))
 
     def _on_task_rename(self):
         if not self._current_task:
@@ -3409,7 +3430,9 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import QInputDialog
 
         old_name = self._current_task
-        name, ok = QInputDialog.getText(self, "重新命名任務", "請輸入新任務名稱：", text=old_name)
+        name, ok = QInputDialog.getText(
+            self, T("dialog.rename_task"), T("dialog.rename_task_hint"), text=old_name
+        )
         if not ok or not name.strip():
             return
         name = name.strip()
@@ -3417,33 +3440,35 @@ class MainWindow(QMainWindow):
             return
         existing = list_tasks()
         if name in existing:
-            QMessageBox.warning(self, "任務已存在", f"任務「{name}」已經存在。")
+            QMessageBox.warning(
+                self, T("dialog.task_exists"), T("dialog.task_exists_msg", name=name)
+            )
             return
         self._flush_save()
         if not rename_task(old_name, name):
-            QMessageBox.warning(self, "重新命名失敗", "無法重新命名任務。")
+            QMessageBox.warning(self, "重新命名失敗", T("dialog.cannot_rename"))
             return
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
         if idx >= 0:
             self._task_combo.setCurrentIndex(idx)
-        self._status_bar.showMessage(f"任務「{old_name}」已重新命名為「{name}」")
+        self._status_bar.showMessage(T("notif.task_renamed", old_name=old_name, name=name))
 
     def _on_task_delete(self):
         if not self._current_task:
             return
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再刪除任務")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_delete_task"))
             return
         tasks = list_tasks()
         if len(tasks) <= 1:
-            QMessageBox.warning(self, "無法刪除", "至少需要保留一個任務。")
+            QMessageBox.warning(self, T("dialog.cannot_delete"), T("dialog.at_least_one_task"))
             return
         if (
             QMessageBox.question(
                 self,
-                "刪除任務",
-                f"確定刪除任務「{self._current_task}」及其所有規則？\n此操作無法復原。",
+                T("dialog.delete_task"),
+                T("dialog.delete_task_msg", name=self._current_task),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             != QMessageBox.StandardButton.Yes
@@ -3456,30 +3481,30 @@ class MainWindow(QMainWindow):
     def _show_import_preview_dialog(self, preview: ImportPreview) -> tuple[bool, bool]:
         """Show import preview dialog. Returns (accepted, regenerate_uuids)."""
         dialog = QDialog(self)
-        dialog.setWindowTitle("匯入任務預覽")
+        dialog.setWindowTitle(T("dialog.import_task_preview"))
         dialog.setMinimumWidth(480)
         layout = QVBoxLayout(dialog)
 
         meta = preview.meta
         meta_lines = []
         if meta.get("description"):
-            meta_lines.append(f"說明：{meta['description']}")
+            meta_lines.append(T("format.description", description=meta["description"]))
         if meta.get("author"):
-            meta_lines.append(f"作者：{meta['author']}")
+            meta_lines.append(T("format.author", author=meta["author"]))
         if meta.get("game"):
-            meta_lines.append(f"遊戲：{meta['game']}")
+            meta_lines.append(T("format.game", game=meta["game"]))
         if meta.get("app_version"):
-            meta_lines.append(f"來源版本：{meta['app_version']}")
+            meta_lines.append(T("format.app_version", version=meta["app_version"]))
         if meta_lines:
-            layout.addWidget(QLabel("▸ 任務資訊"))
+            layout.addWidget(QLabel(T("format.task_info")))
             meta_label = QLabel("\n".join(meta_lines))
             meta_label.setWordWrap(True)
             layout.addWidget(meta_label)
 
-        layout.addWidget(QLabel(f"▸ 將匯入 {preview.rule_count} 條規則："))
+        layout.addWidget(QLabel(T("format.import_preview", count=preview.rule_count)))
         names_text = "\n".join(f"  • {n}" for n in preview.rule_names[:20])
         if preview.rule_count > 20:
-            names_text += f"\n  …及其他 {preview.rule_count - 20} 條"
+            names_text += "\n  " + T("format.import_overflow", count=preview.rule_count - 20)
         names_label = QLabel(names_text)
         names_label.setWordWrap(True)
         layout.addWidget(names_label)
@@ -3491,14 +3516,14 @@ class MainWindow(QMainWindow):
             warn_label.setStyleSheet("color: #cc8800;")
             layout.addWidget(warn_label)
 
-        cb = QCheckBox("重新產生所有規則 ID（避免與現有規則衝突）")
+        cb = QCheckBox(T("ui.regenerate_ids"))
         cb.setChecked(False)
         layout.addWidget(cb)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("匯入")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(T("dialog.import_task"))
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -3507,43 +3532,47 @@ class MainWindow(QMainWindow):
         return result == QDialog.DialogCode.Accepted, cb.isChecked()
 
     def _on_task_import(self):
-        path, _ = QFileDialog.getOpenFileName(self, "匯入任務", str(_here), "JSON (*.json)")
+        path, _ = QFileDialog.getOpenFileName(
+            self, T("dialog.import_task"), str(_here), "JSON (*.json)"
+        )
         if not path:
             return
         try:
             if Path(path).stat().st_size > _MAX_IMPORT_SIZE:
                 QMessageBox.warning(
-                    self, "匯入失敗", "檔案過大（超過 10 MB），請確認是否為正確的任務檔案。"
+                    self, T("dialog.import_task"), T("dialog.import_task_too_large")
                 )
                 return
         except OSError:
             pass
         preview = preview_import_task(path)
         if preview is None or preview.rule_count == 0:
-            QMessageBox.warning(
-                self, "匯入失敗", "檔案格式無效或無有效規則，請確認是包含 rules 陣列的 JSON。"
-            )
+            QMessageBox.warning(self, T("dialog.import_task"), T("dialog.import_task_invalid"))
             return
         accepted, regen = self._show_import_preview_dialog(preview)
         if not accepted:
             return
         imported_name = import_task(path, regenerate_uuids=regen)
         if imported_name is None:
-            QMessageBox.warning(self, "匯入失敗", "無法寫入目標檔案。")
+            QMessageBox.warning(self, T("dialog.import_task"), T("dialog.cannot_write"))
             return
         self._refresh_task_list()
         idx = self._task_combo.findText(imported_name)
         if idx >= 0:
             self._task_combo.setCurrentIndex(idx)
-        msg = f"已匯入任務「{imported_name}」"
+        msg = T("notif.task_imported", name=imported_name)
         if preview.warnings:
-            msg += f"（{len(preview.warnings)} 條警告）"
+            msg += T("notif.task_import_warnings", count=len(preview.warnings))
         self._status_bar.showMessage(msg, 8000)
         if preview.warnings:
             QMessageBox.information(
                 self,
-                "匯入完成（有警告）",
-                f"任務「{imported_name}」已匯入，但有 {len(preview.warnings)} 條警告：\n\n"
+                T("dialog.import_task"),
+                T(
+                    "notif.task_imported_with_warnings",
+                    name=imported_name,
+                    count=len(preview.warnings),
+                )
                 + "\n".join(preview.warnings),
             )
 
@@ -3551,14 +3580,17 @@ class MainWindow(QMainWindow):
         if not self._current_task:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "匯出任務", str(_here / f"{self._current_task}.json"), "JSON (*.json)"
+            self,
+            T("dialog.export_task"),
+            str(_here / f"{self._current_task}.json"),
+            "JSON (*.json)",
         )
         if not path:
             return
         if export_task(self._current_task, path):
-            self._status_bar.showMessage(f"任務「{self._current_task}」已匯出")
+            self._status_bar.showMessage(T("notif.task_exported", name=self._current_task))
         else:
-            QMessageBox.warning(self, "匯出失敗", "無法寫入目標檔案")
+            QMessageBox.warning(self, T("dialog.export_task"), T("dialog.cannot_write"))
 
     # === Rule list ===
     @staticmethod
@@ -3607,7 +3639,7 @@ class MainWindow(QMainWindow):
             group_item.setText(0, text)
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
             group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
-            group_item.setToolTip(0, "右鍵可重新命名、群組設定、上移／下移、刪除")
+            group_item.setToolTip(0, T("tooltip.group_item"))
             for rid in g.rule_ids:
                 r = rule_map.get(rid)
                 if r is None:
@@ -3619,7 +3651,7 @@ class MainWindow(QMainWindow):
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
                 )
-                child.setToolTip(0, "右鍵可複製規則、移動到其他群組")
+                child.setToolTip(0, T("tooltip.rule_item"))
                 group_item.addChild(child)
                 if r.id == self._selected_rule_id:
                     selected_item = child
@@ -3630,7 +3662,7 @@ class MainWindow(QMainWindow):
         bg_rules = [r for r in self._rules if r.background]
         if bg_rules:
             bg_item = QTreeWidgetItem()
-            bg_item.setText(0, "📡 常駐監控")
+            bg_item.setText(0, T("ui.background_monitor"))
             bg_item.setData(0, Qt.ItemDataRole.UserRole, ("bg_group", "__background__"))
             bg_item.setFlags(
                 bg_item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled & ~Qt.ItemFlag.ItemIsEditable
@@ -3643,7 +3675,7 @@ class MainWindow(QMainWindow):
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
                 )
-                child.setToolTip(0, "右鍵可複製規則、移動到其他群組")
+                child.setToolTip(0, T("tooltip.rule_item"))
                 bg_item.addChild(child)
                 if r.id == self._selected_rule_id:
                     selected_item = child
@@ -3935,7 +3967,9 @@ class MainWindow(QMainWindow):
             if self._groups[-1].id != "__uncategorized__":
                 self._groups.remove(target)
                 self._groups.append(target)
-            self._status_bar.showMessage(f"「{rule.name}」已移至未歸類", 4000)
+            self._status_bar.showMessage(
+                T("notif.rule_removed_from_uncategorized", name=rule.name), 4000
+            )
         logging.info(
             "[background_changed] AFTER rules_bg=%s groups=%s",
             [(r.name, r.background) for r in self._rules],
@@ -3960,8 +3994,8 @@ class MainWindow(QMainWindow):
         count = len(target.rule_ids)
         reply = QMessageBox.question(
             self,
-            "清空未歸類",
-            f"確定刪除「未歸類」中的所有規則（共 {count} 條）？\n此操作無法復原。",
+            T("ui.clear_uncategorized"),
+            T("dialog.delete_uncategorized_confirm", count=count),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -4063,7 +4097,7 @@ class MainWindow(QMainWindow):
 
     def _delete_group(self):
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再刪除群組")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_delete_group"))
             return
         item = self._rule_list.currentItem()
         if item is None:
@@ -4078,18 +4112,18 @@ class MainWindow(QMainWindow):
         if group.id == "__uncategorized__":
             QMessageBox.warning(
                 self,
-                "無法刪除",
-                "「未歸類」為系統保留群組，無法刪除。\n可使用右鍵選單「清空未歸類」移出所有規則。",
+                T("dialog.cannot_delete"),
+                T("dialog.uncategorized_system"),
             )
             return
         rule_count = len([rid for rid in group.rule_ids if any(r.id == rid for r in self._rules)])
-        msg = f"確定刪除群組「{group.name}」？"
+        msg = T("dialog.delete_group_confirm", name=group.name)
         if rule_count > 0:
-            msg += f"\n群組內有 {rule_count} 條規則，這些規則也將一併刪除。"
+            msg += T("dialog.delete_group_has_rules", count=rule_count)
         if (
             QMessageBox.question(
                 self,
-                "刪除群組",
+                T("ui.delete_group"),
                 msg,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
@@ -4136,7 +4170,7 @@ class MainWindow(QMainWindow):
 
     def _add_rule(self):
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再新增規則")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_add_rule"))
             return
         cur = self._get_current_rule()
         if cur is not None:
@@ -4237,7 +4271,7 @@ class MainWindow(QMainWindow):
 
     def _delete_rule(self):
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再刪除規則")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_delete_rule"))
             return
         item = self._rule_list.currentItem()
         if item:
@@ -4270,15 +4304,13 @@ class MainWindow(QMainWindow):
             return result
 
         refs = _refs_to(rule.id)
-        msg = f"確定刪除規則「{rule.name}」？"
+        msg = T("dialog.delete_rule_confirm", name=rule.name)
         if refs:
-            msg += "\n\n⚠ 以下規則依賴此規則，刪除後將失效：\n" + "\n".join(
-                f"  • {n}" for n in refs
-            )
+            msg += "\n\n" + T("dialog.dependency_warning") + "\n".join(f"  • {n}" for n in refs)
         if (
             QMessageBox.question(
                 self,
-                "刪除規則",
+                T("ui.delete_rule"),
                 msg,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
@@ -4330,9 +4362,9 @@ class MainWindow(QMainWindow):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
         if data and data[0] == "rule":
-            act = menu.addAction("複製規則（同群組）")
+            act = menu.addAction(T("ui.copy_rule"))
             act.triggered.connect(self._duplicate_rule)
-            copy_to_menu = menu.addMenu("複製到群組…")
+            copy_to_menu = menu.addMenu(T("ui.copy_to_group"))
             normal_groups = [g for g in self._groups if not g.id.startswith("__")]
             if normal_groups:
                 for g in normal_groups:
@@ -4343,7 +4375,7 @@ class MainWindow(QMainWindow):
                     )
             else:
                 copy_to_menu.setEnabled(False)
-            move_to_menu = menu.addMenu("移動到群組…")
+            move_to_menu = menu.addMenu(T("ui.move_to_group"))
             if normal_groups:
                 for g in normal_groups:
                     group_act = move_to_menu.addAction(g.name)
@@ -4359,21 +4391,21 @@ class MainWindow(QMainWindow):
             group = next((g for g in self._groups if g.id == gid), None)
             is_uncat = group and group.id == "__uncategorized__"
             if is_uncat:
-                act = menu.addAction("🗑 清空未歸類")
+                act = menu.addAction(T("ui.clear_uncategorized"))
                 act.triggered.connect(self._clear_uncategorized)
                 menu.addSeparator()
             else:
-                act = menu.addAction("✏ 重新命名")
+                act = menu.addAction(T("ui.rename"))
                 act.triggered.connect(lambda: self._rename_group(item))
-                act = menu.addAction("⚙ 群組設定")
+                act = menu.addAction(T("ui.group_settings"))
                 act.triggered.connect(self._show_group_settings)
                 menu.addSeparator()
-            act = menu.addAction("▲ 上移")
+            act = menu.addAction(T("ui.move_up"))
             act.triggered.connect(lambda checked, gid=gid: self._move_group_up(gid))
-            act = menu.addAction("▼ 下移")
+            act = menu.addAction(T("ui.move_down"))
             act.triggered.connect(lambda checked, gid=gid: self._move_group_down(gid))
             menu.addSeparator()
-            act = menu.addAction("刪除群組")
+            act = menu.addAction(T("ui.delete_group"))
             act.triggered.connect(self._delete_group)
         menu.exec(self._rule_list.viewport().mapToGlobal(pos))
 
@@ -4388,7 +4420,7 @@ class MainWindow(QMainWindow):
 
     def _duplicate_rule(self):
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再複製規則")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_copy_rule"))
             return
         cur = self._get_current_rule()
         if cur is not None:
@@ -4402,7 +4434,9 @@ class MainWindow(QMainWindow):
         new.id = f"rule_{uuid.uuid4().hex[:8]}"
         new.name = self._next_duplicate_name(src.name)
         self._rules.append(new)
-        _main_loop_mod.log_main(f"規則「{new.name}」從「{src.name}」複製 (id={new.id})")
+        _main_loop_mod.log_main(
+            T("notif.rule_copied", new_name=new.name, src_name=src.name, new_id=new.id)
+        )
         dup_gid = None
         for g in self._groups:
             if src.id in g.rule_ids:
@@ -4418,7 +4452,7 @@ class MainWindow(QMainWindow):
     def _duplicate_rule_to_group(self, target_gid: str):
         """Copy the current rule to the specified group."""
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再複製規則")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_copy_rule"))
             return
         cur = self._get_current_rule()
         if cur is not None:
@@ -4447,14 +4481,20 @@ class MainWindow(QMainWindow):
         self._selected_rule_id = new_rule.id
         self._refresh_rule_list(target_group.id)
         self._status_bar.showMessage(
-            "已將「" + src_rule.name + "」複製到群組「" + target_group.name + "」", 4000
+            T(
+                "notif.rule_copied",
+                new_name=new_rule.name,
+                src_name=src_rule.name,
+                new_id=new_rule.id,
+            ),
+            4000,
         )
         if self._loop:
             self._loop.reload_rules()
 
     def _move_rule_to_group(self, target_gid: str):
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再移動規則")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_move_rule"))
             return
         src_rule = self._get_current_rule()
         if src_rule is None:
@@ -4472,7 +4512,7 @@ class MainWindow(QMainWindow):
         self._flush_save()
         self._refresh_rule_list()
         self._status_bar.showMessage(
-            f"已將「{src_rule.name}」移動到群組「{target_group.name}」", 4000
+            T("notif.rule_moved", rule_name=src_rule.name, group_name=target_group.name), 4000
         )
         if self._loop:
             self._loop.reload_rules()
@@ -4514,11 +4554,11 @@ class MainWindow(QMainWindow):
         logging.info("[save] _flush_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.stop()
         self._do_debounced_save()
-        _main_loop_mod.log_main(f"任務已儲存：{len(self._rules)} 條規則")
+        _main_loop_mod.log_main(T("status.task_saved", count=len(self._rules)))
 
     def _save_current_rule(self):
         if self._loop and self._loop.is_running:
-            QMessageBox.warning(self, "提示", "請先停止偵測再儲存規則")
+            QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_save"))
             return
         rule = self._get_current_rule()
         if rule is None:
@@ -4530,37 +4570,38 @@ class MainWindow(QMainWindow):
         # 校驗 detect 步驟文字不可為空
         for i, s in enumerate(rule.steps):
             if s.type == "detect" and not s.params.get("text", "").strip():
-                QMessageBox.warning(self, "儲存失敗", f"步驟 {i + 1} (偵測文字)：目標文字不可為空")
+                QMessageBox.warning(
+                    self, T("dialog.save_failed"), T("notif.rule_validation_empty_text", idx=i + 1)
+                )
                 return
             if s.type == "click" and s.params.get("target", "") == "custom":
                 x, y = s.params.get("x", 0), s.params.get("y", 0)
                 if x == 0 and y == 0:
                     QMessageBox.warning(
                         self,
-                        "儲存失敗",
-                        f"步驟 {i + 1} (點擊)：自訂座標 (0,0) 可能未設定正確，請選取座標",
+                        T("dialog.save_failed"),
+                        T("notif.rule_validation_zero_click", idx=i + 1),
                     )
                     return
-        # 檢查 jump 參照的規則是否存在
         valid_ids = {r.id for r in self._rules}
         warnings = []
         for i, s in enumerate(rule.steps):
             if s.type == "jump":
                 tid = s.params.get("rule_id", "")
                 if tid and tid not in valid_ids:
-                    warnings.append(f"步驟 {i + 1} (跳轉)：參照的規則已不存在")
+                    warnings.append(T("notif.rule_validation_missing_rule", idx=i + 1))
             elif s.type == "match_image" and not s.params.get("template", "").strip():
-                warnings.append(f"步驟 {i + 1} (圖示辨識)：尚未設定範本圖片")
+                warnings.append(T("notif.rule_validation_no_image", idx=i + 1))
             elif (
                 s.type == "click"
                 and s.params.get("target") == "click_text"
                 and not s.params.get("text", "").strip()
             ):
-                warnings.append(f"步驟 {i + 1} (點擊)：目標文字為空")
+                warnings.append(T("notif.rule_validation_empty_click", idx=i + 1))
             elif s.type == "notify" and not s.params.get("message", "").strip():
-                warnings.append(f"步驟 {i + 1} (提示訊息)：訊息為空")
+                warnings.append(T("notif.rule_validation_empty_notify", idx=i + 1))
             elif s.type == "compare" and not s.params.get("pattern", "").strip():
-                warnings.append(f"步驟 {i + 1} (數字比較)：正規表達式為空，將匹配所有數字")
+                warnings.append(T("notif.rule_validation_empty_regex", idx=i + 1))
         if warnings:
             self._status_bar.showMessage("⚠ " + "；".join(warnings), 8000)
         self._schedule_save()
@@ -4583,7 +4624,7 @@ class MainWindow(QMainWindow):
             if wr:
                 result = (result[0] - wr["x"], result[1] - wr["y"])
         self._edit_stack.setCurrentIndex(1)
-        self._status_bar.showMessage(f"已選取點擊座標: X={result[0]}, Y={result[1]}")
+        self._status_bar.showMessage(T("notif.coordinate_selected", x=result[0], y=result[1]))
         # Convert to ratio before storing
         if title and wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
@@ -4610,9 +4651,9 @@ class MainWindow(QMainWindow):
 
     def _show_test_result(self, result: dict):
         self._edit_test_btn.setEnabled(True)
-        self._edit_test_btn.setText("▶ 測試")
+        self._edit_test_btn.setText(T("ui.test"))
         if "error" in result:
-            QMessageBox.warning(self, "測試結果", result["error"])
+            QMessageBox.warning(self, T("dialog.test_result"), result["error"])
             return
         img = result["image"]
         log_text = result["log"]
@@ -4626,7 +4667,7 @@ class MainWindow(QMainWindow):
         pixmap = QPixmap.fromImage(qt_img)
 
         dialog = QDialog(self)
-        dialog.setWindowTitle("測試結果（視覺化）")
+        dialog.setWindowTitle(T("dialog.test_result"))
         dialog.resize(min(960, w + 40), min(850, h + 200))
         layout = QVBoxLayout(dialog)
 
@@ -4656,7 +4697,7 @@ class MainWindow(QMainWindow):
 
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close_btn = btn_box.button(QDialogButtonBox.StandardButton.Close)
-        close_btn.setText("關閉(Esc)")
+        close_btn.setText(T("dialog.close"))
         btn_box.rejected.connect(dialog.close)
         layout.addWidget(btn_box)
 
@@ -4666,18 +4707,18 @@ class MainWindow(QMainWindow):
     def _switch_to_debug(self):
         title = self._window_combo.currentText()
         if not title:
-            QMessageBox.warning(self, "警告", "請先選擇目標視窗")
+            QMessageBox.warning(self, T("dialog.warning"), T("status.no_window"))
             return
         if self._loop is not None and self._loop.is_running:
-            QMessageBox.warning(self, "無法開啟", "請先停止偵測循環再開啟診斷模式。")
+            QMessageBox.warning(self, T("dialog.cannot_open"), T("status.stop_first_debug"))
             return
         self._debug_panel._window_title = title
         self._main_stack.setCurrentIndex(1)
-        self._status_bar.showMessage(f"OCR 診斷 — 目標: {title}")
+        self._status_bar.showMessage(T("status.detecting", title=title))
 
     def _switch_to_rules(self):
         self._main_stack.setCurrentIndex(0)
-        self._status_bar.showMessage("就緒")
+        self._status_bar.showMessage(T("main.ready"))
 
     def _on_debug_rule_requested(self, rule_data: dict):
         import uuid
@@ -4713,7 +4754,7 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
-        _main_loop_mod.log_main(f"規則「{rule.name}」從 OCR 診斷新增 (id={rule.id})")
+        _main_loop_mod.log_main(T("notif.rule_from_debug", name=rule.name, id=rule.id))
         target_group = None
         item = self._rule_list.currentItem()
         if item:
@@ -4738,9 +4779,11 @@ class MainWindow(QMainWindow):
         self._selected_rule_id = rule.id
         self._refresh_rule_list(target_group.id if target_group else None)
         self._main_stack.setCurrentIndex(0)
-        self._debug_btn.setText("OCR 診斷")
+        self._debug_btn.setText(T("main.ocr_debug"))
         self._show_rule_detail(rule)
-        self._status_bar.showMessage(f"已從 OCR 診斷新增規則：「{rule_data['target_text']}」")
+        self._status_bar.showMessage(
+            T("notif.rule_added_from_debug", text=rule_data["target_text"])
+        )
 
     def _on_debug_step_requested(self, data: dict):
         rule = self._get_current_rule()
@@ -4760,11 +4803,18 @@ class MainWindow(QMainWindow):
         self._flush_save()
         self._step_list.set_steps(rule.steps)
         self._main_stack.setCurrentIndex(0)
-        self._debug_btn.setText("OCR 診斷")
+        self._debug_btn.setText(T("main.ocr_debug"))
         _main_loop_mod.log_main(
-            f"規則「{rule.name}」從 OCR 診斷加入偵測步驟「{data.get('target_text', '')}」(id={rule.id})"
+            T(
+                "notif.rule_from_debug_detect",
+                name=rule.name,
+                text=data.get("target_text", ""),
+                id=rule.id,
+            )
         )
-        self._status_bar.showMessage(f"已加入偵測步驟：「{data.get('target_text', '')}」")
+        self._status_bar.showMessage(
+            T("notif.step_added_from_debug", text=data.get("target_text", ""))
+        )
 
     def _on_debug_template_requested(self, data: dict):
         import uuid
@@ -4801,7 +4851,7 @@ class MainWindow(QMainWindow):
             ],
         )
         self._rules.append(rule)
-        _main_loop_mod.log_main(f"規則「{rule.name}」從 OCR 診斷新建為模板 (id={rule.id})")
+        _main_loop_mod.log_main(T("notif.rule_from_debug_new_template", name=rule.name, id=rule.id))
         target_group = None
         item = self._rule_list.currentItem()
         if item:
@@ -4826,9 +4876,11 @@ class MainWindow(QMainWindow):
         self._selected_rule_id = rule.id
         self._refresh_rule_list(target_group.id if target_group else None)
         self._main_stack.setCurrentIndex(0)
-        self._debug_btn.setText("OCR 診斷")
+        self._debug_btn.setText(T("main.ocr_debug"))
         self._show_rule_detail(rule)
-        self._status_bar.showMessage(f"已從 OCR 診斷建立模板規則：「{data.get('name', '')}」")
+        self._status_bar.showMessage(
+            T("notif.template_rule_added_from_debug", name=data.get("name", ""))
+        )
 
     def _on_debug_template_step_requested(self, data: dict):
         rule = self._get_current_rule()
@@ -4849,11 +4901,11 @@ class MainWindow(QMainWindow):
         self._flush_save()
         self._step_list.set_steps(rule.steps)
         self._main_stack.setCurrentIndex(0)
-        self._debug_btn.setText("OCR 診斷")
-        _main_loop_mod.log_main(
-            f"規則「{rule.name}」從 OCR 診斷加入模板步驟「{data.get('name', '')}」(id={rule.id})"
+        self._debug_btn.setText(T("main.ocr_debug"))
+        _main_loop_mod.log_main(T("notif.rule_from_debug_template", name=rule.name, id=rule.id))
+        self._status_bar.showMessage(
+            T("notif.template_step_added_from_debug", name=data.get("name", ""))
         )
-        self._status_bar.showMessage(f"已加入模板步驟：「{data.get('name', '')}」")
 
     # === Start / Pause ===
     def _show_group_selection_dialog(self) -> Optional[list[str]]:
@@ -4861,7 +4913,7 @@ class MainWindow(QMainWindow):
         if len(enabled) <= 1:
             return [g.id for g in enabled] if enabled else []
         dialog = QDialog(self)
-        dialog.setWindowTitle("選擇要執行的群組")
+        dialog.setWindowTitle(T("dialog.group_selection"))
         dialog.setStyleSheet(
             "QDialog { background-color: #2b2b2b; }"
             "QLabel { color: #aaa; font-size: 12px; padding-bottom: 4px; }"
@@ -4872,7 +4924,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(8)
 
-        hint = QLabel(f"已啟用 {len(enabled)} 個群組，取消勾選可略過")
+        hint = QLabel(T("ui.select_group_hint", count=len(enabled)))
         layout.addWidget(hint)
 
         checks = []
@@ -4885,7 +4937,7 @@ class MainWindow(QMainWindow):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("啟動")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(T("main.start"))
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -4912,7 +4964,7 @@ class MainWindow(QMainWindow):
         elif self._loop is not None and self._loop.is_running:
             if self._loop.is_paused:
                 self._loop.resume()
-                self._btn_toggle.setText("停止")
+                self._btn_toggle.setText(T("main.stop"))
             else:
                 self._stop_loop()
         else:
@@ -4922,10 +4974,10 @@ class MainWindow(QMainWindow):
         self._window_lost = False
         title = self._window_combo.currentText()
         if not title:
-            QMessageBox.warning(self, "警告", "請先選擇目標視窗")
+            QMessageBox.warning(self, T("dialog.warning"), T("status.no_window"))
             return
         if not self._rules:
-            QMessageBox.warning(self, "警告", "尚未建立任何規則！\n請先新增至少一條規則。")
+            QMessageBox.warning(self, T("dialog.warning"), T("status.rule_list_empty"))
             return
         empty_steps = [r.name for r in self._rules if r.enabled and not r.steps]
         if empty_steps:
@@ -4941,13 +4993,13 @@ class MainWindow(QMainWindow):
         if group_ids is None:
             return
         if not group_ids:
-            QMessageBox.warning(self, "警告", "請至少選取一個群組。")
+            QMessageBox.warning(self, T("dialog.warning"), T("status.at_least_one_group"))
             return
         self._is_starting = True
         activate_window(title)
         self._btn_toggle.setEnabled(False)
-        self._btn_toggle.setText("初始化中...")
-        self._status_bar.showMessage("正在初始化 OCR 引擎…")
+        self._btn_toggle.setText(T("status.initializing"))
+        self._status_bar.showMessage(T("status.initializing_ocr"))
         task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         self._init_worker = InitWorker(
             str(task_path),
@@ -4965,14 +5017,16 @@ class MainWindow(QMainWindow):
         if success:
             self._loop = self._init_worker.loop
             self._loop.set_tool_hwnd(int(self.winId()))
-            self._btn_toggle.setText("停止")
+            self._btn_toggle.setText(T("main.stop"))
             self._update_edit_enabled(False)
-            self._status_bar.showMessage(f"偵測中 — 目標: {self._window_combo.currentText()}")
+            self._status_bar.showMessage(
+                T("status.detecting", title=self._window_combo.currentText())
+            )
             self._status_timer.start(1000)
         else:
-            QMessageBox.critical(self, "初始化失敗", f"無法啟動主迴圈：\n{error_msg}")
-            self._btn_toggle.setText("啟動")
-            self._status_bar.showMessage(f"初始化失敗 — {error_msg}")
+            QMessageBox.critical(self, T("dialog.init_failed"), f"無法啟動主迴圈：\n{error_msg}")
+            self._btn_toggle.setText(T("main.start"))
+            self._status_bar.showMessage(T("status.init_error", error_msg=error_msg))
 
     def _stop_loop(self):
         self._is_starting = False
@@ -4981,9 +5035,9 @@ class MainWindow(QMainWindow):
             self._loop.stop()
             self._loop = None
         self._window_lost = False
-        self._btn_toggle.setText("啟動")
+        self._btn_toggle.setText(T("main.start"))
         self._update_edit_enabled(True)
-        self._status_bar.showMessage("已停止")
+        self._status_bar.showMessage(T("status.stopped"))
         self._update_rule_status()
 
     def _on_loop_finished(self, success: bool, msg: str):
@@ -5020,8 +5074,7 @@ class MainWindow(QMainWindow):
     # === Thread-safe callbacks ===
     def _on_window_lost_from_thread(self):
         self._window_lost = True
-        self._btn_toggle.setText("繼續")
-        self._status_bar.showMessage("⚠ 目標視窗已關閉，偵測已暫停")
+        self._btn_toggle.setText(T("main.continue"))
 
     # === Emergency & OCR Health ===
     def _emergency_stop(self):
@@ -5030,9 +5083,9 @@ class MainWindow(QMainWindow):
             return
         self._loop.emergency_stop()
         self._loop = None
-        self._btn_toggle.setText("啟動")
+        self._btn_toggle.setText(T("main.start"))
         self._update_edit_enabled(True)
-        self._status_bar.showMessage("🛑 緊急停止 — 按「啟動」重新開始")
+        self._status_bar.showMessage(T("status.emergency_stop"))
         self._update_rule_status()
 
     # === Sponsor ===
@@ -5064,11 +5117,11 @@ class MainWindow(QMainWindow):
     def _show_about(self):
         QMessageBox.about(
             self,
-            "關於 OCR Trigger Clicker",
+            T("dialog.about"),
             f"<h3>OCR Trigger Clicker v{__version__}</h3>"
-            f"<p>作者: {__author__}</p>"
-            f"<p>專案: <a href='{__github__}'>{__github__}</a></p>"
-            f"<p>新手教學: <a href='{_GUIDE_URL}'>{_GUIDE_URL}</a></p>",
+            + T("about.author", author=__author__)
+            + T("about.project", url=__github__)
+            + T("about.guide", url=_GUIDE_URL),
         )
 
     def _open_guide(self):
@@ -5094,7 +5147,7 @@ class MainWindow(QMainWindow):
 
         self._updating = True
         self._update_cancel = threading.Event()
-        self._status_bar.showMessage("正在檢查更新...")
+        self._status_bar.showMessage(T("status.checking_update"))
 
         class _CheckWorker(QThread):
             result = pyqtSignal(object)
@@ -5119,10 +5172,10 @@ class MainWindow(QMainWindow):
     def _on_update_checked(self, info):
         self._updating = False
         if info is None:
-            self._status_bar.showMessage("已是最新版本", 3000)
+            self._status_bar.showMessage(T("status.latest_version"), 3000)
             return
 
-        self._status_bar.showMessage(f"發現新版本 v{info.version}（點此更新）", 0)
+        self._status_bar.showMessage(T("status.update_found", version=info.version), 0)
         self._pending_update_ver = info.version
         self._pending_update_info = info
         orig_press = self._status_bar.mousePressEvent
@@ -5140,8 +5193,8 @@ class MainWindow(QMainWindow):
         if forced:
             QMessageBox.warning(
                 self,
-                "檢查更新失敗",
-                f"無法檢查更新：{msg}\n\n請前往 GitHub 手動下載最新版本。",
+                T("dialog.update_failed"),
+                T("update.check_failed", msg=msg),
             )
         else:
             logging.warning("背景檢查更新失敗（不影響使用）: %s", msg)
@@ -5152,8 +5205,8 @@ class MainWindow(QMainWindow):
         self._downloading = True
         self._update_cancel = threading.Event()
 
-        self._progress = QProgressDialog("正在下載更新...", "取消", 0, 100, self)
-        self._progress.setWindowTitle(f"下載 v{info.version}")
+        self._progress = QProgressDialog(T("update.downloading"), T("ui.cancel"), 0, 100, self)
+        self._progress.setWindowTitle(T("update.download_version", version=info.version))
         self._progress.setWindowModality(Qt.WindowModality.WindowModal)
         self._progress.setMinimumDuration(0)
         self._progress.setValue(0)
@@ -5189,17 +5242,24 @@ class MainWindow(QMainWindow):
             pct = int(downloaded * 100 / total)
             self._progress.setValue(pct)
             self._progress.setLabelText(
-                f"正在下載更新...（{downloaded // 1024} KB / {total // 1024} KB, {pct}%）"
+                T(
+                    "update.downloading_progress",
+                    downloaded=downloaded // 1024,
+                    total=total // 1024,
+                    pct=pct,
+                )
             )
         else:
-            self._progress.setLabelText(f"正在下載更新...（{downloaded // 1024} KB，未知總大小）")
+            self._progress.setLabelText(
+                T("update.downloading_unknown", downloaded=downloaded // 1024)
+            )
 
     def _cancel_download(self):
         if self._update_cancel:
             self._update_cancel.set()
         self._progress.close()
         self._downloading = False
-        self._status_bar.showMessage("下載已取消", 3000)
+        self._status_bar.showMessage(T("dialog.download_cancelled"), 3000)
 
     def _on_download_finished(self, exe_path):
         self._progress.close()
@@ -5211,8 +5271,8 @@ class MainWindow(QMainWindow):
 
         btn = QMessageBox.question(
             self,
-            "更新下載完成",
-            f"v{self._pending_update_ver} 已下載並驗證完成。\n是否立即重新啟動以套用更新？",
+            T("dialog.update_complete"),
+            T("update.apply_prompt", version=self._pending_update_ver),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if btn == QMessageBox.StandardButton.Yes:
@@ -5223,8 +5283,8 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(
                     self,
-                    "更新失敗",
-                    f"無法套用更新：{e}\n\n請手動下載並取代檔案。",
+                    T("dialog.update_failed"),
+                    T("update.apply_failed", error=e),
                 )
         else:
             shutil.rmtree(exe_path.parent, ignore_errors=True)
@@ -5234,8 +5294,8 @@ class MainWindow(QMainWindow):
         self._downloading = False
         QMessageBox.critical(
             self,
-            "下載失敗",
-            f"下載更新時發生錯誤：{msg}\n\n請前往 GitHub 手動下載。",
+            T("dialog.download_failed"),
+            T("update.download_error", msg=msg),
         )
 
     def _open_settings(self):
@@ -5249,15 +5309,19 @@ class MainWindow(QMainWindow):
         show_confirm = config.get("show_close_confirm", True)
 
         if show_confirm:
-            title = "關閉確認"
-            msg = "確定要關閉程式？" if behavior == "quit" else "確定要縮小至系統托盤？"
+            title = T("dialog.close_confirm.title")
+            msg = (
+                T("dialog.close_confirm.msg")
+                if behavior == "quit"
+                else T("dialog.close_confirm.tray_msg")
+            )
             box = QMessageBox(self)
             box.setWindowTitle(title)
             box.setIcon(QMessageBox.Icon.Question)
             box.setText(msg)
             box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             box.setDefaultButton(QMessageBox.StandardButton.No)
-            cb = QCheckBox("不再顯示此確認")
+            cb = QCheckBox(T("dialog.close_confirm.dont_show"))
             box.setCheckBox(cb)
             if box.exec() != QMessageBox.StandardButton.Yes:
                 event.ignore()
@@ -5274,7 +5338,7 @@ class MainWindow(QMainWindow):
             self.hide()
             self._tray.showMessage(
                 "OCR Trigger Clicker",
-                "程式仍在背景執行，雙擊托盤圖示可重新開啟",
+                T("dialog.close_confirm.background_msg"),
                 QSystemTrayIcon.MessageIcon.Information,
                 2000,
             )
@@ -5311,6 +5375,14 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8")
     _log_cfg.get_logger("gui")  # ensure root handler is set up
     _log_cfg.cleanup_stale_logs()
+
+    # Read language preference before creating any GUI
+    _app_cfg_dir = Path(os.environ.get("APPDATA", Path.home())) / "ocr-trigger-clicker"
+    try:
+        _app_cfg = json.loads((_app_cfg_dir / "config.json").read_text(encoding="utf-8"))
+        set_language(_app_cfg.get("language", "zh_TW"))
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        pass
 
     try:
         app = QApplication(sys.argv)

@@ -59,6 +59,12 @@ def main():
     if ahk_src.exists():
         datas.append((str(ahk_src), "."))
 
+    # i18n JSON dictionaries
+    i18n_dir = here / "i18n"
+    if i18n_dir.exists():
+        for lang_file in i18n_dir.glob("*.json"):
+            datas.append((str(lang_file), "i18n"))
+
     custom_dir = here / "custom_models"
     if custom_dir.exists():
         for f in custom_dir.iterdir():
@@ -98,6 +104,7 @@ def main():
         ("gui/test_run_controller.py", "gui"),
         ("build.py", "."),
         ("_loader.py", "."),
+        ("i18n/__init__.py", "i18n"),
     ]
     for rel, dest in py_datas:
         f = here / rel

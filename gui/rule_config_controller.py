@@ -21,6 +21,7 @@ class RuleConfigController:
         "default_color_tolerance": 10,
         "default_mouse_button": "left",
         "default_random_offset": 3,
+        "language": "zh_TW",
     }
 
     def __init__(self):
