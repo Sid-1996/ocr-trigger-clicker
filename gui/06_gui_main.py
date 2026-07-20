@@ -366,16 +366,16 @@ _STEP_TYPE_ICONS = {
 }
 
 _STEP_TYPE_LABELS = {
-    "detect": "偵測文字",
-    "match_image": "圖示辨識",
-    "compare": "數字比較",
-    "click": "點擊",
-    "key": "按鍵",
-    "wait": "等待",
-    "jump": "跳轉規則",
-    "drag": "拖曳",
-    "scroll": "滾輪",
-    "notify": "提示訊息",
+    "detect": T("step_form.step_detect"),
+    "match_image": T("step_form.step_match_image"),
+    "compare": T("step_form.step_compare"),
+    "click": T("step_form.step_click"),
+    "key": T("step_form.step_key"),
+    "wait": T("step_form.step_wait"),
+    "jump": T("step_form.step_jump"),
+    "drag": T("step_form.step_drag"),
+    "scroll": T("step_form.step_scroll"),
+    "notify": T("step_form.step_notify"),
 }
 
 _STEP_COLORS = {
@@ -487,9 +487,9 @@ def _step_summary(step, rules_provider=None) -> str:
         target = p.get("target", "text_center")
         dx, dy = p.get("dx", 0), p.get("dy", 0)
         base = {
-            "text_center": "辨識目標",
-            "custom": "座標",
-            "click_text": f"文字「{p.get('text', '')}」",
+            "text_center": T("summary.click_target"),
+            "custom": T("step_form.text_coord"),
+            "click_text": T("step_form.text_label", text=p.get("text", "")),
         }.get(target, "?")
         return T("summary.format_drag", base=base, dx=dx, dy=dy)
     if t == "scroll":
@@ -510,7 +510,7 @@ def _step_summary(step, rules_provider=None) -> str:
 
 def _of_summary(raw: str | dict, rules_provider=None) -> str:
     if isinstance(raw, str):
-        return "" if raw == "stop" else "→按鍵"  # bare "key"
+        return "" if raw == "stop" else T("summary.onfail_press_key")  # bare "key"
     if isinstance(raw, dict):
         action = raw.get("action", "stop")
         try:
@@ -525,19 +525,19 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
         if action == "stop":
             return prefix if prefix else ""
         if action == "key":
-            return f"{prefix}→按鍵{raw.get('key', '')}"
+            return f"{prefix}{T('summary.onfail_press_key')}{raw.get('key', '')}"
         if action == "skip":
             idx = raw.get("skip_to", -1)
             if idx < 0:
-                return f"{prefix}→停止"
-            return f"{prefix}→步驟{idx + 1}"
+                return f"{prefix}{T('summary.onfail_stop')}"
+            return f"{prefix}{T('summary.onfail_step', idx=idx + 1)}"
         if action == "jump":
             name = _resolve_rule_name(raw.get("rule_id", ""), rules_provider)
-            return f"{prefix}→規則「{name}」"
+            return f"{prefix}{T('summary.onfail_rule', name=name)}"
         if action == "notify":
-            return f"{prefix}→停群組"
+            return f"{prefix}{T('summary.onfail_stop_group')}"
         if action == "retry":
-            return f"{prefix}→重試"
+            return f"{prefix}{T('summary.onfail_retry')}"
     return ""
 
 
@@ -786,7 +786,7 @@ class _StepListWidget(QWidget):
         btn_up.setFixedWidth(24)
         btn_up.setFixedHeight(22)
         btn_up.setStyleSheet("QPushButton { border: none; padding: 2px; }")
-        btn_up.setToolTip("上移")
+        btn_up.setToolTip(T("tooltip.up"))
         btn_up.clicked.connect(lambda checked, i=idx: self._move_up(i))
         hl.addWidget(btn_up)
 
@@ -794,23 +794,23 @@ class _StepListWidget(QWidget):
         btn_dn.setFixedWidth(24)
         btn_dn.setFixedHeight(22)
         btn_dn.setStyleSheet("QPushButton { border: none; padding: 2px; }")
-        btn_dn.setToolTip("下移")
+        btn_dn.setToolTip(T("tooltip.down"))
         btn_dn.clicked.connect(lambda checked, i=idx: self._move_down(i))
         hl.addWidget(btn_dn)
 
-        btn_edit = QPushButton("編")
+        btn_edit = QPushButton(T("step_form.edit_btn"))
         btn_edit.setFixedWidth(24)
         btn_edit.setFixedHeight(22)
         btn_edit.setStyleSheet("QPushButton { border: none; padding: 2px; }")
-        btn_edit.setToolTip("編輯")
+        btn_edit.setToolTip(T("tooltip.edit"))
         btn_edit.clicked.connect(lambda checked, i=idx: self._toggle_expand(i))
         hl.addWidget(btn_edit)
 
-        btn_del = QPushButton("刪")
+        btn_del = QPushButton(T("step_form.del_btn"))
         btn_del.setFixedWidth(24)
         btn_del.setFixedHeight(22)
         btn_del.setStyleSheet("QPushButton { border: none; padding: 2px; }")
-        btn_del.setToolTip("刪除")
+        btn_del.setToolTip(T("tooltip.del"))
         btn_del.clicked.connect(lambda checked, i=idx: self._delete_step(i))
         hl.addWidget(btn_del)
 
@@ -1022,11 +1022,11 @@ class _MatchImageStepForm(QWidget):
             else ("內嵌圖片" if tmpl_data.strip() else T("ui.no_group"))
         )
         self._tmpl_label = QLabel(label_text)
-        self._tmpl_btn = QPushButton("選擇圖片")
+        self._tmpl_btn = QPushButton(T("step_form.select_image"))
         self._tmpl_btn.clicked.connect(self._pick_template)
-        self._capture_btn = QPushButton("截取區域")
+        self._capture_btn = QPushButton(T("step_form.capture_region"))
         self._capture_btn.clicked.connect(self._capture_template)
-        self._img_compare_btn = QPushButton("圖片比對")
+        self._img_compare_btn = QPushButton(T("step_form.compare_image"))
         self._img_compare_btn.clicked.connect(self._img_compare_match)
         self._img_compare_result = QLabel("")
         tmpl_layout.addWidget(self._tmpl_label, 1)
@@ -1034,15 +1034,15 @@ class _MatchImageStepForm(QWidget):
         tmpl_layout.addWidget(self._capture_btn)
         tmpl_layout.addWidget(self._img_compare_btn)
         tmpl_layout.addWidget(self._img_compare_result)
-        form.addRow("範本圖片:", tmpl_row)
+        form.addRow(T("step_form.template_image"), tmpl_row)
         self._update_thumbnail()
 
         # ROI
         roi = p.get("roi", {})
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         self._roi_label = QLabel(T("summary.whole_window") if z else _fmt_roi(roi))
-        self._roi_btn = QPushButton("框選搜尋區域")
-        self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
+        self._roi_btn = QPushButton(T("step_form.search_roi"))
+        self._roi_btn.setToolTip(T("tooltip.roi"))
         self._roi_btn.clicked.connect(self._pick_roi)
         roi_row = QWidget()
         rr_layout = QHBoxLayout(roi_row)
@@ -1050,7 +1050,7 @@ class _MatchImageStepForm(QWidget):
 
         rr_layout.addWidget(self._roi_label)
         rr_layout.addWidget(self._roi_btn)
-        form.addRow("搜尋區域:", roi_row)
+        form.addRow(T("step_form.search_region"), roi_row)
 
         # Threshold
         self._threshold = _NoWheelDoubleSpin()
@@ -1058,22 +1058,18 @@ class _MatchImageStepForm(QWidget):
         self._threshold.setDecimals(2)
         self._threshold.setSingleStep(0.05)
         self._threshold.setValue(p.get("threshold", 0.8))
-        form.addRow("相似度閾值:", self._threshold)
+        form.addRow(T("step_form.threshold"), self._threshold)
 
-        self._match_color = QCheckBox("比對顏色")
+        self._match_color = QCheckBox(T("step_form.match_color"))
         self._match_color.setChecked(p.get("match_color", False))
-        self._match_color.setToolTip(
-            "打勾時保留圖片的顏色資訊進行比對（預設為灰階，只看形狀不顏色）"
-        )
+        self._match_color.setToolTip(T("tooltip.match_color"))
         form.addRow("", self._match_color)
 
         self._color_tolerance = _NoWheelSpin()
         self._color_tolerance.setRange(0, 255)
         self._color_tolerance.setValue(p.get("color_tolerance", 100))
-        self._color_tolerance.setSuffix(" 色差")
-        self._color_tolerance.setToolTip(
-            "比對顏色啟用後，每個像素平均色差容許值（0=完全一致，255=幾乎不檢查，預設 100 可過濾明顯色差）"
-        )
+        self._color_tolerance.setSuffix(T("step_form.color_suffix_short"))
+        self._color_tolerance.setToolTip(T("tooltip.color_tolerance"))
 
         def _on_match_color_toggled(checked):
             self._color_tolerance.setEnabled(checked)
@@ -1084,7 +1080,7 @@ class _MatchImageStepForm(QWidget):
 
         # ── on_fail collapsible section ──
         self._on_fail_expanded = False
-        self._toggle_btn = QPushButton("▶ 進階：找不到圖示時…")
+        self._toggle_btn = QPushButton(T("step_form.toggle_image_collapsed"))
         self._toggle_btn.setFlat(True)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.setStyleSheet(
@@ -1099,12 +1095,12 @@ class _MatchImageStepForm(QWidget):
         of_form.setContentsMargins(0, 0, 0, 0)
 
         self._of_action = _NoWheelCombo()
-        self._of_action.addItem("跳過本次（預設）", "stop")
-        self._of_action.addItem("跳過此規則（換下一條）", "advance")
-        self._of_action.addItem("跳至步驟", "skip")
-        self._of_action.addItem("跳轉至規則", "jump")
-        self._of_action.addItem("按下按鍵後繼續", "key")
-        self._of_action.addItem("通知並停止群組", "notify")
+        self._of_action.addItem(T("step_form.of_skip_once"), "stop")
+        self._of_action.addItem(T("step_form.of_skip_rule"), "advance")
+        self._of_action.addItem(T("step_form.of_jump_step"), "skip")
+        self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
+        self._of_action.addItem(T("step_form.of_key_continue"), "key")
+        self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
         raw_of = p.get("on_fail", "stop")
         default_notify_msg = ""
         default_notify_groups: list[str] = []
@@ -1119,12 +1115,12 @@ class _MatchImageStepForm(QWidget):
         if idx_of >= 0:
             self._of_action.setCurrentIndex(idx_of)
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
-        of_form.addRow("動作:", self._of_action)
+        of_form.addRow(T("step_form.action"), self._of_action)
 
         self._of_fail_duration = _NoWheelDoubleSpin()
         self._of_fail_duration.setRange(0.0, 30.0)
         self._of_fail_duration.setSingleStep(0.5)
-        self._of_fail_duration.setSuffix(" 秒")
+        self._of_fail_duration.setSuffix(T("step_form.of_skip_suffix"))
         self._of_fail_duration.setDecimals(1)
         default_duration = raw_of.get("fail_duration_sec", 0.0) if isinstance(raw_of, dict) else 0.0
         try:
@@ -1132,7 +1128,7 @@ class _MatchImageStepForm(QWidget):
         except (TypeError, ValueError):
             default_duration = 0.0
         self._of_fail_duration.setValue(default_duration)
-        of_form.addRow("持續失敗:", self._of_fail_duration)
+        of_form.addRow(T("step_form.fail_duration"), self._of_fail_duration)
 
         # skip row (jump to step)
         self._of_skip_row = QWidget()
@@ -1140,7 +1136,7 @@ class _MatchImageStepForm(QWidget):
         sf.setContentsMargins(0, 0, 0, 0)
         self._of_skip_combo = _NoWheelCombo()
         self._populate_skip_combo(raw_of.get("skip_to", -1) if isinstance(raw_of, dict) else -1)
-        sf.addWidget(QLabel("跳至"))
+        sf.addWidget(QLabel(T("step_form.skip_to")))
         sf.addWidget(self._of_skip_combo)
         sf.addStretch()
         of_form.addRow("", self._of_skip_row)
@@ -1159,10 +1155,10 @@ class _MatchImageStepForm(QWidget):
             j_idx = self._of_jump_combo.findData(target_id)
             if j_idx < 0 and target_id:
                 # keep unknown by adding placeholder; jump combo will show it
-                self._of_jump_combo.addItem(f"(未知: {target_id})", target_id)
+                self._of_jump_combo.addItem(T("step_form.unknown_rule", id=target_id), target_id)
                 j_idx = self._of_jump_combo.count() - 1
             self._of_jump_combo.setCurrentIndex(max(j_idx, 0))
-        jf.addWidget(QLabel("跳至"))
+        jf.addWidget(QLabel(T("step_form.skip_to")))
         jf.addWidget(self._of_jump_combo)
         jf.addStretch()
         of_form.addRow("", self._of_jump_row)
@@ -1177,32 +1173,32 @@ class _MatchImageStepForm(QWidget):
         self._of_key_row = QWidget()
         kf = QHBoxLayout(self._of_key_row)
         kf.setContentsMargins(0, 0, 0, 0)
-        kf.addWidget(QLabel("按下"))
+        kf.addWidget(QLabel(T("step_form.press_key")))
         kf.addWidget(self._of_key)
-        kf.addWidget(QLabel("後繼續"))
+        kf.addWidget(QLabel(T("step_form.then_continue")))
         kf.addStretch()
         of_form.addRow("", self._of_key_row)
 
         # notify widgets
         self._of_notify_msg = QLineEdit()
-        self._of_notify_msg.setPlaceholderText("例如：每日探索次數已為空，已停止流程")
-        of_form.addRow("通知訊息:", self._of_notify_msg)
+        self._of_notify_msg.setPlaceholderText(T("step_form.enter_text"))
+        of_form.addRow(T("step_form.notify_message"), self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = _StopGroupsPicker(
             groups_provider=groups_provider,
             selected=default_notify_groups,
         )
-        of_form.addRow("停止群組:", self._of_notify_groups)
+        of_form.addRow(T("step_form.stop_groups"), self._of_notify_groups)
 
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
 
     def _populate_skip_combo(self, current_skip_to):
         self._of_skip_combo.clear()
-        self._of_skip_combo.addItem("本規則結束", self._step_count)
+        self._of_skip_combo.addItem(T("step_form.this_rule_end"), self._step_count)
         start = self._idx + 2  # 1-based, after current
         for i in range(start, self._step_count + 1):
-            self._of_skip_combo.addItem(f"步驟{i}", i - 1)
+            self._of_skip_combo.addItem(T("step_form.step_n", i=i), i - 1)
         if current_skip_to >= 0:
             idx_s = self._of_skip_combo.findData(current_skip_to)
             if idx_s >= 0:
@@ -1359,7 +1355,7 @@ class _MatchImageStepForm(QWidget):
 
     def _pick_template(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "選擇範本圖片", "", "圖片 (*.png *.jpg *.jpeg *.bmp)"
+            self, T("step_form.select_image_title"), "", T("step_form.img_file_filter")
         )
         if path:
             import cv2 as _cv2
@@ -1386,7 +1382,9 @@ class _MatchImageStepForm(QWidget):
         self._on_fail_expanded = not self._on_fail_expanded
         self._on_fail_container.setVisible(self._on_fail_expanded)
         self._toggle_btn.setText(
-            "▼ 進階：找不到圖示時…" if self._on_fail_expanded else "▶ 進階：找不到圖示時…"
+            T("step_form.toggle_image_expanded")
+            if self._on_fail_expanded
+            else T("step_form.toggle_image_collapsed")
         )
 
     def _on_of_action_changed(self, idx=None):
@@ -1470,7 +1468,7 @@ class _DetectStepForm(QWidget):
 
         self._text = QLineEdit(p.get("text", ""))
         self._text.editingFinished.connect(self._validate_text)
-        form.addRow("目標文字:", self._text)
+        form.addRow(T("step_form.target_text"), self._text)
 
         self._advanced_container = QWidget()
         adv_form = QFormLayout(self._advanced_container)
@@ -1479,34 +1477,34 @@ class _DetectStepForm(QWidget):
         roi = p.get("roi", {})
         zero = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         self._roi_label = QLabel(T("summary.whole_window") if zero else _fmt_roi(roi))
-        self._roi_btn = QPushButton("框選偵測區域")
-        self._roi_btn.setToolTip("不設定時掃描整個視窗，建議框選偵測區域以加快速度")
+        self._roi_btn = QPushButton(T("step_form.detect_roi"))
+        self._roi_btn.setToolTip(T("tooltip.roi"))
         if roi_cb:
             self._roi_btn.clicked.connect(self._pick_roi)
-        adv_form.addRow("偵測區域:", self._roi_label)
+        adv_form.addRow(T("step_form.detect_region"), self._roi_label)
         adv_form.addRow("", self._roi_btn)
 
         self._match_mode = _NoWheelCombo()
-        self._match_mode.addItem("包含關鍵字", "contains")
-        self._match_mode.addItem("完全符合", "exact")
-        self._match_mode.addItem("近似比對", "fuzzy")
-        self._match_mode.addItem("正規表達式", "regex")
+        self._match_mode.addItem(T("combo.contains"), "contains")
+        self._match_mode.addItem(T("combo.exact"), "exact")
+        self._match_mode.addItem(T("combo.fuzzy"), "fuzzy")
+        self._match_mode.addItem(T("combo.regex"), "regex")
         idx_mm = self._match_mode.findData(p.get("match_mode", "fuzzy"))
         if idx_mm >= 0:
             self._match_mode.setCurrentIndex(idx_mm)
         self._match_mode.currentIndexChanged.connect(self._on_match_mode_changed)
-        adv_form.addRow("比對模式:", self._match_mode)
+        adv_form.addRow(T("step_form.compare_mode"), self._match_mode)
 
         self._fuzzy_th = _NoWheelSpin()
         self._fuzzy_th.setRange(1, 100)
         self._fuzzy_th.setSuffix(" %")
         self._fuzzy_th.setValue(int(p.get("fuzzy_threshold", 0.8) * 100))
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
-        adv_form.addRow("精準度:", self._fuzzy_th)
+        adv_form.addRow(T("step_form.accuracy"), self._fuzzy_th)
 
         # ── on_fail collapsible section (in advanced) ──
         self._on_fail_expanded = False
-        self._toggle_btn = QPushButton("▶ 進階：找不到文字時…")
+        self._toggle_btn = QPushButton(T("step_form.toggle_detect_collapsed"))
         self._toggle_btn.setFlat(True)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.setStyleSheet(
@@ -1525,11 +1523,11 @@ class _DetectStepForm(QWidget):
         form.addRow(self._advanced_container)
         form.addRow(self._advanced_container)
 
-        self._of_action.addItem("跳過本次（預設）", "stop")
-        self._of_action.addItem("跳過此規則（換下一條）", "advance")
-        self._of_action.addItem("跳轉至規則", "jump")
-        self._of_action.addItem("按下按鍵後繼續", "key")
-        self._of_action.addItem("通知並停止群組", "notify")
+        self._of_action.addItem(T("step_form.of_skip_once"), "stop")
+        self._of_action.addItem(T("step_form.of_skip_rule"), "advance")
+        self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
+        self._of_action.addItem(T("step_form.of_key_continue"), "key")
+        self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
         raw = p.get("on_fail", "stop")
         default_notify_msg = ""
         default_notify_groups: list[str] = []
@@ -1544,12 +1542,12 @@ class _DetectStepForm(QWidget):
         if idx_of >= 0:
             self._of_action.setCurrentIndex(idx_of)
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
-        of_form.addRow("動作:", self._of_action)
+        of_form.addRow(T("step_form.action"), self._of_action)
 
         self._of_fail_duration = _NoWheelDoubleSpin()
         self._of_fail_duration.setRange(0.0, 30.0)
         self._of_fail_duration.setSingleStep(0.5)
-        self._of_fail_duration.setSuffix(" 秒")
+        self._of_fail_duration.setSuffix(T("step_form.of_skip_suffix"))
         self._of_fail_duration.setDecimals(1)
         default_duration = raw.get("fail_duration_sec", 0.0) if isinstance(raw, dict) else 0.0
         try:
@@ -1557,7 +1555,7 @@ class _DetectStepForm(QWidget):
         except (TypeError, ValueError):
             default_duration = 0.0
         self._of_fail_duration.setValue(default_duration)
-        of_form.addRow("持續失敗:", self._of_fail_duration)
+        of_form.addRow(T("step_form.fail_duration"), self._of_fail_duration)
 
         # jump row (jump to rule)
         self._of_jump_row = QWidget()
@@ -1572,10 +1570,10 @@ class _DetectStepForm(QWidget):
             target_id = raw.get("rule_id", "")
             j_idx = self._of_jump_combo.findData(target_id)
             if j_idx < 0 and target_id:
-                self._of_jump_combo.addItem(f"(未知: {target_id})", target_id)
+                self._of_jump_combo.addItem(T("step_form.unknown_rule", id=target_id), target_id)
                 j_idx = self._of_jump_combo.count() - 1
             self._of_jump_combo.setCurrentIndex(max(j_idx, 0))
-        jf.addWidget(QLabel("跳至"))
+        jf.addWidget(QLabel(T("step_form.skip_to")))
         jf.addWidget(self._of_jump_combo)
         jf.addStretch()
         of_form.addRow("", self._of_jump_row)
@@ -1590,22 +1588,22 @@ class _DetectStepForm(QWidget):
         self._of_key_row = QWidget()
         kf = QHBoxLayout(self._of_key_row)
         kf.setContentsMargins(0, 0, 0, 0)
-        kf.addWidget(QLabel("按下"))
+        kf.addWidget(QLabel(T("step_form.press_key")))
         kf.addWidget(self._of_key)
-        kf.addWidget(QLabel("後繼續"))
+        kf.addWidget(QLabel(T("step_form.then_continue")))
         kf.addStretch()
         of_form.addRow("", self._of_key_row)
 
         # notify widgets
         self._of_notify_msg = QLineEdit()
-        self._of_notify_msg.setPlaceholderText("例如：每日探索次數已為空，已停止流程")
-        of_form.addRow("通知訊息:", self._of_notify_msg)
+        self._of_notify_msg.setPlaceholderText(T("step_form.enter_text"))
+        of_form.addRow(T("step_form.notify_message"), self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = _StopGroupsPicker(
             groups_provider=self._groups_provider,
             selected=default_notify_groups,
         )
-        of_form.addRow("停止群組:", self._of_notify_groups)
+        of_form.addRow(T("step_form.stop_groups"), self._of_notify_groups)
 
         form.addRow(self._on_fail_container)
         self._on_of_action_changed()
@@ -1616,7 +1614,7 @@ class _DetectStepForm(QWidget):
     def _validate_text(self):
         if not self._text.text().strip():
             self._text.setStyleSheet("border: 1px solid #E74C3C;")
-            self._text.setToolTip("目標文字不可為空")
+            self._text.setToolTip(T("tooltip.target_text_empty"))
         else:
             self._text.setStyleSheet("")
             self._text.setToolTip("")
@@ -1625,7 +1623,9 @@ class _DetectStepForm(QWidget):
         self._on_fail_expanded = not self._on_fail_expanded
         self._on_fail_container.setVisible(self._on_fail_expanded)
         self._toggle_btn.setText(
-            "▼ 進階：找不到文字時…" if self._on_fail_expanded else "▶ 進階：找不到文字時…"
+            T("step_form.toggle_detect_expanded")
+            if self._on_fail_expanded
+            else T("step_form.toggle_detect_collapsed")
         )
 
     def _on_of_action_changed(self, idx=None):
@@ -1699,21 +1699,21 @@ class _ClickStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._target = _NoWheelCombo()
-        self._target.addItem("辨識目標", "text_center")
-        self._target.addItem("自訂座標", "custom")
-        self._target.addItem("點擊文字", "click_text")
+        self._target.addItem(T("summary.click_target"), "text_center")
+        self._target.addItem(T("step_form.text_coord"), "custom")
+        self._target.addItem(T("format.click_mode"), "click_text")
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
         self._target.currentIndexChanged.connect(self._on_target_changed)
-        form.addRow("點擊目標:", self._target)
+        form.addRow(T("step_form.click_target"), self._target)
 
         self._click_text = QLineEdit(p.get("text", ""))
         self._click_text.setVisible(p.get("target", "") == "click_text")
-        form.addRow("目標文字:", self._click_text)
+        form.addRow(T("step_form.target_text"), self._click_text)
 
         self._coord_label = QLabel(_fmt_point(p.get("x", 0), p.get("y", 0)))
-        self._pick_btn = QPushButton("選取點擊座標")
+        self._pick_btn = QPushButton(T("step_form.pick_coord"))
         if pick_cb:
             self._pick_btn.clicked.connect(self._pick_coord)
         self._coord_row = QWidget()
@@ -1722,25 +1722,25 @@ class _ClickStepForm(QWidget):
         cl.addWidget(self._coord_label)
         cl.addWidget(self._pick_btn)
         self._coord_row.setVisible(p.get("target", "") == "custom")
-        form.addRow("點擊座標:", self._coord_row)
+        form.addRow(T("step_form.click_coord"), self._coord_row)
 
         self._adv_container = QWidget()
         adv_form = QFormLayout(self._adv_container)
         adv_form.setContentsMargins(0, 0, 0, 0)
 
         self._button = _NoWheelCombo()
-        self._button.addItem("左鍵", "left")
-        self._button.addItem("右鍵", "right")
+        self._button.addItem(T("combo.left"), "left")
+        self._button.addItem(T("combo.right"), "right")
         b_idx = self._button.findData(p.get("button", "left"))
         if b_idx >= 0:
             self._button.setCurrentIndex(b_idx)
-        adv_form.addRow("滑鼠按鈕:", self._button)
+        adv_form.addRow(T("format.mouse_button"), self._button)
 
         self._offset = _NoWheelSpin()
         self._offset.setRange(0, 100)
         self._offset.setSuffix(" px")
         self._offset.setValue(p.get("random_offset", 3))
-        adv_form.addRow("隨機抖動:", self._offset)
+        adv_form.addRow(T("format.random_jitter"), self._offset)
 
         form.addRow(self._adv_container)
 
@@ -1780,21 +1780,21 @@ class _DragStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._target = _NoWheelCombo()
-        self._target.addItem("辨識目標", "text_center")
-        self._target.addItem("自訂座標", "custom")
-        self._target.addItem("點擊文字", "click_text")
+        self._target.addItem(T("summary.click_target"), "text_center")
+        self._target.addItem(T("step_form.text_coord"), "custom")
+        self._target.addItem(T("format.click_mode"), "click_text")
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
         self._target.currentIndexChanged.connect(self._on_target_changed)
-        form.addRow("拖曳起點:", self._target)
+        form.addRow(T("step_form.drag_start"), self._target)
 
         self._click_text = QLineEdit(p.get("text", ""))
         self._click_text.setVisible(p.get("target", "") == "click_text")
-        form.addRow("目標文字:", self._click_text)
+        form.addRow(T("step_form.target_text"), self._click_text)
 
         self._coord_label = QLabel(_fmt_point(p.get("x", 0), p.get("y", 0)))
-        self._pick_btn = QPushButton("選取座標")
+        self._pick_btn = QPushButton(T("step_form.pick_coord_short"))
         if pick_cb:
             self._pick_btn.clicked.connect(self._pick_coord)
         self._coord_row = QWidget()
@@ -1803,26 +1803,26 @@ class _DragStepForm(QWidget):
         cl.addWidget(self._coord_label)
         cl.addWidget(self._pick_btn)
         self._coord_row.setVisible(p.get("target", "") == "custom")
-        form.addRow("起點座標:", self._coord_row)
+        form.addRow(T("step_form.start_coord"), self._coord_row)
         self._dx = _NoWheelSpin()
         self._dx.setRange(-9999, 9999)
         self._dx.setSuffix(" px")
         self._dx.setValue(p.get("dx", 0))
-        form.addRow("水平偏移:", self._dx)
+        form.addRow(T("format.horizontal_offset"), self._dx)
 
         self._dy = _NoWheelSpin()
         self._dy.setRange(-9999, 9999)
         self._dy.setSuffix(" px")
         self._dy.setValue(p.get("dy", 0))
-        form.addRow("垂直偏移:", self._dy)
+        form.addRow(T("format.vertical_offset"), self._dy)
 
         self._button = _NoWheelCombo()
-        self._button.addItem("左鍵", "left")
-        self._button.addItem("右鍵", "right")
+        self._button.addItem(T("combo.left"), "left")
+        self._button.addItem(T("combo.right"), "right")
         b_idx = self._button.findData(p.get("button", "left"))
         if b_idx >= 0:
             self._button.setCurrentIndex(b_idx)
-        form.addRow("滑鼠按鈕:", self._button)
+        form.addRow(T("format.mouse_button"), self._button)
 
     def _on_target_changed(self, idx):
         t = self._target.currentData()
@@ -1858,25 +1858,25 @@ class _ScrollStepForm(QWidget):
         p = step.params
 
         self._direction = _NoWheelCombo()
-        self._direction.addItem("向下", "WheelDown")
-        self._direction.addItem("向上", "WheelUp")
-        self._direction.addItem("向左", "WheelLeft")
-        self._direction.addItem("向右", "WheelRight")
+        self._direction.addItem(T("summary.down"), "WheelDown")
+        self._direction.addItem(T("summary.up"), "WheelUp")
+        self._direction.addItem(T("summary.left"), "WheelLeft")
+        self._direction.addItem(T("summary.right"), "WheelRight")
         d_idx = self._direction.findData(p.get("direction", "WheelDown"))
         if d_idx >= 0:
             self._direction.setCurrentIndex(d_idx)
-        form.addRow("方向:", self._direction)
+        form.addRow(T("step_form.direction"), self._direction)
 
         self._amount = _NoWheelSpin()
         self._amount.setRange(1, 99)
         self._amount.setValue(p.get("amount", 1))
-        form.addRow("次數:", self._amount)
+        form.addRow(T("step_form.times"), self._amount)
 
         self._delay = _NoWheelSpin()
         self._delay.setRange(0, 1000)
         self._delay.setSuffix(" ms")
         self._delay.setValue(p.get("delay_ms", 30))
-        form.addRow("間隔:", self._delay)
+        form.addRow(T("step_form.interval"), self._delay)
 
     def save(self):
         self._step.params["direction"] = self._direction.currentData()
@@ -1922,15 +1922,15 @@ class _CompareStepForm(QWidget):
             self._roi["roi_coord"] = roi["roi_coord"]
         z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         self._roi_label = QLabel(T("summary.whole_window") if z else _fmt_roi(roi))
-        self._roi_btn = QPushButton("框選偵測區域")
-        self._roi_btn.setToolTip("框選要進行 OCR 的區域，不設定時掃描整個視窗")
+        self._roi_btn = QPushButton(T("step_form.detect_roi"))
+        self._roi_btn.setToolTip(T("tooltip.roi_compare"))
         self._roi_btn.clicked.connect(self._pick_roi)
         roi_row = QWidget()
         rr = QHBoxLayout(roi_row)
         rr.setContentsMargins(0, 0, 0, 0)
         rr.addWidget(self._roi_label)
         rr.addWidget(self._roi_btn)
-        form.addRow("偵測區域:", roi_row)
+        form.addRow(T("step_form.detect_region"), roi_row)
 
         # Operator
         self._operator = _NoWheelCombo()
@@ -1939,17 +1939,17 @@ class _CompareStepForm(QWidget):
         op_idx = self._operator.findData(p.get("operator", ">="))
         if op_idx >= 0:
             self._operator.setCurrentIndex(op_idx)
-        form.addRow("比較方式:", self._operator)
+        form.addRow(T("step_form.compare_mode"), self._operator)
 
         # Value
         self._value = _NoWheelDoubleSpin()
         self._value.setRange(-999999.0, 999999.0)
         self._value.setDecimals(3)
         self._value.setValue(p.get("value", 0.0))
-        form.addRow("數值:", self._value)
+        form.addRow(T("step_form.value"), self._value)
 
         # ── Advanced collapsible section ──
-        self._toggle_btn = QPushButton("▶ 進階：比對規則與失敗處理")
+        self._toggle_btn = QPushButton(T("step_form.toggle_compare_collapsed"))
         self._toggle_btn.setFlat(True)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.setStyleSheet(
@@ -1966,19 +1966,17 @@ class _CompareStepForm(QWidget):
         self._pattern = QLineEdit()
         self._pattern.setText(p.get("pattern", r"-?\d+\.?\d*"))
         self._pattern.editingFinished.connect(self._validate_pattern)
-        self._pattern.setToolTip(
-            "從 OCR 文字中擷取數字用的正則表達式，預設值 -?\\d+\\.?\\d* 可匹配正負整數與小數"
-        )
-        adv.addRow("數字格式:", self._pattern)
+        self._pattern.setToolTip(T("step_form.regex_pattern_tooltip"))
+        adv.addRow(T("step_form.number_format"), self._pattern)
 
         # on_fail section (same as detect/match_image)
         self._of_action = _NoWheelCombo()
-        self._of_action.addItem("跳過本次（預設）", "stop")
-        self._of_action.addItem("跳過此規則（換下一條）", "advance")
-        self._of_action.addItem("跳至步驟", "skip")
-        self._of_action.addItem("跳轉至規則", "jump")
-        self._of_action.addItem("按下按鍵後繼續", "key")
-        self._of_action.addItem("通知並停止群組", "notify")
+        self._of_action.addItem(T("step_form.of_skip_once"), "stop")
+        self._of_action.addItem(T("step_form.of_skip_rule"), "advance")
+        self._of_action.addItem(T("step_form.of_jump_step"), "skip")
+        self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
+        self._of_action.addItem(T("step_form.of_key_continue"), "key")
+        self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
         raw_of = p.get("on_fail", "stop")
         default_notify_msg = ""
         default_notify_groups: list[str] = []
@@ -1990,12 +1988,12 @@ class _CompareStepForm(QWidget):
         if of_idx >= 0:
             self._of_action.setCurrentIndex(of_idx)
         self._of_action.currentIndexChanged.connect(self._on_of_action_changed)
-        adv.addRow("失敗動作:", self._of_action)
+        adv.addRow(T("step_form.action"), self._of_action)
 
         self._of_fail_duration = _NoWheelDoubleSpin()
         self._of_fail_duration.setRange(0.0, 30.0)
         self._of_fail_duration.setSingleStep(0.5)
-        self._of_fail_duration.setSuffix(" 秒")
+        self._of_fail_duration.setSuffix(T("step_form.of_skip_suffix"))
         self._of_fail_duration.setDecimals(1)
         default_duration = raw_of.get("fail_duration_sec", 0.0) if isinstance(raw_of, dict) else 0.0
         try:
@@ -2003,8 +2001,8 @@ class _CompareStepForm(QWidget):
         except (TypeError, ValueError):
             default_duration = 0.0
         self._of_fail_duration.setValue(default_duration)
-        self._of_fail_duration.setToolTip("連續失敗超過此秒數時才觸發失敗動作，0=立即觸發")
-        adv.addRow("持續失敗:", self._of_fail_duration)
+        self._of_fail_duration.setToolTip(T("tooltip.fail_duration"))
+        adv.addRow(T("step_form.fail_duration"), self._of_fail_duration)
 
         self._of_jump_combo = _NoWheelCombo()
         self._of_jump_combo.setMinimumWidth(200)
@@ -2017,7 +2015,7 @@ class _CompareStepForm(QWidget):
         if j_idx >= 0:
             self._of_jump_combo.setCurrentIndex(j_idx)
         elif target_id:
-            self._of_jump_combo.addItem(f"(遺失: {target_id})", target_id)
+            self._of_jump_combo.addItem(T("step_form.missing_rule", id=target_id), target_id)
             j_idx = self._of_jump_combo.count() - 1
             self._of_jump_combo.setCurrentIndex(max(j_idx, 0))
         jf = QWidget()
@@ -2037,7 +2035,7 @@ class _CompareStepForm(QWidget):
         self._of_skip_row = QWidget()
         skf = QHBoxLayout(self._of_skip_row)
         skf.setContentsMargins(0, 0, 0, 0)
-        skf.addWidget(QLabel("跳至"))
+        skf.addWidget(QLabel(T("step_form.skip_to")))
         skf.addWidget(self._of_skip_combo)
         skf.addStretch()
         adv.addRow("", self._of_skip_row)
@@ -2055,14 +2053,14 @@ class _CompareStepForm(QWidget):
 
         # notify widgets
         self._of_notify_msg = QLineEdit()
-        self._of_notify_msg.setPlaceholderText("例如：每日探索次數已為空，已停止流程")
-        adv.addRow("通知訊息:", self._of_notify_msg)
+        self._of_notify_msg.setPlaceholderText(T("step_form.enter_text"))
+        adv.addRow(T("step_form.notify_message"), self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = _StopGroupsPicker(
             groups_provider=groups_provider,
             selected=default_notify_groups,
         )
-        adv.addRow("停止群組:", self._of_notify_groups)
+        adv.addRow(T("step_form.stop_groups"), self._of_notify_groups)
 
         form.addRow(self._adv_container)
 
@@ -2072,10 +2070,10 @@ class _CompareStepForm(QWidget):
 
     def _populate_skip_combo(self, current_skip_to: int):
         self._of_skip_combo.clear()
-        self._of_skip_combo.addItem("本規則結束", self._step_count)
+        self._of_skip_combo.addItem(T("step_form.this_rule_end"), self._step_count)
         start = self._idx + 2
         for i in range(start, self._step_count + 1):
-            self._of_skip_combo.addItem(f"步驟{i}", i - 1)
+            self._of_skip_combo.addItem(T("step_form.step_n", i=i), i - 1)
         if current_skip_to >= 0:
             idx_s = self._of_skip_combo.findData(current_skip_to)
             if idx_s >= 0:
@@ -2150,7 +2148,9 @@ class _CompareStepForm(QWidget):
         expanded = self._adv_container.isVisible()
         self._adv_container.setVisible(not expanded)
         self._toggle_btn.setText(
-            "▼ 進階：比對規則與失敗處理" if not expanded else "▶ 進階：比對規則與失敗處理"
+            T("step_form.toggle_compare_expanded")
+            if not expanded
+            else T("step_form.toggle_compare_collapsed")
         )
 
     def _validate_pattern(self):
@@ -2162,7 +2162,7 @@ class _CompareStepForm(QWidget):
             self._pattern.setToolTip("")
         except _re.error:
             self._pattern.setStyleSheet("border: 1px solid #E74C3C;")
-            self._pattern.setToolTip("無效的正則表達式")
+            self._pattern.setToolTip(T("tooltip.invalid_regex"))
 
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
@@ -2187,14 +2187,14 @@ class _KeyStepForm(QWidget):
         k_idx = self._key.findData(k)
         if k_idx >= 0:
             self._key.setCurrentIndex(k_idx)
-        form.addRow("按鍵:", self._key)
+        form.addRow(T("step_form.key_label"), self._key)
 
         self._hold_ms = _NoWheelSpin()
         self._hold_ms.setRange(0, 60000)
         self._hold_ms.setSuffix(" ms")
         self._hold_ms.setValue(step.params.get("hold_ms", 0))
-        self._hold_ms.setToolTip("0 = 立即按下放開，>0 = 按住指定毫秒後放開")
-        form.addRow("按住 (0=立即放開):", self._hold_ms)
+        self._hold_ms.setToolTip(T("tooltip.hold_ms"))
+        form.addRow(T("step_form.hold_label"), self._hold_ms)
 
     def save(self):
         self._step.params["key"] = self._key.currentData() or self._key.currentText()
@@ -2212,10 +2212,10 @@ class _WaitStepForm(QWidget):
         self._ms = _NoWheelSpin()
         self._ms.setRange(0, 60000)
         self._ms.setSuffix(" ms")
-        self._ms.setToolTip("只有在前面步驟成功後才會執行。若偵測失敗，此等待會直接跳過。")
+        self._ms.setToolTip(T("tooltip.wait_ms"))
         self._ms.setValue(step.params.get("ms", 500))
         self._ms.editingFinished.connect(lambda: self._list.steps_changed.emit())
-        form.addRow("毫秒:", self._ms)
+        form.addRow(T("step_form.milliseconds"), self._ms)
 
     def save(self):
         self._step.params["ms"] = self._ms.value()
@@ -2239,9 +2239,9 @@ class _JumpStepForm(QWidget):
         if idx_r >= 0:
             self._combo.setCurrentIndex(idx_r)
         elif current_id:
-            self._combo.addItem(f"(未知: {current_id})", current_id)
+            self._combo.addItem(T("step_form.unknown_rule", id=current_id), current_id)
             self._combo.setCurrentIndex(self._combo.count() - 1)
-        form.addRow("跳轉至規則:", self._combo)
+        form.addRow(T("step_form.jump_to_rule"), self._combo)
 
     def save(self):
         self._step.params["rule_id"] = self._combo.currentData() or ""
@@ -2257,14 +2257,14 @@ class _NotifyStepForm(QWidget):
 
         self._msg = QLineEdit()
         self._msg.setText(step.params.get("message", ""))
-        self._msg.setPlaceholderText("請輸入要顯示的訊息…")
+        self._msg.setPlaceholderText(T("step_form.enter_text"))
         self._msg.editingFinished.connect(self._validate_msg)
-        form.addRow("訊息文字:", self._msg)
+        form.addRow(T("step_form.message_text"), self._msg)
 
     def _validate_msg(self):
         if not self._msg.text().strip():
             self._msg.setStyleSheet("border: 1px solid #E74C3C;")
-            self._msg.setToolTip("訊息文字不可為空")
+            self._msg.setToolTip(T("tooltip.notify_msg_empty"))
         else:
             self._msg.setStyleSheet("")
             self._msg.setToolTip("")
@@ -2288,8 +2288,8 @@ class _InlineActionEditor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self._type = _NoWheelCombo()
-        self._type.addItem("按鍵", "key")
-        self._type.addItem("點擊", "click")
+        self._type.addItem(T("step_form.step_key"), "key")
+        self._type.addItem(T("step_form.step_click"), "click")
         idx = self._type.findData(action.get("type", "key"))
         if idx >= 0:
             self._type.setCurrentIndex(idx)
@@ -2307,12 +2307,12 @@ class _InlineActionEditor(QWidget):
         click_layout = QHBoxLayout(self._click_row)
         click_layout.setContentsMargins(0, 0, 0, 0)
         self._coord_label = QLabel(self._coord_text())
-        self._pick_btn = QPushButton("選取座標")
+        self._pick_btn = QPushButton(T("step_form.pick_coord_short"))
         self._pick_btn.setEnabled(bool(pick_cb))
         self._pick_btn.clicked.connect(self._pick_coord)
         self._button = _NoWheelCombo()
-        self._button.addItem("左鍵", "left")
-        self._button.addItem("右鍵", "right")
+        self._button.addItem(T("combo.left"), "left")
+        self._button.addItem(T("combo.right"), "right")
         btn_idx = self._button.findData(action.get("button", "left"))
         if btn_idx >= 0:
             self._button.setCurrentIndex(btn_idx)
@@ -2538,7 +2538,7 @@ class SettingsDialog(QDialog):
         self._language.addItem("简体中文", "zh_CN")
         lang_idx = self._language.findData(get_language())
         self._language.setCurrentIndex(max(0, lang_idx))
-        self._language.setToolTip("選擇介面語言，變更後需重新啟動程式才會生效。")
+        self._language.setToolTip(T("settings.language.tooltip"))
         form.addRow(T("settings.language"), self._language)
 
         self._match_mode = QComboBox()
@@ -2831,7 +2831,7 @@ class MainWindow(QMainWindow):
                     4000,
                     lambda v=updated_ver: (
                         self._status_bar.showMessage(T("status.update_complete", v=v), 8000),
-                        self._notif_stack.push(f"已更新至 v{v}"),
+                        self._notif_stack.push(T("step_form.update_toast", v=v)),
                     ),
                 )
 
@@ -2989,7 +2989,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._task_share_btn)
 
         # -- Action section --
-        self._btn_toggle = QPushButton("啟動")
+        self._btn_toggle = QPushButton(T("step_form.start_btn"))
         self._btn_toggle.setMinimumWidth(80)
         self._btn_toggle.setToolTip(T("tooltip.toggle"))
         self._debug_btn = QPushButton(T("main.ocr_debug"))
@@ -3082,7 +3082,7 @@ class MainWindow(QMainWindow):
             + T("guide.step3")
             + T("guide.step4")
             + T("guide.step5")
-            + "框選偵測區域可限制 OCR 範圍\n\n"
+            + T("step_form.detect_hint")
             + "▸ "
             + T("guide.advanced")
             + T("guide.advanced2")
@@ -3145,16 +3145,16 @@ class MainWindow(QMainWindow):
         add_dropdown.setToolTip(T("tooltip.add_step"))
         add_menu = QMenu(self)
         step_types = [
-            ("detect", "🔍 偵測文字", "以 OCR 辨識指定文字，精準但略慢"),
-            ("match_image", "🖼 圖示辨識", "以截圖區塊比對，速度快、抗干擾佳；建議優先選用"),
-            ("compare", "🔢 數字比較", "比對 OCR 數字結果"),
-            ("click", "🖱 點擊", "點擊指定位置"),
-            ("key", "⌨ 按鍵", "送出鍵盤按鍵"),
-            ("drag", "↗ 拖曳", "滑鼠拖曳"),
-            ("scroll", "↕ 滾輪", "滑鼠滾輪"),
-            ("wait", "⏱ 等待", "等待指定毫秒"),
-            ("jump", "↩ 跳轉規則", "跳轉至指定規則"),
-            ("notify", "💬 提示訊息", "顯示通知並可停止群組"),
+            ("detect", "🔍 偵測文字", T("step_form.step_detect_desc")),
+            ("match_image", "🖼 圖示辨識", T("step_form.step_match_image_desc")),
+            ("compare", "🔢 數字比較", T("step_form.step_compare_desc")),
+            ("click", "🖱 點擊", T("step_form.step_click_desc")),
+            ("key", "⌨ 按鍵", T("step_form.step_key_desc")),
+            ("drag", "↗ 拖曳", T("step_form.step_drag_desc")),
+            ("scroll", "↕ 滾輪", T("step_form.step_scroll_desc")),
+            ("wait", "⏱ 等待", T("step_form.step_wait_desc")),
+            ("jump", "↩ 跳轉規則", T("step_form.step_jump_desc")),
+            ("notify", "💬 提示訊息", T("step_form.step_notify_desc")),
         ]
         for st, label, tip in step_types:
             action = add_menu.addAction(label)
@@ -3415,7 +3415,7 @@ class MainWindow(QMainWindow):
                 self, T("dialog.task_exists"), T("dialog.task_exists_msg", name=name)
             )
             return
-        self._groups = [RuleGroup(id="__default__", name="所有規則")]
+        self._groups = [RuleGroup(id="__default__", name=T("ui.all_rules"))]
         save_task(name, [])
         save_groups(self._groups, str(_rule_mod.get_tasks_dir() / f"{name}.json"))
         self._refresh_task_list()
@@ -3446,7 +3446,7 @@ class MainWindow(QMainWindow):
             return
         self._flush_save()
         if not rename_task(old_name, name):
-            QMessageBox.warning(self, "重新命名失敗", T("dialog.cannot_rename"))
+            QMessageBox.warning(self, T("dialog.cannot_rename"), T("dialog.cannot_rename"))
             return
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
@@ -3510,7 +3510,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(names_label)
 
         if preview.warnings:
-            layout.addWidget(QLabel("▸ 警告："))
+            layout.addWidget(QLabel(f"▸ {T('format.warnings_title')}"))
             warn_label = QLabel("\n".join(f"  ⚠ {w}" for w in preview.warnings))
             warn_label.setWordWrap(True)
             warn_label.setStyleSheet("color: #cc8800;")
@@ -3613,10 +3613,12 @@ class MainWindow(QMainWindow):
         if not self._groups:
             all_ids = [r.id for r in self._rules]
             if all_ids:
-                default = RuleGroup(id="__default__", name="所有規則", rule_ids=list(all_ids))
+                default = RuleGroup(
+                    id="__default__", name=T("ui.all_rules"), rule_ids=list(all_ids)
+                )
                 self._groups = [default]
             else:
-                self._groups = [RuleGroup(id="__default__", name="所有規則")]
+                self._groups = [RuleGroup(id="__default__", name=T("ui.all_rules"))]
 
         selected_item = None
         for g in self._groups:
@@ -3960,7 +3962,9 @@ class MainWindow(QMainWindow):
         else:
             target = next((g for g in self._groups if g.id == "__uncategorized__"), None)
             if target is None:
-                target = RuleGroup(id="__uncategorized__", name="未歸類", enabled=False)
+                target = RuleGroup(
+                    id="__uncategorized__", name=T("ui.uncategorized"), enabled=False
+                )
                 self._groups.append(target)
             if rule.id not in target.rule_ids:
                 target.rule_ids.append(rule.id)
@@ -4024,17 +4028,17 @@ class MainWindow(QMainWindow):
         enabled = group.enabled if group else True
         toggle = QPushButton("✓" if enabled else "■")
         toggle.setFixedSize(22, 22)
-        toggle.setToolTip("停用群組" if enabled else "啟用群組")
+        toggle.setToolTip(T("tooltip.disable_group") if enabled else T("tooltip.enable_group"))
         toggle.setStyleSheet("color: #4a4;" if enabled else "color: #888;")
         toggle.clicked.connect(lambda: self._toggle_group(gid))
         layout.addWidget(toggle)
         up = QPushButton("▲")
         up.setFixedSize(22, 22)
-        up.setToolTip("上移群組")
+        up.setToolTip(T("tooltip.up_group"))
         up.clicked.connect(lambda: self._move_group_up(gid))
         down = QPushButton("▼")
         down.setFixedSize(22, 22)
-        down.setToolTip("下移群組")
+        down.setToolTip(T("tooltip.down_group"))
         down.clicked.connect(lambda: self._move_group_down(gid))
         layout.addWidget(up)
         layout.addWidget(down)
@@ -4043,7 +4047,7 @@ class MainWindow(QMainWindow):
     def _add_group(self):
         import uuid
 
-        g = RuleGroup(id=f"group_{uuid.uuid4().hex[:8]}", name="新群組")
+        g = RuleGroup(id=f"group_{uuid.uuid4().hex[:8]}", name=T("ui.new_group"))
         self._groups.append(g)
         self._flush_save()
         self._refresh_rule_list()
@@ -4151,7 +4155,9 @@ class MainWindow(QMainWindow):
             return
         from PyQt6.QtWidgets import QInputDialog
 
-        new_name, ok = QInputDialog.getText(self, "重新命名群組", "新名稱:", text=group.name)
+        new_name, ok = QInputDialog.getText(
+            self, T("step_form.rename_group"), "新名稱:", text=group.name
+        )
         if ok and new_name.strip():
             group.name = new_name.strip()
             self._refresh_rule_list()
@@ -4201,7 +4207,7 @@ class MainWindow(QMainWindow):
         cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
-            name="新規則",
+            name=T("ui.new_rule"),
             enabled=True,
             steps=[
                 Step(
@@ -4731,7 +4737,8 @@ class MainWindow(QMainWindow):
                 Step(
                     type="detect",
                     params={
-                        "text": str(rule_data["target_text"]).strip() or "請輸入文字",
+                        "text": str(rule_data["target_text"]).strip()
+                        or T("step_form.enter_text_placeholder"),
                         "roi": rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                         "match_mode": "fuzzy",
                         "fuzzy_threshold": 0.8,
@@ -4793,7 +4800,8 @@ class MainWindow(QMainWindow):
             Step(
                 type="detect",
                 params={
-                    "text": str(data.get("target_text", "")).strip() or "請輸入文字",
+                    "text": str(data.get("target_text", "")).strip()
+                    or T("step_form.enter_text_placeholder"),
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "match_mode": "fuzzy",
                     "fuzzy_threshold": 0.8,
@@ -4821,7 +4829,7 @@ class MainWindow(QMainWindow):
 
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
-            name=data.get("name", "模板規則"),
+            name=data.get("name", T("step_form.template_rule_name")),
             enabled=True,
             steps=[
                 Step(
@@ -4982,11 +4990,15 @@ class MainWindow(QMainWindow):
         empty_steps = [r.name for r in self._rules if r.enabled and not r.steps]
         if empty_steps:
             names = "\n".join(f"  • {n}" for n in empty_steps[:5])
-            suffix = f"\n  …及其他 {len(empty_steps) - 5} 條" if len(empty_steps) > 5 else ""
+            suffix = (
+                f"\n  {T('format.import_overflow', count=len(empty_steps) - 5)}"
+                if len(empty_steps) > 5
+                else ""
+            )
             QMessageBox.warning(
                 self,
-                "警告",
-                f"以下啟用的規則沒有任何步驟，請先新增步驟：\n{names}{suffix}",
+                T("dialog.warning"),
+                T("notif.steps_empty", names=names, suffix=suffix),
             )
             return
         group_ids = self._show_group_selection_dialog()
@@ -5104,7 +5116,7 @@ class MainWindow(QMainWindow):
         menu.addAction(paypal_icon, "PayPal").triggered.connect(
             lambda: webbrowser.open("https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6")
         )
-        menu.addAction(afdian_icon, "愛發電").triggered.connect(
+        menu.addAction(afdian_icon, T("step_form.love_fadian")).triggered.connect(
             lambda: webbrowser.open("https://afdian.com/a/sid-1996")
         )
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
