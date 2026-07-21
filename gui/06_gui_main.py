@@ -2627,6 +2627,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_accept(self):
+        old_lang = self._ctrl.get_setting(self._win, "language")
         self._ctrl.set_setting(self._win, "max_cps", self._max_cps.value())
         self._ctrl.set_setting(self._win, "scan_interval_ms", self._scan_interval.value())
         self._ctrl.set_setting(self._win, "default_match_mode", self._match_mode.currentData())
@@ -2640,8 +2641,18 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
         self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
-        self._ctrl.set_setting(self._win, "language", self._language.currentData())
+        new_lang = self._language.currentData()
+        self._ctrl.set_setting(self._win, "language", new_lang)
         self.accept()
+        if old_lang != new_lang:
+            answer = QMessageBox.question(
+                self,
+                T("settings.title"),
+                T("settings.language_restart"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                os.execl(sys.executable, *sys.argv)
 
 
 class _NotificationStack(QWidget):

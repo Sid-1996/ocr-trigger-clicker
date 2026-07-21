@@ -614,6 +614,7 @@
   "step_form.template_rule_name": "模板规则",
   "step_form.color_suffix_short": " 色差",
   "settings.language.tooltip": "选择界面语言，变更后需重新启动程序才会生效。",
+  "settings.language_restart": "语言已变更，是否立即重启程序？",
   "step_form.regex_pattern_tooltip": "从 OCR 文字中提取数字用的正则表达式，默认值 -?\\d+\\.?\\d* 可匹配正负整数与小数",
   "step_form.number_format": "数字格式:",
   "step_form.hold_label": "按住 (0=立即放开):",
