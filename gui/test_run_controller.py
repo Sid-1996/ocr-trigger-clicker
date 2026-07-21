@@ -7,6 +7,7 @@ import numpy as np
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from _loader import load_sibling
+from i18n import T
 
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 activate_window = _main_loop_mod.activate_window
@@ -35,14 +36,14 @@ class TestRunController:
         win._save_current_rule()
         rule = win._get_current_rule()
         if not rule:
-            QMessageBox.warning(win, "測試", "請先選取一條規則")
+            QMessageBox.warning(win, T("test.title"), T("test.select_rule"))
             return
         title = win._window_combo.currentText()
         if not title:
-            QMessageBox.warning(win, "測試", "請先選擇目標視窗")
+            QMessageBox.warning(win, T("test.title"), T("test.select_window"))
             return
         win._edit_test_btn.setEnabled(False)
-        win._edit_test_btn.setText("測試中…")
+        win._edit_test_btn.setText(T("test.testing"))
         QApplication.processEvents()
         win.showMinimized()
         QApplication.processEvents()
@@ -57,8 +58,8 @@ class TestRunController:
         win._edit_stack.setCurrentIndex(1)
         if img is None:
             win._edit_test_btn.setEnabled(True)
-            win._edit_test_btn.setText("▶ 測試")
-            QMessageBox.warning(win, "測試", f"截圖失敗：無法擷取視窗「{title}」")
+            win._edit_test_btn.setText(T("ui.test"))
+            QMessageBox.warning(win, T("test.title"), T("test.capture_failed", title=title))
             return
         t = threading.Thread(target=self._run_rule_test, args=(rule, img), daemon=True)
         t.start()
@@ -75,7 +76,7 @@ class TestRunController:
                 "log": "\n".join(log_lines),
             }
         except Exception as e:
-            result = {"error": f"測試異常：{e}"}
+            result = {"error": T("test.exception", e=e)}
         self._win._signals.test_done_signal.emit(result)
 
     # ── dry-run core ──
@@ -123,7 +124,7 @@ class TestRunController:
 
         markers = []
         log = []
-        log.append(f"規則「{rule.name}」— {len(rule.steps)} 個步驟")
+        log.append(T("test.rule_header", name=rule.name, count=len(rule.steps)))
         log.append("─" * 40)
 
         last_center = None
@@ -134,14 +135,14 @@ class TestRunController:
                     p = step.params
                     text = p.get("text", "").strip()
                     if not text:
-                        log.append(f"[{idx + 1}] ⚠ 偵測文字為空白")
+                        log.append(T("test.text_empty", idx=idx + 1))
                         continue
                     roi = _resolve(p.get("roi", {}))
                     use_roi = any(roi.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
                     if use_roi:
                         roi_img = crop_roi(img, roi)
                         if roi_img is None:
-                            log.append(f"[{idx + 1}] ⚠ ROI 裁切無效")
+                            log.append(T("test.roi_invalid", idx=idx + 1))
                             continue
                     else:
                         roi_img = img
@@ -164,7 +165,16 @@ class TestRunController:
                         cy = my + mh // 2
                         last_center = (cx, cy)
                         log.append(
-                            f"[{idx + 1}] 🔍 命中「{m.text}」{m.confidence:.2f}  ({mx},{my}) {mw}×{mh}"
+                            T(
+                                "test.detect_hit",
+                                idx=idx + 1,
+                                text=m.text,
+                                confidence=f"{m.confidence:.2f}",
+                                x=mx,
+                                y=my,
+                                w=mw,
+                                h=mh,
+                            )
                         )
                         markers.append(
                             {
@@ -188,7 +198,13 @@ class TestRunController:
                         )
                     else:
                         log.append(
-                            f"[{idx + 1}] ❌ 未命中「{text}」（{match_mode}，閾值 {threshold}）"
+                            T(
+                                "test.detect_miss",
+                                idx=idx + 1,
+                                text=text,
+                                mode=match_mode,
+                                threshold=threshold,
+                            )
                         )
                         rw = roi.get("w", img.shape[1])
                         rh = roi.get("h", img.shape[0])
@@ -207,9 +223,9 @@ class TestRunController:
                             top5 = "、".join(
                                 f"「{r.text}」({r.confidence:.2f})" for r in results_ocr[:5]
                             )
-                            log.append(f"  附近文字: {top5}")
+                            log.append(T("test.nearby_text", text=top5))
                             if len(results_ocr) > 5:
-                                log.append(f"  … 尚有 {len(results_ocr) - 5} 筆")
+                                log.append(T("test.more_results", count=len(results_ocr) - 5))
 
                 elif step.type == "click":
                     p = step.params
@@ -221,7 +237,7 @@ class TestRunController:
                         if last_center:
                             cx, cy = last_center
                         else:
-                            log.append(f"[{idx + 1}] ⚠ 目標「辨識目標」但無前一步偵測結果")
+                            log.append(T("test.click_target_no_detect", idx=idx + 1))
                             continue
                     elif target == "click_text":
                         ct = p.get("text", "").strip()
@@ -235,10 +251,18 @@ class TestRunController:
                                 cx = int(m.x + m.w / 2)
                                 cy = int(m.y + m.h / 2)
                             else:
-                                log.append(f"[{idx + 1}] ⚠ 點擊目標文字「{ct}」未找到")
+                                log.append(T("test.click_text_not_found", idx=idx + 1, text=ct))
                                 continue
                     if cx is not None:
-                        log.append(f"[{idx + 1}] 🖱 {p.get('button', 'left')} 點擊 ({cx},{cy})")
+                        log.append(
+                            T(
+                                "test.click_action",
+                                idx=idx + 1,
+                                button=p.get("button", "left"),
+                                x=cx,
+                                y=cy,
+                            )
+                        )
                         markers.append(
                             {
                                 "step": idx + 1,
@@ -259,7 +283,7 @@ class TestRunController:
                         if last_center:
                             sx, sy = last_center
                         else:
-                            log.append(f"[{idx + 1}] ⚠ 拖曳起點「辨識目標」但無前一步偵測結果")
+                            log.append(T("test.drag_start_no_detect", idx=idx + 1))
                             continue
                     elif target == "click_text":
                         ct = p.get("text", "").strip()
@@ -273,7 +297,7 @@ class TestRunController:
                                 sx = int(m.x + m.w / 2)
                                 sy = int(m.y + m.h / 2)
                             else:
-                                log.append(f"[{idx + 1}] ⚠ 拖曳目標文字「{ct}」未找到")
+                                log.append(T("test.drag_text_not_found", idx=idx + 1, text=ct))
                                 continue
                     if sx is not None:
                         dx = p.get("dx", 0)
@@ -281,7 +305,15 @@ class TestRunController:
                         ex = sx + dx
                         ey = sy + dy
                         log.append(
-                            f"[{idx + 1}] ↗ {p.get('button', 'left')} 拖曳 ({sx},{sy}) → ({ex},{ey})"
+                            T(
+                                "test.drag_action",
+                                idx=idx + 1,
+                                button=p.get("button", "left"),
+                                sx=sx,
+                                sy=sy,
+                                ex=ex,
+                                ey=ey,
+                            )
                         )
                         markers.append(
                             {
@@ -298,17 +330,23 @@ class TestRunController:
                 elif step.type == "scroll":
                     p = step.params
                     dirs = {
-                        "WheelDown": "向下",
-                        "WheelUp": "向上",
-                        "WheelLeft": "向左",
-                        "WheelRight": "向右",
+                        "WheelDown": T("test.scroll_down"),
+                        "WheelUp": T("test.scroll_up"),
+                        "WheelLeft": T("test.scroll_left"),
+                        "WheelRight": T("test.scroll_right"),
                     }
                     d = dirs.get(p.get("direction", "WheelDown"), p.get("direction", ""))
-                    log.append(f"[{idx + 1}] ↕ 滾輪 {d} ×{p.get('amount', 1)}")
+                    log.append(
+                        T("test.scroll", idx=idx + 1, direction=d, amount=p.get("amount", 1))
+                    )
 
                 elif step.type == "notify":
                     msg = step.params.get("message", "")
-                    log.append(f"[{idx + 1}] 💬 {msg}" if msg else f"[{idx + 1}] 💬 (空白)")
+                    log.append(
+                        T("test.notify", idx=idx + 1, message=msg)
+                        if msg
+                        else T("test.notify_empty", idx=idx + 1)
+                    )
 
                 elif step.type == "compare":
                     p = step.params
@@ -321,7 +359,7 @@ class TestRunController:
                     if use_roi:
                         roi_img = crop_roi(img, r)
                         if roi_img is None:
-                            log.append(f"[{idx + 1}] ⚠ ROI 裁切無效")
+                            log.append(T("test.roi_invalid", idx=idx + 1))
                             continue
                     else:
                         roi_img = img
@@ -344,14 +382,14 @@ class TestRunController:
                         last_center = (cx, cy)
 
                     if not m:
-                        log.append(f"[{idx + 1}] 🔢 未從文字匹配到數字 pattern=「{pattern}」")
+                        log.append(T("test.compare_no_digit", idx=idx + 1, pattern=pattern))
                         if results_ocr:
                             top5 = "、".join(
                                 f"「{res.text}」({res.confidence:.2f})" for res in results_ocr[:5]
                             )
-                            log.append(f"  OCR 文字: {top5}")
+                            log.append(T("test.ocr_text", text=top5))
                             if len(results_ocr) > 5:
-                                log.append(f"  … 尚有 {len(results_ocr) - 5} 筆")
+                                log.append(T("test.more_results", count=len(results_ocr) - 5))
                         of_hint = of_summary(p.get("on_fail", "stop"))
                         if of_hint:
                             log.append(f"  → {of_hint}")
@@ -372,7 +410,7 @@ class TestRunController:
                         num = float(m.group())
                     except (ValueError, TypeError):
                         log.append(
-                            f"[{idx + 1}] 🔢 提取數字無效: 「{m.group()}」pattern=「{pattern}」"
+                            T("test.digit_invalid", idx=idx + 1, text=m.group(), pattern=pattern)
                         )
                         of_hint = of_summary(p.get("on_fail", "stop"))
                         if of_hint:
@@ -425,24 +463,24 @@ class TestRunController:
                     p = step.params
                     k = p.get("key", "")
                     hm = p.get("hold_ms", 0)
-                    s = f"按住 {hm}ms" if hm else "按下"
-                    log.append(f"[{idx + 1}] ⌨ {s} {k}")
+                    s = T("test.key_hold", ms=hm) if hm else T("test.key_press")
+                    log.append(T("test.key_action", idx=idx + 1, action=s, key=k))
 
                 elif step.type == "wait":
                     p = step.params
-                    log.append(f"[{idx + 1}] ⏱ 等待 {p.get('ms', 500)}ms")
+                    log.append(T("test.wait", idx=idx + 1, ms=p.get("ms", 500)))
 
                 elif step.type == "jump":
                     rid = step.params.get("rule_id", "")
                     name = resolve_rule_name(rid, lambda: list(win._rules))
-                    log.append(f"[{idx + 1}] ↩ 跳轉規則「{name}」")
+                    log.append(T("test.jump", idx=idx + 1, name=name))
 
                 elif step.type == "match_image":
                     p = step.params
                     tmpl_data = p.get("template_data", "")
                     tmpl_path = p.get("template", "")
                     if not tmpl_data.strip() and not tmpl_path.strip():
-                        log.append(f"[{idx + 1}] ⚠ 未設定範本圖片")
+                        log.append(T("test.template_not_set", idx=idx + 1))
                         continue
                     roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
@@ -472,13 +510,24 @@ class TestRunController:
                         match_color=match_color,
                         color_tolerance=color_tolerance,
                     )
-                    tmpl_name = "內嵌" if tmpl_data.strip() else Path(tmpl_path).stem
+                    tmpl_name = (
+                        T("test.template_embedded") if tmpl_data.strip() else Path(tmpl_path).stem
+                    )
                     if results:
                         m = results[0]
                         cx, cy = m.center_x, m.center_y
                         last_center = (cx, cy)
                         log.append(
-                            f"[{idx + 1}] 🖼 命中「{tmpl_name}」{m.confidence:.2f}  ({m.x},{m.y}) {m.w}×{m.h}"
+                            T(
+                                "test.template_hit",
+                                idx=idx + 1,
+                                name=tmpl_name,
+                                confidence=f"{m.confidence:.2f}",
+                                x=m.x,
+                                y=m.y,
+                                w=m.w,
+                                h=m.h,
+                            )
                         )
                         markers.append(
                             {
@@ -507,7 +556,13 @@ class TestRunController:
                         of_hint = of_summary(p.get("on_fail", "stop"))
                         of_suffix = f" → {of_hint}" if of_hint else ""
                         log.append(
-                            f"[{idx + 1}] ❌ 未命中「{tmpl_name}」（閾值 {threshold}）{of_suffix}"
+                            T(
+                                "test.template_miss",
+                                idx=idx + 1,
+                                name=tmpl_name,
+                                threshold=threshold,
+                                suffix=of_suffix,
+                            )
                         )
                         markers.append(
                             {
@@ -522,7 +577,7 @@ class TestRunController:
                         )
 
                 else:
-                    log.append(f"[{idx + 1}] ? 未知步驟: {step.type}")
+                    log.append(T("test.unknown_step", idx=idx + 1, type=step.type))
 
             except Exception as e:
                 log.append(f"[{idx + 1}] ⚠ {type(e).__name__}: {e}")

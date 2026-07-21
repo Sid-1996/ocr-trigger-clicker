@@ -3,6 +3,7 @@ import json
 from PyQt6.QtCore import Qt
 
 from _loader import load_sibling
+from i18n import T
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -72,12 +73,12 @@ class RuleConfigController:
             _groups_mod = load_sibling(
                 "group_settings_controller", "gui/group_settings_controller.py"
             )
-            default_name = "我的任務"
+            default_name = T("test.default_task")
             _tm_mod.save_task(default_name, [])
             from core.rule_models import RuleGroup
 
             _tm_mod.save_groups(
-                [RuleGroup(id="__default__", name="所有規則")],
+                [RuleGroup(id="__default__", name=T("test.default_group"))],
                 str(_rule_mod2.get_tasks_dir() / f"{default_name}.json"),
             )
             win._task_combo.addItem(default_name)

@@ -1019,7 +1019,7 @@ class _MatchImageStepForm(QWidget):
         label_text = (
             Path(tmpl_path).stem
             if tmpl_path.strip()
-            else ("內嵌圖片" if tmpl_data.strip() else T("ui.no_group"))
+            else (T("step_form.embedded_image") if tmpl_data.strip() else T("ui.no_group"))
         )
         self._tmpl_label = QLabel(label_text)
         self._tmpl_btn = QPushButton(T("step_form.select_image"))
@@ -3158,16 +3158,16 @@ class MainWindow(QMainWindow):
         add_dropdown.setToolTip(T("tooltip.add_step"))
         add_menu = QMenu(self)
         step_types = [
-            ("detect", "🔍 偵測文字", T("step_form.step_detect_desc")),
-            ("match_image", "🖼 圖示辨識", T("step_form.step_match_image_desc")),
-            ("compare", "🔢 數字比較", T("step_form.step_compare_desc")),
-            ("click", "🖱 點擊", T("step_form.step_click_desc")),
-            ("key", "⌨ 按鍵", T("step_form.step_key_desc")),
-            ("drag", "↗ 拖曳", T("step_form.step_drag_desc")),
-            ("scroll", "↕ 滾輪", T("step_form.step_scroll_desc")),
-            ("wait", "⏱ 等待", T("step_form.step_wait_desc")),
-            ("jump", "↩ 跳轉規則", T("step_form.step_jump_desc")),
-            ("notify", "💬 提示訊息", T("step_form.step_notify_desc")),
+            ("detect", T("step.detect_label"), T("step_form.step_detect_desc")),
+            ("match_image", T("step.match_image_label"), T("step_form.step_match_image_desc")),
+            ("compare", T("step.compare_label"), T("step_form.step_compare_desc")),
+            ("click", T("step.click_label"), T("step_form.step_click_desc")),
+            ("key", T("step.key_label"), T("step_form.step_key_desc")),
+            ("drag", T("step.drag_label"), T("step_form.step_drag_desc")),
+            ("scroll", T("step.scroll_label"), T("step_form.step_scroll_desc")),
+            ("wait", T("step.wait_label"), T("step_form.step_wait_desc")),
+            ("jump", T("step.jump_label"), T("step_form.step_jump_desc")),
+            ("notify", T("step.notify_label"), T("step_form.step_notify_desc")),
         ]
         for st, label, tip in step_types:
             action = add_menu.addAction(label)
@@ -4169,7 +4169,7 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import QInputDialog
 
         new_name, ok = QInputDialog.getText(
-            self, T("step_form.rename_group"), "新名稱:", text=group.name
+            self, T("step_form.rename_group"), T("format.new_group_name"), text=group.name
         )
         if ok and new_name.strip():
             group.name = new_name.strip()
@@ -5049,7 +5049,9 @@ class MainWindow(QMainWindow):
             )
             self._status_timer.start(1000)
         else:
-            QMessageBox.critical(self, T("dialog.init_failed"), f"無法啟動主迴圈：\n{error_msg}")
+            QMessageBox.critical(
+                self, T("dialog.init_failed"), T("dialog.loop_start_failed", error=error_msg)
+            )
             self._btn_toggle.setText(T("main.start"))
             self._status_bar.showMessage(T("status.init_error", error_msg=error_msg))
 
