@@ -208,8 +208,8 @@ def main():
     ]
     for h in hidden:
         args.append(f"--hidden-import={h}")
-    # 收集 numpy 所有 C extension（.pyd），確保打包不遺漏
-    args.append("--collect-binaries=numpy")
+    # 收集 numpy 所有子模組 + 二進位 + 資料檔，確保 C extension 不漏
+    args.append("--collect-all=numpy")
     for e in exclude:
         args.append(f"--exclude-module={e}")
     for src, dst in datas:
