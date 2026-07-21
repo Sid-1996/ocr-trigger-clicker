@@ -618,6 +618,7 @@
   "step_form.regex_pattern_tooltip": "从 OCR 文字中提取数字用的正则表达式，默认值 -?\\d+\\.?\\d* 可匹配正负整数与小数",
   "step_form.number_format": "数字格式:",
   "step_form.hold_label": "按住 (0=立即放开):",
+  "step_form.love_fadian": "爱发电",
   "tooltip.add_step": "新增步骤至规则 — 步骤依序执行，可在进阶设定中指定失败时跳至后续步骤",
   "notif.task_loaded": "已载入任务「{name}」，共 {count} 条规则",
   "ocr_debug.mode_full": "完整测试",

@@ -1,0 +1,42 @@
+# Build artifacts
+dist/
+build/
+*.spec
+*.exe
+*.exe_*
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Logs & diagnostics
+logs/
+*.log
+stderr.txt
+_diag_*
+
+# Test artifacts
+test_*.png
+_test_tmp_*
+
+# Task files (user data)
+tasks/
+*任務*.json
+
+# Generated knowledge graph
+graphify-out/
+
+# Custom models (user-provided)
+custom_models/
+
+# Images directory (screenshots)
+/images/
+
+# IDE config
+.vscode/
+.idea/
+
+# Opencode internal
+.opencode/
