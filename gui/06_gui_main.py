@@ -2536,6 +2536,7 @@ class SettingsDialog(QDialog):
         self._language = QComboBox()
         self._language.addItem("繁體中文", "zh_TW")
         self._language.addItem("简体中文", "zh_CN")
+        self._language.addItem("English", "en")
         lang_idx = self._language.findData(get_language())
         self._language.setCurrentIndex(max(0, lang_idx))
         self._language.setToolTip(T("settings.language.tooltip"))
