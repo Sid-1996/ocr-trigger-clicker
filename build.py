@@ -210,6 +210,8 @@ def main():
         args.append(f"--hidden-import={h}")
     # 收集 numpy 所有子模組 + 二進位 + 資料檔，確保 C extension 不漏
     args.append("--collect-all=numpy")
+    # ponytail: cv2 用動態載入器引入 load_config_py3 等 helper，靜態分析抓不到
+    args.append("--collect-all=cv2")
     for e in exclude:
         args.append(f"--exclude-module={e}")
     for src, dst in datas:
