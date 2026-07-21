@@ -5,6 +5,8 @@ from PyQt6.QtCore import QEventLoop, QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
+from i18n import T
+
 
 class ROISelector(QWidget):
     finished = pyqtSignal()
@@ -102,11 +104,11 @@ class ROISelector(QWidget):
         dpr = self.devicePixelRatioF()
         dim_w = int(rect.width() / dpr) if rect else 0
         dim_h = int(rect.height() / dpr) if rect else 0
-        dim = f"  |  尺寸: {dim_w}×{dim_h}" if rect else ""
+        dim = f"  |  {T('overlay.roi_dimension', w=dim_w, h=dim_h)}" if rect else ""
         painter.drawText(
             16,
             self.rect().height() - 32,
-            f"拖拉選取偵測區域{dim}  |  放開滑鼠自動確認  |  Esc 取消",
+            T("overlay.roi_instruction", dim=dim),
         )
 
     def mousePressEvent(self, event):

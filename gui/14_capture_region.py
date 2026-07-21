@@ -14,6 +14,7 @@ else:
 sys.path.insert(0, str(_base))
 
 from _loader import load_sibling  # noqa: E402
+from i18n import T  # noqa: E402
 
 
 class CaptureRegionSelector(QWidget):
@@ -100,11 +101,11 @@ class CaptureRegionSelector(QWidget):
         dpr = self.devicePixelRatioF()
         dim_w = int(rect.width() / dpr) if rect else 0
         dim_h = int(rect.height() / dpr) if rect else 0
-        dim = f"  |  尺寸: {dim_w}×{dim_h}" if rect else ""
+        dim = f"  |  {T('overlay.roi_dimension', w=dim_w, h=dim_h)}" if rect else ""
         painter.drawText(
             16,
             self.rect().height() - 32,
-            f"拖拉選取截圖範本{dim}  |  放開滑鼠自動確認  |  Esc 取消",
+            T("overlay.capture_instruction", dim=dim),
         )
 
     def mousePressEvent(self, event):

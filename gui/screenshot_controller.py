@@ -1,4 +1,5 @@
 from _loader import load_sibling
+from i18n import T
 
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 activate_window = _main_loop_mod.activate_window
@@ -46,7 +47,7 @@ class ScreenshotController:
                 result["y"] -= wr["y"]
         win._edit_stack.setCurrentIndex(1)
         win._status_bar.showMessage(
-            f"已選取偵測區域: ({result['x']},{result['y']}) {result['w']}×{result['h']}"
+            T("screenshot.roi_selected", x=result["x"], y=result["y"], w=result["w"], h=result["h"])
         )
         if title and wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
@@ -103,7 +104,7 @@ class ScreenshotController:
             return None
         b64 = rect.get("template_b64")
         if b64:
-            win._status_bar.showMessage("已截取範本")
+            win._status_bar.showMessage(T("screenshot.template_captured"))
             win._edit_stack.setCurrentIndex(1)
             roi_ratio = self._capture_rect_to_roi(rect, title)
             return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
@@ -135,7 +136,9 @@ class ScreenshotController:
             if img is not None and img.shape[0] >= ry + rh and img.shape[1] >= rx + rw:
                 crop = img[ry : ry + rh, rx : rx + rw]
                 b64 = img_to_b64(crop)
-                win._status_bar.showMessage(f"已截取範本 ({crop.shape[1]}×{crop.shape[0]})")
+                win._status_bar.showMessage(
+                    T("screenshot.template_captured_size", w=crop.shape[1], h=crop.shape[0])
+                )
                 win._edit_stack.setCurrentIndex(1)
                 return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
         return None

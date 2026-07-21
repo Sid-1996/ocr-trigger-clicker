@@ -1,9 +1,18 @@
 import sys
+from pathlib import Path
 from typing import Optional
+
+if hasattr(sys, "_MEIPASS"):
+    _base = Path(sys._MEIPASS)
+else:
+    _base = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_base))
 
 from PyQt6.QtCore import QEventLoop, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter
 from PyQt6.QtWidgets import QApplication, QWidget
+
+from i18n import T  # noqa: E402
 
 
 class ClickPicker(QWidget):
@@ -38,7 +47,7 @@ class ClickPicker(QWidget):
         font.setPointSize(16)
         painter.setFont(font)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawText(16, 36, "請在目標位置點擊  |  Esc 取消")
+        painter.drawText(16, 36, T("overlay.click_instruction"))
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

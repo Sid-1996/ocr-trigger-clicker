@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from i18n import T
+
 
 class GroupSettingsController:
     def show(self, win):
@@ -26,42 +28,35 @@ class GroupSettingsController:
             return
 
         dialog = QDialog(win)
-        dialog.setWindowTitle(f"群組設定 — {group.name}")
+        dialog.setWindowTitle(T("group_settings.title", name=group.name))
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
 
-        layout.addWidget(QLabel("群組名稱"))
+        layout.addWidget(QLabel(T("group_settings.name")))
         name_edit = QLineEdit(group.name)
         layout.addWidget(name_edit)
 
-        layout.addWidget(QLabel("執行模式"))
+        layout.addWidget(QLabel(T("group_settings.mode")))
         mode_combo = QComboBox()
-        mode_combo.addItem("循環執行", "loop")
-        mode_combo.addItem("執行一次", "once")
-        mode_combo.addItem("重複 N 次", "repeat")
+        mode_combo.addItem(T("group_settings.mode_loop"), "loop")
+        mode_combo.addItem(T("group_settings.mode_once"), "once")
+        mode_combo.addItem(T("group_settings.mode_repeat"), "repeat")
         idx = mode_combo.findData(group.mode)
         if idx >= 0:
             mode_combo.setCurrentIndex(idx)
         layout.addWidget(mode_combo)
 
-        layout.addWidget(QLabel("規則執行順序"))
+        layout.addWidget(QLabel(T("group_settings.order")))
         order_combo = QComboBox()
-        order_combo.addItem("依序執行（↻）", "sequential")
-        order_combo.addItem("並行掃描（∥）", "parallel")
+        order_combo.addItem(T("group_settings.order_sequential"), "sequential")
+        order_combo.addItem(T("group_settings.order_parallel"), "parallel")
         idx2 = order_combo.findData(group.order)
         if idx2 >= 0:
             order_combo.setCurrentIndex(idx2)
-        order_combo.setToolTip(
-            "依序：每次只跑列表當前的規則，觸發才前進到下一條。未觸發會卡住指標。\n"
-            "並行：每幀從頭掃全部規則，第一條命中的執行，其餘跳過。不卡指標。"
-        )
+        order_combo.setToolTip(T("group_settings.order.tooltip"))
         layout.addWidget(order_combo)
-        seq_hint = QLabel(
-            "依序：每次只檢查列表中的一個規則，該規則觸發後指標才前進到下一條。未觸發則重複執行同一條。"
-        )
-        par_hint = QLabel(
-            "並行：每幀從列表最上方開始依序掃描，第一個命中目標的規則會執行其動作，其餘直接跳過。下幀重新從頭掃描。"
-        )
+        seq_hint = QLabel(T("group_settings.seq_hint"))
+        par_hint = QLabel(T("group_settings.par_hint"))
         for lbl in (seq_hint, par_hint):
             lbl.setStyleSheet("color: #888; font-size: 11px;")
             lbl.setWordWrap(True)
@@ -79,7 +74,7 @@ class GroupSettingsController:
         repeat_widget = QWidget()
         repeat_layout = QVBoxLayout(repeat_widget)
         repeat_layout.setContentsMargins(0, 0, 0, 0)
-        repeat_layout.addWidget(QLabel("重複次數"))
+        repeat_layout.addWidget(QLabel(T("group_settings.repeat_times")))
         repeat_spin = QSpinBox()
         repeat_spin.setRange(1, 9999)
         repeat_spin.setValue(group.repeat_times)
@@ -89,7 +84,7 @@ class GroupSettingsController:
         interval_widget = QWidget()
         interval_layout = QVBoxLayout(interval_widget)
         interval_layout.setContentsMargins(0, 0, 0, 0)
-        interval_layout.addWidget(QLabel("每輪間隔 (秒)"))
+        interval_layout.addWidget(QLabel(T("group_settings.interval")))
         interval_spin = QSpinBox()
         interval_spin.setRange(0, 99999)
         interval_spin.setValue(group.between_rounds_sec)
@@ -104,7 +99,7 @@ class GroupSettingsController:
         mode_combo.currentIndexChanged.connect(_on_mode_changed)
         _on_mode_changed(mode_combo.currentIndex())
 
-        enabled_cb = QCheckBox("啟用群組")
+        enabled_cb = QCheckBox(T("group_settings.enabled"))
         enabled_cb.setChecked(group.enabled)
         layout.addWidget(enabled_cb)
 

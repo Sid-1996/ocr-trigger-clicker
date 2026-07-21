@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from _loader import load_sibling
+from i18n import T
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
@@ -86,13 +87,13 @@ class OcrDebugPanel(QWidget):
         layout.setSpacing(8)
 
         toolbar = QHBoxLayout()
-        self._capture_btn = QPushButton("拍一張(&C)")
+        self._capture_btn = QPushButton(T("ocr_debug.capture"))
         self._capture_btn.setMinimumWidth(80)
-        self._capture_btn.setToolTip("擷取一次畫面並執行 OCR 辨識 (Alt+C)")
+        self._capture_btn.setToolTip(T("ocr_debug.capture.tooltip"))
         toolbar.addWidget(self._capture_btn)
-        self._click_test_btn = QPushButton("點擊測試(&T)")
+        self._click_test_btn = QPushButton(T("ocr_debug.click_test"))
         self._click_test_btn.setMinimumWidth(80)
-        self._click_test_btn.setToolTip("點擊選取文字的目標位置，驗證座標是否正確")
+        self._click_test_btn.setToolTip(T("ocr_debug.click_test.tooltip"))
         self._click_test_btn.setEnabled(False)
         self._click_test_btn.clicked.connect(self._on_click_test)
         toolbar.addWidget(self._click_test_btn)
@@ -104,7 +105,7 @@ class OcrDebugPanel(QWidget):
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._image_label = _ImageLabel()
-        self._image_label.setText("尚未截圖 — 點擊「拍一張」開始")
+        self._image_label.setText(T("ocr_debug.no_capture"))
         self._image_label.clicked.connect(self._on_image_clicked)
         self._image_label.installEventFilter(self)
         splitter.addWidget(self._image_label)
@@ -114,7 +115,7 @@ class OcrDebugPanel(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(8)
 
-        self._summary_label = QLabel("視窗：-\n來源：-\n尺寸：-\n區塊：-\n耗時：-")
+        self._summary_label = QLabel(T("ocr_debug.summary"))
         self._summary_label.setWordWrap(True)
         self._summary_label.setMinimumHeight(96)
         self._style_card(self._summary_label, dark=False)
@@ -124,7 +125,9 @@ class OcrDebugPanel(QWidget):
         self._result_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._result_table.setFont(QFont("Consolas", 9))
         self._result_table.setColumnCount(3)
-        self._result_table.setHorizontalHeaderLabels(["#", "文字", "信心度"])
+        self._result_table.setHorizontalHeaderLabels(
+            [T("ocr_debug.col_index"), T("ocr_debug.col_text"), T("ocr_debug.col_confidence")]
+        )
         self._result_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self._result_table.setColumnWidth(0, 40)
         self._result_table.horizontalHeader().setSectionResizeMode(
@@ -138,11 +141,11 @@ class OcrDebugPanel(QWidget):
         self._result_table.itemSelectionChanged.connect(self._on_table_selection_changed)
         right_layout.addWidget(self._result_table)
 
-        crop_title = QLabel("選取區塊預覽")
+        crop_title = QLabel(T("ocr_debug.crop_preview_title"))
         crop_title.setStyleSheet("font-weight: 600; color: #666;")
         right_layout.addWidget(crop_title)
 
-        self._crop_label = QLabel("點選表格中的一列，這裡會顯示裁切預覽")
+        self._crop_label = QLabel(T("ocr_debug.crop_hint"))
         self._crop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._crop_label.setMinimumHeight(150)
         self._crop_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -157,41 +160,33 @@ class OcrDebugPanel(QWidget):
         )
         right_layout.addWidget(self._crop_label)
 
-        self._selected_detail = QLabel("選取區塊：尚未選取")
+        self._selected_detail = QLabel(T("ocr_debug.selected_none"))
         self._selected_detail.setWordWrap(True)
         self._selected_detail.setMinimumHeight(110)
         self._style_card(self._selected_detail, dark=True)
         right_layout.addWidget(self._selected_detail)
 
-        self._template_btn = QPushButton("🖼 建立為模板圖片規則(&M)")
+        self._template_btn = QPushButton(T("ocr_debug.create_template_rule"))
         self._template_btn.setEnabled(False)
-        self._template_btn.setToolTip(
-            "將選取的區塊截圖建立為圖片比對規則 (match_image)，以圖找圖，速度快\n適合無文字的按鈕或圖示辨識"
-        )
+        self._template_btn.setToolTip(T("ocr_debug.create_template_rule.tooltip"))
         self._template_btn.clicked.connect(self._on_add_template)
         right_layout.addWidget(self._template_btn)
 
-        self._add_template_step_btn = QPushButton("🖼 加入模板圖片步驟(&T)")
+        self._add_template_step_btn = QPushButton(T("ocr_debug.add_template_step"))
         self._add_template_step_btn.setEnabled(False)
-        self._add_template_step_btn.setToolTip(
-            "將選取的區塊截圖新增為目前規則的圖片比對步驟\n以圖找圖，適合無文字的按鈕或圖示"
-        )
+        self._add_template_step_btn.setToolTip(T("ocr_debug.add_template_step.tooltip"))
         self._add_template_step_btn.clicked.connect(self._on_add_template_step)
         right_layout.addWidget(self._add_template_step_btn)
 
-        self._add_rule_btn = QPushButton("🔤 建立為新文字規則(&N)")
+        self._add_rule_btn = QPushButton(T("ocr_debug.create_text_rule"))
         self._add_rule_btn.setEnabled(False)
-        self._add_rule_btn.setToolTip(
-            "將選取的文字與位置直接建立為一條新的 OCR 文字偵測規則\n以文字辨識，精準但略慢"
-        )
+        self._add_rule_btn.setToolTip(T("ocr_debug.create_text_rule.tooltip"))
         self._add_rule_btn.clicked.connect(self._on_add_rule)
         right_layout.addWidget(self._add_rule_btn)
 
-        self._set_sub_target_btn = QPushButton("🔤 加入文字偵測步驟(&A)")
+        self._set_sub_target_btn = QPushButton(T("ocr_debug.add_text_step"))
         self._set_sub_target_btn.setEnabled(False)
-        self._set_sub_target_btn.setToolTip(
-            "將選取文字新增為目前規則的 OCR 文字偵測步驟\n以文字辨識，精準但略慢"
-        )
+        self._set_sub_target_btn.setToolTip(T("ocr_debug.add_text_step.tooltip"))
         self._set_sub_target_btn.clicked.connect(self._on_set_sub_target)
         right_layout.addWidget(self._set_sub_target_btn)
 
@@ -217,7 +212,7 @@ class OcrDebugPanel(QWidget):
         layout.addWidget(splitter, 1)
 
         self._status_bar = QStatusBar(self)
-        self._status_bar.showMessage("就緒")
+        self._status_bar.showMessage(T("ocr_debug.ready"))
         layout.addWidget(self._status_bar)
 
         self._capture_btn.clicked.connect(self._take_snapshot)
@@ -261,13 +256,13 @@ class OcrDebugPanel(QWidget):
             time.sleep(0.12)
 
             img = capture(self._window_title)
-            source = "螢幕截圖"
+            source = T("ocr_debug.source_screen")
             if img is not None:
                 img = img[:, :, ::-1].copy()
 
             if img is None:
                 img = capture_window_content(self._window_title)
-                source = "GDI 截圖"
+                source = T("ocr_debug.source_gdi")
 
             return img, source
         except Exception:
@@ -284,7 +279,7 @@ class OcrDebugPanel(QWidget):
         self._request_id += 1
         request_id = self._request_id
         self._capture_btn.setEnabled(False)
-        self._capture_btn.setText("辨識中…")
+        self._capture_btn.setText(T("ocr_debug.recognizing"))
         self._info_label.setText("")
         self._selected_index = -1
         self._add_rule_btn.setEnabled(False)
@@ -297,8 +292,8 @@ class OcrDebugPanel(QWidget):
 
         if raw is None:
             logging.warning("capture failed for '%s'", self._window_title)
-            self._status_bar.showMessage(f"無法擷取視窗「{self._window_title}」")
-            self._capture_btn.setText("拍一張")
+            self._status_bar.showMessage(T("ocr_debug.capture_failed", title=self._window_title))
+            self._capture_btn.setText(T("ocr_debug.capture"))
             self._capture_btn.setEnabled(True)
             return
 
@@ -308,7 +303,7 @@ class OcrDebugPanel(QWidget):
 
     def _do_ocr(self, img: np.ndarray, request_id: int):
         try:
-            self._signals.ocr_status.emit("OCR 引擎載入中...")
+            self._signals.ocr_status.emit(T("ocr_debug.ocr_loading"))
             t0 = time.monotonic()
             opts = self._ocr_options()
             results = recognize(img, **opts)
@@ -316,7 +311,7 @@ class OcrDebugPanel(QWidget):
             self._signals.ocr_done.emit(results, elapsed, request_id)
         except Exception:
             logging.exception("_do_ocr failed")
-            self._capture_btn.setText("拍一張")
+            self._capture_btn.setText(T("ocr_debug.capture"))
             self._capture_btn.setEnabled(True)
         finally:
             self._ocr_busy = False
@@ -329,7 +324,7 @@ class OcrDebugPanel(QWidget):
             if request_id != self._request_id:
                 return
             self._ocr_results = results
-            self._capture_btn.setText("拍一張")
+            self._capture_btn.setText(T("ocr_debug.capture"))
             self._capture_btn.setEnabled(True)
             self._populate_table()
             self._rebuild_annotated()
@@ -337,16 +332,27 @@ class OcrDebugPanel(QWidget):
             if self._latest_raw is None:
                 return
             h, w = self._latest_raw.shape[:2]
-            self._info_label.setText(f"耗時: {elapsed_ms:.0f} ms  {len(results)} 個區塊")
+            self._info_label.setText(T("ocr_debug.info_label", ms=elapsed_ms, n=len(results)))
             self._summary_label.setText(
-                f"視窗：{self._window_title}\n"
-                f"來源：{self._capture_source or '未知'}\n"
-                f"尺寸：{w} × {h}\n"
-                f"區塊：{len(results)}\n"
-                f"耗時：{elapsed_ms:.0f} ms"
+                T(
+                    "ocr_debug.summary_text",
+                    title=self._window_title,
+                    source=self._capture_source or T("ocr_debug.source_screen"),
+                    w=w,
+                    h=h,
+                    n=len(results),
+                    ms=elapsed_ms,
+                )
             )
             self._status_bar.showMessage(
-                f"[{self._capture_source}] {w}×{h} | {len(results)} 個區塊 | {elapsed_ms:.0f} ms"
+                T(
+                    "ocr_debug.status_bar",
+                    source=self._capture_source,
+                    w=w,
+                    h=h,
+                    n=len(results),
+                    ms=elapsed_ms,
+                )
             )
         except Exception:
             logging.exception("_on_ocr_done failed")
@@ -454,7 +460,7 @@ class OcrDebugPanel(QWidget):
 
         chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
         cx, cy = chrome
-        is_gdi = self._capture_source == "GDI 截圖"
+        is_gdi = self._capture_source == T("ocr_debug.source_gdi")
         if is_gdi or (cx <= 0 and cy <= 0):
             roi = {
                 "x": px_x / img_w,
@@ -492,7 +498,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已建立新規則：「{r.text}」  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
+            T("ocr_debug.rule_created", text=r.text, x=px_x, y=px_y, w=px_w, h=px_h)
         )
 
     def _on_add_template(self):
@@ -528,7 +534,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已建立模板規則：「{r.text}」  模板: {t_w}×{t_h}px  ROI: {_px_w}×{_px_h}px"
+            T("ocr_debug.template_rule_created", text=r.text, tw=t_w, th=t_h, rw=_px_w, rh=_px_h)
         )
 
     def _on_set_sub_target(self):
@@ -546,7 +552,7 @@ class OcrDebugPanel(QWidget):
         )
 
         self._status_bar.showMessage(
-            f"✓ 已加入偵測步驟：「{r.text}」  ROI(px): x={px_x}, y={px_y}, w={px_w}, h={px_h}"
+            T("ocr_debug.step_added", text=r.text, x=px_x, y=px_y, w=px_w, h=px_h)
         )
 
     def _on_add_template_step(self):
@@ -581,7 +587,9 @@ class OcrDebugPanel(QWidget):
             }
         )
 
-        self._status_bar.showMessage(f"✓ 已加入模板步驟：「{r.text}」  模板: {t_w}×{t_h}px")
+        self._status_bar.showMessage(
+            T("ocr_debug.template_step_added", text=r.text, tw=t_w, th=t_h)
+        )
 
     def _on_click_test(self):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
@@ -602,7 +610,7 @@ class OcrDebugPanel(QWidget):
 
         rect = _screenshot.get_window_rect(self._window_title)
 
-        if self._capture_source == "GDI 截圖":
+        if self._capture_source == T("ocr_debug.source_gdi"):
             import ctypes
             from ctypes import wintypes
 
@@ -617,13 +625,17 @@ class OcrDebugPanel(QWidget):
                 cx = rect["x"] + ocr_center_x
                 cy = rect["y"] + ocr_center_y
             else:
-                self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
+                self._status_bar.showMessage(
+                    T("ocr_debug.window_coords_failed", title=self._window_title)
+                )
                 return
             if rect is None:
                 rect = {"x": cx - ocr_center_x, "y": cy - ocr_center_y, "w": 0, "h": 0}
         else:
             if rect is None:
-                self._status_bar.showMessage(f"無法取得視窗「{self._window_title}」的座標")
+                self._status_bar.showMessage(
+                    T("ocr_debug.window_coords_failed", title=self._window_title)
+                )
                 return
             cx = rect["x"] + ocr_center_x
             cy = rect["y"] + ocr_center_y
@@ -639,19 +651,37 @@ class OcrDebugPanel(QWidget):
 
         btn_pos = self._click_test_btn.mapToGlobal(QPoint(0, self._click_test_btn.height()))
         status_icon = "✓" if click_ok else "✗"
-        status_text = "成功" if click_ok else "失敗"
-        tooltip = (
-            f"{status_icon} 點擊{status_text}：{r.text}\n"
-            f"截圖來源：{self._capture_source}\n"
-            f"視窗 rect: ({rect['x']}, {rect['y']}) {rect['w']}×{rect['h']}\n"
-            f"OCR 中心: ({ocr_center_x}, {ocr_center_y})\n"
-            f"螢幕座標: ({cx}, {cy})"
+        status_text = T("ocr_debug.click_success") if click_ok else T("ocr_debug.click_failed")
+        tooltip = T(
+            "ocr_debug.click_test_tooltip",
+            icon=status_icon,
+            status=status_text,
+            text=r.text,
+            source=self._capture_source,
+            rx=rect["x"],
+            ry=rect["y"],
+            rw=rect["w"],
+            rh=rect["h"],
+            cx=ocr_center_x,
+            cy=ocr_center_y,
+            sx=cx,
+            sy=cy,
         )
         QToolTip.showText(btn_pos, tooltip, self._click_test_btn)
         QTimer.singleShot(2500, QToolTip.hideText)
 
         self._status_bar.showMessage(
-            f"點擊測試{status_text}：「{r.text}」  rect({rect['x']},{rect['y']}) OCR中心({ocr_center_x},{ocr_center_y}) 螢幕({cx},{cy})"
+            T(
+                "ocr_debug.click_test_status",
+                status=status_text,
+                text=r.text,
+                rx=rect["x"],
+                ry=rect["y"],
+                cx=ocr_center_x,
+                cy=ocr_center_y,
+                sx=cx,
+                sy=cy,
+            )
         )
 
     def _rebuild_annotated(self):
@@ -717,14 +747,14 @@ class OcrDebugPanel(QWidget):
     def _update_crop_preview(self):
         try:
             self._crop_pixmap = None
-            self._selected_detail.setText("選取區塊：尚未選取")
+            self._selected_detail.setText(T("ocr_debug.selected_none"))
             if self._latest_raw is None:
-                self._crop_label.setText("無預覽")
+                self._crop_label.setText(T("ocr_debug.no_preview"))
                 self._crop_label.setPixmap(QPixmap())
                 return
 
             if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
-                self._crop_label.setText("點選表格中的一列，這裡會顯示裁切預覽")
+                self._crop_label.setText(T("ocr_debug.crop_hint"))
                 self._crop_label.setPixmap(QPixmap())
                 return
 
@@ -735,7 +765,7 @@ class OcrDebugPanel(QWidget):
             x1 = min(self._latest_raw.shape[1], r.x + r.w + pad)
             y1 = min(self._latest_raw.shape[0], r.y + r.h + pad)
             if x1 <= x0 or y1 <= y0:
-                self._crop_label.setText("無法產生裁切預覽")
+                self._crop_label.setText(T("ocr_debug.crop_gen_failed"))
                 self._crop_label.setPixmap(QPixmap())
                 return
 
@@ -759,11 +789,16 @@ class OcrDebugPanel(QWidget):
                 )
             )
             self._selected_detail.setText(
-                "選取區塊："
-                f"#{self._selected_index + 1}\n"
-                f"文字：{r.text}\n"
-                f"座標：x={r.x}, y={r.y}, w={r.w}, h={r.h}\n"
-                f"信心度：{int(r.confidence * 100)}%"
+                T(
+                    "ocr_debug.detail_text",
+                    n=self._selected_index + 1,
+                    text=r.text,
+                    x=r.x,
+                    y=r.y,
+                    w=r.w,
+                    h=r.h,
+                    conf=int(r.confidence * 100),
+                )
             )
         except Exception:
             logging.exception("_update_crop_preview failed")
@@ -791,11 +826,11 @@ class OcrDebugPanel(QWidget):
         self._add_rule_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
         self._update_step_btn_state()
-        self._image_label.setText("切換視窗 — 請重新拍一張")
+        self._image_label.setText(T("ocr_debug.switch_window"))
         self._image_label.setPixmap(QPixmap())
         self._crop_label.setText("")
         self._crop_label.setPixmap(QPixmap())
-        self._selected_detail.setText("選取區塊：尚未選取")
+        self._selected_detail.setText(T("ocr_debug.selected_none"))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
