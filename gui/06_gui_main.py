@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -2652,7 +2653,8 @@ class SettingsDialog(QDialog):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if answer == QMessageBox.StandardButton.Yes:
-                os.execl(sys.executable, *sys.argv)
+                subprocess.Popen([sys.executable] + sys.argv)
+                os._exit(0)
 
 
 class _NotificationStack(QWidget):
