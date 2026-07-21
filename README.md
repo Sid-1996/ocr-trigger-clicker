@@ -5,8 +5,8 @@
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Downloads](https://img.shields.io/github/downloads/Sid-1996/ocr-trigger-clicker/total?label=%E4%B8%8B%E8%BC%89%E6%AC%A1%E6%95%B8&color=238636)
 
-> 免寫程式的 Windows 遊戲自動點擊工具 — 透過 OCR 即時偵測螢幕文字，自動執行滑鼠點擊與鍵盤操作。  
-> Author: Sid
+> 免寫程式的 Windows 自動化工具 — 透過 OCR 即時偵測螢幕文字，自動執行滑鼠點擊與鍵盤操作。  
+> 支援繁體中文 / 簡體中文 UI 切換。Author: Sid
 
 ---
 
@@ -15,7 +15,7 @@
 OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動化工具。  
 它監控指定視窗的畫面內容，當偵測到使用者設定的目標文字時，自動移動滑鼠並點擊指定位置。
 
-專注於**無程式碼（No-Code）**、**跨解析度相容**的開源方案，封裝複雜的機器學習模型與底層 Windows 視窗操作，讓不具備程式背景的使用者也能輕鬆建立自動化規則。
+專注於**無程式碼（No-Code）**、**跨解析度相容**、**多語言介面**的開源方案，封裝複雜的機器學習模型與底層 Windows 視窗操作，讓不具備程式背景的使用者也能輕鬆建立自動化規則。
 
 ### 應用場景
 
@@ -251,6 +251,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 - **mss** — 高效率螢幕截圖
 - **OpenCV + NumPy** — 影像處理與畫面變動偵測
 - **PyInstaller** — 打包為單一 EXE
+- **JSON 字典式 i18n** — 繁體中文 / 簡體中文 UI 切換，設定頁一鍵選擇
 
 ### 座標系統
 
@@ -269,7 +270,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 ### 環境準備
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ocr-trigger-clicker.git
+git clone https://github.com/Sid-1996/ocr-trigger-clicker.git
 cd ocr-trigger-clicker
 python -m venv venv
 .\venv\Scripts\activate
@@ -332,9 +333,9 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 
 **OCR Trigger Clicker** — A no-code Windows auto clicker powered by OCR. It monitors any window in real time, detects target text on screen, and automatically clicks, presses keys, or performs multi-step sequences. Built for gamers and power users who need game automation, idle scripts, or repetitive task automation without writing a single line of code.
 
-**Key features:** OCR text detection (Traditional Chinese), image template matching (10–50× faster than OCR), window-ratio coordinates (resolution-independent), group-based rule management with drag-and-drop, background monitoring mode, foreground protection, and a full PyQt6 GUI.
+**Key features:** OCR text detection (Traditional Chinese), image template matching (10–50× faster than OCR), window-ratio coordinates (resolution-independent), group-based rule management with drag-and-drop, background monitoring mode, foreground protection, Traditional/Simplified Chinese UI switching, and a full PyQt6 GUI.
 
-**Keywords:** auto clicker, game automation, Windows automation, no-code automation, OCR automation, screen recognition, text recognition click, idle script, repetitive task automation, Python automation tool, AutoHotkey alternative
+**Keywords:** auto clicker, game automation, Windows automation, no-code automation, OCR automation, screen recognition, text recognition click, idle script, repetitive task automation, Python automation tool, AutoHotkey alternative, i18n, 多語言
 
 ---
 
@@ -342,9 +343,9 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 
 **OCR Trigger Clicker** — 免写代码的 Windows 自动点击工具，基于 OCR 实时检测屏幕文字，自动执行鼠标点击与键盘操作。适用于游戏自动化、挂机脚本、重复性操作自动化等场景。
 
-**核心功能：** OCR 文字检测（繁体中文）、图像模板比对（比 OCR 快 10~50 倍）、窗口比例坐标（跨分辨率兼容）、群组规则管理（拖拽排序）、后台监控模式、前景保护、完整图形化界面。
+**核心功能：** OCR 文字检测（繁体中文）、图像模板比对（比 OCR 快 10~50 倍）、窗口比例坐标（跨分辨率兼容）、群组规则管理（拖拽排序）、后台监控模式、前景保护、繁体/简体中文界面切换、完整图形化界面。
 
-**关键词：** 自动点击器、游戏自动化、Windows 自动化、免代码自动化、OCR 自动化、屏幕文字识别、自动点击脚本、挂机辅助工具、Python 自动化、AutoHotkey 替代
+**关键词：** 自动点击器、游戏自动化、Windows 自动化、免代码自动化、OCR 自动化、屏幕文字识别、自动点击脚本、挂机辅助工具、Python 自动化、AutoHotkey 替代、多语言
 
 ---
 
@@ -356,7 +357,7 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 
 ## 開源授權
 
-Copyright (C) 2024 Sid
+Copyright (C) 2024-2026 Sid
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
