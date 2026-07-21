@@ -59,8 +59,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from i18n import T, set_language
-
 if hasattr(sys, "_MEIPASS"):
     _base = Path(sys._MEIPASS)
 else:
@@ -68,6 +66,7 @@ else:
 sys.path.insert(0, str(_base))
 
 from _loader import load_sibling
+from i18n import T, set_language
 
 _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
