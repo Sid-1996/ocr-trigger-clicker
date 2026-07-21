@@ -208,8 +208,8 @@ def main():
     ]
     for h in hidden:
         args.append(f"--hidden-import={h}")
-    # 收集 numpy C extension（.pyd），確保 _multiarray_tests 等被包入
-    args.append("--collect-binaries=numpy.core")
+    # 收集 numpy 所有 C extension（.pyd），確保打包不遺漏
+    args.append("--collect-binaries=numpy")
     for e in exclude:
         args.append(f"--exclude-module={e}")
     for src, dst in datas:
