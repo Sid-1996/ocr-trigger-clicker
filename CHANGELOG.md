@@ -1,5 +1,29 @@
 # Changelog
 
+## [v0.1.1] - 2026-07-22
+
+### 新增
+- 英文語言支援（en.json，528 個翻譯 key），語言切換選單升級為繁體中文 / 简体中文 / English
+- i18n 驗證工具 `i18n/check.py` 改為動態偵測語言檔，新增語言無需手動改腳本
+- `.opencodeignore` 排除建構快取、測試產物、graphify-out 等非必要檔案
+
+### 修正
+- `release.ps1` 安全流程重寫：新增 pre-flight 檢查（python / gh / git 乾淨度 / tag 重複），
+  push 移至 build 成功後執行，避免 build 失敗時遠端留下孤立版本提交
+- `release.ps1` 改為 `--draft --prerelease`，Release 建立為 Draft 狀態，
+  需手動按 Publish 才公開，避免 auto-updater 在 asset 上線前觸發下載失敗
+- `release.ps1` 硬編絕對路徑改為 `Split-Path` 動態解析
+- `build.py` 錯誤訊息 `cd "{__file__}"` 修正為 `cd "{here}"`
+- T() 函式參數名 `key` 改為 `msg_id`，修復與 `key=` 格式化參數衝突
+- `_OCR_MODES` 內部 key 從中文「完整測試」改為英文 `"full_test"`
+- T() 遺漏補齊：test_run_controller / group_settings_controller / screenshot_controller 等檔案 60+ 字串
+- step_form.love_fadian 遺漏 key 補回
+
+### 重構
+- 移除 i18n 死鑰 184 個（format.*、group.*、ocr_debug.*、overlay.*、screenshot.* 等）
+- gui log 訊息（規則刪除、背景更新失敗）改為 T() 翻譯
+- AGENTS.md release 流程描述更新為 draft + pre-flight 新流程
+
 ## [v0.1.0] - 2026-07-19
 
 ### 新增
