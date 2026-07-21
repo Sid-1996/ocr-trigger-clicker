@@ -40,7 +40,7 @@ def main():
         print("   1. 啟動虛擬環境（如有）：venv\\Scripts\\activate")
         print("   2. 安裝依賴：pip install rapidocr-onnxruntime")
         print("   3. 或直接在專案目錄執行：")
-        print(f'      cd "{__file__}"')
+        print(f'      cd "{here}"')
         print(f'      "{sys.executable}" build.py')
         sys.exit(1)
 
