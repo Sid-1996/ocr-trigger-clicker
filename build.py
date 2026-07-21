@@ -194,6 +194,8 @@ def main():
         "antlr4_python3_runtime",
     ]
 
+    runtime_dir = Path(os.environ.get("APPDATA", Path.home())) / "ocr-trigger-clicker" / "runtime"
+
     args = [
         "--onefile",
         "--windowed",
@@ -202,6 +204,7 @@ def main():
         "--workpath=" + str(here / "build"),
         "--specpath=" + str(here),
         "--noconfirm",
+        f"--runtime-tmpdir={runtime_dir}",
     ]
     for h in hidden:
         args.append(f"--hidden-import={h}")
