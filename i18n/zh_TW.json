@@ -317,6 +317,8 @@
   "dialog.startup_failed_msg": "初始化過程中發生錯誤：\n{error}",
   "dialog.save_failed": "儲存失敗",
   "dialog.close": "關閉(Esc)",
+  "log.deleted_rule": "規則「{name}」已刪除 (id={id})",
+  "log.update_failed_bg": "背景檢查更新失敗（不影響使用）: {msg}",
   "tray.show": "顯示視窗",
   "tray.settings": "設定...",
   "tray.check_update": "檢查更新",

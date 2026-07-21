@@ -4338,7 +4338,7 @@ class MainWindow(QMainWindow):
         ):
             return
         self._rules = [r for r in self._rules if r.id != rule.id]
-        _main_loop_mod.log_main(f"規則「{rule.name}」已刪除 (id={rule.id})")
+        _main_loop_mod.log_main(T("log.deleted_rule", name=rule.name, id=rule.id))
         for g in self._groups:
             g.rule_ids = [rid for rid in g.rule_ids if rid != rule.id]
         # 清理被刪規則的孤兒範本圖片（僅限舊版檔案路徑殘留）
@@ -5225,7 +5225,7 @@ class MainWindow(QMainWindow):
                 T("update.check_failed", msg=msg),
             )
         else:
-            logging.warning("背景檢查更新失敗（不影響使用）: %s", msg)
+            logging.warning(T("log.update_failed_bg", msg=msg))
 
     def _start_download(self, info):
         if self._downloading:

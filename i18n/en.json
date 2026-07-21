@@ -317,6 +317,8 @@
   "dialog.startup_failed_msg": "An error occurred during initialization:\n{error}",
   "dialog.save_failed": "Save Failed",
   "dialog.close": "Close (Esc)",
+  "log.deleted_rule": "Rule \"{name}\" deleted (id={id})",
+  "log.update_failed_bg": "Background update check failed (not affecting usage): {msg}",
   "tray.show": "Show Window",
   "tray.settings": "Settings...",
   "tray.check_update": "Check Update",

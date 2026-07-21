@@ -317,6 +317,8 @@
   "dialog.startup_failed_msg": "初始化过程中发生错误：\n{error}",
   "dialog.save_failed": "保存失败",
   "dialog.close": "关闭(Esc)",
+  "log.deleted_rule": "规则「{name}」已删除 (id={id})",
+  "log.update_failed_bg": "后台检查更新失败（不影响使用）: {msg}",
   "tray.show": "显示窗口",
   "tray.settings": "设置...",
   "tray.check_update": "检查更新",

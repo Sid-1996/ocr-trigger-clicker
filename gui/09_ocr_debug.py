@@ -63,7 +63,7 @@ class OcrDebugPanel(QWidget):
     template_step_requested = pyqtSignal(dict)
 
     _OCR_MODES = {
-        "完整測試": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
+        "full_test": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
     }
 
     def __init__(self, window_title: str, parent=None):
@@ -240,7 +240,7 @@ class OcrDebugPanel(QWidget):
             )
 
     def _ocr_options(self) -> dict:
-        return self._OCR_MODES["完整測試"]
+        return self._OCR_MODES["full_test"]
 
     def _minimize_and_capture(self):
         try:
