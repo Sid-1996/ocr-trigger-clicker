@@ -2644,7 +2644,6 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
         new_lang = self._language.currentData()
         self._ctrl.set_setting(self._win, "language", new_lang)
-        self.accept()
         if old_lang != new_lang:
             answer = QMessageBox.question(
                 self,
@@ -2653,8 +2652,10 @@ class SettingsDialog(QDialog):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if answer == QMessageBox.StandardButton.Yes:
+                self.accept()
                 subprocess.Popen([sys.executable] + sys.argv)
                 os._exit(0)
+        self.accept()
 
 
 class _NotificationStack(QWidget):
