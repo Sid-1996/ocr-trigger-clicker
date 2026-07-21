@@ -28,10 +28,10 @@ def _load(lang: str) -> dict[str, str]:
     return _cache[lang]
 
 
-def T(key: str, **kwargs) -> str:
+def T(msg_id: str, **kwargs) -> str:
     """翻譯查表。缺失時 fallback 到 zh_TW 並印 warning。"""
-    s = _load(_current).get(key)
+    s = _load(_current).get(msg_id)
     if s is None:
-        s = _load("zh_TW").get(key, key)
-        warnings.warn(f"[i18n] missing key '{key}' in '{_current}'")
+        s = _load("zh_TW").get(msg_id, msg_id)
+        warnings.warn(f"[i18n] missing key '{msg_id}' in '{_current}'")
     return s.format(**kwargs) if kwargs else s
