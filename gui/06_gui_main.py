@@ -509,6 +509,41 @@ def _step_summary(step, rules_provider=None) -> str:
     return t
 
 
+def _rule_tags(rule) -> str:
+    """Generate summary tags for rule list, e.g. ' [5步] [失敗]'."""
+    steps = rule.steps
+    if not steps:
+        return " " + T("rule_summary.empty")
+    has_fail = False
+    has_retry = False
+    for s in steps:
+        of = s.params.get("on_fail")
+        if of is None:
+            continue
+        if isinstance(of, str):
+            if of != "stop":
+                has_fail = True
+        elif isinstance(of, dict):
+            action = of.get("action", "stop")
+            if action != "stop":
+                has_fail = True
+            if action == "retry":
+                has_retry = True
+            elif action == "stop":
+                try:
+                    dur = float(of.get("fail_duration_sec", 0) or 0)
+                except (TypeError, ValueError):
+                    dur = 0.0
+                if dur > 0:
+                    has_fail = True
+    parts = [T("rule_summary.steps", count=len(steps))]
+    if has_fail:
+        parts.append(T("rule_summary.has_fail"))
+    if has_retry:
+        parts.append(T("rule_summary.has_retry"))
+    return " " + " ".join(parts)
+
+
 def _of_summary(raw: str | dict, rules_provider=None) -> str:
     if isinstance(raw, str):
         return "" if raw == "stop" else T("summary.onfail_press_key")  # bare "key"
@@ -3710,7 +3745,7 @@ class MainWindow(QMainWindow):
                     continue
                 child = QTreeWidgetItem()
                 text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
-                child.setText(0, text)
+                child.setText(0, text + _rule_tags(r))
                 child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
@@ -3734,7 +3769,8 @@ class MainWindow(QMainWindow):
             bg_item.setForeground(0, QColor("#aaaaaa"))
             for r in bg_rules:
                 child = QTreeWidgetItem()
-                child.setText(0, f"[{'✓' if r.enabled else '✗'}] {r.name}")
+                text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
+                child.setText(0, text + _rule_tags(r))
                 child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
