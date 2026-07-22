@@ -3769,7 +3769,7 @@ class MainWindow(QMainWindow):
             bg_item.setForeground(0, QColor("#aaaaaa"))
             for r in bg_rules:
                 child = QTreeWidgetItem()
-                text = f"[{'✓' if r.enabled else '✗'}] {r.name}"
+                text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
                 child.setText(0, text + _rule_tags(r))
                 child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
                 child.setIcon(
@@ -4719,7 +4719,10 @@ class MainWindow(QMainWindow):
         self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
-            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}" + _rule_tags(rule))
+            prefix = "👁 " if rule.background else ""
+            item.setText(
+                0, f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}" + _rule_tags(rule)
+            )
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
