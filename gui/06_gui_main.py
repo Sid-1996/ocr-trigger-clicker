@@ -3826,6 +3826,7 @@ class MainWindow(QMainWindow):
             return
         statuses = self._loop.get_rules_status()
         status_map = {s["id"]: s for s in statuses}
+        rule_lookup = {r.id: r for r in self._rules}
         pointer_id = next((s["id"] for s in statuses if s.get("pointer")), None)
 
         def _set_text(item):
@@ -3846,8 +3847,11 @@ class MainWindow(QMainWindow):
             else:
                 icon_color = (160, 160, 160)
             base = f"{'👁 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
-            if item.text(0) != base:
-                item.setText(0, base)
+            r = rule_lookup.get(sid)
+            tag_str = _rule_tags(r) if r else ""
+            full = base + tag_str
+            if item.text(0) != full:
+                item.setText(0, full)
             item.setIcon(0, self._make_circle_icon(icon_color))
             if sid == pointer_id:
                 item.setForeground(0, QColor("#4fc3f7"))
@@ -3920,7 +3924,9 @@ class MainWindow(QMainWindow):
                     self._flush_save()
                     prefix = "👁 " if prev_rule.background else ""
                     status = "✓" if prev_rule.enabled else "✗"
-                    previous.setText(0, f"{prefix}[{status}] {prev_rule.name}")
+                    previous.setText(
+                        0, f"{prefix}[{status}] {prev_rule.name}" + _rule_tags(prev_rule)
+                    )
                     if self._loop:
                         self._loop.reload_rules()
         if current:
@@ -4037,7 +4043,7 @@ class MainWindow(QMainWindow):
         if item:
             prefix = "👁 " if rule.background else ""
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
-            item.setText(0, text)
+            item.setText(0, text + _rule_tags(rule))
 
     def _on_background_changed(self, state):
         rule = self._get_current_rule()
@@ -4713,7 +4719,7 @@ class MainWindow(QMainWindow):
         self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
-            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}")
+            item.setText(0, f"[{'✓' if rule.enabled else '✗'}] {rule.name}" + _rule_tags(rule))
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
