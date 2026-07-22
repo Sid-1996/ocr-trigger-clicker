@@ -1,3 +1,4 @@
+import json
 import logging
 import os as _os
 import re
@@ -20,6 +21,7 @@ RAW_VERSION_URL = (
 )
 ASSET_NAME = "ocr-trigger-clicker.zip"
 UPDATER_EXE_NAME = "updater.exe"
+_API_RELEASES = f"https://api.github.com/repos/{_GITHUB_OWNER}/{_GITHUB_REPO}/releases"
 
 
 @dataclass
@@ -38,6 +40,18 @@ def _parse_version(v: str) -> tuple[int, ...]:
         m = re.match(r"(\d+)", x)
         parts.append(int(m.group(1)) if m else 0)
     return tuple(parts)
+
+
+def fetch_release_notes(version: str) -> str | None:
+    url = f"{_API_RELEASES}/tags/v{version}"
+    req = Request(url, headers={"User-Agent": _USER_AGENT, "Accept": "application/vnd.github+json"})
+    try:
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("body")
+    except Exception:
+        log.warning("fetch_release_notes failed for v%s", version)
+        return None
 
 
 def is_frozen() -> bool:

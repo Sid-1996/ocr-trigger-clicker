@@ -53,6 +53,7 @@ from PyQt6.QtWidgets import (
     QStatusBar,
     QSystemTrayIcon,
     QTabWidget,
+    QTextBrowser,
     QTextEdit,
     QTreeWidget,
     QTreeWidgetItem,
@@ -5179,6 +5180,11 @@ class MainWindow(QMainWindow):
             + T("about.guide", url=_GUIDE_URL),
         )
 
+    def _show_update_dialog(self, info, notes=None):
+        dialog = _UpdateInfoDialog(info, notes, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._start_download(info)
+
     def _open_guide(self):
         import webbrowser
 
@@ -5205,7 +5211,7 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(T("status.checking_update"))
 
         class _CheckWorker(QThread):
-            result = pyqtSignal(object)
+            result = pyqtSignal(object, object)  # (UpdateInfo | None, notes str | None)
             error = pyqtSignal(str, bool)  # (msg, forced)
 
             def __init__(self, forced):
@@ -5215,7 +5221,13 @@ class MainWindow(QMainWindow):
             def run(self):
                 try:
                     info = _updater_mod.check_for_update(__version__)
-                    self.result.emit(info)
+                    notes = None
+                    if info:
+                        try:
+                            notes = _updater_mod.fetch_release_notes(info.version)
+                        except Exception:
+                            notes = None
+                    self.result.emit(info, notes)
                 except Exception as e:
                     self.error.emit(str(e), self.forced)
 
@@ -5224,7 +5236,7 @@ class MainWindow(QMainWindow):
         self._check_worker.error.connect(self._on_update_error)
         self._check_worker.start()
 
-    def _on_update_checked(self, info):
+    def _on_update_checked(self, info, notes=None):
         self._updating = False
         if info is None:
             self._status_bar.showMessage(T("status.latest_version"), 3000)
@@ -5233,14 +5245,16 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(T("status.update_found", version=info.version), 0)
         self._pending_update_ver = info.version
         self._pending_update_info = info
+        self._pending_update_notes = notes
         orig_press = self._status_bar.mousePressEvent
 
         def _on_click(e):
             self._status_bar.mousePressEvent = orig_press
             self._status_bar.showMessage("")
-            self._start_download(info)
+            self._show_update_dialog(info, notes)
 
         self._status_bar.mousePressEvent = _on_click
+        self._show_update_dialog(info, notes)
 
     def _on_update_error(self, msg, forced=False):
         self._updating = False
@@ -5415,6 +5429,51 @@ class MainWindow(QMainWindow):
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
             self._restore_window()
+
+
+class _UpdateInfoDialog(QDialog):
+    def __init__(self, info, notes=None, parent=None):
+        super().__init__(parent)
+        self._info = info
+        self.setWindowTitle(T("update.dialog.title", version=info.version))
+        self.setMinimumSize(480, 380)
+        self.resize(560, 500)
+
+        layout = QVBoxLayout(self)
+
+        header = QLabel(T("update.dialog.header", version=info.version))
+        header.setWordWrap(True)
+        header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 8px;")
+        layout.addWidget(header)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        if notes:
+            browser.setMarkdown(notes)
+        else:
+            browser.setPlainText(T("update.dialog.no_notes"))
+        layout.addWidget(browser)
+
+        btn_layout = QHBoxLayout()
+        auto_btn = QPushButton(T("update.dialog.auto"))
+        auto_btn.clicked.connect(self.accept)
+
+        manual_btn = QPushButton(T("update.dialog.manual"))
+        manual_btn.clicked.connect(self._open_release)
+
+        cancel_btn = QPushButton(T("ui.cancel"))
+        cancel_btn.clicked.connect(self.reject)
+
+        btn_layout.addWidget(auto_btn)
+        btn_layout.addWidget(manual_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+    def _open_release(self):
+        import webbrowser
+
+        webbrowser.open(self._info.release_url)
+        self.reject()
 
 
 if __name__ == "__main__":
