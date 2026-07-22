@@ -432,8 +432,8 @@ def _step_summary(step, rules_provider=None) -> str:
             extra = " [" + T("summary.exact") + "]"
         elif mode == "contains":
             extra = " [" + T("summary.contains") + "]"
-        elif mode == "fuzzy" and th != 0.8:
-            extra = " [" + T("summary.fuzzy") + f"@{th}]"
+        elif mode == "fuzzy":
+            extra = " [" + T("summary.fuzzy") + (f"@{th}" if th != 0.8 else "") + "]"
         text_label = f"「{text}」" if text else T("summary.not_set")
         parts = [text_label + extra]
         parts.append(roi_str)
