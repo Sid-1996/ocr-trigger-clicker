@@ -3131,8 +3131,7 @@ class MainWindow(QMainWindow):
         hdr = self._rule_list.header()
         hdr.setStretchLastSection(False)
         hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        hdr.resizeSection(1, 80)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._rule_list.customContextMenuRequested.connect(self._on_rule_context_menu)
         left_layout.addWidget(self._rule_list)
 
@@ -3745,7 +3744,13 @@ class MainWindow(QMainWindow):
                     continue
                 child = QTreeWidgetItem()
                 text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
-                child.setText(0, text + _rule_tags(r))
+                child.setText(0, text)
+                tags = _rule_tags(r).lstrip()
+                if tags:
+                    child.setText(1, tags)
+                    child.setTextAlignment(
+                        1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                    )
                 child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
@@ -3770,7 +3775,13 @@ class MainWindow(QMainWindow):
             for r in bg_rules:
                 child = QTreeWidgetItem()
                 text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
-                child.setText(0, text + _rule_tags(r))
+                child.setText(0, text)
+                tags = _rule_tags(r).lstrip()
+                if tags:
+                    child.setText(1, tags)
+                    child.setTextAlignment(
+                        1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                    )
                 child.setData(0, Qt.ItemDataRole.UserRole, ("rule", r.id))
                 child.setIcon(
                     0, self._make_circle_icon((0, 180, 0) if r.enabled else (160, 160, 160))
@@ -3847,11 +3858,12 @@ class MainWindow(QMainWindow):
             else:
                 icon_color = (160, 160, 160)
             base = f"{'👁 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
+            if item.text(0) != base:
+                item.setText(0, base)
             r = rule_lookup.get(sid)
-            tag_str = _rule_tags(r) if r else ""
-            full = base + tag_str
-            if item.text(0) != full:
-                item.setText(0, full)
+            tag_str = (_rule_tags(r) if r else "").lstrip()
+            if item.text(1) != tag_str:
+                item.setText(1, tag_str)
             item.setIcon(0, self._make_circle_icon(icon_color))
             if sid == pointer_id:
                 item.setForeground(0, QColor("#4fc3f7"))
@@ -3924,9 +3936,10 @@ class MainWindow(QMainWindow):
                     self._flush_save()
                     prefix = "👁 " if prev_rule.background else ""
                     status = "✓" if prev_rule.enabled else "✗"
-                    previous.setText(
-                        0, f"{prefix}[{status}] {prev_rule.name}" + _rule_tags(prev_rule)
-                    )
+                    previous.setText(0, f"{prefix}[{status}] {prev_rule.name}")
+                    tags = _rule_tags(prev_rule).lstrip()
+                    if tags:
+                        previous.setText(1, tags)
                     if self._loop:
                         self._loop.reload_rules()
         if current:
@@ -4043,7 +4056,10 @@ class MainWindow(QMainWindow):
         if item:
             prefix = "👁 " if rule.background else ""
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
-            item.setText(0, text + _rule_tags(rule))
+            item.setText(0, text)
+            tags = _rule_tags(rule).lstrip()
+            if tags:
+                item.setText(1, tags)
 
     def _on_background_changed(self, state):
         rule = self._get_current_rule()
@@ -4720,9 +4736,10 @@ class MainWindow(QMainWindow):
         item = self._rule_list.currentItem()
         if item:
             prefix = "👁 " if rule.background else ""
-            item.setText(
-                0, f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}" + _rule_tags(rule)
-            )
+            item.setText(0, f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}")
+            tags = _rule_tags(rule).lstrip()
+            if tags:
+                item.setText(1, tags)
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
