@@ -1,13 +1,38 @@
 ﻿
 ## [v0.1.1] - 2026-07-22
 
+### ⚠️ 重要公告：打包格式變更
+
+此版本從 `--onefile`（單一 exe）遷移至 `--onedir`（目錄結構），以消除運行時動態解壓縮帶來的穩定性問題，冷啟動速度從 6.81 秒降至 **1 秒內**。
+
+### 🔴 強烈建議：本次請手動下載
+
+由於本次為打包格式首次轉換，自動更新可能發生錯誤。**所有使用者（無論新舊版本）** 請至 [GitHub Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases/latest) 手動下載 `ocr-trigger-clicker.zip`。
+
+使用方式：
+1. 下載 `ocr-trigger-clicker.zip`
+2. 解壓縮至任意目錄
+3. 執行 `ocr-trigger-clicker.exe`
+
+**舊版本可直接刪除**，不影響設定檔與規則（儲存於 `%APPDATA%\ocr-trigger-clicker\`）。
+
+### 新增
+- 自動更新支援 onedir 結構：`updater.exe --mode=update` 改為整包目錄取代，含備份 + rollback 還原機制
+- `_UpdaterParser` MessageBox 防呆：直接雙擊 `updater.exe` 時跳出提示對話框
+- `apply_update()` 對 onedir 路徑改為自動啟動新版 `updater.exe` 做目錄取代
+
 ### 變更
-- 切換為 --onedir 打包模式，徹底消除運行時動態解壓縮帶來的穩定性問題
+- 切換為 `--onedir` 打包模式，徹底消除運行時動態解壓縮帶來的穩定性問題
 - 冷啟動速度從 6.81 秒大幅提升至 **1 秒內**
-- 語言切換重啟改為外部 relauncher (updater.exe --mode=relaunch)，解決舊版重啟時的 bootloader 競爭問題
-- 自動更新策略調整：偵測到新版為 onedir 結構時，引導使用者手動至 GitHub Releases 下載，避免自動更新造成安裝損壞
-- 移除已棄用的 updater_main.py --mode=migrate 相關程式碼
-# Changelog
+- 語言切換重啟改為外部 relauncher（`updater.exe --mode=relaunch`），解決 PyInstaller bootloader 競爭問題
+- 移除 `updater_main.py` 中 onefile 時代的參數（`--old`、`--new`、`--pid`、`--log`）與重試邏輯
+- 移除已棄用的 `--mode=migrate` 相關程式碼
+- `gui/06_gui_main.py` relaunch 呼叫移除除錯用 `--log` 參數
+
+### 技術細節
+- `updater.exe` 維持 `--onefile` 打包，不依賴 `_internal/`，確保可獨立執行且原始 exe 不被鎖定
+- 更新流程：下載 ZIP → 偵測 `_internal/` → 解壓到 sibling 目錄 → 啟動新版 `updater.exe` → 備份舊目錄 → rename 取代 → 啟動新版
+- 失敗還原：取代失敗時自動將備份目錄 rename 回原位，防止程式遺失
 
 ## [v0.1.0] - 2026-07-19
 
@@ -174,6 +199,7 @@
 
 擐活?祇??潸?嚗CR ??颲刻?閫貊閬???銝剛閮芋??蝒??詻HK ?芸?摰???隞餃?蝞∠?
 
+[v0.1.1]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.1
 [v0.1.0]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.0
 [v0.0.14]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.14
 [v0.0.13]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.13

@@ -172,6 +172,12 @@ def main():
         "urllib3",
         "certifi",
         "idna",
+        # 開發/建置工具
+        "Cython",
+        # GUI 框架（不使用 tkinter）
+        "tkinter",
+        "_tkinter",
+        "tcl",
         # 其他未使用
         "PyAutoGUI",
         "keyboard",
