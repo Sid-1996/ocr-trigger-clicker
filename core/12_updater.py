@@ -83,7 +83,6 @@ def download_update(
     _clean_stale_temp_dirs()
     tmp_dir = Path(tempfile.mkdtemp(prefix="ocr_update_"))
     zip_path = tmp_dir / ASSET_NAME
-    exe_path = tmp_dir / "ocr-trigger-clicker.exe"
 
     try:
         log.info("開始下載更新 v%s", info.version)
@@ -103,6 +102,32 @@ def download_update(
                     if progress_cb:
                         progress_cb(downloaded, total)
 
+        # Detect release type from ZIP structure
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            has_internal = any(n.startswith("_internal/") for n in zf.namelist())
+
+        if has_internal:
+            # onedir: extract all to a sibling directory
+            exe_dir = current_exe_path().parent
+            new_dir = exe_dir / "ocr-trigger-clicker_new"
+            if new_dir.exists():
+                shutil.rmtree(new_dir, ignore_errors=True)
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(new_dir)
+            new_updater = new_dir / UPDATER_EXE_NAME
+            if not new_updater.exists():
+                raise RuntimeError("\u89e3\u58d3\u7e2e\u5f8c\u627e\u4e0d\u5230 updater.exe")
+            main_exe = new_dir / "ocr-trigger-clicker.exe"
+            if not (main_exe.exists() and main_exe.read_bytes()[:2] == b"MZ"):
+                raise RuntimeError(
+                    "\u4e0b\u8f09\u6a94\u6848\u4e0d\u662f\u6709\u6548\u7684 EXE"
+                    "\uff08PE \u6a19\u982d\u932f\u8aa4\uff09"
+                )
+            log.info("onedir \u66f4\u65b0\u89e3\u58d3\u5b8c\u6210: %s", new_dir)
+            return new_dir
+
+        # onefile: extract exes (backward compatibility)
+        exe_path = tmp_dir / "ocr-trigger-clicker.exe"
         with zipfile.ZipFile(zip_path, "r") as zf:
             exe_entries = [n for n in zf.namelist() if n.endswith(".exe")]
             if not exe_entries:
@@ -113,45 +138,76 @@ def download_update(
             )
             with zf.open(target) as src, open(exe_path, "wb") as dst:
                 shutil.copyfileobj(src, dst)
-
             updater_entries = [n for n in zf.namelist() if n == UPDATER_EXE_NAME]
             if not updater_entries:
                 raise RuntimeError("ZIP \u5185\u7f3a\u5c11 updater.exe")
             updater_dst = tmp_dir / UPDATER_EXE_NAME
             with zf.open(UPDATER_EXE_NAME) as src, open(updater_dst, "wb") as dst:
                 shutil.copyfileobj(src, dst)
-
         with open(exe_path, "rb") as f:
             if f.read(2) != b"MZ":
                 raise RuntimeError(
                     "\u4e0b\u8f09\u6a94\u6848\u4e0d\u662f\u6709\u6548\u7684 EXE"
                     "\uff08PE \u6a19\u982d\u932f\u8aa4\uff09"
                 )
-
         return exe_path
 
     except Exception:
         log.exception("下載更新失敗")
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        try:
+            _nd = current_exe_path().parent / "ocr-trigger-clicker_new"
+            if _nd.exists():
+                shutil.rmtree(_nd, ignore_errors=True)
+        except Exception:
+            pass
         raise
 
 
-def apply_update(new_exe_path: Path) -> Path:
+def apply_update(new_path: Path) -> Path:
     if not is_frozen():
         log.error("原始碼模式不支援自動更新")
         raise RuntimeError(
             "\u539f\u59cb\u78bc\u6a21\u5f0f\u4e0d\u652f\u63f4\u81ea\u52d5\u66f4\u65b0"
         )
 
+    if new_path.is_dir() and (new_path / "_internal").exists():
+        # onedir 結構：不自動更新，引導使用者手動下載
+        log.info("偵測到 onedir 結構，顯示手動下載引導")
+        try:
+            from PyQt6.QtCore import QUrl
+            from PyQt6.QtGui import QDesktopServices
+            from PyQt6.QtWidgets import QMessageBox
+
+            _RELEASE_URL = f"https://github.com/{_GITHUB_OWNER}/{_GITHUB_REPO}/releases/latest"
+            msg = QMessageBox()
+            msg.setWindowTitle("更新通知")
+            msg.setText(
+                "偵測到重大版本更新，此版本改為資料夾結構，"
+                "無法自動更新。\n\n"
+                "請手動至 GitHub Releases 下載最新版本，"
+                "解壓縮後使用。\n\n"
+                "點擊「前往下載」將開啟瀏覽器。"
+            )
+            ok_btn = msg.addButton("前往下載", QMessageBox.ButtonRole.ActionRole)
+            msg.addButton("稍後再說", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() is ok_btn:
+                QDesktopServices.openUrl(QUrl(_RELEASE_URL))
+        except Exception:
+            log.exception("顯示更新引導對話框失敗")
+        return new_path
+
+    # onefile update (backward compatibility)
     old_exe = current_exe_path()
-    updater_exe = new_exe_path.parent / UPDATER_EXE_NAME
+    updater_exe = new_path.parent / UPDATER_EXE_NAME
     if not updater_exe.exists():
         log.error("找不到 updater.exe，無法套用更新")
         raise RuntimeError(
             "\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0"
         )
 
-    log.info("套用更新: old=%s new=%s", old_exe, new_exe_path)
+    log.info("套用更新: old=%s new=%s", old_exe, new_path)
 
     debug_log_path = (
         Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs" / "update_debug.log"
@@ -165,7 +221,7 @@ def apply_update(new_exe_path: Path) -> Path:
         subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
     ]
     launched = False
-    tmp_dir = new_exe_path.parent
+    tmp_dir = new_path.parent
     try:
         for flags in creationflags_variants:
             try:
@@ -175,7 +231,7 @@ def apply_update(new_exe_path: Path) -> Path:
                         "--old",
                         str(old_exe),
                         "--new",
-                        str(new_exe_path),
+                        str(new_path),
                         "--pid",
                         str(_os.getpid()),
                         "--log",

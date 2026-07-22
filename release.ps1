@@ -125,7 +125,7 @@ git commit -m "chore: bump to v$Version"
 
 Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
 python build.py
-Compress-Archive -Path dist\ocr-trigger-clicker.exe, dist\updater.exe -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
+Compress-Archive -Path dist\ocr-trigger-clicker\* -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
 
 # ---- 清理既有 tag / release（-Force 模式） ----
 

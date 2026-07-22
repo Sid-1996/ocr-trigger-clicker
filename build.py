@@ -195,7 +195,7 @@ def main():
     ]
 
     args = [
-        "--onefile",
+        "--onedir",
         "--windowed",
         "--name=ocr-trigger-clicker",
         "--distpath=" + str(here / "dist"),
@@ -224,7 +224,7 @@ def main():
 
     print("=== PyInstaller 打包參數 ===")
     print("入口: 06_gui_main.py")
-    print("輸出: dist\\ocr-trigger-clicker.exe")
+    print("輸出: dist\\ocr-trigger-clicker\\")
     print(f"資料檔案: {len(datas)} 項")
     print(f"隱藏 import: {len(hidden)} 項")
     print(f"排除模組: {len(exclude)} 項")
@@ -232,7 +232,7 @@ def main():
 
     PyInstaller.__main__.run(args)
 
-    exe = here / "dist" / "ocr-trigger-clicker.exe"
+    exe = here / "dist" / "ocr-trigger-clicker" / "ocr-trigger-clicker.exe"
     if exe.exists():
         print(f"\n打包成功: {exe}")
         # 清理 build/ 暫存（spec 保留供除錯）
@@ -252,7 +252,7 @@ def build_updater():
         "--onefile",
         "--windowed",
         "--name=updater",
-        "--distpath=" + str(here / "dist"),
+        "--distpath=" + str(here / "dist" / "ocr-trigger-clicker"),
         "--workpath=" + str(here / "build_updater"),
         "--specpath=" + str(here),
         "--noconfirm",
@@ -260,7 +260,7 @@ def build_updater():
     ]
     print("\n=== 打包獨立 updater.exe ===")
     PyInstaller.__main__.run(args)
-    updater_exe = here / "dist" / "updater.exe"
+    updater_exe = here / "dist" / "ocr-trigger-clicker" / "updater.exe"
     if updater_exe.exists():
         print(f"updater 打包成功: {updater_exe}")
         import shutil
