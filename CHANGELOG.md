@@ -1,239 +1,178 @@
+﻿
+## [v0.1.1] - 2026-07-22
+
+### 變更
+- 切換為 --onedir 打包模式，徹底消除運行時動態解壓縮帶來的穩定性問題
+- 冷啟動速度從 6.81 秒大幅提升至 **1 秒內**
+- 語言切換重啟改為外部 relauncher (updater.exe --mode=relaunch)，解決舊版重啟時的 bootloader 競爭問題
+- 自動更新策略調整：偵測到新版為 onedir 結構時，引導使用者手動至 GitHub Releases 下載，避免自動更新造成安裝損壞
+- 移除已棄用的 updater_main.py --mode=migrate 相關程式碼
 # Changelog
 
 ## [v0.1.0] - 2026-07-19
 
-### 新增
-- 多語言 UI 切換：新增 i18n 模組，支援繁體中文 / 簡體中文切換，
-  於偏好設定「語言」下拉選單選擇後重啟即可生效
-- 高 DPI 螢幕 overlay 座標修正：ROI 框選、點擊座標選取、截圖區域三個 overlay
-  均乘以 `devicePixelRatioF()` 轉換為實體座標，解決高 DPI 下框選偏移問題
-- 自動化測試框架：新增 `tests/` 目錄，87 項 pytest 測試涵蓋規則引擎、主迴圈、
-  模板比對、任務管理、序列化、觸發紀錄
-- 規則備註欄位（notes）：Rule 資料模型新增 `notes: str` 欄位，GUI 規則編輯器
-  新增備註文字框，向後相容（舊任務檔自動填入空字串）
-- 觸發歷史紀錄：每次規則觸發時寫入 `logs/triggers.jsonl`（JSONL 格式），
-  記錄時間戳、規則 ID、規則名稱、任務名稱、群組 ID
-- 觸發紀錄 rotation：`triggers.jsonl` 超過 1MB 自動輪替（保留 3 份）
-- 啟動時自動清理版本更新殘留死檔（`debug.log`、`run_stderr.log`）
-
-### 修正
-- 捕捉區域 overlay 1:1 模式下顯示文字改為物理像素尺寸（乘以 `devicePixelRatioF`）
-- 日誌系統優化：root logger 從 DEBUG 提升至 INFO，消除模板不匹配噪音
-  （每日 log 量從 ~50,000 行降至 ~3,000 行）
-- `_ensure_root_handler()` 加 `threading.Lock` 雙重檢查鎖，修復並發競爭
-- `rule_serialization` load/save 日誌從 INFO 降為 DEBUG，移除完整 rule list dump
-- 主迴圈 rate-limit / 前景略過日誌從 INFO 降為 DEBUG，減少每幀重複輸出
-- 主迴圈 `_log()` 移除 `print()` stdout 輸出，改為純 logging
-- `startup_error.log` 從覆寫模式改為追加模式
-- 刪除 `debug.log`、`run_stderr.log` 等孤立死檔
-
-### 移除
-- 移除「簡易/進階」切換按鈕：進階欄位（ROI、on_fail、滑鼠按鈕等）永遠可見，
-  簡化 UI 結構，減少使用者困惑
-
-### 重構
-- README SEO 優化：擴充適用場景（10 個情境）、新增工具比較表、
-  新增英文與簡體中文關鍵詞段落
+### ?啣?
+- 憭?閮 UI ??嚗憓?i18n 璅∠?嚗?渡?擃葉??/ 蝪⊿?銝剜???嚗?  ?澆?憟質身摰?閮????桅?????喳??
+- 擃?DPI ?Ｗ? overlay 摨扳?靽格迤嚗OI 獢???漣璅???????overlay
+  ??隞?`devicePixelRatioF()` 頧??箏祕擃漣璅?閫?捱擃?DPI 銝??詨?蝘餃?憿?- ?芸??葫閰行??塚??啣? `tests/` ?桅?嚗?7 ??pytest 皜祈岫瘨菔?閬?撘??蜓餈游???  璅⊥瘥??遙?恣?????孛?潛???- 閬??酉甈?嚗otes嚗?Rule 鞈?璅∪??啣? `notes: str` 甈?嚗UI 閬?蝺刻摩??  ?啣??酉??獢????詨捆嚗?隞餃?瑼?‵?亦征摮葡嚗?- 閫貊甇瑕蝝??瘥活閬?閫貊?神??`logs/triggers.jsonl`嚗SONL ?澆?嚗?
+  閮????喋???ID????蝔晞遙??蝔晞黎蝯?ID
+- 閫貊蝝??rotation嚗triggers.jsonl` 頞? 1MB ?芸?頛芣嚗???3 隞踝?
+- ????????祆?唳??香瑼?`debug.log`?run_stderr.log`嚗?
+### 靽格迤
+- ?????overlay 1:1 璅∪?銝＊蝷箸?摮?箇??蝝偕撖賂?銋誑 `devicePixelRatioF`嚗?- ?亥?蝟餌絞?芸?嚗oot logger 敺?DEBUG ????INFO嚗??斗芋?蹂??寥??芷
+  嚗???log ?? ~50,000 銵???~3,000 銵?
+- `_ensure_root_handler()` ??`threading.Lock` ??瑼Ｘ??靽桀儔銝衣蝡嗥
+- `rule_serialization` load/save ?亥?敺?INFO ? DEBUG嚗宏?文???rule list dump
+- 銝餉艘??rate-limit / ??仿??亥?敺?INFO ? DEBUG嚗?撠?撟??頛詨
+- 銝餉艘??`_log()` 蝘駁 `print()` stdout 頛詨嚗?箇? logging
+- `startup_error.log` 敺?撖急芋撘?箄蕭?芋撘?- ?芷 `debug.log`?run_stderr.log` 蝑迨蝡香瑼?
+### 蝘駁
+- 蝘駁?陛???脤????????脤?甈?嚗OI?n_fail??曌???嚗偶?閬?
+  蝪∪? UI 蝯?嚗?撠蝙?刻??
+### ??
+- README SEO ?芸?嚗??典?荔?10 ??憓??憓極?瑟?頛”??  ?啣??望??陛擃葉???菔?畾菔
 
 ## [v0.0.14] - 2026-07-15
 
-### 新增
-- 新增 `scroll`（滑鼠滾輪）與 `drag`（滑鼠拖曳）步驟類型，支援正規表達式比對
-- OCR 診斷面板新增「建立為模板」按鈕：選取辨識結果後一鍵截圖裁切為模板，
-  建立 match_image + click + wait 規則（模板用 OCR 精確邊框，ROI 維持 pad=20 搜尋範圍）
-- OCR 診斷面板新增「加入模板步驟」按鈕：將辨識區塊截圖追加為現有規則的 match_image 步驟
-- 步驟卡片顏色區分：10 種步驟類型各配對應顏色（`_STEP_COLORS`）
-- 規則圓點顯示 5 種狀態：停用（灰）、就緒（綠）、運行中（藍）、失敗（紅）、已完成（深藍）
-- 狀態欄常駐 AHK 🟢/🔴 連接指示器
-- 步驟參數即時校驗：detect 文字、notify 訊息、compare 步驟紅色邊框提示
-- 步驟列表支援 Del 快捷鍵刪除選中步驟
-
-### 修正
-- 步驟列表 Del 快捷鍵改用 `WidgetShortcut` context，避免攔截規則列表的 Del 刪除功能
-- OCR 診斷面板模板截圖色彩空間：`_latest_raw` 為 RGB，裁切後轉 BGR 再編碼，
-  避免 match_template 執行時 R↔B 互換導致比對失敗
-- `_step_summary` 補充 `template_center` 摘要顯示（後改用統一 `text_center`）
-
-### 重構
-- OCR 診斷面板提取 `_compute_roi()` 輔助方法，`_on_add_rule`、`_on_set_sub_target`、
-  `_on_add_template`、`_on_add_template_step` 四處共用 ROI 計算邏輯
-- 移除多餘的 `template_center` click target，match_image 規則統一用 `text_center`，
-  runtime 已透過 `ctx.matched_text` 介面兼容 detect 與 match_image
+### ?啣?
+- ?啣? `scroll`嚗?曌遝頛迎???`drag`嚗?曌??喉?甇仿?憿?嚗?湔迤閬”??瘥?
+- OCR 閮箸?Ｘ?啣??遣蝡璅⊥?????詨?颲刻?蝯?敺??菜???璅⊥嚗?  撱箇? match_image + click + wait 閬?嚗芋?輻 OCR 蝎曄Ⅱ??嚗OI 蝬剜? pad=20 ??蝭?嚗?- OCR 閮箸?Ｘ?啣????交芋?踵郊撽???撠儘霅?憛?蕭??暹?閬???match_image 甇仿?
+- 甇仿??∠?憿???10 蝔格郊撽????????莎?`_STEP_COLORS`嚗?- 閬???憿舐內 5 蝔桃????嚗嚗停蝺?蝬???銵葉嚗?嚗仃??蝝??歇摰?嚗楛??
+- ???撣賊? AHK ?/? ???內??- 甇仿???單??⊿?嚗etect ???otify 閮?ompare 甇仿?蝝???內
+- 甇仿??”?舀 Del 敹急?萄?日銝剜郊撽?
+### 靽格迤
+- 甇仿??” Del 敹急?菜??`WidgetShortcut` context嚗???芾???銵函? Del ?芷?
+- OCR 閮箸?Ｘ璅⊥?芸??脣蔗蝛粹?嚗_latest_raw` ??RGB嚗???頧?BGR ?楊蝣潘?
+  ?踹? match_template ?瑁???R? 鈭?撠瘥?憭望?
+- `_step_summary` 鋆? `template_center` ??憿舐內嚗??寧蝯曹? `text_center`嚗?
+### ??
+- OCR 閮箸?Ｘ?? `_compute_roi()` 頛?寞?嚗_on_add_rule`?_on_set_sub_target`??  `_on_add_template`?_on_add_template_step` ???梁 ROI 閮??摩
+- 蝘駁憭???`template_center` click target嚗atch_image 閬?蝯曹???`text_center`嚗?  runtime 撌脤? `ctx.matched_text` 隞?澆捆 detect ??match_image
 
 ## [v0.0.13] - 2026-07-15
 
-### 移除
-- 移除 `condition_list` 步驟類型（條件清單），其功能已由 `detect` + `click`/`key`/`jump` 步驟組合完全取代
-- 移除相關 GUI 元件（`_CondCardWidget`、`_ConditionListStepForm`）、引擎 handler（`_handle_condition_list`）、
-  資料模型（`Condition`、`ConditionListParams`）、遷移函式（`_migrate_condition_list_to_step`）
-- 清理 tasks JSON 中的 legacy null 欄位（`use_condition_list`、`condition_list`、`condition_list_advance_on_no_match`）
-- 無任何實際任務使用此步驟，移除不影響現有功能
+### 蝘駁
+- 蝘駁 `condition_list` 甇仿?憿?嚗?隞嗆??殷?嚗?撌脩 `detect` + `click`/`key`/`jump` 甇仿?蝯?摰?誨
+- 蝘駁?賊? GUI ?辣嚗_CondCardWidget`?_ConditionListStepForm`嚗???handler嚗_handle_condition_list`嚗?  鞈?璅∪?嚗Condition`?ConditionListParams`嚗蝘餃撘?`_migrate_condition_list_to_step`嚗?- 皜? tasks JSON 銝剔? legacy null 甈?嚗use_condition_list`?condition_list`?condition_list_advance_on_no_match`嚗?- ?∩遙雿祕?遙?蝙?冽迨甇仿?嚗宏?支?敶梢?暹??
 
 ## [v0.0.12] - 2026-07-15
 
-### 重構
-- 條件清單與 Step 系統合併：將獨立的「條件清單」模式併入 Step 系統，
-  新增 `condition_list` Step 類型，消除雙軌架構
-- 舊格式任務檔（`use_condition_list` + `condition_list`）自動遷移為
-  新的 `condition_list` Step，無需手動轉換
-- GUI 移除「條件清單」勾選框，改為在步驟下拉選單中新增
-- 執行引擎從兩套獨立路徑（`_run_condition_list` / `_execute_steps`）
-  統一為單一 `_run_step` 分派，`condition_list` 由 `_handle_condition_list` 處理
-- 條件清單驗證從阻塞彈窗（QMessageBox）改為狀態列非阻塞警告
-- 新增條件後自動捲動至新卡片可見區域
-
-### 新增
-- 首次啟動自動建立預設任務「我的任務」
-- 新手教學改為狀態列輕量提示（toast），不再阻塞啟動
-- AHK 未安裝時改為狀態列點擊安裝，不再彈窗
-- 版本檢查改為狀態列點擊更新，不再彈窗
-- 步驟初始化使用 `_STEP_DEFAULTS` 預設值，新增等待/條件清單等步驟不再空白
-
+### ??
+- 璇辣皜??Step 蝟餌絞?蔥嚗??函???隞嗆??柴芋撘蔥??Step 蝟餌絞嚗?  ?啣? `condition_list` Step 憿?嚗??日?頠瑽?- ?撘遙??嚗use_condition_list` + `condition_list`嚗?蝘餌
+  ?啁? `condition_list` Step嚗???頧?
+- GUI 蝘駁??隞嗆??柴?豢?嚗?箏甇仿?銝??詨銝剜憓?- ?瑁?撘?敺憟蝡楝敺?`_run_condition_list` / `_execute_steps`嚗?  蝯曹??箏銝 `_run_step` ?晷嚗condition_list` ??`_handle_condition_list` ??
+- 璇辣皜撽?敺憛?蝒?QMessageBox嚗?箇????憛郎??- ?啣?璇辣敺???啣?閬???
+### ?啣?
+- 擐活???芸?撱箇??身隞餃????遙??- ?唳??飛?寧???頛??內嚗oast嚗?銝??餃???
+- AHK ?芸?鋆??寧???暺?摰?嚗???蝒?- ?瑼Ｘ?寧???暺??湔嚗???蝒?- 甇仿????蝙??`_STEP_DEFAULTS` ?身?潘??啣?蝑?/璇辣皜蝑郊撽??征??
 ## [v0.0.11] - 2026-07-11
 
-### 新增
-- on_fail 新增動作「跳過此規則（換下一條）」（action: advance）：
-  搭配 fail_duration_sec，連續偵測失敗滿 N 秒後跳過該規則、
-  推進到同群組下一條規則（而非原地持續重試），群組重新輪到此規則時
-  會重新獲得完整容忍期
+### ?啣?
+- on_fail ?啣????歲?迨閬?嚗?銝?璇???action: advance嚗?
+  ?剝? fail_duration_sec嚗???菜葫憭望?皛?N 蝘?頝喲?閰脰???  ?券脣?黎蝯?銝璇?????????岫嚗?蝢斤??頛芸甇方???
+  ???啁敺??游捆敹?
 
-### 修正
-- _normalize_on_fail 缺少 "advance" action 分支，導致規則重新載入時
-  該設定被靜默降級為 "stop"、fail_duration_sec 遺失（存檔後表現異常）
-
-### 重構
-- 移除三份分散在不同檔案的重複 _tasks_dir() wrapper，
-  統一直接呼叫 get_tasks_dir()
+### 靽格迤
+- _normalize_on_fail 蝻箏? "advance" action ?嚗??渲????啗??交?
+  閰脰身摰◤??????"stop"?ail_duration_sec ?箏仃嚗?瑼?銵函?啣虜嚗?
+### ??
+- 蝘駁銝遢??其???獢??? _tasks_dir() wrapper嚗?  蝯曹??湔?澆 get_tasks_dir()
 
 ## [v0.0.10] - 2026-07-10
 
-### 重構
-- MainWindow 拆分：抽出 GroupSettingsController、ScreenshotController、
-  RuleConfigController、TestRunController，MainWindow 從 3260 行降至約一半
-- rule_engine 拆分：core/04_rule_engine.py 從 1439 行拆為
-  rule_models.py / rule_migration.py / rule_serialization.py /
-  task_management.py / run_config.py / file_utils.py，從 1439 行降至約 530 行
-- 純內部重構，無使用者可見功能變更，所有拆分皆經過手動功能驗證
+### ??
+- MainWindow ??嚗??GroupSettingsController?creenshotController??  RuleConfigController?estRunController嚗ainWindow 敺?3260 銵??喟?銝??- rule_engine ??嚗ore/04_rule_engine.py 敺?1439 銵???  rule_models.py / rule_migration.py / rule_serialization.py /
+  task_management.py / run_config.py / file_utils.py嚗? 1439 銵??喟? 530 銵?- 蝝?券?瑽??∩蝙?刻閬??質??湛??????蝬????撽?
 
 ## [v0.0.9] - 2026-07-10
 
-### 新增
-- 啟動加速：UI 優先顯示，OCR 引擎與 AHK 初始化改為背景 deferred init
-- 啟動 3 秒後自動檢查更新（遵循 `skip_update_check` 設定）
-- 主頁增加「日誌」按鈕，點擊開啟日誌目錄
+### ?啣?
+- ????UI ?芸?憿舐內嚗CR 撘???AHK ????箄???deferred init
+- ?? 3 蝘??芸?瑼Ｘ?湔嚗敺?`skip_update_check` 閮剖?嚗?- 銝駁?憓??隤???暺????亥??桅?
 
-### 修正
-- 規則拖曳到另一規則上時 UI 項目消失（Qt InternalMove 幽靈清除）
-- 樹狀拖曳多重修正：阻擋 rule 成為 child、自動改為 sibling、支援背景規則群組
-- `_init_ahk_async` QThread GC 導致閃退
-- `_match_image_warn_counter` 無界字典隨規則重載清除
-- 關鍵錯誤路徑從 `print()` 遷移至 `logging`，補上遺失的 traceback
+### 靽格迤
+- 閬???啣銝閬?銝? UI ?瘨仃嚗t InternalMove 撟賡?皜嚗?- 璅寧??憭?靽格迤嚗??rule ? child????sibling??渲??航??黎蝯?- `_init_ahk_async` QThread GC 撠?
+- `_match_image_warn_counter` ?∠?摮?刻???頛???- ??航炊頝臬?敺?`print()` ?瑞宏??`logging`嚗?銝憭梁? traceback
 
-### 改善
-- 統一日誌至單一 `app.log`，移除 `main.log` / `debug.log` 分散寫入
-- 清理過時 docstring 及舊路徑 `update_debug.log` 殘留
-- 降低主循環常規 log 等級（info → debug）
-
-### 移除
-- 全面移除「觸發紀錄」與「比較輪次日誌」UI 面板及底層資料通道
-- 移除 `_rules_dirty` 及相關週期存檔 dead code
+### ?孵?
+- 蝯曹??亥??喳銝 `app.log`嚗宏??`main.log` / `debug.log` ?撖怠
+- 皜??? docstring ??頝臬? `update_debug.log` 畾?
+- ??銝餃儐?啣虜閬?log 蝑?嚗nfo ??debug嚗?
+### 蝘駁
+- ?券蝘駁?孛?潛?????頛憚甈⊥隤I ?Ｘ??撅方???
+- 蝘駁 `_rules_dirty` ??望?摮? dead code
 
 ## [v0.0.8] - 2026-07-09
 
-### 新增
-- 自動更新系統正式實裝：獨立 `updater.exe`，以 `WaitForSingleObject` 精準等待母進程結束後取代檔案
-- `build.py` 打包主程式後自動產生 `updater.exe`
-- `release.ps1` ZIP 同時包含 `ocr-trigger-clicker.exe` 與 `updater.exe`
+### ?啣?
+- ?芸??湔蝟餌絞甇??撖西?嚗蝡?`updater.exe`嚗誑 `WaitForSingleObject` 蝎暹?蝑?瘥脩?蝯?敺?隞??獢?- `build.py` ??銝餌?撘??芸??Ｙ? `updater.exe`
+- `release.ps1` ZIP ??? `ocr-trigger-clicker.exe` ??`updater.exe`
 
-### 修正
-- 更新後暫存目錄殘留：updater 清理改為逐檔刪除，略過自身 exe（Windows 不能刪正在執行的檔案）
-- `Process.wait()` timeout 改為 `WaitForSingleObject`，解決等待母進程退出不可靠問題
+### 靽格迤
+- ?湔敺摮????updater 皜??寧???芷嚗?頨?exe嚗indows 銝?芣迤?典銵?瑼?嚗?- `Process.wait()` timeout ?寧 `WaitForSingleObject`嚗圾瘙箇?敺??脩???箔??舫???
 
-### 改善
-- 移除了臨時診斷腳本（IsProcessInJob／輪詢測試等）
-- 重整專案結構：刪除過時計畫文檔、舊壓力測試、殘留資料
-- 補上 GitHub Pages（`docs/`）與更新架構文件說明
+### ?孵?
+- 蝘駁鈭?那?瑁?穿?IsProcessInJob嚗憚閰Ｘ葫閰衣?嚗?- ?撠?蝯?嚗?日????急?瑼?憯?皜祈岫??????- 鋆? GitHub Pages嚗docs/`嚗??湔?嗆??辣隤芣?
 
 ## [v0.0.7] - 2026-07-09
 
-### 改善
-- 自動更新改用獨立 `updater.exe`（`WaitForSingleObject` 精準等待母進程結束）
-- `build.py` 打包主程式後自動產生 `updater.exe`
-- `release.ps1` ZIP 同時包含 `ocr-trigger-clicker.exe` 與 `updater.exe`
-- 移除舊批次腳本、Job Object 診斷等暫時性程式碼
+### ?孵?
+- ?芸??湔?寧?函? `updater.exe`嚗WaitForSingleObject` 蝎暹?蝑?瘥脩?蝯?嚗?- `build.py` ??銝餌?撘??芸??Ｙ? `updater.exe`
+- `release.ps1` ZIP ??? `ocr-trigger-clicker.exe` ??`updater.exe`
+- 蝘駁?甈∟?研ob Object 閮箸蝑?抒?撘Ⅳ
 
 ## [v0.0.6] - 2026-07-08
 
-### 改善
-- 版本號更新（測試自動更新流程）
-
+### ?孵?
+- ???堆?皜祈岫?芸??湔瘚?嚗?
 ## [v0.0.5] - 2026-07-08
 
-### 新增
-- 自動更新功能（版本檢查、下載、zip 解壓、自我取代、重啟）
-- 設定頁「啟動時檢查更新」開關（Settings 分頁）
-
-### 修正
-- 啟動時背景檢查更新不再彈阻塞對話框
-
-### 改善
-- 版本檢查改用 raw GitHub latest_version.txt 取代 GitHub API（避免 rate limit）
-
+### ?啣?
+- ?芸??湔?嚗??祆炎?乓?頛ip 閫?????隞????
+- 閮剖?????瑼Ｘ?湔????Settings ??嚗?
+### 靽格迤
+- ?????舀炎?交?唬????餃?撠店獢?
+### ?孵?
+- ?瑼Ｘ?寧 raw GitHub latest_version.txt ?誨 GitHub API嚗??rate limit嚗?
 ## [v0.0.4] - 2026-07-03
 
-### 新增
-- notify 步驟類型（提示訊息）
-- match_image 比對顏色選項（match_color）
+### ?啣?
+- notify 甇仿?憿?嚗?蝷箄??荔?
+- match_image 瘥?憿?賊?嚗atch_color嚗?
+### 靽格迤
+- fail_duration_sec 摰孵??炊閫貊嚗ommit 4cb403c嚗?- _NotificationStack 閮閬??遙??亦?????撠???潦?  dry_run 蝻?match_color?ompareStepForm 蝻?fail_duration_sec/roi_coord
 
-### 修正
-- fail_duration_sec 容忍期誤觸發（commit 4cb403c）
-- _NotificationStack 訊息覆蓋、任務匯入白名單、圖片比對按鈕即時值、
-  dry_run 缺 match_color、CompareStepForm 缺 fail_duration_sec/roi_coord
-
-### 改善
-- 群組預設模式 loop→once、color_tolerance 40→100、移除 debug print
+### ?孵?
+- 蝢斤??身璅∪? loop?nce?olor_tolerance 40??00?宏??debug print
 
 ## [v0.0.3] - 2026-06-30
 
-### 新增
-- match_image 圖示模板比對、on_fail 異常流程控制、fail_duration_sec、壓力測試套件
-
-### 修正
-- EXE 啟動 crash、_recv_line 通訊協定偏移、測試比對按鈕視窗遮擋、
-  .gitignore images/ 路徑過寬
+### ?啣?
+- match_image ?內璅⊥瘥??n_fail ?啣虜瘚??批?ail_duration_sec???葫閰血?隞?
+### 靽格迤
+- EXE ?? crash?recv_line ?????宏?葫閰行?撠???蝒??  .gitignore images/ 頝臬??祝
 
 ## [v0.0.2] - 2026-06-23
 
-### 新增
-- 統一步驟系統、比對模式三選一（contains/exact/fuzzy）、觸發模式（once/repeat）
-
-### 修正
-- 規則引擎健壯性（跳轉循環偵測、runaway 恢復）、多項 bug（詳見 GH release）
-
-### 移除
-- 全面移除熱鍵（F8/F9/F10/F12）
-
+### ?啣?
+- 蝯曹?甇仿?蝟餌絞??撠芋撘??訾?嚗ontains/exact/fuzzy嚗孛?潭芋撘?once/repeat嚗?
+### 靽格迤
+- 閬?撘??亙ㄞ?改?頝唾?敺芰?菜葫?unaway ?Ｗ儔嚗???bug嚗底閬?GH release嚗?
+### 蝘駁
+- ?券蝘駁?梢嚗8/F9/F10/F12嚗?
 ## [v0.0.1] - 2026-06-19
 
-### 新增
-- 截圖點擊放大功能（lightbox，commit b1dd4e4）
-- 打包圖示與 GUI/OCR 截圖（commit 6634f3f）
-
-### 修正
-- OCR 失敗計數重置（commit d48718c）
-
-### 改善
-- SEO 全面優化 — 結構化資料、meta、FAQ（commit de6e2ad）
-- 介紹頁改為暗色主題（commit 44111b0）
-- 新手教學導流與首次啟動提示（commit fc2707a、3ab8ed2）
-
-### 工具
-- 新增 release.ps1 自動化發版腳本（commit d761df6）
-- AGENTS.md 補上版本管理與發版流程（commit c3015f7）
-
+### ?啣?
+- ?芸?暺??曉之?嚗ightbox嚗ommit b1dd4e4嚗?- ???內??GUI/OCR ?芸?嚗ommit 6634f3f嚗?
+### 靽格迤
+- OCR 憭望?閮?蔭嚗ommit d48718c嚗?
+### ?孵?
+- SEO ?券?芸? ??蝯????eta?AQ嚗ommit de6e2ad嚗?- 隞晶??箸??脖蜓憿?commit 44111b0嚗?- ?唳??飛撠???甈∪???蝷綽?commit fc2707a??ab8ed2嚗?
+### 撌亙
+- ?啣? release.ps1 ?芸????穿?commit d761df6嚗?- AGENTS.md 鋆??蝞∠????蝔?commit c3015f7嚗?
 ## [v0.0.0] - 2026-06-18
 
-首次公開發行：OCR 文字辨識觸發規則、繁中自訂模型、視窗框選、AHK 自動安裝、多任務管理
+擐活?祇??潸?嚗CR ??颲刻?閫貊閬???銝剛閮芋??蝒??詻HK ?芸?摰???隞餃?蝞∠?
 
 [v0.1.0]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.0
 [v0.0.14]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.14
@@ -251,3 +190,4 @@
 [v0.0.2]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.2
 [v0.0.1]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.1
 [v0.0.0]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.0
+
