@@ -164,7 +164,7 @@ def download_update(
         raise
 
 
-def apply_update(new_path: Path) -> Path:
+def apply_update(new_path: Path) -> None:
     if not is_frozen():
         log.error("原始碼模式不支援自動更新")
         raise RuntimeError(
@@ -172,89 +172,46 @@ def apply_update(new_path: Path) -> Path:
         )
 
     if new_path.is_dir() and (new_path / "_internal").exists():
-        # onedir 結構：不自動更新，引導使用者手動下載
-        log.info("偵測到 onedir 結構，顯示手動下載引導")
-        try:
-            from PyQt6.QtCore import QUrl
-            from PyQt6.QtGui import QDesktopServices
-            from PyQt6.QtWidgets import QMessageBox
+        # onedir 更新：啟動新目錄中的 updater.exe 做目錄取代
+        new_updater = new_path / UPDATER_EXE_NAME
+        if not new_updater.exists():
+            log.error("新版本缺少 updater.exe: %s", new_updater)
+            raise RuntimeError("\u65b0\u7248\u672c\u7f3a\u5c11 updater.exe")
 
-            _RELEASE_URL = f"https://github.com/{_GITHUB_OWNER}/{_GITHUB_REPO}/releases/latest"
-            msg = QMessageBox()
-            msg.setWindowTitle("更新通知")
-            msg.setText(
-                "偵測到重大版本更新，此版本改為資料夾結構，"
-                "無法自動更新。\n\n"
-                "請手動至 GitHub Releases 下載最新版本，"
-                "解壓縮後使用。\n\n"
-                "點擊「前往下載」將開啟瀏覽器。"
-            )
-            ok_btn = msg.addButton("前往下載", QMessageBox.ButtonRole.ActionRole)
-            msg.addButton("稍後再說", QMessageBox.ButtonRole.RejectRole)
-            msg.exec()
-            if msg.clickedButton() is ok_btn:
-                QDesktopServices.openUrl(QUrl(_RELEASE_URL))
-        except Exception:
-            log.exception("顯示更新引導對話框失敗")
-        return new_path
+        target_dir = current_exe_path().parent
+        log.info("onedir \u66f4\u65b0: new_dir=%s target_dir=%s", new_path, target_dir)
 
-    # onefile update (backward compatibility)
-    old_exe = current_exe_path()
-    updater_exe = new_path.parent / UPDATER_EXE_NAME
-    if not updater_exe.exists():
-        log.error("找不到 updater.exe，無法套用更新")
-        raise RuntimeError(
-            "\u627e\u4e0d\u5230 updater.exe\uff0c\u7121\u6cd5\u5957\u7528\u66f4\u65b0"
-        )
-
-    log.info("套用更新: old=%s new=%s", old_exe, new_path)
-
-    debug_log_path = (
-        Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs" / "update_debug.log"
-    )
-    debug_log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    creationflags_variants = [
-        subprocess.CREATE_NEW_PROCESS_GROUP
-        | subprocess.DETACHED_PROCESS
-        | subprocess.CREATE_BREAKAWAY_FROM_JOB,
-        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-    ]
-    launched = False
-    tmp_dir = new_path.parent
-    try:
+        creationflags_variants = [
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.DETACHED_PROCESS
+            | subprocess.CREATE_BREAKAWAY_FROM_JOB,
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+        ]
         for flags in creationflags_variants:
             try:
                 subprocess.Popen(
                     [
-                        str(updater_exe),
-                        "--old",
-                        str(old_exe),
-                        "--new",
-                        str(new_path),
-                        "--pid",
-                        str(_os.getpid()),
-                        "--log",
-                        str(debug_log_path),
+                        str(new_updater),
+                        "--mode=update",
+                        f"--wait-pid={_os.getpid()}",
+                        f"--new-dir={new_path}",
+                        f"--target-dir={target_dir}",
                     ],
-                    cwd=str(old_exe.parent),
                     creationflags=flags,
                     close_fds=True,
                 )
-                launched = True
-                break
+                log.info("updater.exe \u555f\u52d5\u6210\u529f")
+                return
             except OSError:
                 continue
+        log.error("\u7121\u6cd5\u555f\u52d5 updater.exe")
+        raise RuntimeError("\u7121\u6cd5\u555f\u52d5 updater.exe")
 
-        if not launched:
-            log.error("無法啟動 updater.exe（所有 creationflags 組合皆失敗）")
-            raise RuntimeError("\u7121\u6cd5\u555f\u52d5 updater.exe")
-
-        log.info("updater.exe 啟動成功: %s", updater_exe)
-        return updater_exe
-    finally:
-        if not launched:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+    # 非 onedir 結構（無 _internal/）→ 不支援自動更新
+    log.error("不支援的更新結構（非 onedir）: %s", new_path)
+    raise RuntimeError(
+        "\u4e0d\u652f\u63f4\u7684\u66f4\u65b0\u7d50\u69cb\uff0c\u8acb\u624b\u52d5\u4e0b\u8f09\u6700\u65b0\u7248\u672c"
+    )
 
 
 def demo():

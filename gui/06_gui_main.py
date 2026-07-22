@@ -2669,7 +2669,6 @@ class SettingsDialog(QDialog):
                         sys.executable,
                         str(Path(__file__).resolve().parent.parent / "updater_main.py"),
                     ]
-                _log_path = str(Path(_launch_cwd) / "relaunch.log")
                 subprocess.Popen(
                     _relaunch_cmd
                     + [
@@ -2678,7 +2677,6 @@ class SettingsDialog(QDialog):
                         f"--launch-exe={_launch_exe}",
                         *[f"--launch-arg={a}" for a in _launch_args],
                         f"--launch-cwd={_launch_cwd}",
-                        f"--log={_log_path}",
                     ],
                     close_fds=True,
                 )
