@@ -19,6 +19,8 @@
   "settings.default_mouse_button.tooltip": "点击默认用哪个键。大多数游戏左键即可。",
   "settings.default_random_offset": "点击随机偏移:",
   "settings.default_random_offset.tooltip": "每次点击的位置会随机偏移几像素，避免每次都在同一个点被系统检测。设 0 关闭。",
+  "settings.default_wait_ms": "默认等待毫秒:",
+  "settings.default_wait_ms.tooltip": "新增「等待」步骤时的默认毫秒数。",
   "settings.default_fuzzy_threshold": "模糊比对灵敏度:",
   "settings.default_fuzzy_threshold.tooltip": "文字比对的宽严程度。数字越大越严格（要几乎一样才算找到），越小越宽松。0.8 为默认。",
   "settings.default_template_threshold": "图片识别灵敏度:",

@@ -19,6 +19,8 @@
   "settings.default_mouse_button.tooltip": "Default mouse button for clicks. Left is suitable for most games.",
   "settings.default_random_offset": "Click random offset:",
   "settings.default_random_offset.tooltip": "Randomize click position by a few pixels to avoid detection. Set 0 to disable.",
+  "settings.default_wait_ms": "Default wait (ms):",
+  "settings.default_wait_ms.tooltip": "Default milliseconds when adding a new Wait step.",
   "settings.default_fuzzy_threshold": "Fuzzy match sensitivity:",
   "settings.default_fuzzy_threshold.tooltip": "How strict text matching is. Higher values require closer matches. Default 0.8.",
   "settings.default_template_threshold": "Image match sensitivity:",

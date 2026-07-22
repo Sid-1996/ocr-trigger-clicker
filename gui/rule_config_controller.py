@@ -22,6 +22,7 @@ class RuleConfigController:
         "default_color_tolerance": 10,
         "default_mouse_button": "left",
         "default_random_offset": 3,
+        "default_wait_ms": 500,
         "language": "zh_TW",
     }
 
