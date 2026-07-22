@@ -47,14 +47,42 @@ def _wait_for_pid_exit(pid: int, timeout_sec: int, log_path):
     _log(log_path, f"WaitForSingleObject result={result}（0=已結束, {WAIT_TIMEOUT}=逾時）")
 
 
+def _relaunch(args):
+    log_path = args.log
+    _wait_for_pid_exit(args.wait_pid, timeout_sec=15, log_path=log_path)
+    _log(
+        log_path,
+        f"relaunch: launching {args.launch_exe} args={args.launch_arg} cwd={args.launch_cwd}",
+    )
+    try:
+        subprocess.Popen(
+            [args.launch_exe] + (args.launch_arg or []),
+            cwd=args.launch_cwd,
+        )
+    except Exception as e:
+        _log(log_path, f"relaunch failed: {e}")
+        sys.exit(1)
+    _log(log_path, "relaunch finished")
+
+
 def main():
     parser = _UpdaterParser()
-    parser.add_argument("--old", required=True)
-    parser.add_argument("--new", required=True)
-    parser.add_argument("--pid", type=int, required=True)
+    parser.add_argument("--mode", default="update", choices=["update", "relaunch"])
+    parser.add_argument("--old")
+    parser.add_argument("--new")
+    parser.add_argument("--pid", type=int)
+    parser.add_argument("--wait-pid", type=int)
+    parser.add_argument("--launch-exe")
+    parser.add_argument("--launch-arg", action="append", default=[])
+    parser.add_argument("--launch-cwd")
     parser.add_argument("--log", default=None)
     args = parser.parse_args()
 
+    if args.mode == "relaunch":
+        _relaunch(args)
+        sys.exit(0)
+
+    # ── update mode (default) ──
     log_path = args.log
     old_path = Path(args.old)
     new_path = Path(args.new)

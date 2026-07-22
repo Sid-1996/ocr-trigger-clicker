@@ -2653,9 +2653,38 @@ class SettingsDialog(QDialog):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if answer == QMessageBox.StandardButton.Yes:
+                _is_frozen = getattr(sys, "frozen", False)
+                if _is_frozen:
+                    _launch_exe = sys.executable
+                    _launch_args: list[str] = []
+                    _launch_cwd = str(Path(sys.executable).parent)
+                    _relaunch_cmd = [
+                        str(Path(sys.executable).parent / "updater.exe"),
+                    ]
+                else:
+                    _launch_exe = sys.executable
+                    _launch_args = ["gui/06_gui_main.py"]
+                    _launch_cwd = str(Path(__file__).resolve().parent.parent)
+                    _relaunch_cmd = [
+                        sys.executable,
+                        str(Path(__file__).resolve().parent.parent / "updater_main.py"),
+                    ]
+                _log_path = str(Path(_launch_cwd) / "relaunch.log")
+                subprocess.Popen(
+                    _relaunch_cmd
+                    + [
+                        "--mode=relaunch",
+                        f"--wait-pid={os.getpid()}",
+                        f"--launch-exe={_launch_exe}",
+                        *[f"--launch-arg={a}" for a in _launch_args],
+                        f"--launch-cwd={_launch_cwd}",
+                        f"--log={_log_path}",
+                    ],
+                    close_fds=True,
+                )
                 self.accept()
-                subprocess.Popen([sys.executable] + sys.argv)
-                os._exit(0)
+                self._win._quit_app()
+                return
         self.accept()
 
 
