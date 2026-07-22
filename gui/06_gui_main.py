@@ -1525,6 +1525,14 @@ class _DetectStepForm(QWidget):
         self._match_mode.addItem(T("combo.exact"), "exact")
         self._match_mode.addItem(T("combo.fuzzy"), "fuzzy")
         self._match_mode.addItem(T("combo.regex"), "regex")
+        _tt = [
+            T("combo.exact.tooltip"),
+            T("combo.contains.tooltip"),
+            T("combo.fuzzy.tooltip"),
+            T("combo.regex.tooltip"),
+        ]
+        for i in range(self._match_mode.count()):
+            self._match_mode.setItemData(i, _tt[i], Qt.ItemDataRole.ToolTipRole)
         idx_mm = self._match_mode.findData(p.get("match_mode", "fuzzy"))
         if idx_mm >= 0:
             self._match_mode.setCurrentIndex(idx_mm)
@@ -1537,6 +1545,26 @@ class _DetectStepForm(QWidget):
         self._fuzzy_th.setValue(int(p.get("fuzzy_threshold", 0.8) * 100))
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
         adv_form.addRow(T("step_form.accuracy"), self._fuzzy_th)
+
+        # ── template helper toolbar ──
+        self._template_helper = QWidget()
+        th_layout = QHBoxLayout(self._template_helper)
+        th_layout.setContentsMargins(0, 2, 0, 2)
+        th_layout.setSpacing(4)
+        th_layout.addWidget(QLabel(T("template_helper.insert")))
+        for label, token in [
+            ("template_helper.digit", r"\d+"),
+            ("template_helper.letter", r"[A-Za-z]+"),
+            ("template_helper.any", r".+"),
+            ("template_helper.space", r"\s+"),
+        ]:
+            btn = QPushButton(T(label))
+            btn.setFixedHeight(22)
+            btn.clicked.connect(lambda checked, t=token: self._insert_template_token(t))
+            th_layout.addWidget(btn)
+        th_layout.addStretch()
+        self._template_helper.setVisible(self._match_mode.currentData() == "regex")
+        form.addRow("", self._template_helper)
 
         # ── on_fail collapsible section (in advanced) ──
         self._on_fail_expanded = False
@@ -1645,7 +1673,13 @@ class _DetectStepForm(QWidget):
         self._on_of_action_changed()
 
     def _on_match_mode_changed(self, idx):
-        self._fuzzy_th.setVisible(self._match_mode.itemData(idx) == "fuzzy")
+        mode = self._match_mode.itemData(idx)
+        self._fuzzy_th.setVisible(mode == "fuzzy")
+        self._template_helper.setVisible(mode == "regex")
+
+    def _insert_template_token(self, token: str):
+        self._text.setFocus()
+        self._text.insert(token)
 
     def _validate_text(self):
         if not self._text.text().strip():
@@ -2583,6 +2617,14 @@ class SettingsDialog(QDialog):
         self._match_mode.addItem(T("combo.exact"), "exact")
         self._match_mode.addItem(T("combo.fuzzy"), "fuzzy")
         self._match_mode.addItem(T("combo.regex"), "regex")
+        _tt = [
+            T("combo.exact.tooltip"),
+            T("combo.contains.tooltip"),
+            T("combo.fuzzy.tooltip"),
+            T("combo.regex.tooltip"),
+        ]
+        for i in range(self._match_mode.count()):
+            self._match_mode.setItemData(i, _tt[i], Qt.ItemDataRole.ToolTipRole)
         idx = self._match_mode.findData(self._ctrl.get_setting(win, "default_match_mode"))
         self._match_mode.setCurrentIndex(max(0, idx))
         self._match_mode.setToolTip(T("settings.default_match_mode.tooltip"))
