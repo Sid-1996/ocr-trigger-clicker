@@ -1137,6 +1137,16 @@ class _MatchImageStepForm(QWidget):
         self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
         self._of_action.addItem(T("step_form.of_key_continue"), "key")
         self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
+        self._of_action.setItemData(0, T("step_form.of_skip_once_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(1, T("step_form.of_skip_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(2, T("step_form.of_jump_step_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(3, T("step_form.of_jump_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(
+            4, T("step_form.of_key_continue_tip"), Qt.ItemDataRole.ToolTipRole
+        )
+        self._of_action.setItemData(
+            5, T("step_form.of_notify_stop_tip"), Qt.ItemDataRole.ToolTipRole
+        )
         raw_of = p.get("on_fail", "stop")
         default_notify_msg = ""
         default_notify_groups: list[str] = []
@@ -1592,6 +1602,15 @@ class _DetectStepForm(QWidget):
         self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
         self._of_action.addItem(T("step_form.of_key_continue"), "key")
         self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
+        self._of_action.setItemData(0, T("step_form.of_skip_once_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(1, T("step_form.of_skip_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(2, T("step_form.of_jump_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(
+            3, T("step_form.of_key_continue_tip"), Qt.ItemDataRole.ToolTipRole
+        )
+        self._of_action.setItemData(
+            4, T("step_form.of_notify_stop_tip"), Qt.ItemDataRole.ToolTipRole
+        )
         raw = p.get("on_fail", "stop")
         default_notify_msg = ""
         default_notify_groups: list[str] = []
@@ -1772,6 +1791,13 @@ class _ClickStepForm(QWidget):
         self._target.addItem(T("summary.click_target"), "text_center")
         self._target.addItem(T("step_form.text_coord"), "custom")
         self._target.addItem(T("format.click_mode"), "click_text")
+        self._target.setItemData(
+            0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
+        )
+        self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._target.setItemData(
+            2, T("step_form.target_click_text_tip"), Qt.ItemDataRole.ToolTipRole
+        )
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
@@ -1853,6 +1879,13 @@ class _DragStepForm(QWidget):
         self._target.addItem(T("summary.click_target"), "text_center")
         self._target.addItem(T("step_form.text_coord"), "custom")
         self._target.addItem(T("format.click_mode"), "click_text")
+        self._target.setItemData(
+            0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
+        )
+        self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._target.setItemData(
+            2, T("step_form.target_click_text_tip"), Qt.ItemDataRole.ToolTipRole
+        )
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
@@ -2047,6 +2080,16 @@ class _CompareStepForm(QWidget):
         self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
         self._of_action.addItem(T("step_form.of_key_continue"), "key")
         self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
+        self._of_action.setItemData(0, T("step_form.of_skip_once_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(1, T("step_form.of_skip_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(2, T("step_form.of_jump_step_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(3, T("step_form.of_jump_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(
+            4, T("step_form.of_key_continue_tip"), Qt.ItemDataRole.ToolTipRole
+        )
+        self._of_action.setItemData(
+            5, T("step_form.of_notify_stop_tip"), Qt.ItemDataRole.ToolTipRole
+        )
         raw_of = p.get("on_fail", "stop")
         default_notify_msg = ""
         default_notify_groups: list[str] = []

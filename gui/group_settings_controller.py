@@ -41,6 +41,9 @@ class GroupSettingsController:
         mode_combo.addItem(T("group_settings.mode_loop"), "loop")
         mode_combo.addItem(T("group_settings.mode_once"), "once")
         mode_combo.addItem(T("group_settings.mode_repeat"), "repeat")
+        mode_combo.setItemData(0, T("group_settings.mode_loop_tip"), Qt.ItemDataRole.ToolTipRole)
+        mode_combo.setItemData(1, T("group_settings.mode_once_tip"), Qt.ItemDataRole.ToolTipRole)
+        mode_combo.setItemData(2, T("group_settings.mode_repeat_tip"), Qt.ItemDataRole.ToolTipRole)
         idx = mode_combo.findData(group.mode)
         if idx >= 0:
             mode_combo.setCurrentIndex(idx)
