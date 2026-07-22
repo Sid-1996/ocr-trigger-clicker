@@ -10,27 +10,44 @@
 
 ---
 
+## 目錄
+
+- [概述](#概述)
+- [功能一覽](#功能一覽)
+- [與其他工具比較](#與其他工具比較)
+- [系統需求](#系統需求)
+- [安裝](#安裝)
+- [快速入門](#快速入門)
+- [完整文件](#完整文件)
+- [社群與交流](#社群與交流)
+- [English](#english)
+- [简体中文](#简体中文)
+- [授權](#授權)
+
+---
+
 ## 概述
 
-OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動化工具。  
-它監控指定視窗的畫面內容，當偵測到使用者設定的目標文字時，自動移動滑鼠並點擊指定位置。
+OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動化工具。它監控指定視窗的畫面內容，當偵測到使用者設定的目標文字或圖示時，自動執行滑鼠點擊、鍵盤按鍵、拖曳等動作。
 
-專注於**無程式碼（No-Code）**、**跨解析度相容**、**多語言介面**的開源方案，封裝複雜的機器學習模型與底層 Windows 視窗操作，讓不具備程式背景的使用者也能輕鬆建立自動化規則。
+**無程式碼（No-Code）**、**視窗比例座標（跨解析度相容）**、**多語言介面**，讓不具備程式背景的使用者也能快速建立自動化規則。
 
-### 應用場景
+---
 
-- **遊戲自動點擊** — 自動點擊「確認」、「領取」、「開始戰鬥」等重複按鈕，解放雙手
-- **掛機腳本** — 手遊模擬器（雷電、夜神、BlueStacks）或 PC 遊戲長時間掛機自動化
-- **自動對話 / 跳過劇情** — 偵測對話框文字，自動點擊「下一步」或「跳過」
-- **自動領取獎勵** — 定時偵測獎勵畫面，一鍵領取所有獎勵
-- **錯誤彈窗自動關閉** — 偵測錯誤提示、維護公告等彈窗，自動關閉或通知
-- **數值監控觸發** — 偵測血量、魔力、金幣等數值變化，低於閾值自動使用道具
-- **重複性表單操作** — 自動填寫、提交、翻頁等桌面重複性工作
-- **定時搶購 / 搶票** — 偵測頁面文字變化，第一時間自動點擊搶購
-- **批次操作自動化** — 多規則組合：偵測→點擊→等待→再偵測，複雜流程一條龍
-- **跨解析度相容** — 腳本在 1080p、4K、不同縮放比例下皆可正常運作，無需重寫
+## 功能一覽
 
-### 與其他工具比較
+- **OCR 文字偵測** — 基於 RapidOCR，支援繁體／簡體中文，可框選 ROI 減少干擾
+- **圖示模板比對** — OpenCV matchTemplate + NMS，比 OCR 快 10~50 倍，適合無文字按鈕
+- **視窗比例座標** — 所有座標儲存為 0~1 比值，1080p / 4K / 縮放 150% 皆相容
+- **群組規則管理** — 拖曳排序、循環執行／執行一次／重複 N 次、群組並行與依序
+- **步驟系統** — detect / click / key / wait / jump / compare / match_image / notify / scroll / drag，可組合複雜流程
+- **常駐監控模式** — 不受群組流程影響，每幀獨立執行，適合錯誤攔截
+- **前景保護與安全機制** — 可選前景保護、速率限制、緊急停止
+- **多任務管理** — 不同場景建立獨立任務，快速切換，JSON 匯入／匯出
+
+---
+
+## 與其他工具比較
 
 | 特性 | OCR Trigger Clicker | AutoHotkey | Airtest | AutoIt |
 |------|:---:|:---:|:---:|:---:|
@@ -41,25 +58,6 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | 滑鼠 / 鍵盤模擬 | ✅ AHK v2 TCP 通訊 | ✅ 原生支援 | ✅ 有 | ✅ 原生支援 |
 | 多規則群組管理 | ✅ 拖曳排序、循環、跳轉 | ❌ 需手寫邏輯 | ❌ 需手寫邏輯 | ❌ 需手寫邏輯 |
 | 開源免費 | ✅ AGPLv3 | ✅ 免費 | ✅ Apache 2.0 | ✅ 免費 |
-
----
-
-## 專案亮點
-
-### 🎯 解決業界痛點：視窗比例座標系統
-
-首創視窗比例座標系統（0~1 比值），完美解決傳統自動化工具（如 Airtest）在跨解析度、縮放比例變更時腳本失效的致命傷，大幅降低 80% 的腳本維護成本。  
-→ 詳見 [座標系統](#座標系統)
-
-### 🔗 跨技術棧整合：Python + AHK TCP Socket 架構
-
-自主設計並實現基於 TCP Socket 的跨行程通訊架構，結合 Python（PyQt6 + RapidOCR）的高效資料處理能力與 AutoHotkey v2 的底層 Windows 視窗訊息模擬，顯著提升遊戲前景保護下的點擊成功率與系統穩定度。  
-→ 詳見 [技術架構](#技術架構)
-
-### 🎨 產品思維與用戶體驗：No-Code 極簡設計
-
-主打極簡無程式碼（No-Code）設計，封裝複雜的機器學習模型（ONNX Runtime），並內建視覺化 Dry-Run 測試、ROI 診斷面板與效能監控，成功將複雜自動化工具的上手門檻降至普通使用者等級。  
-→ 詳見 [步驟測試按鈕](#步驟測試按鈕)、[ROI 區域選擇器](#roi-區域選擇器)、[OCR 診斷面板](#ocr-診斷面板)、[效能監控](#效能監控)
 
 ---
 
@@ -74,8 +72,9 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 ## 安裝
 
 1. 下載並安裝 [AutoHotkey v2](https://www.autohotkey.com/)
-2. 從 Releases 下載 `ocr-trigger-clicker.exe`
-3. **以系統管理員身分執行**（若目標程式以管理員權限執行，否則點擊無效）
+2. 從 [Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) 下載 `ocr-trigger-clicker.zip`
+3. 解壓縮後執行 `ocr-trigger-clicker.exe`
+4. **以系統管理員身分執行**（若目標程式以管理員權限執行，否則點擊無效）
 
 ---
 
@@ -89,233 +88,11 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 
 ---
 
-## 功能詳解
+## 完整文件
 
-全部功能均透過圖形化介面操作，無需編寫任何程式碼。從選取目標視窗、框選偵測區域到設定比對邏輯，皆可在數分鐘內透過點選與拖曳完成，即使不熟悉機器學習或自動化技術的使用者也能快速上手。
+詳細的功能說明、使用教學、技術架構與常見問題，請參閱：
 
-### 群組系統
-
-群組是規則的容器，控制規則的執行順序與循環方式。每個群組可獨立設定：
-
-| 設定 | 說明 |
-|------|------|
-| 執行模式 | 循環執行（持續輪迴）、執行一次（跑完就停，預設）、重複 N 次（指定次數後停止） |
-| 重複次數 | 僅「重複 N 次」模式下有效 |
-| 每輪間隔 | 每輪完成後的等待秒數 |
-| 啟用／停用 | 停用的群組在啟動時不會出現在選單中 |
-
-可透過右鍵選單新增、刪除、重新命名群組。規則可在群組內拖曳排序。
-
-### 規則系統
-
-每條規則包含以下設定：
-
-| 欄位 | 型態 | 說明 |
-|------|------|------|
-| `id` | str | 唯一識別碼 |
-| `name` | str | 使用者自訂名稱 |
-| `enabled` | bool | 規則啟用／停用 |
-| `background` | bool | 常駐監控模式（獨立於群組流程外） |
-| `steps` | list[Step] | 有序步驟陣列，依序執行 |
-
-步驟（Step）是規則的執行單元，支援以下類型。**優先選用 `match_image`（圖示比對），比 OCR 快 10~50 倍且抗背景文字干擾；只有在模板無法區分時才改用 `detect`（OCR）。**
-
-| 步驟類型 | 用途 | 關鍵參數 |
-|----------|------|----------|
-| `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
-| `click` | 滑鼠點擊 | `target`（text_center/custom）、`x`, `y`, `button`, `random_offset` |
-| `key` | 鍵盤按鍵 | `key`（AHK 格式）, `hold_ms` |
-| `wait` | 固定等待 | `ms` |
-| `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
-| `compare` | 數值比對（擷取 ROI 內數字後比較） | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
-| `match_image` | 圖示模板比對（比 OCR 快 10~50 倍，建議優先選用；可選顏色比對） | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
-| `notify` | 提示訊息彈窗 | `message` |
-| `scroll` | 滑鼠滾輪 | `direction`, `amount`, `delay_ms` |
-| `drag` | 滑鼠拖曳 | `target`, `dx`, `dy`, `button` |
-
-### 常駐監控
-
-勾選「常駐監控」的規則不屬於任何群組流程，獨立運作：
-
-- 每幀都會執行（不受群組 pointer 影響）
-- 不參與群組順序、不計入群組輪次
-- 自動歸入樹狀結構底部的 📡 常駐監控節點
-- 適合隨時需要攔截的條件，如錯誤提示、緊急中斷
-
-取消常駐監控後，規則自動加回第一個啟用的群組。
-
-### 多任務管理
-
-- 可建立多組任務，各自獨立啟用（每組任務包含獨立的規則與群組設定）
-- 儲存位置：`%APPDATA%\ocr-trigger-clicker\tasks\`（開發與打包 EXE 皆同）；可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋基底路徑
-- 模板圖片儲存位置：`%APPDATA%\ocr-trigger-clicker\images\`（同上）
-- 匯入／匯出：對話框起始目錄為專案根目錄（開發模式）或 EXE 所在目錄（打包模式），可自由選擇存放位置
-
-### 步驟測試按鈕
-
-每個偵測／比較／圖像比對步驟旁皆有「測試」按鈕，可在編輯時直接 dry-run，結果會以視覺化標記繪製在截圖上（偵測到的文字框、比對結果、點擊位置等），便於調校參數。
-
-### ROI 區域選擇器
-
-全螢幕十字游標覆蓋層，使用滑鼠拖曳框選偵測區域，直覺可視化。
-
-### 點擊座標選取器
-
-全螢幕覆蓋層，點擊目標位置即可選取自訂點擊座標。
-
-### OCR 診斷面板
-
-即時顯示當前視窗截圖、OCR 辨識結果（含邊界框與信心度）、點擊測試按鈕，便於除錯與調校。
-
-### 效能監控
-
-主循環運行期間即時顯示：FPS、CPU 使用率、記憶體佔用、點擊速率、OCR 延遲。
-
-### 安全機制
-
-- **前景保護** — 可選功能，開啟後僅在目標視窗位於前景時才執行點擊
-- **工具前景保護** — 工具本身視窗位於前景時自動暫停 click/key/drag/scroll，防止誤操作搶走焦點
-- **速率限制** — 最高每秒 5 次點擊，超限自動暫停
-- **緊急停止** — 主視窗停止按鈕立即終止循環
-
-### 系統托盤與關閉行為
-
-打叉關閉視窗時，預設縮小至系統托盤（背景持續偵測），雙擊托盤圖示可還原視窗。可透過托盤選單的「設定...」調整：
-
-- **關閉行為** — 選擇「縮小至系統托盤」或「直接關閉程式」
-- **關閉前確認** — 關閉前跳出確認對話框，可勾選「不再顯示此確認」
-
-托盤選單提供「顯示視窗」與「離開」（完整結束程式）兩個選項。
-
----
-
-## 技術架構
-
-本專案自主設計基於 TCP Socket 的跨行程通訊層，串接 Python 的計算能力（PyQt6 GUI + RapidOCR 辨識）與 AutoHotkey v2 的底層 Windows 視窗訊息模擬，實現高效且穩定的跨行程協作。
-
-```
-使用者 (GUI)
-    │
-    ▼
-┌────────────────────────┐
-│  PyQt6 主視窗           │
-│  ┌────────────────────┐│
-│  │ 群組管理／規則編輯   ││
-│  │ 常駐監控 📡 節點    ││
-│  │ ROI 框選／點擊選取  ││
-│  │ OCR 診斷／效能監控  ││
-│  │ 觸發日誌            ││
-│  └────────┬───────────┘│
-└───────────┼────────────┘
-            │
-            ▼
-┌────────────────────────┐
-│  主循環 (背景執行緒)    │
-│  群組佇列 → 群組內規則  │
-│  ─→ 背景規則 (常駐監控) │
-│  截圖 → OCR → 比對 → 點擊│
-└───────────┬────────────┘
-            │ TCP Socket (port 12345)
-            ▼
-┌────────────────────────┐
-│  AutoHotkey v2 Client   │
-│  (滑鼠移動／點擊／按鍵)  │
-└────────────────────────┘
-```
-
-### 核心模組
-
-| 模組 | 功能 |
-|---|---|
-| `_loader.py` | 動態載入以數字開頭的模組檔案 |
-| `01_screenshot.py` | `mss` 截取視窗畫面，fallback GDI PrintWindow |
-| `02_ocr_engine.py` | RapidOCR 文字辨識、三種比對模式（contains/exact/fuzzy） |
-| `03_ahk_socket.py` | TCP Server，與 AHK 跨行程通訊 |
-| `04_rule_engine.py` | 規則引擎 re-export hub（已拆分為 rule_models / rule_migration / rule_serialization / task_management / run_config） |
-| `05_main_loop.py` | 主循環：群組兩層指標模型、步驟執行、安全機制 |
-| `06_gui_main.py` | PyQt6 主視窗（規則編輯、群組管理、步驟拖曳排序、任務管理、系統托盤、SettingsDialog） |
-| `07_gui_roi.py` | 全螢幕 ROI 框選覆蓋層 |
-| `09_ocr_debug.py` | OCR 診斷面板（即時截圖、OCR 標註、測試按鈕） |
-| `10_performance_monitor.py` | CPU／記憶體／FPS 監控、速率限制 |
-| `11_template_matching.py` | 圖示模板比對（OpenCV matchTemplate + NMS） |
-| `13_gui_click_picker.py` | 全螢幕點擊座標選取覆蓋層 |
-| `14_capture_region.py` | 區域截圖選取器（match_image 模板來源） |
-| `build.py` | PyInstaller 打包腳本 |
-| `clicker.ahk` | AHK v2 TCP Client |
-
-### 技術棧
-
-- **Python 3.12 + PyQt6** — GUI 介面
-- **RapidOCR (ONNX Runtime)** — 繁體中文 OCR，支援 DirectML GPU 加速
-- **AutoHotkey v2** — 滑鼠模擬（TCP Socket 通訊）
-- **mss** — 高效率螢幕截圖
-- **OpenCV + NumPy** — 影像處理與畫面變動偵測
-- **PyInstaller** — 打包為單一 EXE
-- **JSON 字典式 i18n** — 繁體中文 / 簡體中文 UI 切換，設定頁一鍵選擇
-
-### 座標系統
-
-所有 ROI / 點擊座標統一儲存為**視窗比例座標**（0~1 比值，與視窗解析度無關）：
-
-- OCR 辨識結果：自然為視窗相對，再除以視窗寬高轉為比例
-- ROI 框選、點擊選取：螢幕絕對座標 → 減去視窗位置 → 除以視窗寬高轉為比例
-- 主循環使用時：比例 × 當前視窗寬高 → 還原為像素座標 → 加回視窗位置送給 AHK
-
-此設計使腳本在 1080p、4K、縮放 150% 等不同環境下完全相容，無需手動調整座標—解決傳統工具（如 Airtest）跨解析度腳本失效的致命傷，大幅降低約 80% 的腳本維護成本。
-
----
-
-## 開發
-
-### 環境準備
-
-```bash
-git clone https://github.com/Sid-1996/ocr-trigger-clicker.git
-cd ocr-trigger-clicker
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt   # 或手動安裝必要套件
-```
-
-### 執行
-
-```bash
-python gui/06_gui_main.py
-```
-
-### 打包
-
-```bash
-python build.py
-```
-
-輸出：
-- `dist\ocr-trigger-clicker.exe` — 主程式
-- `dist\updater.exe` — 獨立更新行程（自動更新時用 `WaitForSingleObject` 等待母進程退出後取代檔案）
-
-> `docs/` 目錄為 GitHub Pages 專案網站（<https://sid-1996.github.io/ocr-trigger-clicker/>），含 `docs/index.html` 手刻首頁與 Google Search Console 驗證檔。
-
----
-
-## 常見問題
-
-**Q：點擊沒有作用？**  
-A：請以系統管理員身分執行。若目標程式以管理員權限啟動，本工具也須相同權限才能發送滑鼠事件。
-
-**Q：OCR 辨識不準確？**  
-A：縮小 ROI 範圍，減少背景干擾。可在診斷面板即時觀察辨識結果與信心度，調整比對閾值。
-
-**Q：找不到 AutoHotkey？**  
-A：確認已安裝 AHK v2，安裝後重新啟動本工具。
-
-**Q：更新後規則會不見嗎？**
-A：規則儲存在 `%APPDATA%\ocr-trigger-clicker\tasks\`（開發與打包 EXE 皆同），更新 EXE 不會影響既有設定。
-
-**Q：防毒軟體誤判 ONNX 模型檔案怎麼辦？**
-A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模型格式，部分防毒軟體可能因為不認識此格式而誤判為威脅。如遇此情況，請將以下目錄加入防毒軟體的排除清單：
-- 安裝目錄（`ocr-trigger-clicker.exe` 所在位置）
-- `%APPDATA%\ocr-trigger-clicker\`
-本工具完全開源，原始碼可於 GitHub 上自行審閱驗證。
+👉 [**文件網站**](https://sid-1996.github.io/ocr-trigger-clicker/)（含介面截圖、工具教學、腳本設計範例）
 
 ---
 
@@ -331,31 +108,25 @@ A：本工具內建的 OCR 模型（`.onnx` 檔案）是標準的機器學習模
 
 ## English
 
-**OCR Trigger Clicker** — A no-code Windows auto clicker powered by OCR. It monitors any window in real time, detects target text on screen, and automatically clicks, presses keys, or performs multi-step sequences. Built for gamers and power users who need game automation, idle scripts, or repetitive task automation without writing a single line of code.
+**OCR Trigger Clicker** — A no-code Windows auto clicker powered by OCR. It monitors any window in real time, detects target text on screen, and automatically clicks, presses keys, or performs multi-step sequences.
 
-**Key features:** OCR text detection (Traditional Chinese), image template matching (10–50× faster than OCR), window-ratio coordinates (resolution-independent), group-based rule management with drag-and-drop, background monitoring mode, foreground protection, Traditional/Simplified Chinese UI switching, and a full PyQt6 GUI.
+**Key features:** OCR text detection (Traditional Chinese), image template matching (10–50× faster than OCR), window-ratio coordinates (resolution-independent), group-based rule management with drag-and-drop, background monitoring mode, foreground protection, Traditional/Simplified Chinese UI switching.
 
-**Keywords:** auto clicker, game automation, Windows automation, no-code automation, OCR automation, screen recognition, text recognition click, idle script, repetitive task automation, Python automation tool, AutoHotkey alternative, i18n, 多語言
+📖 [Full documentation](https://sid-1996.github.io/ocr-trigger-clicker/)
 
 ---
 
 ## 简体中文
 
-**OCR Trigger Clicker** — 免写代码的 Windows 自动点击工具，基于 OCR 实时检测屏幕文字，自动执行鼠标点击与键盘操作。适用于游戏自动化、挂机脚本、重复性操作自动化等场景。
+**OCR Trigger Clicker** — 免写代码的 Windows 自动点击工具，基于 OCR 实时检测屏幕文字，自动执行鼠标点击与键盘操作。
 
-**核心功能：** OCR 文字检测（繁体中文）、图像模板比对（比 OCR 快 10~50 倍）、窗口比例坐标（跨分辨率兼容）、群组规则管理（拖拽排序）、后台监控模式、前景保护、繁体/简体中文界面切换、完整图形化界面。
+**核心功能：** OCR 文字检测（繁体中文）、图像模板比对（比 OCR 快 10~50 倍）、窗口比例坐标（跨分辨率兼容）、群组规则管理（拖拽排序）、后台监控模式、前景保护、繁体/简体中文界面切换。
 
-**关键词：** 自动点击器、游戏自动化、Windows 自动化、免代码自动化、OCR 自动化、屏幕文字识别、自动点击脚本、挂机辅助工具、Python 自动化、AutoHotkey 替代、多语言
-
----
-
-## 免責聲明
-
-本工具僅供學習與研究用途。使用者應自行確認使用行為是否符合目標軟體的服務條款。開發者不對任何因使用本工具造成的帳號停權、資料損失或其他損害負責。
+📖 [完整文档](https://sid-1996.github.io/ocr-trigger-clicker/)
 
 ---
 
-## 開源授權
+## 授權
 
 Copyright (C) 2024-2026 Sid
 
