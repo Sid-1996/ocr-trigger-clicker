@@ -3269,6 +3269,8 @@ class MainWindow(QMainWindow):
         self._perf_timer = QTimer()
         self._perf_timer.timeout.connect(self._update_perf_display)
         self._perf_timer.start(1000)
+        self._bg_perf = _perf_mod.PerformanceMonitor(max_cps=999)
+        self._bg_perf.start()
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._update_rule_status)
         self._save_timer = QTimer(self)
@@ -3367,7 +3369,16 @@ class MainWindow(QMainWindow):
 
     def _update_perf_display(self):
         if self._loop is None:
-            self._perf_label.setText(T("fps.idle"))
+            stats = self._bg_perf.get_stats()
+            text = T(
+                "fps.active",
+                fps="--",
+                cpu=f"{stats['cpu_pct']:.0f}",
+                mem=f"{stats['memory_mb']:.0f}",
+                click_rate="--",
+            )
+            self._perf_label.setText(text)
+            self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
             return
         stats = self._loop.get_perf_stats()
         fps = stats["fps"]
