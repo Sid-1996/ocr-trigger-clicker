@@ -8,11 +8,14 @@
 > 免寫程式的 Windows 自動化工具 — 透過 OCR 即時偵測螢幕文字，自動執行滑鼠點擊與鍵盤操作。  
 > 支援繁體中文 / 簡體中文 UI 切換。Author: Sid
 
+[**English**](./README.en.md) · [**简体中文**](./README.zh-CN.md) · **繁體中文**
+
 ---
 
 ## 目錄
 
 - [概述](#概述)
+- [截圖一覽](#截圖一覽)
 - [功能一覽](#功能一覽)
 - [與其他工具比較](#與其他工具比較)
 - [系統需求](#系統需求)
@@ -20,8 +23,7 @@
 - [快速入門](#快速入門)
 - [完整文件](#完整文件)
 - [社群與交流](#社群與交流)
-- [English](#english)
-- [简体中文](#简体中文)
+- [贊助開發者](#贊助開發者)
 - [授權](#授權)
 
 ---
@@ -31,6 +33,14 @@
 OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動化工具。它監控指定視窗的畫面內容，當偵測到使用者設定的目標文字或圖示時，自動執行滑鼠點擊、鍵盤按鍵、拖曳等動作。
 
 **無程式碼（No-Code）**、**視窗比例座標（跨解析度相容）**、**多語言介面**，讓不具備程式背景的使用者也能快速建立自動化規則。
+
+---
+
+## 截圖一覽
+
+![主介面](docs/images/gui-main.png)
+
+![OCR 診斷面板](docs/images/ocr-diagnostic.png)
 
 ---
 
@@ -102,27 +112,14 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 - 💬 **一般討論** — 使用心得、功能建議、疑難排解，都歡迎在 [GitHub Discussions](https://github.com/Sid-1996/ocr-trigger-clicker/discussions) 發起。
 - 🐛 **問題回報** — 遇到 bug 或想要新功能，請到 [Issues](https://github.com/Sid-1996/ocr-trigger-clicker/issues) 回報。
 - ⭐ 如果這套工具對你有幫助，歡迎到 [GitHub 專案](https://github.com/Sid-1996/ocr-trigger-clicker) 給一顆 Star 支持開發！
-- ☕ **贊助開發者** — [ECPAY](https://p.ecpay.com.tw/E0E3A) / [PayPal](https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6) / [愛發電](https://afdian.com/a/sid-1996)
 
 ---
 
-## English
+## 贊助開發者
 
-**OCR Trigger Clicker** — A no-code Windows auto clicker powered by OCR. It monitors any window in real time, detects target text on screen, and automatically clicks, presses keys, or performs multi-step sequences.
-
-**Key features:** OCR text detection (Traditional Chinese), image template matching (10–50× faster than OCR), window-ratio coordinates (resolution-independent), group-based rule management with drag-and-drop, background monitoring mode, foreground protection, Traditional/Simplified Chinese UI switching.
-
-📖 [Full documentation](https://sid-1996.github.io/ocr-trigger-clicker/)
-
----
-
-## 简体中文
-
-**OCR Trigger Clicker** — 免写代码的 Windows 自动点击工具，基于 OCR 实时检测屏幕文字，自动执行鼠标点击与键盘操作。
-
-**核心功能：** OCR 文字检测（繁体中文）、图像模板比对（比 OCR 快 10~50 倍）、窗口比例坐标（跨分辨率兼容）、群组规则管理（拖拽排序）、后台监控模式、前景保护、繁体/简体中文界面切换。
-
-📖 [完整文档](https://sid-1996.github.io/ocr-trigger-clicker/)
+- ☕ [ECPAY](https://p.ecpay.com.tw/E0E3A)
+- ☕ [PayPal](https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6)
+- ☕ [愛發電](https://afdian.com/a/sid-1996)
 
 ---
 

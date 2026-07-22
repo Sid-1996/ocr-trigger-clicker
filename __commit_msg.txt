@@ -1,1 +1,1 @@
-docs: 精簡 README 為 landing page 格式，更新 docs/index.html 版本號
+docs: 新增多語言 README（EN/ZH-CN），更新截圖與 docs/index.html
