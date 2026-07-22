@@ -199,7 +199,7 @@
   "summary.format_notify": "💬「{msg}」",
   "summary.format_notify_empty": "💬 (空白)",
   "summary.format_threshold": "閾值{threshold}",
-  "summary.format_fail_duration": "[{seconds}秒]",
+  "summary.format_fail_duration": "持續{seconds}秒後",
   "ui.back_to_rules": "← 返回規則",
   "ui.add_first_rule": "← 點擊「新增」建立第一條規則",
   "ui.new_group": "新群組",

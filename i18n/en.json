@@ -199,7 +199,7 @@
   "summary.format_notify": "💬 \"{msg}\"",
   "summary.format_notify_empty": "💬 (empty)",
   "summary.format_threshold": "Threshold {threshold}",
-  "summary.format_fail_duration": "[{seconds}s]",
+  "summary.format_fail_duration": "after {seconds}s ",
   "ui.back_to_rules": "← Back to Rules",
   "ui.add_first_rule": "← Click \"Add\" to create your first rule",
   "ui.new_group": "New Group",
