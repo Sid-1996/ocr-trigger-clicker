@@ -67,12 +67,9 @@ set_capture_size = _config.set_capture_size
 def migrate_old_rules():
     if any(get_tasks_dir().iterdir()):
         return
-    from core._paths import _is_frozen, get_data_path
+    from core._paths import get_data_path
 
-    if _is_frozen():
-        old_path = Path(get_data_path("rules.json"))
-    else:
-        old_path = get_tasks_dir().parent / "rules.json"
+    old_path = Path(get_data_path("rules.json"))
     if old_path.exists():
         rules = load_rules(str(old_path))
         save_task("預設任務", rules)

@@ -1,0 +1,18 @@
+{
+  "last_task": "starsavior-Horse racing assistant",
+  "last_window": "StarSavior",
+  "hide_startup_guide": true,
+  "max_cps": 5,
+  "scan_interval_ms": 500,
+  "default_match_mode": "fuzzy",
+  "close_behavior": "quit",
+  "show_close_confirm": true,
+  "skip_update_check": false,
+  "default_mouse_button": "left",
+  "default_random_offset": 3,
+  "default_wait_ms": 500,
+  "default_fuzzy_threshold": 0.8,
+  "default_template_threshold": 0.85,
+  "default_color_tolerance": 10,
+  "language": "zh_TW"
+}
