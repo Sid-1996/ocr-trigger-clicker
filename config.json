@@ -1,5 +1,5 @@
 {
-  "last_task": "starsavior-Horse racing assistant",
+  "last_task": "StarSavior-每日任務",
   "last_window": "StarSavior",
   "hide_startup_guide": true,
   "max_cps": 5,
@@ -10,7 +10,7 @@
   "skip_update_check": false,
   "default_mouse_button": "left",
   "default_random_offset": 3,
-  "default_wait_ms": 500,
+  "default_wait_ms": 250,
   "default_fuzzy_threshold": 0.8,
   "default_template_threshold": 0.85,
   "default_color_tolerance": 10,

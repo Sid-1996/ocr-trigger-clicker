@@ -3149,7 +3149,7 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._task_del_btn)
         toolbar.addWidget(self._task_import_btn)
         toolbar.addWidget(self._task_export_btn)
-        self._task_share_btn = QPushButton(T("main.share_task"))
+        self._task_share_btn = QPushButton("🌐 " + T("main.share_task"))
         self._task_share_btn.setToolTip(T("tooltip.task_share"))
         self._task_share_btn.clicked.connect(self._open_task_share)
         toolbar.addWidget(self._task_share_btn)
