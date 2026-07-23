@@ -1,1 +1,0 @@
-docs: 新增多語言 README（EN/ZH-CN），更新截圖與 docs/index.html

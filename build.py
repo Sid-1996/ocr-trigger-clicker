@@ -72,41 +72,16 @@ def main():
                 datas.append((str(f), "custom_models"))
         print(f"找到 {len(list(custom_dir.iterdir()))} 個自訂模型檔")
 
-    # 核心模組 ─ 保留 core/ gui/ 目錄結構
-    # _loader.load_sibling() 動態載入的 .py 必須列在此處
-    # 缺漏 → EXE 啟動 FileNotFoundError（PyInstaller 靜態分析無法追蹤）
-    py_datas = [
-        ("core/00_global_hotkey.py", "core"),
-        ("core/00_logging_config.py", "core"),
-        ("core/01_screenshot.py", "core"),
-        ("core/02_ocr_engine.py", "core"),
-        ("core/03_ahk_socket.py", "core"),
-        ("core/04_rule_engine.py", "core"),
-        ("core/rule_models.py", "core"),
-        ("core/rule_migration.py", "core"),
-        ("core/rule_serialization.py", "core"),
-        ("core/task_management.py", "core"),
-        ("core/run_config.py", "core"),
-        ("core/file_utils.py", "core"),
-        ("core/05_main_loop.py", "core"),
-        ("core/10_performance_monitor.py", "core"),
-        ("core/11_template_matching.py", "core"),
-        ("core/12_updater.py", "core"),
-        ("core/trigger_log.py", "core"),
-        ("gui/06_gui_main.py", "gui"),
-        ("gui/07_gui_roi.py", "gui"),
-        ("gui/09_ocr_debug.py", "gui"),
-        ("gui/13_gui_click_picker.py", "gui"),
-        ("gui/14_capture_region.py", "gui"),
-        ("gui/group_settings_controller.py", "gui"),
-        ("gui/screenshot_controller.py", "gui"),
-        ("gui/rule_config_controller.py", "gui"),
-        ("gui/test_run_controller.py", "gui"),
-        ("build.py", "."),
-        ("_loader.py", "."),
-        ("i18n/__init__.py", "i18n"),
-    ]
-    for rel, dest in py_datas:
+    # 核心/ GUI 模組 ─ glob 自動掃描，不再手動維護
+    for f in (here / "core").rglob("*.py"):
+        if "__pycache__" in str(f):
+            continue
+        datas.append((str(f), "core"))
+    for f in (here / "gui").rglob("*.py"):
+        if "__pycache__" in str(f):
+            continue
+        datas.append((str(f), "gui"))
+    for rel, dest in [("_loader.py", "."), ("i18n/__init__.py", "i18n")]:
         f = here / rel
         if f.exists():
             datas.append((str(f), dest))

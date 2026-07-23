@@ -22,13 +22,11 @@ _MAX_IMPORT_SIZE = 10 * 1024 * 1024
 
 
 def _tasks_base() -> Path:
-    try:
-        from build import get_data_path
+    from core._paths import _is_frozen, get_data_path
 
-        raw = get_data_path("_")
-        return Path(raw).parent
-    except ImportError:
-        return Path(__file__).resolve().parent.parent
+    if _is_frozen():
+        return Path(get_data_path("_")).parent
+    return Path(__file__).resolve().parent.parent
 
 
 def get_tasks_dir() -> Path:

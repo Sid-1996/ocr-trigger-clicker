@@ -1,12 +1,5 @@
 import sys
-from pathlib import Path
 from typing import Optional
-
-if hasattr(sys, "_MEIPASS"):
-    _base = Path(sys._MEIPASS)
-else:
-    _base = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_base))
 
 from PyQt6.QtCore import QEventLoop, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter

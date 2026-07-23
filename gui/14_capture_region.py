@@ -1,19 +1,12 @@
 import base64
 import sys
-from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QBuffer, QByteArray, QEventLoop, QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
-if hasattr(sys, "_MEIPASS"):
-    _base = Path(sys._MEIPASS)
-else:
-    _base = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_base))
-
-from _loader import load_sibling  # noqa: E402
+from _loader import load_sibling
 from i18n import T  # noqa: E402
 
 

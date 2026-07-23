@@ -1,6 +1,5 @@
 import base64
 import logging
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -53,15 +52,12 @@ def _resolve_template(template_path: str) -> Optional[Path]:
     candidate = project_root / "images" / p.name
     if candidate.exists():
         return candidate
-    if hasattr(sys, "_MEIPASS"):
-        try:
-            from build import get_data_path
+    from core._paths import _is_frozen, get_data_path
 
-            candidate = Path(get_data_path("images")) / p.name
-            if candidate.exists():
-                return candidate
-        except ImportError:
-            pass
+    if _is_frozen():
+        candidate = Path(get_data_path("images")) / p.name
+        if candidate.exists():
+            return candidate
     return None
 
 

@@ -1,5 +1,4 @@
 import logging
-import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -96,10 +95,9 @@ def init_engine() -> None:
     with _engine_lock:
         if _engine is not None:
             return
-        if hasattr(sys, "_MEIPASS"):
-            custom_dir = Path(sys._MEIPASS) / "custom_models"
-        else:
-            custom_dir = Path(__file__).resolve().parent.parent / "custom_models"
+        from core._paths import _bundle_root
+
+        custom_dir = _bundle_root() / "custom_models"
         rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
         dict_path = custom_dir / "chinese_cht_dict.txt"
         kwargs: dict = dict(

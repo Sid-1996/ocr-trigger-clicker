@@ -2536,15 +2536,11 @@ _hk_handle_native = _hk_mod.handle_native_event
 
 
 def _get_images_dir() -> Path:
-    """Return writable images directory — project root in dev, %APPDATA% when packaged."""
-    if hasattr(sys, "_MEIPASS"):
-        try:
-            from build import get_data_path
+    from core._paths import _bundle_root, _is_frozen, get_data_path
 
-            return Path(get_data_path("images"))
-        except ImportError:
-            pass
-    return Path(__file__).resolve().parent.parent / "images"
+    if _is_frozen():
+        return Path(get_data_path("images"))
+    return _bundle_root() / "images"
 
 
 class WorkerSignals(QObject):
@@ -2907,13 +2903,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"OCR Trigger Clicker v{__version__}")
         self.resize(900, 650)
 
-        try:
-            from build import get_data_path
+        from core._paths import _bundle_root, _is_frozen, get_data_path
 
+        if _is_frozen():
             self._config_path = get_data_path("config.json")
-        except ImportError:
-            here = Path(__file__).resolve().parent.parent
-            self._config_path = str(here / "config.json")
+        else:
+            self._config_path = str(_bundle_root() / "config.json")
 
         try:
             migrate_old_rules()

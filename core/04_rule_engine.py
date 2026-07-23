@@ -67,11 +67,11 @@ set_capture_size = _config.set_capture_size
 def migrate_old_rules():
     if any(get_tasks_dir().iterdir()):
         return
-    try:
-        from build import get_data_path
+    from core._paths import _is_frozen, get_data_path
 
+    if _is_frozen():
         old_path = Path(get_data_path("rules.json"))
-    except ImportError:
+    else:
         old_path = get_tasks_dir().parent / "rules.json"
     if old_path.exists():
         rules = load_rules(str(old_path))

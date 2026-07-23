@@ -11,6 +11,8 @@ import zipfile
 from pathlib import Path
 from typing import Callable, Optional
 
+from core._paths import get_data_path, get_resource_path
+
 _server: Optional[socket.socket] = None
 _conn: Optional[socket.socket] = None
 _ahk_process: Optional[subprocess.Popen] = None
@@ -34,23 +36,13 @@ _AHK_DOWNLOAD_URL = (
 
 
 def _ahk_data_dir() -> Path:
-    try:
-        from build import get_data_path
-
-        return Path(get_data_path("ahk"))
-    except ImportError:
-        return Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "ahk"
+    return Path(get_data_path("ahk"))
 
 
 def _find_ahk() -> str:
-    try:
-        from build import get_resource_path
-
-        p = Path(get_resource_path("clicker.ahk"))
-        if p.exists():
-            return str(p.resolve())
-    except ImportError:
-        pass
+    p = Path(get_resource_path("clicker.ahk"))
+    if p.exists():
+        return str(p.resolve())
     candidates = [
         Path(__file__).resolve().parent.parent / "clicker.ahk",
         Path.cwd() / "clicker.ahk",
