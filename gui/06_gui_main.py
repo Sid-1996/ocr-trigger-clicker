@@ -3151,7 +3151,10 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._task_export_btn)
         self._task_share_btn = QPushButton("🌐 " + T("main.share_task"))
         self._task_share_btn.setToolTip(T("tooltip.task_share"))
-        self._task_share_btn.clicked.connect(self._open_task_share)
+        _share_menu = QMenu(self._task_share_btn)
+        _share_menu.addAction(T("share.open_folder"), self._open_tasks_folder)
+        _share_menu.addAction(T("share.go_website"), self._open_share_website)
+        self._task_share_btn.setMenu(_share_menu)
         toolbar.addWidget(self._task_share_btn)
 
         # -- Action section --
@@ -5354,7 +5357,12 @@ class MainWindow(QMainWindow):
 
         webbrowser.open(_GUIDE_URL)
 
-    def _open_task_share(self):
+    def _open_tasks_folder(self):
+        import os
+
+        os.startfile(str(_rule_mod.get_tasks_dir()))
+
+    def _open_share_website(self):
         import webbrowser
 
         webbrowser.open(
