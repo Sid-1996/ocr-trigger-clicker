@@ -140,7 +140,9 @@ if ($Force) {
 
 git tag v$Version
 git push origin master
+if ($LASTEXITCODE -ne 0) { git tag -d v$Version; throw "Failed to push master" }
 git push origin v$Version
+if ($LASTEXITCODE -ne 0) { git tag -d v$Version; throw "Failed to push tag" }
 
 # ---- draft release ----
 
