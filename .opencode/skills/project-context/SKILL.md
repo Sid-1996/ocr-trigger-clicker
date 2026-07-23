@@ -81,7 +81,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 ## 已知陷阱（避免誤判）
 
-1. **打包遺漏陷阱**：`build.py` 的 `py_datas` 必須列出所有被 `_loader.load_sibling()` 動態載入的 `.py` 檔案，否則 PyInstaller 不會 bundle 進去，EXE 啟動時噴 `FileNotFoundError`。新增 `core/` 或 `gui/` 下的 `.py` 並用 `load_sibling()` 載入時，記得同步補上 `py_datas` 條目。
+1. ~~打包遺漏陷阱（已解決）~~：`build.py` 的 `py_datas` 已於 commit `f45f9ad` 改為 glob 自動掃描 `core/` 和 `gui/` 下所有 `*.py`，新增檔案不再需要手動同步。
 
 2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`TestRunController.on_test_rule` → `_run_dry_run`，位於 `gui/test_run_controller.py`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_img_compare_match`，`gui/06_gui_main.py:1228`）只直接呼叫 `_tmpl_mod.match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
 
@@ -93,7 +93,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 6. **Qt `model().rowsMoved` 不可靠**：對頂層群組項目的拖曳操作，這個內建訊號可能不觸發或順序不對，導致資料看似拖完了但實際沒存。一律用自訂 `pyqtSignal` 取代，不要依賴它做持久化判斷依據。
 
-7. **控制器檔案打包遺漏**：`gui/group_settings_controller.py`、`gui/rule_config_controller.py`、`gui/screenshot_controller.py`、`gui/test_run_controller.py` 等非數字開頭的 controller 檔案不會被 `_loader.load_sibling()` 自動載入，但 `build.py` 的 `py_datas` 仍需明確列出它們，否則 PyInstaller 不會 bundle。
+7. ~~控制器檔案打包遺漏（已解決）~~：同陷阱 1，`build.py` 的 glob 自動掃描已涵蓋 `gui/` 下所有 `*.py`（含非數字開頭的 controller），不再需要手動列出。
 
 ## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267` + `eda47c2`）
 

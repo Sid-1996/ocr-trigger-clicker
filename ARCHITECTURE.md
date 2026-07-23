@@ -358,7 +358,7 @@ MainLoop.emergency_stop()
 | `python gui/06_gui_main.py`（開發模式） | `%APPDATA%\ocr-trigger-clicker\` |
 | 打包 EXE（PyInstaller） | `%APPDATA%\ocr-trigger-clicker\` |
 
-兩種模式皆同，因為 `build.get_data_path()` 在開發環境也可 import。可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋基底路徑。僅當 `build` 模組完全無法 import 的極端情況才會 fallback 到專案根目錄。
+兩種模式皆同，因為 `core._paths.get_data_path()` 在任何模式皆可 import。可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋基底路徑。
 
 任務檔案：`<基底>/tasks/<任務名稱>.json`（如 `%APPDATA%\ocr-trigger-clicker\tasks\每日任務.json`）。
 
