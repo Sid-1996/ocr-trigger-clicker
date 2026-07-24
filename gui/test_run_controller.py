@@ -93,8 +93,7 @@ class TestRunController:
                 return roi
             if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
                 if roi.get("roi_coord") == "client":
-                    chrome = get_window_client_offset(win._window_combo.currentText()) or (0, 0)
-                    cx, cy = chrome
+                    cx, cy = _chrome_offset
                     client_w = W - cx
                     client_h = H - cy
                     if client_w > 0 and client_h > 0:
@@ -113,8 +112,7 @@ class TestRunController:
             W, H = img.shape[1], img.shape[0]
             if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
                 if roi_coord == "client":
-                    chrome = get_window_client_offset(win._window_combo.currentText()) or (0, 0)
-                    cx, cy = chrome
+                    cx, cy = _chrome_offset
                     client_w = W - cx
                     client_h = H - cy
                     if client_w > 0 and client_h > 0:
@@ -122,6 +120,7 @@ class TestRunController:
                 return int(round(px * W)), int(round(py * H))
             return int(px), int(py)
 
+        _chrome_offset = get_window_client_offset(win._window_combo.currentText()) or (0, 0)
         markers = []
         log = []
         log.append(T("test.rule_header", name=rule.name, count=len(rule.steps)))
@@ -206,6 +205,9 @@ class TestRunController:
                                 threshold=threshold,
                             )
                         )
+                        of_hint = of_summary(p.get("on_fail", "stop"))
+                        if of_hint:
+                            log.append(f"  → {of_hint}")
                         rw = roi.get("w", img.shape[1])
                         rh = roi.get("h", img.shape[0])
                         markers.append(
@@ -245,7 +247,7 @@ class TestRunController:
                             r = recognize(
                                 img, preprocess=False, max_side_len=0, min_confidence=0.25
                             )
-                            ms = find_text(r, ct, "fuzzy", 0.8)
+                            ms = find_text(r, ct, "contains", 0.8)
                             if ms:
                                 m = ms[0]
                                 cx = int(m.x + m.w / 2)
@@ -291,7 +293,7 @@ class TestRunController:
                             r = recognize(
                                 img, preprocess=False, max_side_len=0, min_confidence=0.25
                             )
-                            ms = find_text(r, ct, "fuzzy", 0.8)
+                            ms = find_text(r, ct, "contains", 0.8)
                             if ms:
                                 m = ms[0]
                                 sx = int(m.x + m.w / 2)
