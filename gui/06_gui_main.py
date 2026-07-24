@@ -4938,6 +4938,7 @@ class MainWindow(QMainWindow):
     def _on_debug_rule_requested(self, rule_data: dict):
         import uuid
 
+        cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
             name=rule_data["target_text"],
@@ -4949,23 +4950,23 @@ class MainWindow(QMainWindow):
                         "text": str(rule_data["target_text"]).strip()
                         or T("step_form.enter_text_placeholder"),
                         "roi": rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                        "match_mode": "fuzzy",
-                        "fuzzy_threshold": 0.8,
+                        "match_mode": cfg.get("default_match_mode", "fuzzy"),
+                        "fuzzy_threshold": cfg.get("default_fuzzy_threshold", 0.8),
                     },
                 ),
                 Step(
                     type="click",
                     params={
                         "target": "text_center",
-                        "button": "left",
-                        "random_offset": 3,
+                        "button": cfg.get("default_mouse_button", "left"),
+                        "random_offset": cfg.get("default_random_offset", 3),
                         "x": 0,
                         "y": 0,
                     },
                 ),
                 Step(
                     type="wait",
-                    params={"ms": 100},
+                    params={"ms": cfg.get("default_wait_ms", 500)},
                 ),
             ],
         )
@@ -5002,6 +5003,7 @@ class MainWindow(QMainWindow):
         )
 
     def _on_debug_step_requested(self, data: dict):
+        cfg = self._rule_config_ctrl.load_config(self)
         rule = self._get_current_rule()
         if rule is None:
             return
@@ -5012,8 +5014,8 @@ class MainWindow(QMainWindow):
                     "text": str(data.get("target_text", "")).strip()
                     or T("step_form.enter_text_placeholder"),
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                    "match_mode": "fuzzy",
-                    "fuzzy_threshold": 0.8,
+                    "match_mode": cfg.get("default_match_mode", "fuzzy"),
+                    "fuzzy_threshold": cfg.get("default_fuzzy_threshold", 0.8),
                 },
             )
         )
@@ -5036,6 +5038,7 @@ class MainWindow(QMainWindow):
     def _on_debug_template_requested(self, data: dict):
         import uuid
 
+        cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
             name=data.get("name", T("step_form.template_rule_name")),
@@ -5046,24 +5049,24 @@ class MainWindow(QMainWindow):
                     params={
                         "template_data": data.get("template_data", ""),
                         "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                        "threshold": 0.8,
+                        "threshold": cfg.get("default_template_threshold", 0.85),
                         "match_color": False,
-                        "color_tolerance": 100,
+                        "color_tolerance": cfg.get("default_color_tolerance", 10),
                     },
                 ),
                 Step(
                     type="click",
                     params={
                         "target": "text_center",
-                        "button": "left",
-                        "random_offset": 3,
+                        "button": cfg.get("default_mouse_button", "left"),
+                        "random_offset": cfg.get("default_random_offset", 3),
                         "x": 0,
                         "y": 0,
                     },
                 ),
                 Step(
                     type="wait",
-                    params={"ms": 100},
+                    params={"ms": cfg.get("default_wait_ms", 500)},
                 ),
             ],
         )
@@ -5100,6 +5103,7 @@ class MainWindow(QMainWindow):
         )
 
     def _on_debug_template_step_requested(self, data: dict):
+        cfg = self._rule_config_ctrl.load_config(self)
         rule = self._get_current_rule()
         if rule is None:
             return
@@ -5109,9 +5113,9 @@ class MainWindow(QMainWindow):
                 params={
                     "template_data": data.get("template_data", ""),
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
-                    "threshold": 0.8,
+                    "threshold": cfg.get("default_template_threshold", 0.85),
                     "match_color": False,
-                    "color_tolerance": 100,
+                    "color_tolerance": cfg.get("default_color_tolerance", 10),
                 },
             )
         )
