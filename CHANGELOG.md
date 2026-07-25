@@ -2,6 +2,18 @@
 ## [Unreleased]
 
 ### 新增
+
+
+### 變更
+
+
+### 修復
+
+
+## [v0.1.2] - 2026-07-25
+
+### 新增
+- 任務分享按鈕改為 QMenu 下拉式（「開啟任務資料夾」+「前往網站」），加入 🌐 圖示
 - 發現新版本時彈出更新資訊對話框，含 release notes + 自動更新／前往 Release 頁面按鈕
 - 設定可自訂「等待」步驟的預設毫秒數 (default_wait_ms)
 - 規則列表每條規則顯示總結標籤（步驟數、有失敗處理、有重試容忍、空白）
@@ -10,6 +22,9 @@
 - 失敗處理、點擊目標、群組模式三組下拉選項全部加入 tooltip（懸停說明）
 
 ### 變更
+- 路徑邏輯集中至 `core/_paths.py`（`get_data_path` / `get_resource_path` / `_appdata_path`），取代 10+ 檔案中的內聯路徑
+- `build.py` py_datas 改為 glob 自動掃描 `core/` 與 `gui/` 下所有 `*.py`，不再手動維護
+- 任務目錄統一使用 `%APPDATA%\ocr-trigger-clicker\tasks\`，不再區分 dev/frozen 模式
 - 比對模式命名調整：模糊比對（fuzzy）→ 近似比對；模板比對（regex）→ 模板比對；summary／combo 相關標籤同步更新
 - 步驟摘要改進：內嵌→截圖、on_fail 顯示全稱、fuzzy 模式永遠顯示 `[近似比對]`、fail_duration 改為「持續N秒後」格式
 - 規則列表總結標籤從 column 0 移至 column 1 靠右顯示，resize mode 改為 ResizeToContents
@@ -18,6 +33,9 @@
 - 規則列表總結標籤在選取、啟用切換、儲存、更新狀態 4 個操作後被覆蓋消失
 - 常駐監控 👁 符號在儲存規則後被覆蓋消失
 - 持續失敗時長（fail_duration_sec）在步驟摘要中的格式易讀性
+- OCR 診斷規則/步驟改用設定值取代寫死參數（bd6bffc）
+- test 結果與步驟表單用語統一「內嵌」→「截圖」（44041a4）
+- release.ps1 tag push 失敗時自動刪除 local tag rollback（87a86fe）
 
 ## [v0.1.1] - 2026-07-22
 
@@ -219,6 +237,7 @@
 
 擐活?祇??潸?嚗CR ??颲刻?閫貊閬???銝剛閮芋??蝒??詻HK ?芸?摰???隞餃?蝞∠?
 
+[v0.1.2]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.2
 [v0.1.1]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.1
 [v0.1.0]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.1.0
 [v0.0.14]: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v0.0.14
