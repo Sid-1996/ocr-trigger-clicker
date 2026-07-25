@@ -121,24 +121,20 @@ def download_update(
             has_internal = any(n.startswith("_internal/") for n in zf.namelist())
 
         if has_internal:
-            # onedir: extract all to a sibling directory
-            exe_dir = current_exe_path().parent
-            new_dir = exe_dir.parent / "ocr-trigger-clicker_new"
-            if new_dir.exists():
-                shutil.rmtree(new_dir, ignore_errors=True)
+            staging = tmp_dir / "staging"
             with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(new_dir)
-            new_updater = new_dir / UPDATER_EXE_NAME
+                zf.extractall(staging)
+            new_updater = staging / UPDATER_EXE_NAME
             if not new_updater.exists():
                 raise RuntimeError("\u89e3\u58d3\u7e2e\u5f8c\u627e\u4e0d\u5230 updater.exe")
-            main_exe = new_dir / "ocr-trigger-clicker.exe"
+            main_exe = staging / "ocr-trigger-clicker.exe"
             if not (main_exe.exists() and main_exe.read_bytes()[:2] == b"MZ"):
                 raise RuntimeError(
                     "\u4e0b\u8f09\u6a94\u6848\u4e0d\u662f\u6709\u6548\u7684 EXE"
                     "\uff08PE \u6a19\u982d\u932f\u8aa4\uff09"
                 )
-            log.info("onedir \u66f4\u65b0\u89e3\u58d3\u5b8c\u6210: %s", new_dir)
-            return new_dir
+            log.info("onedir \u66f4\u65b0\u89e3\u58d3\u5b8c\u6210: %s", staging)
+            return staging
 
         # onefile: extract exes (backward compatibility)
         exe_path = tmp_dir / "ocr-trigger-clicker.exe"
@@ -169,12 +165,7 @@ def download_update(
     except Exception:
         log.exception("下載更新失敗")
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        try:
-            _nd = current_exe_path().parent.parent / "ocr-trigger-clicker_new"
-            if _nd.exists():
-                shutil.rmtree(_nd, ignore_errors=True)
-        except Exception:
-            pass
+        pass  # tmp_dir cleaned above, no stale _new to clean
         raise
 
 

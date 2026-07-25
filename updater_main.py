@@ -22,13 +22,14 @@ class _UpdaterParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
-def wait_for_pid_exit(pid: int, timeout_sec: int = 15) -> None:
+def wait_for_pid_exit(pid: int) -> None:
     PROCESS_SYNCHRONIZE = 0x00100000
+    INFINITE = 0xFFFFFFFF
     kernel32 = ctypes.windll.kernel32
     handle = kernel32.OpenProcess(PROCESS_SYNCHRONIZE, False, pid)
     if not handle:
         return
-    kernel32.WaitForSingleObject(handle, timeout_sec * 1000)
+    kernel32.WaitForSingleObject(handle, INFINITE)
     kernel32.CloseHandle(handle)
 
 
@@ -52,7 +53,7 @@ def main():
 
     if args.mode == "relaunch":
         if args.wait_pid:
-            wait_for_pid_exit(args.wait_pid, timeout_sec=15)
+            wait_for_pid_exit(args.wait_pid)
         launch_cmd = [args.launch_exe] + args.launch_arg
         subprocess.Popen(
             launch_cmd,
@@ -62,20 +63,18 @@ def main():
         )
         sys.exit(0)
 
-    # onedir update 模式：目錄取代 + rollback
-    new_dir = Path(args.new_dir)
+    # onedir update 模式：暫存 → 逐檔複製取代 + rollback
+    staging = Path(args.new_dir)
     target_dir = Path(args.target_dir)
 
-    if not new_dir.exists():
-        print(f"update: 新目錄不存在 {new_dir}")
+    if not staging.exists():
+        print(f"update: 暫存目錄不存在 {staging}")
         sys.exit(1)
-    if not target_dir.exists():
-        print(f"update: 目標目錄不存在 {target_dir}")
 
     if args.wait_pid:
-        wait_for_pid_exit(args.wait_pid, timeout_sec=15)
+        wait_for_pid_exit(args.wait_pid)
 
-    # Phase 1: 備份舊目錄（rename，同磁碟瞬間完成）
+    # Phase 1: 備份（rename，同磁碟瞬間完成）
     old_backup = target_dir.parent / (target_dir.name + "_old")
     have_backup = False
     if target_dir.exists():
@@ -86,20 +85,37 @@ def main():
             print("update: 無法備份舊目錄，直接刪除取代")
             shutil.rmtree(str(target_dir), ignore_errors=True)
 
-    # Phase 2: 取代（rename new → target，同磁碟瞬間完成）
+    # Phase 2: 逐檔複製（每檔 retry 3 次，整包 retry 3 次）
+    def _robust_copy(src, dst):
+        for i in range(3):
+            try:
+                shutil.copy2(src, dst)
+                return
+            except OSError as e:
+                print(f"update: 複製失敗 {src.name} attempt {i + 1}/3: {e}")
+                if i == 2:
+                    raise
+                time.sleep(0.5)
+
     success = False
-    for i in range(5):
+    for i in range(3):
         try:
-            os.rename(str(new_dir), str(target_dir))
+            shutil.copytree(
+                str(staging), str(target_dir), copy_function=_robust_copy, dirs_exist_ok=True
+            )
             success = True
             break
         except OSError as e:
-            print(f"update: 取代失敗 attempt {i + 1}/5: {e}")
+            print(f"update: 整包複製失敗 attempt {i + 1}/3: {e}")
+            if target_dir.exists():
+                shutil.rmtree(str(target_dir), ignore_errors=True)
             time.sleep(1)
 
     if not success:
         print("update: 取代失敗，嘗試還原備份")
         if have_backup:
+            if target_dir.exists():
+                shutil.rmtree(str(target_dir), ignore_errors=True)
             try:
                 os.rename(str(old_backup), str(target_dir))
                 print("update: 已還原備份")
@@ -107,9 +123,12 @@ def main():
                 print(f"update: 還原備份失敗: {e}")
         sys.exit(1)
 
-    # Phase 3: 清理備份
+    # Phase 3: 清理備份 + 暫存目錄
     if have_backup and old_backup.exists():
         shutil.rmtree(str(old_backup), ignore_errors=True)
+    temp_root = staging.parent
+    if temp_root.name.startswith("ocr_update_"):
+        shutil.rmtree(str(temp_root), ignore_errors=True)
 
     # Phase 4: 啟動新版
     exe_path = target_dir / "ocr-trigger-clicker.exe"

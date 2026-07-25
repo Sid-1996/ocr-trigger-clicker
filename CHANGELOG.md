@@ -1,36 +1,10 @@
 ﻿
-## [v0.1.3] - 2026-07-26
+## [v0.1.4] - 2026-07-26
 
 ### 修復
-- 自動更新後應用程式無法重新啟動的 bug（根因：`new_dir` 建立在 `target_dir` 內部，Phase 1 rename 導致路徑失效）
-- cleanup 區塊 `ocr-trigger-clicker_new` 殘檔清除路徑同步修正
-
-## [v0.1.2] - 2026-07-25
-
-### 新增
-- 任務分享按鈕改為 QMenu 下拉式（「開啟任務資料夾」+「前往網站」），加入 🌐 圖示
-- 發現新版本時彈出更新資訊對話框，含 release notes + 自動更新／前往 Release 頁面按鈕
-- 設定可自訂「等待」步驟的預設毫秒數 (default_wait_ms)
-- 規則列表每條規則顯示總結標籤（步驟數、有失敗處理、有重試容忍、空白）
-- 閒置時狀態列顯示真實 CPU／記憶體數據（背景 PerformanceMonitor 持續取樣）
-- 模板比對（regex）模式提供「快速插入」輔助工具列：[數字][英文][任意][空白]
-- 失敗處理、點擊目標、群組模式三組下拉選項全部加入 tooltip（懸停說明）
-
-### 變更
-- 路徑邏輯集中至 `core/_paths.py`（`get_data_path` / `get_resource_path` / `_appdata_path`），取代 10+ 檔案中的內聯路徑
-- `build.py` py_datas 改為 glob 自動掃描 `core/` 與 `gui/` 下所有 `*.py`，不再手動維護
-- 任務目錄統一使用 `%APPDATA%\ocr-trigger-clicker\tasks\`，不再區分 dev/frozen 模式
-- 比對模式命名調整：模糊比對（fuzzy）→ 近似比對；模板比對（regex）→ 模板比對；summary／combo 相關標籤同步更新
-- 步驟摘要改進：內嵌→截圖、on_fail 顯示全稱、fuzzy 模式永遠顯示 `[近似比對]`、fail_duration 改為「持續N秒後」格式
-- 規則列表總結標籤從 column 0 移至 column 1 靠右顯示，resize mode 改為 ResizeToContents
-
-### 修復
-- 規則列表總結標籤在選取、啟用切換、儲存、更新狀態 4 個操作後被覆蓋消失
-- 常駐監控 👁 符號在儲存規則後被覆蓋消失
-- 持續失敗時長（fail_duration_sec）在步驟摘要中的格式易讀性
-- OCR 診斷規則/步驟改用設定值取代寫死參數（bd6bffc）
-- test 結果與步驟表單用語統一「內嵌」→「截圖」（44041a4）
-- release.ps1 tag push 失敗時自動刪除 local tag rollback（87a86fe）
+- 自動更新機制全面重寫：暫存目錄改為 `%TEMP%`，取代改為逐檔複製 (copy2) + 每檔 retry 3 次 + 整包 retry 3 次 + rollback 強化
+- 移除 `ocr-trigger-clicker_new` 目錄模式（不再在 app 目錄內解壓縮）
+- 移除有缺陷的 v0.1.2 / v0.1.3 版本（請勿使用）
 
 ## [v0.1.1] - 2026-07-22
 
