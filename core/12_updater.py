@@ -123,7 +123,7 @@ def download_update(
         if has_internal:
             # onedir: extract all to a sibling directory
             exe_dir = current_exe_path().parent
-            new_dir = exe_dir / "ocr-trigger-clicker_new"
+            new_dir = exe_dir.parent / "ocr-trigger-clicker_new"
             if new_dir.exists():
                 shutil.rmtree(new_dir, ignore_errors=True)
             with zipfile.ZipFile(zip_path, "r") as zf:
@@ -170,7 +170,7 @@ def download_update(
         log.exception("下載更新失敗")
         shutil.rmtree(tmp_dir, ignore_errors=True)
         try:
-            _nd = current_exe_path().parent / "ocr-trigger-clicker_new"
+            _nd = current_exe_path().parent.parent / "ocr-trigger-clicker_new"
             if _nd.exists():
                 shutil.rmtree(_nd, ignore_errors=True)
         except Exception:

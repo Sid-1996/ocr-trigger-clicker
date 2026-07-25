@@ -1,14 +1,9 @@
 ﻿
-## [Unreleased]
-
-### 新增
-
-
-### 變更
-
+## [v0.1.3] - 2026-07-26
 
 ### 修復
-
+- 自動更新後應用程式無法重新啟動的 bug（根因：`new_dir` 建立在 `target_dir` 內部，Phase 1 rename 導致路徑失效）
+- cleanup 區塊 `ocr-trigger-clicker_new` 殘檔清除路徑同步修正
 
 ## [v0.1.2] - 2026-07-25
 
