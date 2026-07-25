@@ -1,11 +1,11 @@
 ---
 name: project-context
-description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 ROI 座標系統、OCR/模板比對、規則執行引擎（StepContext、on_fail、fail_duration_sec）、GUI 規則樹拖曳排序、任務檔案格式時使用此 skill。
+description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系統摘要。涉及 ROI 座標系統、OCR vs 模板比對、規則執行引擎（StepContext、on_fail、fail_duration_sec）、GUI 規則樹拖曳排序、任務檔案格式、i18n 多語言、自動更新、路徑集中化設計。
 ---
 
 # ocr-trigger-clicker 架構與陷阱筆記
 
-> 基準版本：git commit `eb7d452` (2026-07-20)
+> 基準版本：git commit `bd6bffc` (2026-07-25)
 > 本文件內容已逐項對照實際原始碼驗證（見文末驗證記錄），可信度高。
 > 若目前 HEAD 與基準 commit 差距很大，請對涉及的子系統提高警覺，必要時重新核對代碼。
 
@@ -18,7 +18,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 - `core/01_screenshot.py` — 視窗截圖核心（mss 截圖含邊框 / GDI 備援僅客戶區）
 - `core/02_ocr_engine.py` — OCR 引擎封裝（RapidOCR），`recognize()` / `find_text()`
 - `core/03_ahk_socket.py` — AutoHotkey TCP 通訊層
-- `core/04_rule_engine.py` — 規則引擎 re-export hub（委派給 6 個子模組）
+- `core/04_rule_engine.py` — 規則引擎 re-export hub + 16 個 self-check 測試（527 行）
 - `core/rule_models.py` — 規則/步驟/群組資料模型（`Rule`、`Step`、`RuleGroup`、`ImportPreview` dataclass）
 - `core/rule_migration.py` — 舊格式 v1→v2/v2→v3 遷移、步驟參數正規化（`_STEP_DEFAULTS`）
 - `core/rule_serialization.py` — 規則/群組 JSON 序列化、檔案讀寫（`load_rules`、`save_rules`、`load_groups`、`save_groups`）
@@ -39,7 +39,13 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 - `gui/rule_config_controller.py` — 規則設定對話框邏輯
 - `gui/screenshot_controller.py` — 截圖設定對話框邏輯
 - `gui/test_run_controller.py` — 測試執行對話框邏輯
+- `core/_paths.py` — 路徑邏輯集中樞（`get_data_path` / `get_resource_path` / `_appdata_path`）
 - `_loader.py`（根目錄）— 動態載入數字開頭模組的工具，含 RLock 快取
+- `_version.py`（根目錄）— 版本號單一事實來源（`__version__` / `__author__` / `__github__`）
+- `build.py`（根目錄）— PyInstaller 打包腳本 + updater.exe 構建
+- `updater_main.py`（根目錄）— 獨立更新/重啟程序（updater.exe 原始碼）
+
+另有 `i18n/`（多語言系統，`__init__.py` + `check.py` + 三語言 JSON）與 `tests/`（pytest 單元測試）兩個目錄。
 
 任務檔案實際路徑：`%APPDATA%\ocr-trigger-clicker\tasks\`（不在專案目錄內）。
 
@@ -47,7 +53,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 **OCR 與模板比對對座標誤差的容忍度不同。** OCR 是語意比對，位置有小幅偏移仍能辨識成功；模板比對是像素級比對，座標只要偏移幾個 pixel 就會比對失敗。診斷「比對失敗但 OCR 正常」類問題時，先往座標精度方向查。
 
-**`roi_coord: "client"` 機制。** ROI 比例預設以全視窗尺寸為基準儲存。若 `roi` 字典含 `"roi_coord": "client"`，代表比例是相對於客戶區（不含標題列/邊框）。還原時（`_resolve_roi()`）需呼叫 `get_window_client_offset()` 取得邊框偏移量，再轉換為含邊框的全視窗像素座標 —— 因為 `capture()` 截圖本身含邊框。忽略此標記會導致裁切區域系統性偏移。舊任務（無此標記）視為以全視窗比例儲存，向下相容。此機制在 baseline 之後又發現並修補了多處遺漏（`_CompareStepForm`、OCR 診斷面板、舊檔載入路徑），commits：`2cc7db6`、`db094f4`、`2502b52`、`ff2ffb0`。
+**`roi_coord: "client"` 機制。** ROI 比例預設以全視窗尺寸為基準儲存。若 `roi` 字典含 `"roi_coord": "client"`，代表比例是相對於客戶區（不含標題列/邊框）。還原時（`_resolve_roi()`）需呼叫 `get_window_client_offset()` 取得邊框偏移量，再轉換為含邊框的全視窗像素座標 —— 因為 `capture()` 截圖本身含邊框。忽略此標記會導致裁切區域系統性偏移。舊任務（無此標記）視為以全視窗比例儲存，向下相容。此機制在基準版本前已修補了多處遺漏（`_CompareStepForm`、OCR 診斷面板、舊檔載入路徑），commits：`2cc7db6`、`db094f4`、`2502b52`、`ff2ffb0`。
 
 ## 規則執行引擎
 
@@ -55,7 +61,7 @@ description: ocr-trigger-clicker 專案的架構知識與已知陷阱。涉及 R
 
 **主循環執行順序**：每幀先跑所有 `background=True` 規則（獨立於群組、`jump` 步驟無效但 `on_fail.jump` 仍有效）→ 根據群組模式（`sequential` 用 `_rule_in_group_ptr` 指向單一規則 / `parallel` 從頭掃描只執行第一個觸發的規則）執行當前規則 → 規則內逐步驟執行，每步回傳 `continue` / `stop` / `jump_step` → 若 `ctx.triggered == True` 則 `_advance_rule_in_group()` 前進；否則停留原規則下幀重試 → 指標超出範圍時觸發 `_on_group_complete()`（依 `loop`/`once`/`repeat` 決定重置或前進；新建群組預設為 `once`，commit `3b171e6` 前為 `loop`）。
 
-**`fail_duration_sec`（已驗證，05_main_loop.py:166-168, 444-456）**：
+**`fail_duration_sec`（已驗證，05_main_loop.py:166-168, 435-456）**：
 ```python
 self._fail_since: dict[str, float] = {}  # key=f"{rule_id}:{step_idx}" -> first-fail monotonic timestamp
 ```
@@ -67,7 +73,7 @@ if change_ratio < 0.02 and not self._should_process_static_frame():
 ```
 是 AND 條件。`_should_process_static_frame()` 直接回傳 `self._has_detect_rules`（規則含 `detect`/`match_image` 步驟時為 True）。也就是說：畫面靜止且當前沒有需要偵測的規則時才跳過整幀處理。這個機制有單元測試覆蓋（1435-1488 行，Test 12）。診斷「規則明明該觸發卻沒反應」時，這是優先排查點之一——尤其當畫面長時間無變化、且規則集中沒有 detect 類步驟時。
 
-**notify 步驟類型（commit `5f0f187`）。** notify 是新的步驟類型，用於在螢幕右下角疊加顯示提示訊息，不影響規則流程（回傳 `continue`）。`_NotificationStack`（`gui/06_gui_main.py:2637`）使用 label 手動定位取代 QVBoxLayout（commit `e73dc86`），因為多則訊息在 QVBoxLayout 下會互相覆蓋。任務匯入白名單需含 `notify`，否則含此步驟的規則會被拒（commit `c89fdf1`）。
+**notify 步驟類型（commit `5f0f187`）。** notify 是新的步驟類型，用於在螢幕右下角疊加顯示提示訊息，不影響規則流程（回傳 `continue`）。`_NotificationStack`（`gui/06_gui_main.py:2815`）使用 label 手動定位取代 QVBoxLayout（commit `e73dc86`），因為多則訊息在 QVBoxLayout 下會互相覆蓋。任務匯入白名單需含 `notify`，否則含此步驟的規則會被拒（commit `c89fdf1`）。
 
 **match_image 雙階段驗證（commit `0516abc`、`a7394ef`）。** match_image 新增「比對顏色」選項（`match_color`），模板比對通過後再做顏色篩選：灰階只比形狀，啟用比對顏色則保留 BGR 三通道資訊，並以 `color_tolerance`（`core/11_template_matching.py:80`）過濾平均色差超過容許值的候選框。`color_tolerance` 預設值從 40 改為 100（commit `c6f044e`）。`_run_dry_run` 測試按鈕需同步傳遞 `match_color` 參數（commit `1fda9e2`）；圖片比對按鈕改讀 widget 即時值，不依賴 save()（commit `fac2cef`）。
 
@@ -83,7 +89,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 1. ~~打包遺漏陷阱（已解決）~~：`build.py` 的 `py_datas` 已於 commit `f45f9ad` 改為 glob 自動掃描 `core/` 和 `gui/` 下所有 `*.py`，新增檔案不再需要手動同步。
 
-2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`TestRunController.on_test_rule` → `_run_dry_run`，位於 `gui/test_run_controller.py`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_img_compare_match`，`gui/06_gui_main.py:1228`）只直接呼叫 `_tmpl_mod.match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
+2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`TestRunController.on_test_rule` → `_run_dry_run`，位於 `gui/test_run_controller.py`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_img_compare_match`，`gui/06_gui_main.py:1282`）只直接呼叫 `_tmpl_mod.match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
 
 3. **背景規則自動脫離群組**：規則標記為 `background=True` 後會自動從所屬群組移除（顯示於樹狀圖「📡 常駐監控」節點），取消標記則移回「未歸類」群組。背景規則內的 `jump` 步驟對群組指標無效（執行前後會 save/restore `_rule_pointer`），但 `on_fail.jump` 仍可作用於同群組規則。
 
@@ -99,11 +105,47 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 **病灶**：`MainLoop` 執行中每 20 次迭代（或停止時），若 `_rules_dirty=True`（規則觸發時設定），會用自己記憶體中的 `self._rules` 快照直接呼叫 `save_rules()` 覆寫任務檔（此邏輯已於 commit `eda47c2` 完全移除，不再存在於目前的 `05_main_loop.py`）。GUI 端的一般規則編輯（`_save_current_rule`）在 loop 執行中會被 UI disabled 擋住，但 `_on_background_changed`（勾選「常駐監控」）沒有這層防護，可以在 loop 執行中直接存檔。GUI 的 `save_task()`/`save_groups()` 呼叫與 loop 的週期性存檔之間存在檔案層級的 write-write race：GUI 剛寫入的新規則，可能在下一瞬間被 loop 用舊快照覆寫掉。症狀：新建立的「常駐監控」規則，在 loop 執行過幾輪、且使用者編輯過後，重啟工具即消失。
 
-**修復歷程**：commit `7974267` 先將 `_do_debounced_save()`（`gui/06_gui_main.py:4493`）改為當 `self._loop` 存在時，`save_task` + `save_groups` + `loop._load_rules()` 全部包在 `with self._loop._rules_lock:` 內原子執行（`_rules_lock` 是 `threading.RLock()`，可重入不會死鎖）。隨後 commit `eda47c2` 進一步移除 loop 的週期性存檔與 `_rules_dirty` 死碼，消除 race 的根本源頭——目前 loop 完全不寫任務檔，GUI 是唯一的寫入者，`_rules_lock` 仍用於保護 GUI 寫入與 loop `_load_rules()` 讀取之間的競爭。
+**修復歷程**：commit `7974267` 先將 `_do_debounced_save()`（`gui/06_gui_main.py:4744`）改為當 `self._loop` 存在時，`save_task` + `save_groups` + `loop._load_rules()` 全部包在 `with self._loop._rules_lock:` 內原子執行（`_rules_lock` 是 `threading.RLock()`，可重入不會死鎖）。隨後 commit `eda47c2` 進一步移除 loop 的週期性存檔與 `_rules_dirty` 死碼，消除 race 的根本源頭——目前 loop 完全不寫任務檔，GUI 是唯一的寫入者，`_rules_lock` 仍用於保護 GUI 寫入與 loop `_load_rules()` 讀取之間的競爭。
 
 **壓力測試驗證**（真實 threading 併發，非循序模擬，50 次疊代）：修復前規則遺失率 100%（21 條預期→實際 1~6 條存活），修復後 0%（21 條全數存活）。
 
 **診斷教訓**：純程式碼靜態分析＋循序模擬的 round-trip 測試（load→save→load）無法揭露這類 bug，因為兩個獨立寫入者各自的循序邏輯都「正確」，問題只在真正併發交錯時出現。懷疑寫入遺失且靜態分析找不到根因時，優先檢查是否有多個執行緒／執行路徑各自直接寫同一檔案，而非透過共同的鎖或單一寫入點。
+
+## 未記錄子系統摘要（基準版本後新增）
+
+### A. i18n 多語言系統（commit `21a611c` 起至 `ad9a65e`、`db7de24` 等）
+
+`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。三份 JSON（zh_TW/zh_CN/en.json 各 564 keys）均為扁平 dot-separated key。`i18n/check.py` 強制三語言 key set 一致。
+
+語言切換（`gui/06_gui_main.py:2756-2811`）→ 寫入 config.json → `subprocess.Popen(updater_main.py --mode=relaunch --wait-pid=<pid>)` → 等待舊 process 結束 → 啟動新 process。覆蓋範圍：~677 T() 呼叫，僅限 gui/ 層。`core/` 層無 i18n。
+
+### B. 自動更新機制（commit `56ba94d`、`295b677` 等）
+
+四階段流程：
+1. **版本檢查**（`core/12_updater.py`）：GitHub raw `latest_version.txt` 比對 `__version__`
+2. **更新對話框**（`gui/06_gui_main.py:5610-5652` `_UpdateInfoDialog`）：釋出 notes + 自動更新/前往 Release/取消
+3. **下載**（`core/12_updater.py:download_update`）：64KB chunks，ZIP 解壓至 EXE 旁 `ocr-trigger-clicker_new/`
+4. **套用**（`updater_main.py --mode=update`）：`os.rename(target→target_old)` 備份 → `os.rename(new→target)` 取代（retry 5x）→ 失敗則 rollback → 成功則 `rmtree(target_old)` → 啟動新 process
+
+主程式 `--onedir`、updater.exe `--onefile`（`build.py` 228-253）。`--mode=relaunch` 共用於語言切換重啟。
+
+### C. 任務目錄統一 APPDATA（commit `2e7895e`）
+
+dev/frozen 雙軌模式 → 一律 `%APPDATA%\ocr-trigger-clicker\tasks\`。受 `OCR_TRIGGER_DATA` 環境變數覆寫。`core/task_management.py:24-33` 不再區分 `_is_frozen()`；`core/04_rule_engine.py:67-74` 遷移邏輯同步統一。
+
+仍保留 dev/frozen 分支的項目（資源路徑、範本圖片、設定檔、重啟程式路徑）屬合理範圍，非路徑重複。
+
+### D. 路徑邏輯集中 core/_paths.py + build.py glob（commit `f45f9ad`）
+
+`core/_paths.py`（29 行）：`_is_frozen()`、`_bundle_root()`、`_appdata_path()`、`get_data_path()`、`get_resource_path()`。取代先前散落在 10+ 檔案中的內聯路徑邏輯。
+
+`build.py` 手動 25+ 條 `py_datas` → `core/` 與 `gui/` 各一行 `rglob("*.py")`。新增 `.py` 檔案不再需手動同步。
+
+### E. 規則列表 UI 變更（`05a7f24` 起 ~13 commits）
+
+`_RuleTreeWidget` 現為雙欄位：Column 0 = 名稱（stretch），格式 `"👁 [✓] RuleName"`；Column 1 = 標籤（ResizeToContents），靠右垂直置中，格式 `"5步 失敗"`。
+
+比對模式名稱演進：`正規`→`模板比對`，`模糊`→`模糊比對`→`近似比對`。工具列 tooltip（on_fail/點擊目標/群組模式）、模板比對輔助按鈕等。`default_wait_ms` 可自訂；閒置時狀態列顯示真實 CPU/記憶體。
 
 ## 診斷工作流程慣例
 
@@ -147,12 +189,15 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 
 ## 驗證記錄
 
-以下項目已用 `Select-String` 直接對照原始碼第一手確認（非僅憑模型自我審查）：
+以下項目已用 `Select-String` / `rg` 直接對照原始碼第一手確認（非僅憑模型自我審查）：
 
 - `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:166-168`，邏輯分布於 327（`_handle_detect`）、348（`_handle_match_image`）、396（`_handle_compare`）、435-456（`_handle_on_fail`）、1124-1146（`get_rules_status`，`_fail_since` 引用在 1137）行。
 - fail_duration_sec 修正（commit `4cb403c`）與 Test 25（`core/05_main_loop.py:1854-1927`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
 - 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:977` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`，且有對應單元測試（Test 12，1435-1488 行）。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆由 Claude 直接讀取原始碼與執行測試腳本第一手確認，非模型自我審查。
 - 全域熱鍵 — `core/00_global_hotkey.py` 僅註冊 F8（hid=1），對應 `MainWindow._on_hotkey()` → `_toggle_start()`（切換開始/暫停/停止），非 F1/F4。
+- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON（zh_TW/zh_CN/en.json）各 564 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認（`06_gui_main.py:2756-2811`，`updater_main.py:53-63`）。
+- 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `_new` 目錄，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py:78-122` 含目錄交換與 rollback 機制。
+- 路徑集中 — `core/_paths.py` 5 函式（`_is_frozen`/`_bundle_root`/`_appdata_path`/`get_data_path`/`get_resource_path`），取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
 
 其餘內容來自 DeepSeek V4 Pro 對代碼的分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。
