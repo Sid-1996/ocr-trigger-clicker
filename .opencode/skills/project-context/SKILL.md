@@ -124,8 +124,8 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 四階段流程：
 1. **版本檢查**（`core/12_updater.py`）：GitHub raw `latest_version.txt` 比對 `__version__`
 2. **更新對話框**（`gui/06_gui_main.py:5610-5652` `_UpdateInfoDialog`）：釋出 notes + 自動更新/前往 Release/取消
-3. **下載**（`core/12_updater.py:download_update`）：64KB chunks，ZIP 解壓至 EXE 旁 `ocr-trigger-clicker_new/`
-4. **套用**（`updater_main.py --mode=update`）：`os.rename(target→target_old)` 備份 → `os.rename(new→target)` 取代（retry 5x）→ 失敗則 rollback → 成功則 `rmtree(target_old)` → 啟動新 process
+3. **下載**（`core/12_updater.py:download_update`）：64KB chunks，ZIP 解壓至 `%TEMP%/ocr_update_RANDOM/staging/`
+4. **套用**（`updater_main.py --mode=update`）：`os.rename(target→target_old)` 備份 → `shutil.copytree(staging→target)` 逐檔複製（每檔 retry 3x，整包 retry 3x）→ 失敗則 rollback → 成功則 `rmtree(target_old)` + 清理 TEMP → 啟動新 process
 
 主程式 `--onedir`、updater.exe `--onefile`（`build.py` 228-253）。`--mode=relaunch` 共用於語言切換重啟。
 
@@ -197,7 +197,7 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆由 Claude 直接讀取原始碼與執行測試腳本第一手確認，非模型自我審查。
 - 全域熱鍵 — `core/00_global_hotkey.py` 僅註冊 F8（hid=1），對應 `MainWindow._on_hotkey()` → `_toggle_start()`（切換開始/暫停/停止），非 F1/F4。
 - i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON（zh_TW/zh_CN/en.json）各 564 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認（`06_gui_main.py:2756-2811`，`updater_main.py:53-63`）。
-- 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `_new` 目錄，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py:78-122` 含目錄交換與 rollback 機制。
+- 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `%TEMP%/ocr_update_*/staging/`，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py:66-139` 含備份、逐檔複製取代、rollback、TEMP 清理機制。
 - 路徑集中 — `core/_paths.py` 5 函式（`_is_frozen`/`_bundle_root`/`_appdata_path`/`get_data_path`/`get_resource_path`），取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
 
 其餘內容來自 DeepSeek V4 Pro 對代碼的分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。
