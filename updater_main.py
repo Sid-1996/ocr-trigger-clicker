@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -141,5 +142,31 @@ def main():
     sys.exit(0)
 
 
+def demo():
+    tmp = Path(tempfile.mkdtemp(prefix="ocr_test_"))
+    staging = tmp / "staging"
+    target = tmp / "target"
+    target.mkdir()
+    (staging / "_internal").mkdir(parents=True)
+    (staging / "ocr-trigger-clicker.exe").write_bytes(b"MZ" + b"\x00" * 100)
+    (staging / "updater.exe").write_text("dummy")
+    (staging / "_internal" / "test.dll").write_text("dll")
+    (target / "old.txt").write_text("old")
+
+    old_backup = target.parent / (target.name + "_old")
+    try:
+        os.rename(str(target), str(old_backup))
+    except OSError:
+        pass
+    shutil.copytree(str(staging), str(target), copy_function=shutil.copy2, dirs_exist_ok=True)
+    assert (target / "_internal" / "test.dll").is_file(), "取代後應有 test.dll"
+    assert not (target / "old.txt").exists(), "取代後不應有 old.txt"
+    shutil.rmtree(tmp)
+    print("✓ update simulation passed")
+
+
 if __name__ == "__main__":
-    main()
+    if "--demo" in sys.argv:
+        demo()
+    else:
+        main()
