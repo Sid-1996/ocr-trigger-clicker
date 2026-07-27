@@ -72,9 +72,10 @@ def match_template(
     template_data: Optional[str] = None,
     capture_size: Optional[list] = None,
     current_size: Optional[list] = None,
-    match_color: bool = False,  # 預設灰階比對（只看形狀），打勾則保留顏色資訊比對
-    color_tolerance: float = 0,  # 第二階段顏色驗證：每個像素平均色差容許值（0~255），0=關閉
-) -> list[MatchResult]:
+    match_color: bool = False,
+    color_tolerance: float = 0,
+    return_best: bool = False,
+) -> list[MatchResult] | tuple[list[MatchResult], float]:
     if template_data:
         template_bgr = b64_to_img(template_data)
         tmpl_name = "inline"
@@ -133,6 +134,7 @@ def match_template(
         scales = [round(scale_range[0] + i * scale_step, 4) for i in range(num)]
 
     matches = []
+    best_below = -1.0
     for scale in scales:
         sw = max(min_side, int(tw * scale))
         sh = max(min_side, int(th * scale))
@@ -145,6 +147,10 @@ def match_template(
             scaled = cv2.resize(template, (sw, sh), interpolation=interpolation)
 
         result_map = cv2.matchTemplate(search_img, scaled, cv2.TM_CCOEFF_NORMED)
+        if return_best and result_map.size > 0:
+            map_max = float(result_map.max())
+            if map_max > best_below:
+                best_below = map_max
         locations = np.where(result_map >= threshold)
         for pt in zip(*locations[::-1]):
             matches.append(
@@ -159,7 +165,7 @@ def match_template(
             )
 
     if not matches:
-        return []
+        return ([], best_below) if return_best else []
 
     # non-maximum suppression across all scales
     matches.sort(key=lambda m: m.confidence, reverse=True)
@@ -210,7 +216,7 @@ def match_template(
         )
     else:
         log.debug("模板「%s」顏色過濾後無結果", tmpl_name)
-    return kept
+    return (kept, best_below) if return_best else kept
 
 
 def nms_suppress(matches: list[MatchResult], iou_threshold: float = 0.5) -> list[MatchResult]:

@@ -115,6 +115,7 @@ class StepContext:
     triggered: bool = False
     force_advance: bool = False
     step_idx: int = -1
+    best_confidence: float = -1.0
 
 
 @dataclass
@@ -214,6 +215,7 @@ class MainLoop:
         "scroll": "滾輪",
         "notify": "通知",
         "background": "常駐",
+        "completed": "完成",
     }
 
     def _log_exec(
@@ -432,8 +434,13 @@ class MainLoop:
             current_size=current_size,
             match_color=match_color,
             color_tolerance=color_tolerance,
+            return_best=True,
         )
+        best_below = -1.0
+        if isinstance(results, tuple):
+            results, best_below = results
         if not results:
+            ctx.best_confidence = best_below
             return self._handle_on_fail(params, ctx, rule)
 
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
@@ -855,6 +862,8 @@ class MainLoop:
                 return f"未找到「{text[:15]}」" if text else ""
             return ""
         if t == "match_image":
+            if ctx.best_confidence >= 0:
+                return f"模板未命中（最佳 {ctx.best_confidence * 100:.0f}%）"
             return "模板未命中"
         if t in ("scroll", "drag"):
             return "通訊失敗"
@@ -876,10 +885,19 @@ class MainLoop:
         if t == "key":
             return step.params.get("key", "")
         if t == "match_image" and ctx.matched_text and hasattr(ctx.matched_text, "confidence"):
-            return f"conf={ctx.matched_text.confidence:.2f}"
+            return f"信心 {ctx.matched_text.confidence * 100:.0f}%"
         if t == "compare" and ctx.matched_box:
             num = ctx.matched_box.get("number", "")
             return str(num) if num != "" else ""
+        if t == "scroll":
+            direction = step.params.get("direction", "WheelDown")
+            amount = step.params.get("amount", 1)
+            d = "下" if "Down" in direction else "上"
+            return f"{d} x{amount}"
+        if t == "drag":
+            dx = step.params.get("dx", 0)
+            dy = step.params.get("dy", 0)
+            return f"→ ({dx:+d},{dy:+d})"
         return ""
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -956,6 +974,7 @@ class MainLoop:
                     group.id,
                 )
                 self._rule_completed.add(rule.name)
+                self._log_exec(rule.name, -1, "completed", "completed")
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
@@ -980,6 +999,7 @@ class MainLoop:
                 _trigger_log.log_trigger(r.id, r.name, task_name, group.id)
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.name)
+                self._log_exec(r.name, -1, "completed", "completed")
                 triggered = True
         if triggered and group.mode == "once":
             self._advance_group_queue()
