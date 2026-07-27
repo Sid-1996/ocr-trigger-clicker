@@ -210,6 +210,7 @@ class MainLoop:
         "drag": "拖曳",
         "scroll": "滾輪",
         "notify": "通知",
+        "background": "常駐",
     }
 
     def _log_exec(
@@ -777,7 +778,12 @@ class MainLoop:
         return handler(step.params, ctx, rule)
 
     def _run_rule(
-        self, rule: Rule, img: np.ndarray, rect: dict, ctx: StepContext | None = None
+        self,
+        rule: Rule,
+        img: np.ndarray,
+        rect: dict,
+        ctx: StepContext | None = None,
+        background: bool = False,
     ) -> None:
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
@@ -787,15 +793,21 @@ class MainLoop:
             step = rule.steps[i]
             if step.type == "wait":
                 ms = step.params.get("ms", 500)
-                self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
+                if not background:
+                    self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
             if step.type == "wait" and result.action == "continue":
-                self._log_exec(rule.name, i, "wait", "ok")
+                if not background:
+                    self._log_exec(rule.name, i, "wait", "ok")
             elif result.action == "stop":
-                self._log_exec(rule.name, i, step.type, "stop")
+                if not background:
+                    self._log_exec(rule.name, i, step.type, "stop")
                 return
             elif result.action == "jump_step":
-                self._log_exec(rule.name, i, step.type, "jump", f"→ 步驟 {result.step_index + 1}")
+                if not background:
+                    self._log_exec(
+                        rule.name, i, step.type, "jump", f"→ 步驟 {result.step_index + 1}"
+                    )
                 idx = result.step_index
                 if idx < 0:
                     idx = 0
@@ -809,7 +821,8 @@ class MainLoop:
                 detail = ""
                 if ctx.matched_text and hasattr(ctx.matched_text, "text"):
                     detail = ctx.matched_text.text[:15]
-                self._log_exec(rule.name, i, step.type, "ok", detail)
+                if not background:
+                    self._log_exec(rule.name, i, step.type, "ok", detail)
             i += 1
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -826,7 +839,7 @@ class MainLoop:
                 saved_ptr = self._rule_pointer
                 bg_ctx = StepContext(img=img, rect=rect)
                 try:
-                    self._run_rule(rule, img, rect, bg_ctx)
+                    self._run_rule(rule, img, rect, bg_ctx, background=True)
                 except Exception as e:
                     self._log(f"背景規則「{rule.name}」異常: {e}")
                     if self.on_warning:
@@ -834,6 +847,7 @@ class MainLoop:
                 if bg_ctx.triggered:
                     task_name = Path(self._rules_path).stem if self._rules_path else ""
                     _trigger_log.log_trigger(rule.id, rule.name, task_name, "background")
+                    self._log_exec(rule.name, 0, "background", "triggered")
                 self._rule_pointer = saved_ptr
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
