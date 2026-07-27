@@ -5280,7 +5280,10 @@ class MainWindow(QMainWindow):
 
     def _on_hotkey(self, hid: int):
         if hid == 1:
-            self._restore_window()
+            if self.isHidden() or self.isMinimized():
+                self._restore_window()
+            else:
+                self.activateWindow()
             self._toggle_start()
 
     def _toggle_start(self):
