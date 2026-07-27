@@ -2945,27 +2945,29 @@ class _ExecutionLogWidget(QWidget):
         )
         layout.addWidget(self._table)
 
-    _RESULT_LABELS = {
-        "ok": "✓ 通過",
-        "stop": "✗ 停止",
-        "jump": "→ 跳轉",
-        "wait": "⏳ 等待",
-        "completed": "✓ 完成",
-        "triggered": "✓ 觸發",
+    _RESULT_KEYS = {
+        "ok": "exec_log.result.ok",
+        "stop": "exec_log.result.stop",
+        "jump": "exec_log.result.jump",
+        "wait": "exec_log.result.wait",
+        "completed": "exec_log.result.completed",
+        "triggered": "exec_log.result.triggered",
     }
 
     def _populate(self, entries: list[dict]):
         self._table.setRowCount(len(entries))
         for row, e in enumerate(entries):
             result = e.get("result", "")
-            result_label = self._RESULT_LABELS.get(result, result)
+            result_label = T(self._RESULT_KEYS.get(result, result))
             detail = e.get("detail", "")
             step_idx = e.get("step_idx", 0)
             step_type = e.get("step_type", "")
-            if step_idx < 0 or step_type in ("完成", "常駐"):
-                step_label = step_type
+            if step_idx < 0 or step_type in ("completed", "background"):
+                step_label = T(f"exec_log.type.{step_type}")
             else:
-                step_label = f"步驟 {step_idx + 1} {step_type}"
+                step_label = (
+                    f"{T('exec_log.type.step')} {step_idx + 1} {T(f'exec_log.type.{step_type}')}"
+                )
             items = [
                 e.get("ts", ""),
                 e.get("rule_name", ""),
