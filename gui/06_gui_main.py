@@ -5793,9 +5793,14 @@ if __name__ == "__main__":
     _log_cfg.cleanup_stale_logs()
 
     # Read language preference before creating any GUI
-    _app_cfg_dir = Path(os.environ.get("APPDATA", Path.home())) / "ocr-trigger-clicker"
+    from core._paths import _bundle_root, _is_frozen, get_data_path
+
+    if _is_frozen():
+        _cfg_path = Path(get_data_path("config.json"))
+    else:
+        _cfg_path = _bundle_root() / "config.json"
     try:
-        _app_cfg = json.loads((_app_cfg_dir / "config.json").read_text(encoding="utf-8"))
+        _app_cfg = json.loads(_cfg_path.read_text(encoding="utf-8"))
         set_language(_app_cfg.get("language", "zh_TW"))
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         pass
