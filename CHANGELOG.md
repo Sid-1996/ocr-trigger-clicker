@@ -1,4 +1,16 @@
 ﻿
+## [v0.1.6] - 2026-07-28
+
+### 修復
+- 語言切換 bug：`__main__` 語言讀取路徑改用與 `MainWindow._config_path` 一致的路徑邏輯（`_bundle_root()` / `_is_frozen()` / `get_data_path()`），避免 dev 模式與 frozen 模式讀到不同位置
+
+### 變更
+- 執行日誌摘要文字改進：`StepContext.on_fail_fired` 旗標、detail 顯示 `{fail_name}失敗，使用「{key}」`、前進→強制前進、空設定顯示明確訊息
+- `_STEP_TYPE_NAMES` 靜態 dict 移除，統一用 i18n key 查表
+
+### 新增
+- 執行日誌全三語 i18n：core 層 `StepResult("stop", detail=...)` 33 條字串全部改用 `T()`，GUI `_RESULT_LABELS` 改為 `_RESULT_KEYS` 並在 `_populate` 執行期以 `T()` 解析，新增 44 組 i18n key（步驟類型、結果標籤、捲動方向、靜態與參數化細節）至 zh_TW/zh_CN/en
+
 ## [v0.1.5] - 2026-07-26
 
 ### 新增
