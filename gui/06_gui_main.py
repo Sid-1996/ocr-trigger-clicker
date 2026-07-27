@@ -2918,13 +2918,14 @@ class _ExecutionLogWidget(QWidget):
         header.addWidget(self._clear_btn)
         layout.addLayout(header)
 
-        self._table = QTableWidget(0, 4)
+        self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(
             [
                 T("exec_log.col_time"),
                 T("exec_log.col_rule"),
                 T("exec_log.col_step"),
                 T("exec_log.col_result"),
+                T("exec_log.col_detail"),
             ]
         )
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -2937,27 +2938,36 @@ class _ExecutionLogWidget(QWidget):
         hdr_view.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         hdr_view.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         hdr_view.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        hdr_view.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hdr_view.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hdr_view.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self._table.setStyleSheet(
             "QTableWidget { font-size: 11px; }QTableWidget::item { padding: 2px 4px; }"
         )
         layout.addWidget(self._table)
 
+    _RESULT_LABELS = {
+        "ok": "✓ 通過",
+        "stop": "✗ 停止",
+        "jump": "→ 跳轉",
+        "wait": "⏳ 等待",
+    }
+
     def _populate(self, entries: list[dict]):
         self._table.setRowCount(len(entries))
         for row, e in enumerate(entries):
+            result = e.get("result", "")
+            result_label = self._RESULT_LABELS.get(result, result)
+            detail = e.get("detail", "")
             items = [
                 e.get("ts", ""),
                 e.get("rule_name", ""),
                 f"步驟 {e.get('step_idx', 0) + 1} {e.get('step_type', '')}",
-                e.get("detail", "") or e.get("result", ""),
+                result_label,
+                detail,
             ]
-            result = e.get("result", "")
             for col, text in enumerate(items):
                 item = QTableWidgetItem(text)
-                if result == "running":
-                    item.setBackground(QColor(255, 255, 200))
-                elif result == "ok":
+                if result == "ok":
                     item.setForeground(QColor(0, 160, 0))
                 elif result == "stop":
                     item.setForeground(QColor(220, 50, 50))

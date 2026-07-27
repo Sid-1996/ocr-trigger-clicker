@@ -568,5 +568,6 @@
   "exec_log.col_time": "Time",
   "exec_log.col_rule": "Rule",
   "exec_log.col_step": "Step",
-  "exec_log.col_result": "Result"
+  "exec_log.col_result": "Result",
+  "exec_log.col_detail": "Detail"
 }

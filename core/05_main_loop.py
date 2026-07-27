@@ -121,6 +121,7 @@ class StepContext:
 class StepResult:
     action: str  # "continue" | "stop" | "jump_step"
     step_index: int = -1
+    detail: str = ""
 
 
 class MainLoop:
@@ -496,9 +497,9 @@ class MainLoop:
                 self._log(
                     f"規則「{rule.name}」步驟{ctx.step_idx} 失敗，進入 {fail_duration}s 容忍期"
                 )
-                return StepResult("stop")
+                return StepResult("stop", detail="容忍期中")
             if now - first_fail < fail_duration:
-                return StepResult("stop")
+                return StepResult("stop", detail="容忍期中")
             self._fail_since.pop(key, None)
             # fail_duration elapsed → fall through to execute the configured action
 
@@ -537,7 +538,7 @@ class MainLoop:
                     f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 跳轉至規則「{target_name}」"
                 )
                 self._rule_in_group_ptr = group.rule_ids.index(rule_id)
-            return StepResult("stop")
+            return StepResult("stop", detail="跳轉規則")
 
         if action == "notify":
             message = raw.get("message", "") if isinstance(raw, dict) else ""
@@ -568,16 +569,16 @@ class MainLoop:
                 has_bg = any(r.background and r.enabled for r in self._rules)
                 if not has_bg:
                     self._stop_event.set()
-                return StepResult("stop")
+                return StepResult("stop", detail="通知停止")
             if not stopped:
                 ctx.triggered = True
-            return StepResult("stop")
+            return StepResult("stop", detail="通知停止")
 
         if action == "advance":
             ctx.force_advance = True
-            return StepResult("stop")
+            return StepResult("stop", detail="前進")
 
-        return StepResult("stop")
+        return StepResult("stop", detail="失敗停止")
 
     def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         target = params.get("target", "text_center")
@@ -587,7 +588,7 @@ class MainLoop:
 
         if target == "text_center":
             if ctx.matched_text is None:
-                return StepResult("stop")
+                return StepResult("stop", detail="無偵測目標")
             cx = ctx.matched_text.center_x + dx
             cy = ctx.matched_text.center_y + dy
             matched_text = ctx.matched_text.text
@@ -605,7 +606,7 @@ class MainLoop:
             results = self._ocr_region(ctx.img, None)
             clk_matches = find_text(results, click_text, "contains", 0.8)
             if not clk_matches:
-                return StepResult("stop")
+                return StepResult("stop", detail=f"未找到「{click_text[:15]}」")
             cx = clk_matches[0].center_x + dx
             cy = clk_matches[0].center_y + dy
             matched_text = clk_matches[0].text
@@ -614,10 +615,10 @@ class MainLoop:
 
         if not self._can_perform_action():
             self._logger.debug("規則「%s」點擊略過：CPS 速率限制", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="CPS 速率限制")
         if self._is_tool_foreground():
             self._logger.debug("規則「%s」點擊略過：工具處於前景", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="工具在前景")
 
         button = params.get("button", "left")
         sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
@@ -639,10 +640,10 @@ class MainLoop:
 
         if not self._can_perform_action():
             self._logger.debug("規則「%s」按鍵略過：CPS 速率限制", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="CPS 速率限制")
         if self._is_tool_foreground():
             self._logger.debug("規則「%s」按鍵略過：工具處於前景", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="工具在前景")
 
         activate_window(self._window_title)
 
@@ -662,7 +663,7 @@ class MainLoop:
         target = params.get("target", "text_center")
         if target == "text_center":
             if ctx.matched_text is None:
-                return StepResult("stop")
+                return StepResult("stop", detail="無偵測目標")
             sx = ctx.matched_text.center_x
             sy = ctx.matched_text.center_y
         elif target == "custom":
@@ -676,7 +677,7 @@ class MainLoop:
             results = self._ocr_region(ctx.img, None)
             matches = find_text(results, click_text, "contains", 0.8)
             if not matches:
-                return StepResult("stop")
+                return StepResult("stop", detail=f"未找到「{click_text[:15]}」")
             sx = matches[0].center_x
             sy = matches[0].center_y
         else:
@@ -684,10 +685,10 @@ class MainLoop:
 
         if not self._can_perform_action():
             self._logger.debug("規則「%s」拖曳略過：CPS 速率限制", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="CPS 速率限制")
         if self._is_tool_foreground():
             self._logger.debug("規則「%s」拖曳略過：工具處於前景", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="工具在前景")
 
         dx = params.get("dx", 0)
         dy = params.get("dy", 0)
@@ -699,7 +700,7 @@ class MainLoop:
         activate_window(self._window_title)
         ok = _ahk.send_drag(ssx, ssy, sex, sey, button)
         if not ok:
-            return StepResult("stop")
+            return StepResult("stop", detail="通訊失敗")
         self._perf.record_click()
         ctx.triggered = True
         self._log(f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})")
@@ -708,10 +709,10 @@ class MainLoop:
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         if not self._can_perform_action():
             self._logger.debug("規則「%s」滾輪略過：CPS 速率限制", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="CPS 速率限制")
         if self._is_tool_foreground():
             self._logger.debug("規則「%s」滾輪略過：工具處於前景", rule.name)
-            return StepResult("stop")
+            return StepResult("stop", detail="工具在前景")
 
         direction = params.get("direction", "WheelDown")
         amount = params.get("amount", 1)
@@ -721,10 +722,10 @@ class MainLoop:
         for _ in range(amount):
             ok = self._send_scroll(direction)
             if not ok:
-                return StepResult("stop")
+                return StepResult("stop", detail="通訊失敗")
             if delay_ms > 0:
                 if self._stop_event.wait(timeout=delay_ms / 1000.0):
-                    return StepResult("stop")
+                    return StepResult("stop", detail="中斷")
 
         self._perf.record_click()
         ctx.triggered = True
@@ -740,7 +741,7 @@ class MainLoop:
             elapsed = (time.monotonic() - t0) * 1000
             if interrupted:
                 self._log(f"規則「{rule.name}」等待中斷（stop_event），經過 {elapsed:.0f}ms")
-                return StepResult("stop")
+                return StepResult("stop", detail="中斷")
             self._log(f"規則「{rule.name}」等待完成，實際經過 {elapsed:.0f}ms")
         return StepResult("continue")
 
@@ -807,7 +808,10 @@ class MainLoop:
                     self._log_exec(rule.name, i, "wait", "ok")
             elif result.action == "stop":
                 if not background:
-                    self._log_exec(rule.name, i, step.type, "stop")
+                    detail = result.detail
+                    if not detail:
+                        detail = self._infer_stop_detail(step, ctx)
+                    self._log_exec(rule.name, i, step.type, "stop", detail)
                 return
             elif result.action == "jump_step":
                 if not background:
@@ -824,12 +828,50 @@ class MainLoop:
                 i = idx
                 continue
             else:
-                detail = ""
-                if ctx.matched_text and hasattr(ctx.matched_text, "text"):
-                    detail = ctx.matched_text.text[:15]
+                detail = self._build_ok_detail(step, ctx)
                 if not background:
                     self._log_exec(rule.name, i, step.type, "ok", detail)
             i += 1
+
+    def _infer_stop_detail(self, step, ctx: StepContext) -> str:
+        t = step.type
+        if t in ("detect", "compare"):
+            return "未偵測到目標" if ctx.matched_text is None else ""
+        if t == "click":
+            target = step.params.get("target", "text_center")
+            if target == "text_center" and ctx.matched_text is None:
+                return "無偵測目標"
+            if target == "click_text":
+                text = step.params.get("text", "")
+                return f"未找到「{text[:15]}」" if text else ""
+            return ""
+        if t == "match_image":
+            return "模板未命中"
+        if t in ("scroll", "drag"):
+            return "通訊失敗"
+        if t == "wait":
+            return "中斷"
+        return ""
+
+    def _build_ok_detail(self, step, ctx: StepContext) -> str:
+        on_fail = step.params.get("on_fail", "stop")
+        if isinstance(on_fail, dict) and on_fail.get("action") == "key":
+            fk = on_fail.get("key", "")
+            if fk:
+                return f"按鍵「{fk}」"
+        t = step.type
+        if t in ("detect", "compare") and ctx.matched_text and hasattr(ctx.matched_text, "text"):
+            return ctx.matched_text.text[:15]
+        if t == "click" and ctx.matched_text and hasattr(ctx.matched_text, "text"):
+            return ctx.matched_text.text[:15]
+        if t == "key":
+            return step.params.get("key", "")
+        if t == "match_image" and ctx.matched_text and hasattr(ctx.matched_text, "confidence"):
+            return f"conf={ctx.matched_text.confidence:.2f}"
+        if t == "compare" and ctx.matched_box:
+            num = ctx.matched_box.get("number", "")
+            return str(num) if num != "" else ""
+        return ""
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()

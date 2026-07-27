@@ -568,5 +568,6 @@
   "exec_log.col_time": "時間",
   "exec_log.col_rule": "規則",
   "exec_log.col_step": "步驟",
-  "exec_log.col_result": "結果"
+  "exec_log.col_result": "結果",
+  "exec_log.col_detail": "摘要"
 }
