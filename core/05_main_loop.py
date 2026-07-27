@@ -114,6 +114,7 @@ class StepContext:
     matched_box: Optional[dict] = None
     triggered: bool = False
     force_advance: bool = False
+    on_fail_fired: bool = False
     step_idx: int = -1
     best_confidence: float = -1.0
 
@@ -389,7 +390,7 @@ class MainLoop:
     def _handle_detect(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         text = params.get("text", "")
         if not text.strip():
-            return StepResult("stop")
+            return StepResult("stop", detail="未設定偵測文字")
 
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         results = self._ocr_region(ctx.img, roi)
@@ -411,7 +412,7 @@ class MainLoop:
         template_data = params.get("template_data", "")
         template_path = params.get("template", "")
         if not template_data.strip() and not template_path.strip():
-            return StepResult("stop")
+            return StepResult("stop", detail="未設定模板圖片")
 
         capture_size = get_capture_size(self._rules_path)
         chrome = get_window_client_offset(self._window_title)
@@ -538,7 +539,8 @@ class MainLoop:
                 activate_window(self._window_title)
                 self._send_key(fail_key)
                 ctx.triggered = True
-                self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 按鍵「{fail_key}」")
+                ctx.on_fail_fired = True
+                self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 使用「{fail_key}」")
             return StepResult("continue")
 
         if action == "skip":
@@ -596,7 +598,7 @@ class MainLoop:
 
         if action == "advance":
             ctx.force_advance = True
-            return StepResult("stop", detail="前進")
+            return StepResult("stop", detail="強制前進")
 
         return StepResult("stop", detail="失敗停止")
 
@@ -622,7 +624,7 @@ class MainLoop:
         elif target == "click_text":
             click_text = params.get("text", "")
             if not click_text:
-                return StepResult("stop")
+                return StepResult("stop", detail="未設定點擊文字")
             results = self._ocr_region(ctx.img, None)
             clk_matches = find_text(results, click_text, "contains", 0.8)
             if not clk_matches:
@@ -631,7 +633,7 @@ class MainLoop:
             cy = clk_matches[0].center_y + dy
             matched_text = clk_matches[0].text
         else:
-            return StepResult("stop")
+            return StepResult("stop", detail="未知點擊目標")
 
         if not self._can_perform_action():
             self._logger.debug("規則「%s」點擊略過：CPS 速率限制", rule.name)
@@ -656,7 +658,7 @@ class MainLoop:
     def _handle_key(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         key = params.get("key", "")
         if not key:
-            return StepResult("stop")
+            return StepResult("stop", detail="未設定按鍵")
 
         if not self._can_perform_action():
             self._logger.debug("規則「%s」按鍵略過：CPS 速率限制", rule.name)
@@ -693,7 +695,7 @@ class MainLoop:
         elif target == "click_text":
             click_text = params.get("text", "")
             if not click_text:
-                return StepResult("stop")
+                return StepResult("stop", detail="未設定點擊文字")
             results = self._ocr_region(ctx.img, None)
             matches = find_text(results, click_text, "contains", 0.8)
             if not matches:
@@ -701,7 +703,7 @@ class MainLoop:
             sx = matches[0].center_x
             sy = matches[0].center_y
         else:
-            return StepResult("stop")
+            return StepResult("stop", detail="未知拖曳目標")
 
         if not self._can_perform_action():
             self._logger.debug("規則「%s」拖曳略過：CPS 速率限制", rule.name)
@@ -768,11 +770,11 @@ class MainLoop:
     def _handle_jump(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         target_id = params.get("rule_id", "")
         if not target_id:
-            return StepResult("stop")
+            return StepResult("stop", detail="未設定跳轉目標")
         group = self._current_group()
         if group is None or target_id not in group.rule_ids:
             self._log(f"規則「{rule.name}」jump 目標「{target_id}」不在當前群組內")
-            return StepResult("stop")
+            return StepResult("stop", detail="跳轉目標不在群組內")
         self._rule_in_group_ptr = group.rule_ids.index(target_id)
         target_name = getattr(self._rule_map.get(target_id), "name", target_id)
         self._log(f"規則「{rule.name}」跳轉至「{target_name}」")
@@ -801,7 +803,7 @@ class MainLoop:
         }
         handler = handlers.get(step.type)
         if handler is None:
-            return StepResult("stop")
+            return StepResult("stop", detail="未知步驟類型")
         return handler(step.params, ctx, rule)
 
     def _run_rule(
@@ -881,11 +883,6 @@ class MainLoop:
         return ""
 
     def _build_ok_detail(self, step, ctx: StepContext) -> str:
-        on_fail = step.params.get("on_fail", "stop")
-        if isinstance(on_fail, dict) and on_fail.get("action") == "key":
-            fk = on_fail.get("key", "")
-            if fk:
-                return f"按鍵「{fk}」"
         t = step.type
         if t in ("detect", "compare") and ctx.matched_text and hasattr(ctx.matched_text, "text"):
             return ctx.matched_text.text[:15]
@@ -894,7 +891,7 @@ class MainLoop:
         if t == "key":
             return step.params.get("key", "")
         if t == "match_image" and ctx.matched_text and hasattr(ctx.matched_text, "confidence"):
-            return f"信心 {ctx.matched_text.confidence * 100:.0f}%"
+            return f"比對 {ctx.matched_text.confidence * 100:.0f}%"
         if t == "compare" and ctx.matched_box:
             num = ctx.matched_box.get("number", "")
             return str(num) if num != "" else ""
@@ -907,6 +904,18 @@ class MainLoop:
             dx = step.params.get("dx", 0)
             dy = step.params.get("dy", 0)
             return f"→ ({dx:+d},{dy:+d})"
+        if ctx.on_fail_fired:
+            on_fail = step.params.get("on_fail", "stop")
+            if isinstance(on_fail, dict) and on_fail.get("action") == "key":
+                fk = on_fail.get("key", "")
+                if fk:
+                    _FAIL_NAMES = {
+                        "detect": "偵測",
+                        "compare": "比對",
+                        "match_image": "圖示比對",
+                        "click": "點擊",
+                    }
+                    return f"{_FAIL_NAMES.get(t, '步驟')}失敗，使用「{fk}」"
         return ""
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -1453,6 +1462,7 @@ if __name__ == "__main__":
     result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
     _ahk.send_key = _orig_k
     assert result.action == "continue", "on_fail key should return continue"
+    assert ctx.on_fail_fired, "on_fail key should set on_fail_fired"
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"
     print("  [OK] _handle_on_fail (stop/key)")
 

@@ -2960,10 +2960,16 @@ class _ExecutionLogWidget(QWidget):
             result = e.get("result", "")
             result_label = self._RESULT_LABELS.get(result, result)
             detail = e.get("detail", "")
+            step_idx = e.get("step_idx", 0)
+            step_type = e.get("step_type", "")
+            if step_idx < 0 or step_type in ("完成", "常駐"):
+                step_label = step_type
+            else:
+                step_label = f"步驟 {step_idx + 1} {step_type}"
             items = [
                 e.get("ts", ""),
                 e.get("rule_name", ""),
-                f"步驟 {e.get('step_idx', 0) + 1} {e.get('step_type', '')}",
+                step_label,
                 result_label,
                 detail,
             ]

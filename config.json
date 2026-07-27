@@ -14,5 +14,5 @@
   "default_fuzzy_threshold": 0.9,
   "default_template_threshold": 0.9,
   "default_color_tolerance": 10,
-  "language": "zh_CN"
+  "language": "zh_TW"
 }
