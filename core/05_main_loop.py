@@ -171,6 +171,7 @@ class MainLoop:
         self._last_active_rule_id: str | None = None
         self._execution_log: deque = deque(maxlen=10)
         self._last_exec_log: dict[str, tuple] = {}
+        self._rule_completed: set[str] = set()
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -806,12 +807,19 @@ class MainLoop:
             if step.type == "wait" and result.action == "continue":
                 if not background:
                     self._log_exec(rule.name, i, "wait", "ok")
+                self._rule_completed.discard(rule.name)
             elif result.action == "stop":
                 if not background:
                     detail = result.detail
                     if not detail:
                         detail = self._infer_stop_detail(step, ctx)
-                    self._log_exec(rule.name, i, step.type, "stop", detail)
+                    if rule.name in self._rule_completed and detail in (
+                        "未偵測到目標",
+                        "模板未命中",
+                    ):
+                        self._rule_completed.discard(rule.name)
+                    else:
+                        self._log_exec(rule.name, i, step.type, "stop", detail)
                 return
             elif result.action == "jump_step":
                 if not background:
@@ -831,6 +839,7 @@ class MainLoop:
                 detail = self._build_ok_detail(step, ctx)
                 if not background:
                     self._log_exec(rule.name, i, step.type, "ok", detail)
+                self._rule_completed.discard(rule.name)
             i += 1
 
     def _infer_stop_detail(self, step, ctx: StepContext) -> str:
@@ -946,6 +955,7 @@ class MainLoop:
                     task_name,
                     group.id,
                 )
+                self._rule_completed.add(rule.name)
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
@@ -969,6 +979,7 @@ class MainLoop:
                 task_name = Path(self._rules_path).stem if self._rules_path else ""
                 _trigger_log.log_trigger(r.id, r.name, task_name, group.id)
                 self._last_active_rule_id = r.id
+                self._rule_completed.add(r.name)
                 triggered = True
         if triggered and group.mode == "once":
             self._advance_group_queue()
@@ -1135,6 +1146,7 @@ class MainLoop:
         log_main(f"循環開始，目標視窗「{self._window_title}」")
         self._execution_log.clear()
         self._last_exec_log.clear()
+        self._rule_completed.clear()
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -1315,6 +1327,7 @@ if __name__ == "__main__":
     ml._frame_ocr_cache = {}
     ml._execution_log = deque(maxlen=10)
     ml._last_exec_log = {}
+    ml._rule_completed = set()
     ml._match_image_warn_counter = {}
     ml._last_active_rule_id = None
     ml._logger = logging.getLogger("main_loop_test")
