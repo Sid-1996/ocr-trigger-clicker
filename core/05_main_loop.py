@@ -169,6 +169,7 @@ class MainLoop:
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
         self._last_active_rule_id: str | None = None
         self._execution_log: deque = deque(maxlen=10)
+        self._last_exec_log: dict[str, tuple] = {}
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -221,6 +222,11 @@ class MainLoop:
         result: str,
         detail: str = "",
     ):
+        key = f"{rule_name}:{step_idx}"
+        entry = (result, detail)
+        if self._last_exec_log.get(key) == entry:
+            return
+        self._last_exec_log[key] = entry
         type_name = self._STEP_TYPE_NAMES.get(step_type, step_type)
         self._execution_log.append(
             {
@@ -1086,6 +1092,7 @@ class MainLoop:
     def start(self) -> None:
         log_main(f"循環開始，目標視窗「{self._window_title}」")
         self._execution_log.clear()
+        self._last_exec_log.clear()
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -1265,6 +1272,7 @@ if __name__ == "__main__":
     ml._has_detect_rules = False
     ml._frame_ocr_cache = {}
     ml._execution_log = deque(maxlen=10)
+    ml._last_exec_log = {}
     ml._match_image_warn_counter = {}
     ml._last_active_rule_id = None
     ml._logger = logging.getLogger("main_loop_test")
