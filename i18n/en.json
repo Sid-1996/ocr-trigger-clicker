@@ -560,5 +560,13 @@
   "test.template_miss": "[{idx}] ❌ Miss \"{name}\" (threshold {threshold}){suffix}",
   "test.unknown_step": "[{idx}] ? Unknown step: {type}",
   "test.default_task": "My Task",
-  "test.default_group": "All Rules"
+  "test.default_group": "All Rules",
+  "exec_log.toggle": "▶ Execution Log",
+  "exec_log.hide": "▼ Execution Log",
+  "exec_log.title": "Execution Log",
+  "exec_log.clear": "Clear",
+  "exec_log.col_time": "Time",
+  "exec_log.col_rule": "Rule",
+  "exec_log.col_step": "Step",
+  "exec_log.col_result": "Result"
 }

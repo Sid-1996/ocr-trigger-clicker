@@ -4,6 +4,7 @@ import re
 import sys as _sys
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -167,6 +168,7 @@ class MainLoop:
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
         self._last_active_rule_id: str | None = None
+        self._execution_log: deque = deque(maxlen=10)
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -196,6 +198,43 @@ class MainLoop:
 
     def _log(self, msg: str):
         self._logger.info(msg)
+
+    _STEP_TYPE_NAMES = {
+        "detect": "偵測",
+        "match_image": "圖示",
+        "compare": "比較",
+        "click": "點擊",
+        "key": "按鍵",
+        "wait": "等待",
+        "jump": "跳轉",
+        "drag": "拖曳",
+        "scroll": "滾輪",
+        "notify": "通知",
+    }
+
+    def _log_exec(
+        self,
+        rule_name: str,
+        step_idx: int,
+        step_type: str,
+        result: str,
+        detail: str = "",
+    ):
+        type_name = self._STEP_TYPE_NAMES.get(step_type, step_type)
+        self._execution_log.append(
+            {
+                "ts": time.strftime("%H:%M:%S"),
+                "rule_name": rule_name,
+                "step_idx": step_idx,
+                "step_type": type_name,
+                "result": result,
+                "detail": detail,
+            }
+        )
+
+    def get_execution_log(self) -> list[dict]:
+        with self._rules_lock:
+            return list(self._execution_log)
 
     def _load_rules(self):
         with self._rules_lock:
@@ -745,10 +784,18 @@ class MainLoop:
         i = 0
         while i < len(rule.steps):
             ctx.step_idx = i
-            result = self._run_step(rule.steps[i], ctx, rule)
-            if result.action == "stop":
+            step = rule.steps[i]
+            if step.type == "wait":
+                ms = step.params.get("ms", 500)
+                self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
+            result = self._run_step(step, ctx, rule)
+            if step.type == "wait" and result.action == "continue":
+                self._log_exec(rule.name, i, "wait", "ok")
+            elif result.action == "stop":
+                self._log_exec(rule.name, i, step.type, "stop")
                 return
-            if result.action == "jump_step":
+            elif result.action == "jump_step":
+                self._log_exec(rule.name, i, step.type, "jump", f"→ 步驟 {result.step_index + 1}")
                 idx = result.step_index
                 if idx < 0:
                     idx = 0
@@ -758,6 +805,11 @@ class MainLoop:
                     return
                 i = idx
                 continue
+            else:
+                detail = ""
+                if ctx.matched_text and hasattr(ctx.matched_text, "text"):
+                    detail = ctx.matched_text.text[:15]
+                self._log_exec(rule.name, i, step.type, "ok", detail)
             i += 1
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
@@ -1019,6 +1071,7 @@ class MainLoop:
 
     def start(self) -> None:
         log_main(f"循環開始，目標視窗「{self._window_title}」")
+        self._execution_log.clear()
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -1197,6 +1250,9 @@ if __name__ == "__main__":
     ml._frame_diff_ratio = 0.0
     ml._has_detect_rules = False
     ml._frame_ocr_cache = {}
+    ml._execution_log = deque(maxlen=10)
+    ml._match_image_warn_counter = {}
+    ml._last_active_rule_id = None
     ml._logger = logging.getLogger("main_loop_test")
     ml._logger.setLevel(logging.INFO)
     ml._logger.handlers.clear()

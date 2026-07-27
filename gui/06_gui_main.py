@@ -52,6 +52,8 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QStatusBar,
     QSystemTrayIcon,
+    QTableWidget,
+    QTableWidgetItem,
     QTabWidget,
     QTextBrowser,
     QTextEdit,
@@ -2897,6 +2899,80 @@ class _NotificationStack(QWidget):
         self.move(int(x), int(y))
 
 
+class _ExecutionLogWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        self._title_label = QLabel(T("exec_log.title"))
+        self._title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        header.addWidget(self._title_label)
+        header.addStretch()
+        self._clear_btn = QPushButton(T("exec_log.clear"))
+        self._clear_btn.setStyleSheet("font-size: 11px; padding: 2px 8px;")
+        self._clear_btn.clicked.connect(self._clear)
+        header.addWidget(self._clear_btn)
+        layout.addLayout(header)
+
+        self._table = QTableWidget(0, 4)
+        self._table.setHorizontalHeaderLabels(
+            [
+                T("exec_log.col_time"),
+                T("exec_log.col_rule"),
+                T("exec_log.col_step"),
+                T("exec_log.col_result"),
+            ]
+        )
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setShowGrid(False)
+        self._table.setAlternatingRowColors(True)
+        self._table.setMaximumHeight(150)
+        hdr_view = self._table.horizontalHeader()
+        hdr_view.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr_view.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        hdr_view.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        hdr_view.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self._table.setStyleSheet(
+            "QTableWidget { font-size: 11px; }QTableWidget::item { padding: 2px 4px; }"
+        )
+        layout.addWidget(self._table)
+
+    def _populate(self, entries: list[dict]):
+        self._table.setRowCount(len(entries))
+        for row, e in enumerate(entries):
+            items = [
+                e.get("ts", ""),
+                e.get("rule_name", ""),
+                f"步驟 {e.get('step_idx', 0) + 1} {e.get('step_type', '')}",
+                e.get("detail", "") or e.get("result", ""),
+            ]
+            result = e.get("result", "")
+            for col, text in enumerate(items):
+                item = QTableWidgetItem(text)
+                if result == "running":
+                    item.setBackground(QColor(255, 255, 200))
+                elif result == "ok":
+                    item.setForeground(QColor(0, 160, 0))
+                elif result == "stop":
+                    item.setForeground(QColor(220, 50, 50))
+                elif result == "jump":
+                    item.setForeground(QColor(80, 120, 200))
+                elif result == "wait":
+                    item.setForeground(QColor(140, 140, 140))
+                self._table.setItem(row, col, item)
+        if entries:
+            self._table.scrollToBottom()
+
+    def _clear(self):
+        self._table.setRowCount(0)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -3193,7 +3269,11 @@ class MainWindow(QMainWindow):
 
         # -- Page 0: rules --
         rules_page = QWidget()
-        rules_layout = QHBoxLayout(rules_page)
+        outer_layout = QVBoxLayout(rules_page)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        rules_layout = QHBoxLayout()
         rules_layout.setContentsMargins(0, 0, 0, 0)
 
         left_widget = QWidget()
@@ -3356,6 +3436,19 @@ class MainWindow(QMainWindow):
         self._edit_stack.addWidget(scroll)
         self._edit_stack.setCurrentIndex(0)
         rules_layout.addWidget(self._edit_stack, 2)
+
+        outer_layout.addLayout(rules_layout, 1)
+
+        self._exec_log_toggle = QPushButton(T("exec_log.toggle"))
+        self._exec_log_toggle.setStyleSheet(
+            "text-align: left; padding: 2px 8px; font-size: 11px; border: none; color: #666;"
+        )
+        self._exec_log_toggle.clicked.connect(self._on_exec_log_toggle)
+        outer_layout.addWidget(self._exec_log_toggle)
+
+        self._exec_log_widget = _ExecutionLogWidget()
+        self._exec_log_widget.setVisible(False)
+        outer_layout.addWidget(self._exec_log_widget)
 
         self._main_stack.addWidget(rules_page)
 
@@ -5248,6 +5341,9 @@ class MainWindow(QMainWindow):
                 T("status.detecting", title=self._window_combo.currentText())
             )
             self._status_timer.start(1000)
+            self._exec_log_timer = QTimer()
+            self._exec_log_timer.timeout.connect(self._update_exec_log)
+            self._exec_log_timer.start(500)
         else:
             QMessageBox.critical(
                 self, T("dialog.init_failed"), T("dialog.loop_start_failed", error=error_msg)
@@ -5258,6 +5354,8 @@ class MainWindow(QMainWindow):
     def _stop_loop(self):
         self._is_starting = False
         self._status_timer.stop()
+        if hasattr(self, "_exec_log_timer"):
+            self._exec_log_timer.stop()
         if self._loop:
             self._loop.stop()
             self._loop = None
@@ -5270,6 +5368,17 @@ class MainWindow(QMainWindow):
     def _on_loop_finished(self, success: bool, msg: str):
         if self._loop is not None:
             self._stop_loop()
+
+    def _on_exec_log_toggle(self):
+        visible = not self._exec_log_widget.isVisible()
+        self._exec_log_widget.setVisible(visible)
+        self._exec_log_toggle.setText(T("exec_log.hide") if visible else T("exec_log.toggle"))
+
+    def _update_exec_log(self):
+        if not self._loop or not self._loop.is_running:
+            return
+        entries = self._loop.get_execution_log()
+        self._exec_log_widget._populate(entries)
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)

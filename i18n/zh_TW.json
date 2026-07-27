@@ -560,5 +560,13 @@
   "test.template_miss": "[{idx}] ❌ 未命中「{name}」（閾值 {threshold}）{suffix}",
   "test.unknown_step": "[{idx}] ? 未知步驟: {type}",
   "test.default_task": "我的任務",
-  "test.default_group": "所有規則"
+  "test.default_group": "所有規則",
+  "exec_log.toggle": "▶ 執行日誌",
+  "exec_log.hide": "▼ 執行日誌",
+  "exec_log.title": "執行日誌",
+  "exec_log.clear": "清除",
+  "exec_log.col_time": "時間",
+  "exec_log.col_rule": "規則",
+  "exec_log.col_step": "步驟",
+  "exec_log.col_result": "結果"
 }
