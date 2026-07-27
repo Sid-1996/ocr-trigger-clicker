@@ -2951,6 +2951,7 @@ class _ExecutionLogWidget(QWidget):
         "jump": "→ 跳轉",
         "wait": "⏳ 等待",
         "completed": "✓ 完成",
+        "triggered": "✓ 觸發",
     }
 
     def _populate(self, entries: list[dict]):
@@ -2970,7 +2971,7 @@ class _ExecutionLogWidget(QWidget):
                 item = QTableWidgetItem(text)
                 if result == "ok":
                     item.setForeground(QColor(0, 160, 0))
-                elif result == "completed":
+                elif result in ("completed", "triggered"):
                     item.setForeground(QColor(0, 130, 80))
                 elif result == "stop":
                     item.setForeground(QColor(220, 50, 50))

@@ -173,6 +173,7 @@ class MainLoop:
         self._execution_log: deque = deque(maxlen=10)
         self._last_exec_log: dict[str, tuple] = {}
         self._rule_completed: set[str] = set()
+        self._last_completed_log: dict[str, float] = {}
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -218,6 +219,8 @@ class MainLoop:
         "completed": "完成",
     }
 
+    _DETECT_STEP_TYPES = frozenset({"detect", "compare", "match_image"})
+
     def _log_exec(
         self,
         rule_name: str,
@@ -226,7 +229,16 @@ class MainLoop:
         result: str,
         detail: str = "",
     ):
-        key = f"{rule_name}:{step_idx}"
+        if result == "completed":
+            now = time.monotonic()
+            last = self._last_completed_log.get(rule_name, 0.0)
+            if now - last < 1.0:
+                return
+            self._last_completed_log[rule_name] = now
+            key = f"{rule_name}:{step_idx}"
+            self._last_exec_log.pop(key, None)
+        else:
+            key = f"{rule_name}:{step_idx}"
         entry = (result, detail)
         if self._last_exec_log.get(key) == entry:
             return
@@ -814,17 +826,14 @@ class MainLoop:
             if step.type == "wait" and result.action == "continue":
                 if not background:
                     self._log_exec(rule.name, i, "wait", "ok")
-                self._rule_completed.discard(rule.name)
+                self._rule_completed.discard(rule.id)
             elif result.action == "stop":
                 if not background:
                     detail = result.detail
                     if not detail:
                         detail = self._infer_stop_detail(step, ctx)
-                    if rule.name in self._rule_completed and detail in (
-                        "未偵測到目標",
-                        "模板未命中",
-                    ):
-                        self._rule_completed.discard(rule.name)
+                    if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
+                        self._rule_completed.discard(rule.id)
                     else:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
                 return
@@ -846,7 +855,7 @@ class MainLoop:
                 detail = self._build_ok_detail(step, ctx)
                 if not background:
                     self._log_exec(rule.name, i, step.type, "ok", detail)
-                self._rule_completed.discard(rule.name)
+                self._rule_completed.discard(rule.id)
             i += 1
 
     def _infer_stop_detail(self, step, ctx: StepContext) -> str:
@@ -890,10 +899,10 @@ class MainLoop:
             num = ctx.matched_box.get("number", "")
             return str(num) if num != "" else ""
         if t == "scroll":
+            dirs = {"WheelDown": "下", "WheelUp": "上", "WheelLeft": "左", "WheelRight": "右"}
             direction = step.params.get("direction", "WheelDown")
             amount = step.params.get("amount", 1)
-            d = "下" if "Down" in direction else "上"
-            return f"{d} x{amount}"
+            return f"{dirs.get(direction, direction)} x{amount}"
         if t == "drag":
             dx = step.params.get("dx", 0)
             dy = step.params.get("dy", 0)
@@ -973,7 +982,7 @@ class MainLoop:
                     task_name,
                     group.id,
                 )
-                self._rule_completed.add(rule.name)
+                self._rule_completed.add(rule.id)
                 self._log_exec(rule.name, -1, "completed", "completed")
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
@@ -998,7 +1007,7 @@ class MainLoop:
                 task_name = Path(self._rules_path).stem if self._rules_path else ""
                 _trigger_log.log_trigger(r.id, r.name, task_name, group.id)
                 self._last_active_rule_id = r.id
-                self._rule_completed.add(r.name)
+                self._rule_completed.add(r.id)
                 self._log_exec(r.name, -1, "completed", "completed")
                 triggered = True
         if triggered and group.mode == "once":
@@ -1167,6 +1176,7 @@ class MainLoop:
         self._execution_log.clear()
         self._last_exec_log.clear()
         self._rule_completed.clear()
+        self._last_completed_log.clear()
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -1348,6 +1358,7 @@ if __name__ == "__main__":
     ml._execution_log = deque(maxlen=10)
     ml._last_exec_log = {}
     ml._rule_completed = set()
+    ml._last_completed_log = {}
     ml._match_image_warn_counter = {}
     ml._last_active_rule_id = None
     ml._logger = logging.getLogger("main_loop_test")
@@ -2077,4 +2088,44 @@ if __name__ == "__main__":
     ml._active_group_ids = []
     print("  [OK] advance: full lifecycle verified")
 
-    print("\n=== All 26 tests passed ===")
+    # ── Test 27: Scroll direction WheelLeft → 左 x3 ──
+    _scroll_step = _rule.Step(type="scroll", params={"direction": "WheelLeft", "amount": 3})
+    _scroll_ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    _scroll_detail = ml._build_ok_detail(_scroll_step, _scroll_ctx)
+    assert _scroll_detail == "左 x3", f"expected '左 x3', got '{_scroll_detail}'"
+    print("  [OK] Scroll direction WheelLeft → 左 x3")
+
+    # ── Test 28: Stop suppression — rule not completed → logs ──
+    ml._rules = []
+    ml._rule_map = {}
+    ml._rule_completed.clear()
+    ml._last_completed_log.clear()
+    ml._execution_log.clear()
+    ml._last_exec_log.clear()
+    _sr1 = Rule(
+        id="sp1", name="sp1", enabled=True, steps=[_rule.Step(type="detect", params={"text": ""})]
+    )
+    _simg = np.zeros((100, 100, 3), dtype=np.uint8)
+    _srect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    ml._run_rule(_sr1, _simg, _srect)
+    assert len(ml._execution_log) == 1
+    assert ml._execution_log[0]["result"] == "stop"
+    print("  [OK] Suppression: not completed → stop logged")
+
+    # ── Test 29: Suppression — completed → first stop suppressed ──
+    ml._rule_completed.add(_sr1.id)
+    ml._execution_log.clear()
+    ml._last_exec_log.clear()
+    ml._run_rule(_sr1, _simg, _srect)
+    assert len(ml._execution_log) == 0, f"expected 0, got {len(ml._execution_log)}"
+    print("  [OK] Suppression: completed → first stop suppressed")
+
+    # ── Test 30: Suppression — completed → second stop logged (flag consumed) ──
+    ml._run_rule(_sr1, _simg, _srect)
+    assert len(ml._execution_log) == 1
+    assert ml._execution_log[0]["result"] == "stop"
+    print("  [OK] Suppression: completed → second stop logged again")
+
+    print("\n=== All 30 tests passed ===")
