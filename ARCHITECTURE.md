@@ -12,8 +12,8 @@
 | GUI | PyQt6 | 設定視窗、偵測日誌、除錯面板 |
 | OCR | rapidocr-onnxruntime (DirectML + CPU) | 文字辨識 |
 | 影像處理 | OpenCV (cv2), numpy | 截圖、縮放、二值化、差異偵測 |
-| 輸入模擬 | AutoHotkey v2 | 滑鼠點擊／移動、鍵盤按鍵 |
-| 通訊 | TCP socket (127.0.0.1:12345) | Python ↔ AHK |
+| 輸入模擬 | pynput | 滑鼠點擊／移動、鍵盤按鍵（SendInput） |
+| 截圖備援 | dxcam / mss / GDI | DXGI → mss → GDI PrintWindow/BitBlt 三層備援 |
 | 作業系統 | Windows (GDI / win32 API) | 視窗列舉、DPI 縮放、前景判斷 |
 
 ## 模組地圖與依賴關係
@@ -34,8 +34,8 @@ load_sibling("screenshot", "core/01_screenshot.py")
 ```
 gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──→  core/02_ocr_engine
                   │               └──→  core/05_main_loop     ──→  core/01_screenshot
-                  │               └──→  core/03_ahk_socket    ──→  core/02_ocr_engine
-                  │               └──→  gui/09_ocr_debug      ──→  core/03_ahk_socket
+                   │               └──→  core/03_pynput_input  ──→  core/02_ocr_engine
+                   │               └──→  gui/09_ocr_debug      ──→  core/03_pynput_input
                   │               └──→  gui/07_gui_roi        ──→  core/04_rule_engine
                   │               └──→  core/02_ocr_engine
                   │               └──→  core/10_performance_monitor
@@ -49,13 +49,13 @@ gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──�
                   │
 core/05_main_loop ──→  _loader ──→  core/01_screenshot
                    │               └──→  core/02_ocr_engine
-                   │               └──→  core/03_ahk_socket
-                   │               └──→  core/04_rule_engine
+                    │               └──→  core/03_pynput_input
+                    │               └──→  core/04_rule_engine
                    │               └──→  core/10_performance_monitor
                    │               └──→  core/11_template_matching
                    │               └──→  core/00_logging_config
                    │
-core/03_ahk_socket─→  _loader ──→  core/10_performance_monitor（螢幕邊界檢查用）
+core/03_pynput_input                              （無外部依賴，螢幕邊界檢查內聯於模組本身）
 ```
 
 ### 各模組職責
@@ -64,7 +64,8 @@ core/03_ahk_socket─→  _loader ──→  core/10_performance_monitor（螢�
 |------|------|----------|
 | `core/01_screenshot.py` | 視窗擷取 | `capture()`, `capture_window_content()`, `list_windows()`, `get_window_rect()`, `activate_window()` |
 | `core/02_ocr_engine.py` | OCR 引擎 | `init_engine()`, `recognize()`, `find_text()`, `OcrResult` |
-| `core/03_ahk_socket.py` | AHK 輸入橋接 | `init_ahk()`, `send_click()`, `send_move()`, `send_key()`, `shutdown()` |
+| `core/03_pynput_input.py` | 輸入模擬（pynput SendInput） | `send_click()`, `send_key()`, `send_scroll()`, `send_drag()`, `send_hold_key()` |
+| `core/box_utils.py` | 座標工具集（純函式） | `roi_center()`, `roi_to_pixels()`, `roi_crop()`, `roi_sanitize()`, `box_to_rect()` 等 10 函式 |
 | `core/04_rule_engine.py` | 規則引擎 re-export hub（委派給 6 個子模組） | `Rule`, `RuleGroup`, `Step`, `load_groups()`, `save_groups()`, `load_rules()`, `save_rules()` |
 | `core/rule_models.py` | 資料模型（dataclass） | `Rule`, `RuleGroup`, `Step`, `ImportPreview` |
 | `core/rule_migration.py` | 舊格式遷移 + 步驟正規化 | `_migrate_v1_to_v2()`, `migrate_v2_to_v3()`, `_normalize_step_params()` |
@@ -88,7 +89,6 @@ core/03_ahk_socket─→  _loader ──→  core/10_performance_monitor（螢�
 | `gui/test_run_controller.py` | 乾執行測試控制器（v0.0.10 從 MainWindow 拆出） | `TestRunController` |
 | `gui/14_capture_region.py` | 區域截圖選取器（match_image 模板來源） | `capture_region()` |
 | `updater_main.py` | 獨立更新行程（以 `WaitForSingleObject` 等待母進程、重試複製、重新啟動、清理暫存） | **無對外匯出**，由 `apply_update()` 以 `subprocess.Popen` 啟動 |
-| `clicker.ahk` | AHK TCP 伺服器 | 被動等待指令，執行滑鼠／鍵盤動作 |
 | `docs/` | GitHub Pages 專案網站（含 `index.html`、Google Search Console 驗證） | 由 `sid-1996.github.io/ocr-trigger-clicker/` 發布 |
 | （無對應資料夾） | match_image 模板隨任務 `.json` 內嵌 | `match_image` 步驟的 `template_data` 為 base64 PNG，存於任務檔本身；不另設 `images/` 目錄 |
 
@@ -135,7 +135,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
 | `match_image` | 圖示模板比對，未命中則觸發 on_fail | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
 | `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`）、`x`, `y`, `button`, `random_offset` |
-| `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（AHK 格式）、`hold_ms` |
+| `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（pynput 格式）、`hold_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
@@ -169,9 +169,9 @@ v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
                     └────────┬─────────┘
                              │
                     ┌────────▼─────────┐
-                    │  擷取視窗畫面     │  capture() / capture_window_content()
-                    │  (mss → fallback  │
-                    │   GDI PrintWindow)│
+                     │  擷取視窗畫面     │  capture() 三層備援
+                     │  (mss → dxcam →  │
+                     │   GDI PrintWindow)│
                     └────────┬─────────┘
                              │
                     ┌────────▼─────────┐
@@ -274,11 +274,12 @@ v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 - **群組間隔**：每輪完成後依 `between_rounds_sec` 等待
 - **跳轉限制**：`jump` 僅限同群組內跳轉，跨群組跳轉被拒絕（pointer 不動）
 
-### 截圖雙重機制
+### 截圖三層備援機制
 
-1. **主要** `capture()`：透過 `mss` 擷取全視窗（含邊框標題列），需處理 DPI 縮放與多螢幕裁切
-2. **備援** `capture_window_content()`：當 mss 失敗時，以 GDI `PrintWindow`／`BitBlt` 擷取 client area
-   - 若備援結果小於全視窗尺寸，以黑邊填補至 `get_window_rect()` 回傳的大小（`05_main_loop.py:469-478`）
+1. **一線** `_capture_mss()`：透過 `mss` 擷取全視窗（含邊框標題列），需處理 DPI 縮放與多螢幕裁切
+2. **二線** `_capture_dxcam()`：mss 失敗時以 `dxcam`（DXGI 底層）截取視窗區域，相容性高於 mss
+3. **三線** `capture_window_content()`：dxcam 也失敗時以 GDI `PrintWindow`／`BitBlt` 僅擷取 client area
+   - `capture_window_content()` 結果由呼叫方使用，未以黑邊填補
 
 ## 座標系統三層說明
 
@@ -309,42 +310,39 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 `05_main_loop.py` 的 `_resolve_roi()` 與 `_resolve_point()` 負責將比例座標還原為像素：
 
 - `_resolve_roi(roi_dict, img_width, img_height)` → `(x, y, w, h)` 像素整數，用於影像裁切
-- `_resolve_point(point_dict, win_width, win_height)` → `(x, y)` 像素整數，加上視窗偏移後送 AHK
+- `_resolve_point(point_dict, win_width, win_height)` → `(x, y)` 像素整數，加上視窗偏移後送 `send_click()`
 
-## AHK TCP 通訊協定
+## 輸入模擬（pynput）
 
-### 連線方式
+### 實作方式
 
-- AHK 以 **TCP client** 模式主動連線 Python TCP server（`127.0.0.1:12345`）
-- Python 端 `init_ahk()` 先啟動 socket server，再啟動 AHK 行程，等待 AHK 連入
+`core/03_pynput_input.py` 使用 `pynput.mouse.Controller` 與 `pynput.keyboard.Controller`（底層為 Windows `SendInput` API），所有操作皆為同步、無外部行程。
 
-### 指令格式
+### 支援功能
 
-純文字行，以 `\n` 結尾。AHK 回覆 `"OK\n"` 表示成功。
+| 函式 | 用途 | 底層實作 |
+|------|------|----------|
+| `send_click(x, y, button)` | 滑鼠點擊 | `mouse.position = (x, y)` → `mouse.click(btn)` |
+| `send_key(key)` | 鍵盤按鍵（含 Ctrl+Combo `^c` 格式） | `kb.press(parsed)` → `time.sleep(0.02)` → `kb.release(parsed)` |
+| `send_hold_key(key, ms)` | 按住一段時間後放開 | `press` → `time.sleep(ms/1000)` → `release` |
+| `send_drag(x1,y1,x2,y2,button)` | 拖曳 | `press` at (x1,y1) → `position = (x2,y2)` → `release` |
+| `send_scroll(amount, direction)` | 滾輪 | `mouse.scroll(dx, dy)` |
+| `send_emergency_stop()` | 緊急停止（in-process noop） | 僅 log + return True，`MainLoop._stop_event` 為實際中斷來源 |
 
-| 指令 | 範例 | 說明 |
-|------|------|------|
-| `PING` | `PING\n` | 心跳檢查 |
-| `CLICK,x,y,button` | `CLICK,500,300,left\n` | 滑鼠點擊，button 為 `left`／`right` |
-| `MOVE,x,y` | `MOVE,500,300\n` | 滑鼠移動 |
-| `KEY,key` | `KEY,Enter\n` | 鍵盤按鍵，支援 `{Key}` 與 AHK 修飾鍵格式（`^c` 等） |
-| `ESTOP` | `ESTOP\n` | 緊急停止：放開所有滑鼠按鍵 |
+### 按鍵對應
 
-### 心跳機制
+- `_KEY_MAP`：29 個命名鍵（F1-F12、方向鍵、修飾鍵等）
+- `_NUMPAD_VK`：10 個九宮格鍵（Numpad0-9、NumpadAdd 等）
+- 單字元文字：`pynput.keyboard.KeyCode.from_char()`
+- Ctrl+Combo：`^` 前綴解析（如 `^c` → Ctrl+C）
 
-- Python 端每 **5 秒**發送 `PING`
-- AHK 端 recv timeout 預設 **5 秒**，心跳逾時 **30 秒**無指令則自動退出
-- Python 連續 3 次 PING 失敗 → 觸發自動重啟 AHK（最多 3 次，達上限後永久停止）
-
-### ESTOP 流程
+### ESTOP 流程（簡化）
 
 ```
 MainLoop.emergency_stop()
   → self._emergency_event.set()
   → _ahk.send_emergency_stop()
-     → send "ESTOP\n" to AHK
-        → AHK 釋放所有滑鼠按鍵（Click Up）
-        → 回覆 "OK"
+     → log + return True（無外部行程可殺）
 ```
 
 ## 資料持久化
@@ -505,13 +503,13 @@ MainLoop.emergency_stop()
 
 | 機制 | 位置 | 說明 |
 |------|------|------|
-| 螢幕邊界檢查 | `03_ahk_socket.py` | 發送 CLICK 前檢查座標是否在螢幕範圍內 |
+| 螢幕邊界檢查 | `03_pynput_input.py` | `send_click()`／`send_drag()` 前檢查座標是否在虛擬螢幕範圍內 |
 | 全域速率限制 (CPS) | `10_performance_monitor.py` | 限制每秒點擊 ≤ 5 次，違規 3 次自動暫停偵測 |
 | 前景保護 (目標視窗) | `05_main_loop.py` | 僅在目標視窗為前景時才執行點擊，非前景時靜默等待 |
 | 前景保護 (工具視窗) | `05_main_loop.py` | 工具自身視窗在前景時自動暫停 click/key/drag/scroll，防止誤搶焦點 |
 | OCR 連續失敗重啟 | `02_ocr_engine.py` | 連續 5 次失敗 → 重建引擎實例 |
 | 視窗消失自動暫停 | `05_main_loop.py` | `get_window_rect()` 回傳 None → 暫停循環，每 5 秒檢查視窗是否重現 |
-| Port 衝突偵測 | `03_ahk_socket.py` `init_ahk()` | 啟動時檢查 port 12345 是否已被佔用，衝突則中止避免雙行程干擾 |
+| 座標驗證 | `03_pynput_input.py` `_validate_coords()` | 使用 `GetSystemMetrics(VIRTUALSCREEN)` 確保點擊不超出多螢幕範圍 |
 | 關閉行為設定 | `06_gui_main.py` `SettingsDialog` | 可選「縮小至托盤」或「直接關閉」，關閉前可跳出確認對話框 |
 
 ## 開發注意事項

@@ -5,6 +5,8 @@ numpy>=1.26
 pygetwindow>=0.0.9
 rapidocr-onnxruntime>=1.4
 PyQt6>=6.6
+pynput>=1.7
+dxcam>=0.3
 
 # ===== 測試 =====
 pytest>=8.0

@@ -1,4 +1,24 @@
 ﻿
+## [v0.1.7] - 2026-07-29
+
+### 變更
+- 輸入模擬從 AutoHotkey v2（TCP socket + 外部行程）完全替換為 **pynput**（`SendInput`，in-process），刪除 `core/03_ahk_socket.py`、`clicker.ahk`、AHK 下載與初始化流程
+- 截圖備援鏈從「mss → GDI」強化為「**mss → dxcam (DXGI) → GDI**」，dxcam 作為 mss 與 GDI 間的中間層，相容性更高
+- 移除 8 組 AHK 相關 i18n key（三語言同步），i18n 總 keys 減至 611
+
+### 新增
+- `core/03_pynput_input.py` — pynput 輸入模組（10 個公開函式 + 8 項自檢測試）
+- `core/box_utils.py` — 座標工具集，10 個純函式（`roi_center`、`roi_to_pixels`、`roi_crop`、`roi_sanitize` 等 + 17 項自檢測試）
+- `core/01_screenshot.py` 新增 `_capture_dxcam()` + `--check` 自動自檢
+
+### 移除
+- `core/03_ahk_socket.py`（461 行 AHK TCP 伺服器）
+- `clicker.ahk`（AHK 腳本）
+
+### 相依套件
+- 新增 `pynput>=1.7`（取代 AutoHotkey）
+- 新增 `dxcam>=0.3`（DXGI 截圖備援）
+
 ## [v0.1.6] - 2026-07-28
 
 ### 修復
