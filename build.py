@@ -189,6 +189,11 @@ def main():
     args.append("--collect-all=numpy")
     # ponytail: cv2 用動態載入器引入 load_config_py3 等 helper，靜態分析抓不到
     args.append("--collect-all=cv2")
+    # dxcam/comtypes: COM interop 在運行期動態解析介面，需收集所有二進位
+    args.append("--collect-all=comtypes")
+    args.append("--collect-all=dxcam")
+    # pynput: 平台特定子模組（_win32）靜態分析可能遺漏
+    args.append("--collect-all=pynput")
     for e in exclude:
         args.append(f"--exclude-module={e}")
     for src, dst in datas:
