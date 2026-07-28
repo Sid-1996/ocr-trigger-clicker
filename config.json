@@ -1,5 +1,5 @@
 {
-  "last_task": "StarSavior-跑馬輔助",
+  "last_task": "StarSavior-每日任務",
   "last_window": "StarSavior",
   "hide_startup_guide": true,
   "max_cps": 5,
@@ -14,5 +14,5 @@
   "default_fuzzy_threshold": 0.9,
   "default_template_threshold": 0.9,
   "default_color_tolerance": 10,
-  "language": "zh_TW"
+  "language": "en"
 }

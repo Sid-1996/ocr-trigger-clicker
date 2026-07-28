@@ -55,10 +55,6 @@ def main():
                 datas.append((str(f), str(pkg_dir / rel.parent)))
     print(f"找到 {len(datas)} 個模型/資源檔")
 
-    ahk_src = here / "clicker.ahk"
-    if ahk_src.exists():
-        datas.append((str(ahk_src), "."))
-
     # i18n JSON dictionaries
     i18n_dir = here / "i18n"
     if i18n_dir.exists():
@@ -157,7 +153,6 @@ def main():
         "PyAutoGUI",
         "keyboard",
         "psutil",
-        "pynput",
         "PyDirectInput",
         "mouseinfo",
         "pyscreeze",

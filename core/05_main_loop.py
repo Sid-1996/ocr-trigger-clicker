@@ -19,7 +19,7 @@ from i18n import T  # noqa: E402
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
-_ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+_ahk = load_sibling("pynput_input", "core/03_pynput_input.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
@@ -1464,7 +1464,7 @@ if __name__ == "__main__":
 
     mock_called = []
     _orig_k = _ahk.send_key
-    _ahk.send_key = lambda k: mock_called.append(k) or True
+    _ahk.send_key = lambda k: mock_called.append(k) or True  # type: ignore[assignment]
     result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
     _ahk.send_key = _orig_k
     assert result.action == "continue", "on_fail key should return continue"

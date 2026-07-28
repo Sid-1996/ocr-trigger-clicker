@@ -599,7 +599,7 @@ class OcrDebugPanel(QWidget):
         from _loader import load_sibling
 
         _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
-        _ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+        _input = load_sibling("pynput_input", "core/03_pynput_input.py")
 
         _screenshot.activate_window(self._window_title)
         QApplication.processEvents()
@@ -640,10 +640,7 @@ class OcrDebugPanel(QWidget):
             cx = rect["x"] + ocr_center_x
             cy = rect["y"] + ocr_center_y
 
-        click_ok = _ahk.send_click(cx, cy)
-        if not click_ok:
-            _ahk.init_ahk()
-            click_ok = _ahk.send_click(cx, cy)
+        click_ok = _input.send_click(cx, cy)
         time.sleep(0.1)
 
         from PyQt6.QtCore import QPoint

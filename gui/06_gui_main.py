@@ -2466,7 +2466,7 @@ class _InlineActionEditor(QWidget):
         return {"type": "key", "key": self._key.currentData() or self._key.currentText()}
 
 
-_ahk_mod = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+_ahk_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
 
@@ -3101,77 +3101,15 @@ class MainWindow(QMainWindow):
 
             QTimer.singleShot(3000, lambda: self._check_version(force=False))
 
-            QTimer.singleShot(100, self._init_ahk_async)
+            QTimer.singleShot(100, self._init_input_async)
         except Exception as e:
             logging.exception("deferred init failed")
             self._status_bar.showMessage(T("status.partial_init_error", e=e))
 
-    def _init_ahk_async(self):
-        if not _ahk_mod.is_ahk_available():
-            self._status_bar.showMessage(T("status.ahk_not_installed"), 0)
-            self._status_bar.mousePressEvent = lambda e: self._prompt_ahk_install()
-            return
-
-        class _AhkWorker(QThread):
-            done = pyqtSignal(bool)
-
-            def run(self):
-                ok = _ahk_mod.init_ahk()
-                self.done.emit(ok)
-
-        self._status_bar.showMessage(T("status.ahk_starting"))
-        self._ahk_ready = False
-        self._ahk_worker = _AhkWorker()
-        self._ahk_worker.done.connect(self._on_ahk_init_done)
-        self._ahk_worker.start()
-
-    def _prompt_ahk_install(self):
-        reply = QMessageBox.question(
-            self,
-            T("dialog.install_ahk"),
-            T("dialog.install_ahk_msg"),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self._status_bar.showMessage(T("update.download_ahk"))
-            QApplication.processEvents()
-
-            def _ahk_health_cb(msg):
-                self._status_bar.showMessage(f"⚠ {msg}")
-                self._update_ahk_status(False)
-
-            _ahk_mod.set_ahk_health_callback(_ahk_health_cb)
-            if not _ahk_mod.download_ahk():
-                QMessageBox.critical(
-                    self,
-                    T("update.download_failed"),
-                    T("update.download_failed_manual")
-                    + "https://www.autohotkey.com\n\n"
-                    + T("dialog.install_ahk_success"),
-                )
-                return
-
-            class _AhkWorker(QThread):
-                done = pyqtSignal(bool)
-
-                def run(self):
-                    ok = _ahk_mod.init_ahk()
-                    self.done.emit(ok)
-
-            self._status_bar.showMessage(T("status.ahk_starting"))
-            self._ahk_ready = False
-            self._ahk_worker = _AhkWorker()
-            self._ahk_worker.done.connect(self._on_ahk_init_done)
-            self._ahk_worker.start()
-
-    def _on_ahk_init_done(self, ok):
-        self._ahk_worker = None
-        self._ahk_ready = ok
-        self._update_ahk_status(ok)
-        if not ok:
-            self._status_bar.showMessage(T("status.ahk_not_started"))
-        else:
-            self._status_bar.showMessage(T("status.ahk_ready"), 3000)
+    def _init_input_async(self):
+        self._ahk_ready = True
+        self._update_input_status(True)
+        self._status_bar.showMessage("✔ Input 已就緒", 3000)
 
     def _maybe_show_startup_guide(self):
         config = self._load_config()
@@ -3495,9 +3433,11 @@ class MainWindow(QMainWindow):
         self._perf_label = QLabel(T("fps.idle"))
         self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._status_bar.addPermanentWidget(self._perf_label)
-        self._ahk_status_label = QLabel("🔴 AHK")
-        self._ahk_status_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
-        self._status_bar.addPermanentWidget(self._ahk_status_label)
+        self._input_status_label = QLabel("🟢 Input")
+        self._input_status_label.setStyleSheet(
+            "color: #27AE60; font-size: 11px; padding-right: 8px;"
+        )
+        self._status_bar.addPermanentWidget(self._input_status_label)
         self._perf_timer = QTimer()
         self._perf_timer.timeout.connect(self._update_perf_display)
         self._perf_timer.start(1000)
@@ -3560,15 +3500,15 @@ class MainWindow(QMainWindow):
     def _on_ocr_health(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
 
-    def _update_ahk_status(self, connected: bool):
+    def _update_input_status(self, connected: bool):
         if connected:
-            self._ahk_status_label.setText("🟢 AHK")
-            self._ahk_status_label.setStyleSheet(
+            self._input_status_label.setText("🟢 Input")
+            self._input_status_label.setStyleSheet(
                 "color: #27AE60; font-size: 11px; padding-right: 8px;"
             )
         else:
-            self._ahk_status_label.setText("🔴 AHK")
-            self._ahk_status_label.setStyleSheet(
+            self._input_status_label.setText("🔴 Input")
+            self._input_status_label.setStyleSheet(
                 "color: #E74C3C; font-size: 11px; padding-right: 8px;"
             )
 
@@ -5733,7 +5673,6 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.stop()
         self._perf_timer.stop()
-        _ahk_mod.shutdown()
         QApplication.quit()
 
     def _on_tray_activated(self, reason):
