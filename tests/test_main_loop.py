@@ -16,7 +16,7 @@ from _loader import load_sibling  # noqa: E402
 from core.rule_models import Rule, RuleGroup, Step  # noqa: E402
 
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
-_ahk = load_sibling("ahk_socket", "core/03_ahk_socket.py")
+_ahk = load_sibling("pynput_input", "core/03_pynput_input.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl.img_to_b64
