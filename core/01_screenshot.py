@@ -10,6 +10,7 @@ import numpy as np
 import pygetwindow as gw
 
 _mss_tls = threading.local()
+_dxcam_tls = threading.local()
 
 
 def _get_mss() -> mss.mss:
@@ -91,10 +92,67 @@ def get_window_rect(title: str) -> dict | None:
         return None
 
 
-def capture(title: str) -> np.ndarray | None:
-    rect = get_window_rect(title)
-    if rect is None:
+def _get_dxcam_output(window_rect: dict) -> int:
+    try:
+        user32 = ctypes.windll.user32
+        vw = user32.GetSystemMetrics(78)
+        vh = user32.GetSystemMetrics(79)
+
+        cx = window_rect["x"] + window_rect["w"] // 2
+        cy = window_rect["y"] + window_rect["h"] // 2
+        if cx < 0 or cy < 0 or cx >= vw or cy >= vh:
+            return 0
+
+        if _get_dxcam_output.factory is None:
+            from dxcam import DXFactory
+
+            _get_dxcam_output.factory = DXFactory()
+        outputs = _get_dxcam_output.factory.outputs
+
+        for idx, group in enumerate(outputs):
+            for out in group:
+                rw, rh = out.resolution
+                if cx < rw and cy < rh:
+                    return idx
+    except Exception:
+        pass
+    return 0
+
+
+_get_dxcam_output.factory = None
+
+
+def _capture_dxcam(title: str, rect: dict) -> np.ndarray | None:
+    import dxcam
+
+    try:
+        user32 = ctypes.windll.user32
+        vx = user32.GetSystemMetrics(76)
+        vy = user32.GetSystemMetrics(77)
+        vw = user32.GetSystemMetrics(78)
+        vh = user32.GetSystemMetrics(79)
+
+        left = max(rect["x"], vx)
+        top = max(rect["y"], vy)
+        right = min(rect["x"] + rect["w"], vx + vw)
+        bottom = min(rect["y"] + rect["h"], vy + vh)
+        if right <= left or bottom <= top:
+            return None
+
+        out_idx = _get_dxcam_output(rect)
+        if not hasattr(_dxcam_tls, "cameras"):
+            _dxcam_tls.cameras = {}
+        if out_idx not in _dxcam_tls.cameras:
+            _dxcam_tls.cameras[out_idx] = dxcam.create(output_idx=out_idx, output_color="BGR")
+        camera = _dxcam_tls.cameras[out_idx]
+        img = camera.grab(region=(left, top, right, bottom))
+        return img
+    except Exception:
+        logging.warning("dxcam capture failed for '%s'", title, exc_info=True)
         return None
+
+
+def _capture_mss(title: str, rect: dict) -> np.ndarray | None:
     try:
         sct = _get_mss()
         left = rect["x"]
@@ -102,7 +160,6 @@ def capture(title: str) -> np.ndarray | None:
         right = rect["x"] + rect["w"]
         bottom = rect["y"] + rect["h"]
 
-        # 多螢幕支援：找出涵蓋此視窗的螢幕（跳過 monitors[0] 全局虛擬螢幕）
         best_monitor = None
         for m in sct.monitors[1:]:
             mx1, my1 = m["left"], m["top"]
@@ -127,6 +184,16 @@ def capture(title: str) -> np.ndarray | None:
     except Exception:
         logging.warning("mss capture failed for '%s'", title, exc_info=True)
         return None
+
+
+def capture(title: str) -> np.ndarray | None:
+    rect = get_window_rect(title)
+    if rect is None:
+        return None
+    img = _capture_mss(title, rect)
+    if img is not None:
+        return img
+    return _capture_dxcam(title, rect)
 
 
 def get_dpi_scaling_factor(hwnd: int | None) -> float:
@@ -235,6 +302,39 @@ capture_window_full = capture_window_content  # backward compat alias
 
 
 if __name__ == "__main__":
+    import sys
+
+    if "--check" in sys.argv:
+        # ponytail: automated self-check (run via python core/01_screenshot.py --check)
+        print("=== Screenshot Module Self-Check ===\n")
+        assert list_windows() is not None
+        print("  [OK] list_windows")
+
+        rect = get_window_rect("Program Manager")
+        if rect is not None:
+            assert all(k in rect for k in ("x", "y", "w", "h"))
+            print(f"  [OK] get_window_rect (Program Manager): {rect}")
+        else:
+            print("  [WARN] Program Manager not found (expected in some sessions)")
+
+        assert get_dpi_scaling_factor(None) == 1.0
+        print("  [OK] get_dpi_scaling_factor(default)")
+
+        hwnd = ctypes.windll.user32.GetDesktopWindow()
+        dpi = get_dpi_scaling_factor(hwnd)
+        assert 1.0 <= dpi <= 4.0
+        print(f"  [OK] get_dpi_scaling_factor(desktop): {dpi:.2f}")
+
+        offset = get_window_client_offset("Program Manager")
+        if offset is not None:
+            assert len(offset) == 2
+            print(f"  [OK] get_window_client_offset: {offset}")
+        else:
+            print("  [WARN] get_window_client_offset returned None")
+
+        print("\n=== All automated checks passed ===")
+        raise SystemExit(0)
+
     windows = list_windows()
     print("=== 所有可見視窗 ===")
     for i, w in enumerate(windows, 1):

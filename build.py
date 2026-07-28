@@ -98,6 +98,10 @@ def main():
         "shapely",
         "yaml",
         "tqdm",
+        # pynput + dxcam: lazy-imported, static scanner can miss them
+        "pynput",
+        "dxcam",
+        "comtypes",
     ]
 
     exclude = [
