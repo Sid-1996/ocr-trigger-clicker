@@ -172,6 +172,16 @@ def main():
         "wandb",
         "omegaconf",
         "antlr4_python3_runtime",
+        # dist 瘦身：numpy typing stubs 拉入的開發工具
+        "mypy",
+        "ast_serialize",
+        # dist 瘦身：無人使用的 XML / COM 相關
+        "lxml",
+        "Pythonwin",
+        "win32",
+        "pythoncom",
+        "win32com",
+        "pywin32_bootstrap",
     ]
 
     args = [
