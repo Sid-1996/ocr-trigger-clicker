@@ -13,7 +13,9 @@ _diag_*
 .ruff_cache/
 custom_models/
 tasks/
+!docs/tasks/
 *任務*.json
+!docs/tasks/*
 /images/
 /stderr.txt
 
