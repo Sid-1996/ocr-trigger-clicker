@@ -15,6 +15,9 @@
 - `core/03_ahk_socket.py`（461 行 AHK TCP 伺服器）
 - `clicker.ahk`（AHK 腳本）
 
+### 修復
+- 主視窗最大化後進行測試、框選區域、點擊選取、OCR 診斷等操作後不再還原為視窗模式，保留最大化狀態（7 處統一修復）
+
 ### 相依套件
 - 新增 `pynput>=1.7`（取代 AutoHotkey）
 - 新增 `dxcam>=0.3`（DXGI 截圖備援）
