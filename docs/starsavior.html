@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>星之救援者 StarSavior 每日任務自動化腳本 — OCR Trigger Clicker 遊戲輔助範例</title>
+<meta name="description" content="OCR Trigger Clicker 為星之救援者 StarSavior 設計的每日任務自動化腳本，涵蓋掛機獎勵、戰鬥探索星際迴廊掃蕩、跑馬輔助。支援 1920x1080 / 1600x900 解析度。">
+<meta name="keywords" content="星之救援者,自動化,StarSavior,每日任務,遊戲輔助,OCR自動點擊,自動跑馬,Windows工具">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://sid-1996.github.io/ocr-trigger-clicker/starsavior.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="星之救援者 StarSavior — OCR Trigger Clicker 遊戲輔助腳本">
+<meta property="og:description" content="OCR Trigger Clicker 為 StarSavior 設計的每日任務自動化，含跑馬輔助。免安裝，匯入即用。">
+<meta property="og:url" content="https://sid-1996.github.io/ocr-trigger-clicker/starsavior.html">
+<meta property="og:image" content="https://sid-1996.github.io/ocr-trigger-clicker/images/ocr-trigger-clicker.png">
+<meta property="og:locale" content="zh_TW">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="星之救援者 StarSavior 自動化腳本 — OCR Trigger Clicker">
+<meta name="twitter:description" content="StarSavior 每日任務全自動 + 跑馬事件輔助，匯入直接啟動。">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "使用 OCR Trigger Clicker 自動化星之救援者每日任務",
+  "description": "下載任務檔案，匯入工具，從遊戲主頁啟動即可自動執行每日流程。",
+  "totalTime": "PT5M",
+  "tool": {
+    "@type": "SoftwareApplication",
+    "name": "OCR Trigger Clicker",
+    "url": "https://sid-1996.github.io/ocr-trigger-clicker/"
+  },
+  "step": [
+    { "@type": "HowToStep", "name": "下載任務 JSON", "text": "下載 StarSavior-每日任務.json 與 StarSavior-跑馬輔助.json" },
+    { "@type": "HowToStep", "name": "開啟工具匯入", "text": "執行 ocr-trigger-clicker.exe，按匯入任務選取剛才下載的 JSON 檔案" },
+    { "@type": "HowToStep", "name": "回到遊戲主頁啟動", "text": "切換到星之救援者主畫面，在工具中選取對應任務後按啟動" }
+  ]
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 840px; margin: 0 auto; padding: 0 20px 60px; line-height: 1.8; color: #c9d1d9; background: #0d1117; }
+  h1 { border-bottom: 2px solid #30363d; padding-bottom: 10px; color: #e6edf3; font-size: 1.8em; }
+  h2 { margin-top: 40px; color: #e6edf3; border-left: 4px solid #1f6feb; padding-left: 12px; }
+  h3 { margin-top: 28px; color: #e6edf3; }
+  a { color: #58a6ff; }
+  a:hover { text-decoration: underline; }
+  code { background: #161b22; padding: 2px 6px; border-radius: 3px; font-size: .9em; color: #c9d1d9; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 8px 0; }
+  .badge { display: inline-block; background: #1f6feb; color: #fff; padding: 3px 12px; border-radius: 12px; font-size: .8em; margin-right: 4px; }
+  .badge.gray { background: #6e7681; }
+  .badge.green { background: #238636; }
+  .badge.orange { background: #d29922; }
+  hr { border: none; border-top: 1px solid #30363d; margin: 40px 0; }
+  img.screenshot { max-width: 100%; border: 1px solid #30363d; border-radius: 8px; margin: 16px 0; cursor: zoom-in; }
+  .cta { text-align: center; margin: 24px 0; padding: 24px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
+  .cta a { display: inline-block; background: #238636; color: #fff; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-size: 1.1em; font-weight: 600; margin: 4px; }
+  .cta a:hover { background: #2ea043; }
+  .cta a.secondary { background: #1f6feb; }
+  .cta a.secondary:hover { background: #388bfd; }
+  .cta .sub { margin-top: 8px; font-size: .85em; color: #8b949e; }
+  .group-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 12px 0; }
+  .group-card h4 { margin: 0 0 4px; color: #e6edf3; }
+  .group-card .meta { font-size: .85em; color: #8b949e; margin-bottom: 8px; }
+  .group-card .rule-list { font-size: .92em; padding-left: 18px; }
+  .rule-list li { margin: 3px 0; color: #c9d1d9; }
+  .step-flow { background: #161b22; border-left: 3px solid #238636; padding: 12px 16px; margin: 8px 0; border-radius: 0 6px 6px 0; font-family: monospace; color: #8b949e; }
+  .step-flow .arrow { color: #58a6ff; }
+  .dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+  .dl-card { border: 1px solid #30363d; border-radius: 10px; padding: 20px; background: #0d1117; text-align: center; }
+  .dl-card h3 { margin: 0 0 6px; color: #e6edf3; }
+  .dl-card p { color: #8b949e; font-size: .92em; margin: 0 0 16px; }
+  .dl-card .dl-btn { display: inline-block; background: #238636; color: #fff; padding: 8px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: .95em; }
+  .dl-card .dl-btn:hover { background: #2ea043; }
+  @media (max-width: 640px) { .dl-grid { grid-template-columns: 1fr; } }
+  .img-placeholder { width: 100%; height: 200px; background: linear-gradient(135deg, #161b22, #1f6feb22); border: 1px dashed #30363d; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #8b949e; font-size: .92em; margin: 16px 0; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #30363d; font-size: .85em; color: #8b949e; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>星之救援者 StarSavior 自動化腳本</h1>
+  <p>
+    <span class="badge green">每日任務</span>
+    <span class="badge orange">跑馬輔助</span>
+    <span class="badge gray">1920x1080</span>
+    <span class="badge gray">1600x900</span>
+  </p>
+  <p>OCR Trigger Clicker 內建兩套可直接使用的 <strong>星之救援者 (StarSavior)</strong> 自動化任務：<strong>每日任務全自動</strong>（掛機獎勵 → 戰鬥探索 → 星際迴廊 → 商店 → 好友）與<strong>跑馬事件輔助</strong>（自動應對隨機事件、跳過戰鬥選項）。</p>
+  <p>來源解析度：<strong>1920x1080</strong> 或 <strong>1600x900</strong>（16:9），繁體中文遊戲環境。</p>
+</header>
+
+<div class="cta">
+  <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">下載 OCR Trigger Clicker</a>
+  <a class="secondary" href="#download">直接下載任務 JSON</a>
+  <div class="sub">工具免安裝，匯入 JSON 後從遊戲主頁啟動即可</div>
+</div>
+
+<hr>
+
+<nav>
+  <h2>目錄</h2>
+  <ul>
+    <li><a href="#download">下載任務檔案</a></li>
+    <li><a href="#import">如何匯入</a></li>
+    <li><a href="#daily">每日任務流程</a></li>
+    <li><a href="#racing">跑馬輔助流程</a></li>
+    <li><a href="#faq">常見問題</a></li>
+  </ul>
+</nav>
+
+<section id="download">
+  <h2>下載任務檔案</h2>
+  <p>點擊下載 JSON 檔案，然後在工具中按「匯入任務」選取即可。</p>
+  <div class="dl-grid">
+    <div class="dl-card">
+      <h3>StarSavior-每日任務</h3>
+      <p>11 個群組，含掛機獎勵、戰鬥探索、星際迴廊、每日商店、好友等完整每日流程。</p>
+      <a class="dl-btn" href="tasks/StarSavior-每日任務.json" download>下載 JSON</a>
+    </div>
+    <div class="dl-card">
+      <h3>StarSavior-跑馬輔助</h3>
+      <p>5 個群組，使用 parallel 模式並行偵測，自動應對固定事件與跑馬選項。</p>
+      <a class="dl-btn" href="tasks/StarSavior-跑馬輔助.json" download>下載 JSON</a>
+    </div>
+  </div>
+</section>
+
+<section id="import">
+  <h2>如何匯入</h2>
+  <ol>
+    <li><strong>下載工具</strong>：從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
+    <li><strong>匯入任務</strong>：點擊左上方工具列 → 「匯入任務」 → 選取剛才下載的 JSON 檔案。</li>
+    <li><strong>切換目標視窗</strong>：工具列選擇「StarSavior」遊戲視窗。</li>
+    <li><strong>回到遊戲主頁</strong>：請確保遊戲處於主畫面（大廳），不要在子選單內。</li>
+    <li><strong>啟動</strong>：在群組頁面依序點選要執行的群組（先每日任務，全部 once 群組依序跑完後再開跑馬輔助），按「啟動」按鈕。</li>
+  </ol>
+</section>
+
+<hr>
+
+<section id="daily">
+  <h2>每日任務流程</h2>
+  <p>共 <strong>11 個群組</strong>，依序執行：從掛機獎勵開始，依序完成派遣、戰鬥探索、星際迴廊、商店、好友、信件檢查。多數群組設為 <code>mode=once</code>，完成後自動跳下一群組。</p>
+
+  <div class="group-card">
+    <h4>掛機獎勵</h4>
+    <div class="meta">sequential · once</div>
+    <ul class="rule-list">
+      <li>點擊掛機獎勵(!) → 獲得獎勵 → 緊急支援 → 今日剩餘次數(12/11)</li>
+    </ul>
+    <div class="step-flow">
+      match_image(驚嘆號) <span class="arrow">→</span> click <span class="arrow">→</span> detect(獎勵文字) <span class="arrow">→</span> click <span class="arrow">→</span> detect(緊急支援) <span class="arrow">→</span> click <span class="arrow">→</span> 循環領完剩餘次數
+    </div>
+  </div>
+
+  <div class="group-card">
+    <h4>每日重新派遣</h4>
+    <div class="meta">sequential · once</div>
+    <ul class="rule-list">
+      <li>派遣完成 → 地區派遣 → 進入 → 一鍵領取 → 重新派遣</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>戰鬥探索（三輪掃蕩）</h4>
+    <div class="meta">sequential · once</div>
+    <ul class="rule-list">
+      <li>點擊方塊列表 → 燭光廣場 → 探索委託 → 3/3 → 掃蕩戰鬥 → MAX → 是否為三次 → 0/3點下一頁</li>
+      <li>重複三輪：掃蕩戰鬥(2) → MAX(2) → 是否為三次(2) → 0/3點下一頁(2) → 掃蕩戰鬥(3) → MAX(3) → 是否為三次(3)</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>回到廣場 + 帕萊斯立方</h4>
+    <div class="meta">sequential · loop / once</div>
+    <ul class="rule-list">
+      <li>探索委託→廣場（loop） → 帕萊斯立方領取 → 回到廣場（loop）</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>星際迴廊掃蕩 + 收尾</h4>
+    <div class="meta">sequential · once + loop</div>
+    <ul class="rule-list">
+      <li>星際迴廊入口檢查（match_image） → 掃蕩戰鬥 × N → 確認 → 返回上一頁</li>
+      <li>收尾：查看征服任務特徵 → 尋找紅點 → REWARD</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>每日好友 + 商店</h4>
+    <div class="meta">sequential · once</div>
+    <ul class="rule-list">
+      <li>好友：一鍵發送 → 一鍵領取</li>
+      <li>付費商店：免費禮包 → 確定購買</li>
+      <li>啟示商店：免費 → 購買觀測紀錄/報告書 → SALE 50% → MAX → 購買</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>檢查信件</h4>
+    <div class="meta">sequential · once</div>
+    <ul class="rule-list">
+      <li>查看信件圖示 → 一鍵領取 → 沒有收到的信件（match_image 通知）</li>
+    </ul>
+  </div>
+
+  <div class="img-placeholder">
+    <span>📸 遊戲截圖 — 待你提供 StarSavior 主畫面截圖後替換</span>
+  </div>
+</section>
+
+<hr>
+
+<section id="racing">
+  <h2>跑馬輔助流程</h2>
+  <p>跑馬輔助使用 <strong>parallel（並行）</strong> 模式搭配 <strong>loop（循環）</strong>，每幀從頭掃全部規則，第一個符合條件的事件觸發後執行對應按鍵操作。適合無法預測順序的隨機事件場景。</p>
+
+  <div class="group-card">
+    <h4>固定事件</h4>
+    <div class="meta">parallel · loop · 26 條規則</div>
+    <ul class="rule-list">
+      <li>文書工作總是晴轉陰、代為購買、迷宮探勘、繼續訓練、襲擊、突發遭遇史萊姆</li>
+      <li>溫泉慶典準備、莉賽特系列（日常/好運/假期/憂鬱）</li>
+      <li>為了未來的選擇、在這張卡牌上賭上一切、工坊的宣傳策略</li>
+      <li>沙灘排球比賽、簡單的測試、閒暇時間、偶然的發現</li>
+      <li>今日天氣（打雷/暴雪）、新設部門努力中</li>
+      <li>突發遭遇（強盜騎士/掠奪者）、花中隱藏的力量、意料之外的鼓勵</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>體力型跑馬</h4>
+    <div class="meta">parallel · loop · 6 條規則（預設停用）</div>
+    <ul class="rule-list">
+      <li>列車月台-卡萊德、向持花石像祈禱、風月堂的切磋修行</li>
+      <li>訓練的方向性、救援團補給、未知的商人</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>力量型跑馬</h4>
+    <div class="meta">parallel · loop · 5 條規則</div>
+    <ul class="rule-list">
+      <li>風月堂的切磋修行、訓練的方向性、救援團補給、未知的商人、列車月台-弗洛拉</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>支援卡事件</h4>
+    <div class="meta">parallel · loop · 16 條規則</div>
+    <ul class="rule-list">
+      <li>請講關於初戀的故事、萬物的價值、兔子旁邊是兔子旁邊是兔子</li>
+      <li>顧客至上、變種兔子陷阱、稍不留神就會吃虧、湯為誰而煮</li>
+      <li>略感負擔的童心、訓練如實戰、在這行可是寶物</li>
+      <li>薇絲塔的戰術時光、蝦子的處世之道、午後沙龍</li>
+      <li>救命恩人、超越語言的體驗、並非雜技師</li>
+    </ul>
+  </div>
+
+  <div class="group-card">
+    <h4>自動輔助（防呆/便利）</h4>
+    <div class="meta">parallel · loop · 5 條規則</div>
+    <ul class="rule-list">
+      <li>入場選擇-快轉所有事件、自動返回（失敗率>50%時）</li>
+      <li>自動選擇-阿卡農、自動選擇-受理討伐委託、自動選擇-跳過戰鬥</li>
+    </ul>
+  </div>
+
+  <div class="img-placeholder">
+    <span>📸 跑馬輔助截圖 — 待你提供後替換</span>
+  </div>
+</section>
+
+<hr>
+
+<section id="faq">
+  <h2>常見問題</h2>
+
+  <h3>任務不支援哪些解析度？</h3>
+  <p>腳本以 <strong>1920x1080</strong> 與 <strong>1600x900</strong>（16:9）為基準設計。其他解析度可能需要重新框選 ROI 或調整點擊座標。</p>
+
+  <h3>匯入後沒有反應？</h3>
+  <p>請確認：1) 遊戲處於主頁（大廳） 2) 工具已選取目標視窗為「StarSavior」 3) 繁體中文遊戲環境。</p>
+
+  <h3>跑馬輔助如何運作？</h3>
+  <p>使用 parallel 模式每幀掃描全部規則，偵測到對應事件圖示或文字後，自動按下對應選項按鍵。因為事件順序是隨機的，parallel 模式會在第一個符合條件的事件觸發後結束該幀處理。</p>
+
+  <h3>回報問題</h3>
+  <p>請到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues">GitHub Issues</a> 回報，標題註明「StarSavior」以便區分。</p>
+</section>
+
+<hr>
+
+<footer>
+  <p><a href="index.html">← 回到 OCR Trigger Clicker 首頁</a></p>
+  <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
+</footer>
+
+</body>
+</html>

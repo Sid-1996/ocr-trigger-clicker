@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OCR Trigger Clicker — 螢幕文字偵測自動點擊工具 | 繁體中文 OCR 自動化</title>
-<meta name="description" content="OCR Trigger Clicker 是一套 Windows 綠色免安裝工具，透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作。支援繁體中文、多重觸發條件、二次確認，適合遊戲輔助、表單自動化、監控告警回應。">
-<meta name="keywords" content="OCR,文字辨識,自動點擊,螢幕偵測,繁體中文,Windows工具,綠色軟體,RapidOCR,自動化,按鍵精靈,遊戲輔助">
+<meta name="description" content="OCR Trigger Clicker 是一套 Windows 綠色免安裝工具，透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作。支援繁體中文、多重觸發條件、二次確認，適合遊戲輔助、每日任務自動化、表單自動化、監控告警回應。">
+<meta name="keywords" content="OCR,文字辨識,自動點擊,螢幕偵測,繁體中文,Windows工具,綠色軟體,RapidOCR,自動化,按鍵精靈,遊戲輔助,每日任務自動化,遊戲腳本,PC遊戲輔助">
 <meta name="robots" content="index, follow">
 <meta name="google-site-verification" content="4lWoqckzqXNbwUlyytkGLkFIFjTNKmb8Tr4jADOWXOY" />
 <link rel="canonical" href="https://sid-1996.github.io/ocr-trigger-clicker/">
@@ -84,9 +84,10 @@
 <header>
   <h1>OCR Trigger Clicker</h1>
   <p>
-    <span class="badge green">v0.1.1</span>
+    <span class="badge green">v0.1.7</span>
     <span class="badge gray">綠色免安裝</span>
     <span class="badge green">繁體中文 OCR</span>
+    <span class="badge orange"><a href="starsavior.html" style="color:#fff;text-decoration:none;">🎮 遊戲任務</a></span>
   </p>
   <p>一套 Windows 上的 OCR 自動化工具：偵測螢幕特定文字後，自動執行滑鼠點擊或鍵盤操作。適合遊戲輔助、重複性表單操作、即時監控觸發等場景。</p>
 </header>
@@ -100,6 +101,7 @@
     <li><a href="#principles">規則設計原則</a></li>
     <li><a href="#patterns">常見腳本模式</a></li>
     <li><a href="#examples">腳本設計範例</a></li>
+    <li><a href="starsavior.html">遊戲任務：星之救援者 →</a></li>
     <li><a href="#faq">常見問題</a></li>
     <li><a href="#requirements">系統需求</a></li>
     <li><a href="#download">下載</a></li>
@@ -108,7 +110,8 @@
 
 <div class="cta">
   <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">前往 GitHub 下載</a>
-  <div class="sub">v0.1.1 — Windows 10/11 64-bit — 單執行檔，免安裝</div>
+  <a href="starsavior.html" style="display:inline-block;background:#1f6feb;color:#fff;padding:12px 32px;border-radius:6px;text-decoration:none;font-size:1.1em;font-weight:600;margin:4px;">看看遊戲任務怎麼用 →</a>
+  <div class="sub">v0.1.7 — Windows 10/11 64-bit — 單執行檔，免安裝</div>
 </div>
 
 <section class="start-flow" id="start">
@@ -392,6 +395,25 @@
 
 <hr>
 
+<section id="gametasks">
+  <h2>🎮 遊戲任務展示：星之救援者 StarSavior</h2>
+  <p>這套工具已經實際用於 <strong>星之救援者 (StarSavior)</strong> 的每日任務自動化，包含完整的每日流程與跑馬事件輔助。下載任務 JSON 匯入後即可使用。</p>
+  <div class="pattern">
+    <h4>每日任務（11 個群組）</h4>
+    <p>掛機獎勵 → 重新派遣 → 戰鬥探索掃蕩 → 帕萊斯立方 → 星際迴廊 → 付費商店 → 啟示商店 → 好友 → 信件檢查。全部自動完成。</p>
+    <div class="step-flow">
+      match_image(驚嘆號) <span class="arrow">→</span> click <span class="arrow">→</span> detect(獎勵) <span class="arrow">→</span> click <span class="arrow">→</span> detect(派遣完成) <span class="arrow">→</span> click <span class="arrow">→</span> detect(掃蕩戰鬥) <span class="arrow">→</span> click <span class="arrow">→</span> ... 70+ 步驟全自動
+    </div>
+  </div>
+  <div class="pattern">
+    <h4>跑馬輔助（parallel 模式）</h4>
+    <p>使用 parallel 並行模式每幀掃描隨機事件，自動應對 26 種固定事件 + 體力型/力量型跑馬 + 16 種支援卡事件。</p>
+  </div>
+  <p style="text-align:center;margin-top:16px;"><a href="starsavior.html" style="display:inline-block;background:#238636;color:#fff;padding:10px 28px;border-radius:6px;text-decoration:none;font-weight:600;">查看完整介紹與下載 →</a></p>
+</section>
+
+<hr>
+
 <section id="faq">
   <h2>常見問題</h2>
 
@@ -445,7 +467,7 @@
 
 <section id="download">
   <h2>下載</h2>
-  <p>目前版本：<strong>v0.1.1</strong></p>
+  <p>目前版本：<strong>v0.1.7</strong></p>
   <ul>
     <li>下載：<a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a></li>
     <li>原始碼：<a href="https://github.com/Sid-1996/ocr-trigger-clicker" rel="noopener noreferrer">github.com/Sid-1996/ocr-trigger-clicker</a></li>
@@ -456,7 +478,7 @@
 <hr>
 
 <footer>
-  <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
+  <p><a href="starsavior.html">星之救援者 StarSavior 自動化腳本</a> &nbsp;|&nbsp; 作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
   <p style="margin-top:4px;">發現問題？請到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues">Issues</a> 回報</p>
   <p style="margin-top:4px;">想分享或取得現成任務檔案？前往 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB">任務檔案分享 Discussions</a></p>
   <p style="margin-top:4px;">使用心得與功能建議歡迎到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/discussions">GitHub Discussions</a> 交流</p>

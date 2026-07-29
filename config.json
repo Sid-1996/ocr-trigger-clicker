@@ -1,9 +1,9 @@
 {
-  "last_task": "測試",
-  "last_window": "hololive-Dreams",
+  "last_task": "StarSavior-每日任務",
+  "last_window": "StarSavior",
   "hide_startup_guide": true,
-  "max_cps": 10,
-  "scan_interval_ms": 100,
+  "max_cps": 5,
+  "scan_interval_ms": 250,
   "default_match_mode": "fuzzy",
   "close_behavior": "quit",
   "show_close_confirm": false,
