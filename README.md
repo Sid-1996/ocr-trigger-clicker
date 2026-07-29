@@ -65,7 +65,7 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 | OCR 文字偵測 | ✅ 內建，支援繁中 | ❌ 需外掛 | ⚠️ 有，但配置複雜 | ❌ 無 |
 | 跨解析度 | ✅ 比例座標，自動適應 | ❌ 像素座標，換螢幕就壞 | ❌ 同左 | ❌ 同左 |
 | 圖像模板比對 | ✅ 內建 OpenCV + NMS | ❌ 需外掛 | ✅ 有 | ❌ 無 |
-| 滑鼠 / 鍵盤模擬 | ✅ AHK v2 TCP 通訊 | ✅ 原生支援 | ✅ 有 | ✅ 原生支援 |
+| 滑鼠 / 鍵盤模擬 | ✅ pynput (SendInput) | ✅ 原生支援 | ✅ 有 | ✅ 原生支援 |
 | 多規則群組管理 | ✅ 拖曳排序、循環、跳轉 | ❌ 需手寫邏輯 | ❌ 需手寫邏輯 | ❌ 需手寫邏輯 |
 | 開源免費 | ✅ AGPLv3 | ✅ 免費 | ✅ Apache 2.0 | ✅ 免費 |
 
@@ -74,17 +74,15 @@ OCR Trigger Clicker 是一款基於光學字元辨識（OCR）的 Windows 自動
 ## 系統需求
 
 - Windows 10 / 11（64 位元）
-- [AutoHotkey v2](https://www.autohotkey.com/)（需自行安裝）
 - 使用預編譯 EXE 無需 Python 環境
 
 ---
 
 ## 安裝
 
-1. 下載並安裝 [AutoHotkey v2](https://www.autohotkey.com/)
-2. 從 [Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) 下載 `ocr-trigger-clicker.zip`
-3. 解壓縮後執行 `ocr-trigger-clicker.exe`
-4. **以系統管理員身分執行**（若目標程式以管理員權限執行，否則點擊無效）
+1. 從 [Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) 下載 `ocr-trigger-clicker.zip`
+2. 解壓縮後執行 `ocr-trigger-clicker.exe`
+3. **以系統管理員身分執行**（若目標程式以管理員權限執行，否則點擊無效）
 
 ---
 

@@ -141,7 +141,7 @@
     <button class="path-card" type="button" data-target="faq">
       <span class="tag">卡住了</span>
       <strong>我遇到問題了</strong>
-      <span>先看常見問題，通常能快速判斷是權限、AHK 還是設定檔。</span>
+      <span>先看常見問題，通常能快速判斷是權限還是設定檔。</span>
     </button>
   </div>
   <p class="path-hint" id="path-hint">提示：第一次使用通常先看「我要先跑起來」，再去 OCR 診斷調 ROI。</p>
@@ -420,8 +420,8 @@
   <h3>需要安裝 Python 或任何環境嗎？</h3>
   <p>不需要。下載 ZIP 解壓縮後直接執行 <code>ocr-trigger-clicker.exe</code> 即可。</p>
 
-  <h3>為什麼需要 AutoHotkey？</h3>
-  <p>本工具使用 AutoHotkey v2 執行滑鼠點擊與鍵盤操作。首次啟動時會詢問是否自動下載（約 3MB），若選擇不下載則僅 OCR 偵測功能可用。</p>
+  <h3>需要安裝任何外部程式嗎？</h3>
+  <p>不需要。滑鼠與鍵盤模擬使用 pynput（Win32 SendInput API），完全內建，無需下載或安裝任何外部程式。</p>
 
   <h3>支援哪些語言的文字辨識？</h3>
   <p>預設使用 RapidOCR 通用模型，辨識效果以繁體中文與簡體中文最佳。可透過 <code>custom_models/</code> 自訂模型。</p>
@@ -459,8 +459,7 @@
   <h2>系統需求</h2>
   <ul>
     <li>Windows 10 / 11（64 位元）</li>
-    <li>不需要 Python、Node.js 或其他執行環境</li>
-    <li>首次啟動會自動下載 AutoHotkey v2（約 3MB，可選擇不下載）</li>
+    <li>不需要任何外部執行環境，下載解壓縮後直接執行</li>
     <li>支援 DirectX 12 的 GPU（選擇性，可加速 OCR 辨識）</li>
   </ul>
 </section>
@@ -514,7 +513,7 @@ document.querySelectorAll('.path-card').forEach(function(card) {
         } else if (target === 'examples') {
           hint.textContent = '看完整範例，直接複製步驟順序到你的規則中。';
         } else if (target === 'faq') {
-          hint.textContent = '如果有問題，先看常見問題；通常權限與 AutoHotkey 最常見。';
+          hint.textContent = '如果有問題，先看常見問題；通常權限問題最常見。';
         }
       }
     }

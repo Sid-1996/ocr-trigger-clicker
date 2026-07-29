@@ -65,7 +65,7 @@ OCR Trigger Clicker is a Windows automation tool powered by optical character re
 | OCR Text Detection | ✅ Built-in, Chinese support | ❌ Needs plugin | ⚠️ Complex setup | ❌ None |
 | Resolution Independence | ✅ Ratio coordinates, auto-adapt | ❌ Pixel coords, breaks on resize | ❌ Same | ❌ Same |
 | Image Template Matching | ✅ Built-in OpenCV + NMS | ❌ Needs plugin | ✅ Yes | ❌ None |
-| Mouse / Keyboard Simulation | ✅ AHK v2 TCP | ✅ Native | ✅ Yes | ✅ Native |
+| Mouse / Keyboard Simulation | ✅ pynput (SendInput) | ✅ Native | ✅ Yes | ✅ Native |
 | Multi-Rule Group Management | ✅ Drag-and-drop, loop, jump | ❌ Manual logic | ❌ Manual logic | ❌ Manual logic |
 | Open Source | ✅ AGPLv3 | ✅ Free | ✅ Apache 2.0 | ✅ Free |
 
@@ -74,17 +74,15 @@ OCR Trigger Clicker is a Windows automation tool powered by optical character re
 ## System Requirements
 
 - Windows 10 / 11 (64-bit)
-- [AutoHotkey v2](https://www.autohotkey.com/) (install separately)
 - Pre-built EXE requires no Python environment
 
 ---
 
 ## Installation
 
-1. Download and install [AutoHotkey v2](https://www.autohotkey.com/)
-2. Download `ocr-trigger-clicker.zip` from [Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases)
-3. Extract and run `ocr-trigger-clicker.exe`
-4. **Run as Administrator** (required if the target app runs with admin privileges, otherwise clicks won't register)
+1. Download `ocr-trigger-clicker.zip` from [Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases)
+2. Extract and run `ocr-trigger-clicker.exe`
+3. **Run as Administrator** (required if the target app runs with admin privileges, otherwise clicks won't register)
 
 ---
 
