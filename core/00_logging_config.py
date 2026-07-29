@@ -39,7 +39,7 @@ def _ensure_root_handler():
             return
         log_dir = get_log_dir()
         _handler = TimedRotatingFileHandler(
-            log_dir / "app.log", when="midnight", backupCount=7, encoding="utf-8"
+            log_dir / "app.log", when="midnight", backupCount=1, encoding="utf-8"
         )
         _handler.setFormatter(
             logging.Formatter(
