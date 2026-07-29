@@ -245,6 +245,8 @@ class OcrDebugPanel(QWidget):
     def _minimize_and_capture(self):
         try:
             parent = self.parent() if self.parent() else None
+            self_was_maxed = self.isMaximized()
+            parent_was_maxed = parent.isMaximized() if parent else False
             self.showMinimized()
             if parent:
                 parent.showMinimized()
@@ -270,10 +272,16 @@ class OcrDebugPanel(QWidget):
         finally:
             parent = self.parent() if self.parent() else None
             if parent and parent.isMinimized():
-                parent.showNormal()
+                if parent_was_maxed:
+                    parent.showMaximized()
+                else:
+                    parent.showNormal()
                 parent.activateWindow()
             if self.isMinimized():
-                self.showNormal()
+                if self_was_maxed:
+                    self.showMaximized()
+                else:
+                    self.showNormal()
 
     def _take_snapshot(self):
         self._request_id += 1

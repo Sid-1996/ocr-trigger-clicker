@@ -145,6 +145,7 @@ class ROISelector(QWidget):
 
 def select_roi(parent_window=None) -> Optional[dict]:
     if parent_window:
+        was_maxed = parent_window.isMaximized()
         parent_window.showMinimized()
         QApplication.processEvents()
 
@@ -161,10 +162,12 @@ def select_roi(parent_window=None) -> Optional[dict]:
         import time
 
         time.sleep(0.1)
-        parent_window.showNormal()
+        if was_maxed:
+            parent_window.showMaximized()
+        else:
+            parent_window.showNormal()
         parent_window.raise_()
         parent_window.activateWindow()
-        parent_window.setWindowState(parent_window.windowState() & ~Qt.WindowState.WindowMinimized)
         QApplication.processEvents()
 
     result = selector._result

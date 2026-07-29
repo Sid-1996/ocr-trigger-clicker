@@ -1299,6 +1299,7 @@ class _MatchImageStepForm(QWidget):
         color_tolerance = self._color_tolerance.value()
         win = self.window()
         if isinstance(win, QMainWindow):
+            was_maxed = win.isMaximized()
             win.showMinimized()
             QApplication.processEvents()
             time.sleep(0.08)
@@ -1308,7 +1309,10 @@ class _MatchImageStepForm(QWidget):
         if img is None:
             img = capture_window_content(title)
         if isinstance(win, QMainWindow):
-            win.showNormal()
+            if was_maxed:
+                win.showMaximized()
+            else:
+                win.showNormal()
             win.activateWindow()
         if img is None:
             self._img_compare_result.setText(T("img_compare.capture_failed"))
@@ -5654,6 +5658,7 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
+            self._was_maxed = self.isMaximized()
             self.hide()
             self._tray.showMessage(
                 "OCR Trigger Clicker",
@@ -5663,7 +5668,10 @@ class MainWindow(QMainWindow):
             )
 
     def _restore_window(self):
-        self.showNormal()
+        if getattr(self, "_was_maxed", False):
+            self.showMaximized()
+        else:
+            self.showNormal()
         self.activateWindow()
 
     def _quit_app(self):

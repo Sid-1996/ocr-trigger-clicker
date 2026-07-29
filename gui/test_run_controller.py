@@ -45,6 +45,7 @@ class TestRunController:
         win._edit_test_btn.setEnabled(False)
         win._edit_test_btn.setText(T("test.testing"))
         QApplication.processEvents()
+        was_maxed = win.isMaximized()
         win.showMinimized()
         QApplication.processEvents()
         time.sleep(0.08)
@@ -53,7 +54,10 @@ class TestRunController:
         img = capture(title)
         if img is None:
             img = capture_window_content(title)
-        win.showNormal()
+        if was_maxed:
+            win.showMaximized()
+        else:
+            win.showNormal()
         win.activateWindow()
         win._edit_stack.setCurrentIndex(1)
         if img is None:
