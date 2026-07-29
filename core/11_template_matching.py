@@ -101,10 +101,10 @@ def match_template(
 
     if roi is not None and any(roi.get(k, 0) != 0 for k in ("w", "h")):
         h, w = img.shape[:2]
-        x1 = max(0, roi["x"])
-        y1 = max(0, roi["y"])
-        x2 = min(w, roi["x"] + roi["w"])
-        y2 = min(h, roi["y"] + roi["h"])
+        x1 = max(0, int(roi["x"]))
+        y1 = max(0, int(roi["y"]))
+        x2 = min(w, int(roi["x"]) + int(roi["w"]))
+        y2 = min(h, int(roi["y"]) + int(roi["h"]))
         if x2 > x1 and y2 > y1:
             search_bgr = img[y1:y2, x1:x2]
             offset_x, offset_y = x1, y1

@@ -67,10 +67,10 @@ def log_main(msg: str):
 
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
     h, w = img.shape[:2]
-    x1 = max(0, roi["x"])
-    y1 = max(0, roi["y"])
-    x2 = min(w, roi["x"] + roi["w"])
-    y2 = min(h, roi["y"] + roi["h"])
+    x1 = max(0, int(roi["x"]))
+    y1 = max(0, int(roi["y"]))
+    x2 = min(w, int(roi["x"]) + int(roi["w"]))
+    y2 = min(h, int(roi["y"]) + int(roi["h"]))
     if x2 <= x1 or y2 <= y1:
         return None
     return img[y1:y2, x1:x2]
@@ -299,7 +299,7 @@ class MainLoop:
         if is_full:
             cache_key = ("__full__",)
         else:
-            cache_key = (roi["x"], roi["y"], roi["w"], roi["h"])
+            cache_key = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
         cached = self._frame_ocr_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -308,10 +308,10 @@ class MainLoop:
             results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
         else:
             h, w = img.shape[:2]
-            x1 = max(0, roi["x"])
-            y1 = max(0, roi["y"])
-            x2 = min(w, roi["x"] + roi["w"])
-            y2 = min(h, roi["y"] + roi["h"])
+            x1 = max(0, int(roi["x"]))
+            y1 = max(0, int(roi["y"]))
+            x2 = min(w, int(roi["x"]) + int(roi["w"]))
+            y2 = min(h, int(roi["y"]) + int(roi["h"]))
             if x2 <= x1 or y2 <= y1:
                 return []
             roi_img = img[y1:y2, x1:x2]
