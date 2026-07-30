@@ -10,6 +10,9 @@
 
 **English** · [**简体中文**](./README.zh-CN.md) · [**繁體中文**](./README.md)
 
+> 🎯 **First time here? You're here to *use* it, not to read code.**
+> Check the [📖 Quick Start Guide](./START.en.md) — from download to running in 3 minutes.
+
 ---
 
 ## Table of Contents
