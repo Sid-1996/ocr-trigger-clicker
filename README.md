@@ -53,9 +53,9 @@
 
 ## 給開發者
 
-- [技術規格與比較表](./TECHNICAL.md)
-- [系統架構](./ARCHITECTURE.md)
-- [版本記錄](./CHANGELOG.md)
+- [技術規格與比較表](./docs/dev/TECHNICAL.md)
+- [系統架構](./docs/dev/ARCHITECTURE.md)
+- [版本記錄](./docs/dev/CHANGELOG.md)
 
 ---
 

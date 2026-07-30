@@ -1,7 +1,7 @@
 # Technical Specifications
 
 > This file is intended for developers, technical evaluators, and AI agents.
-> For end-user documentation, see [README.md](./README.md) or the [Quick Start Guide](./START.md).
+> For end-user documentation, see [README.md](../README.md) or the [Quick Start Guide](../START.md).
 
 ---
 

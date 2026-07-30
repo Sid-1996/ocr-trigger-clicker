@@ -53,9 +53,9 @@ For step-by-step guidance, see the [Quick Start Guide](./START.en.md).
 
 ## For developers
 
-- [Technical specs & comparison table](./TECHNICAL.md)
-- [System architecture](./ARCHITECTURE.md)
-- [Changelog](./CHANGELOG.md)
+- [Technical specs & comparison table](./docs/dev/TECHNICAL.md)
+- [System architecture](./docs/dev/ARCHITECTURE.md)
+- [Changelog](./docs/dev/CHANGELOG.md)
 
 ---
 

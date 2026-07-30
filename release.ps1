@@ -41,11 +41,11 @@ if (-not $Force) {
     }
 }
 
-# ---- 從 CHANGELOG.md 解析 release notes ----
+# ---- 從 docs/dev/CHANGELOG.md 解析 release notes ----
 
-Write-Output "從 CHANGELOG.md 解析 v$Version 發行說明..."
+Write-Output "從 docs/dev/CHANGELOG.md 解析 v$Version 發行說明..."
 
-$changelogPath = Join-Path $root "CHANGELOG.md"
+$changelogPath = Join-Path $root "docs/dev/CHANGELOG.md"
 $lines = Get-Content -Path $changelogPath -Encoding utf8
 $escaped = [regex]::Escape("## [v$Version]")
 $versionLine = -1
@@ -61,7 +61,7 @@ for ($i = 0; $i -lt $lines.Count; $i++) {
 }
 
 if ($versionLine -eq -1) {
-    Write-Error "CHANGELOG.md 中找不到 '## [v$Version]' 區塊。請先在 CHANGELOG.md 新增該版本內容。"
+    Write-Error "docs/dev/CHANGELOG.md 中找不到 '## [v$Version]' 區塊。請先在 docs/dev/CHANGELOG.md 新增該版本內容。"
     exit 1
 }
 
@@ -118,7 +118,7 @@ $Version | Set-Content latest_version.txt -Encoding utf8
 
 # ---- commit（本地，還不 push） ----
 
-git add _version.py latest_version.txt CHANGELOG.md
+git add _version.py latest_version.txt docs/dev/CHANGELOG.md
 git commit -m "chore: bump to v$Version"
 
 # ---- 打包 ----

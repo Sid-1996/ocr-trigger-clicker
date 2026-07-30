@@ -53,9 +53,9 @@
 
 ## 给开发者
 
-- [技术规格与比较表](./TECHNICAL.md)
-- [系统架构](./ARCHITECTURE.md)
-- [版本记录](./CHANGELOG.md)
+- [技术规格与比较表](./docs/dev/TECHNICAL.md)
+- [系统架构](./docs/dev/ARCHITECTURE.md)
+- [版本记录](./docs/dev/CHANGELOG.md)
 
 ---
 

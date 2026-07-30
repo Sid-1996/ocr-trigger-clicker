@@ -15,6 +15,23 @@
 
 ---
 
+## 文件索引
+
+| 路徑 | 對象 | 用途 |
+|---|---|---|
+| `README.md` / `.en.md` / `.zh-CN.md` | 使用者 | 專案首頁、下載連結 |
+| `START.md` / `START.en.md` | 使用者 | 快速上手指南（3 分鐘） |
+| `docs/dev/TECHNICAL.md` | 開發者 | 技術規格與比較表 |
+| `docs/dev/ARCHITECTURE.md` | 開發者 | 系統架構與模組地圖 |
+| `docs/dev/CHANGELOG.md` | 開發者 | 版本記錄 |
+| `docs/dev/PLAN_optimizations.md` | 開發者 | 最佳化計畫 |
+| `docs/dev/UI_OPTIMIZATION_PLAN.md` | 開發者 | UI 改造筆記 |
+| `AGENTS.md` | AI agent | 本檔案 — 工作規範與流程 |
+| `docs/index.html` | 使用者 | 完整教學網站 |
+| `docs/starsavior.html` | 使用者 | StarSavior 遊戲任務頁 |
+
+---
+
 ## 工作完成規範
 
 每個獨立任務完成後應立即單獨 commit，不得累積多個不相關任務到同一個 commit。若同一輪對話涉及多個檔案的不同修改目的（例如同時改了架構文件又改了授權檔案），必須拆成多次 git add + commit，逐一提交，不要合併成一個 commit message 帶過。
@@ -216,7 +233,7 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 ### 發版流程
 
 **手動準備階段：**
-1. 更新 `CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（內容 = 從上一個版本至今的所有變更，格式參照 Keep a Changelog，既有區塊可當範本）
+1. 更新 `docs/dev/CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（內容 = 從上一個版本至今的所有變更，格式參照 Keep a Changelog，既有區塊可當範本）
 2. `python build.py` 打包 → `dist/ocr-trigger-clicker.exe`
 3. 手動測試該 EXE，功能確認無誤
 4. 測試失敗 → 修復 → 回到步驟 2
@@ -228,11 +245,11 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 
 腳本自動完成：
 1. Pre-flight 檢查（python / gh / git 乾淨度 / tag 衝突）
-2. 從 CHANGELOG.md 解析 `## [v$x.y.z]` 區塊作為 release notes
+2. 從 docs/dev/CHANGELOG.md 解析 `## [v$x.y.z]` 區塊作為 release notes
    - 找不到該版本 → 報錯
    - 缺日期 → 自動填入當天
 3. 更新 `_version.py` + `latest_version.txt`
-4. git commit（含 CHANGELOG.md / _version.py / latest_version.txt）
+4. git commit（含 docs/dev/CHANGELOG.md / _version.py / latest_version.txt）
 5. `python build.py` 打包 + 壓 ZIP
 6. git tag + push commit + tag 到遠端
 7. `gh release create --draft --prerelease` Release notes = CHANGELOG 內容
@@ -257,7 +274,7 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 
 ### CHANGELOG 維護
 
-CHANGELOG.md 是 release notes 的唯一事實來源。
+docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 格式：`## [v$x.y.z] - YYYY-MM-DD`（日期由 `release.ps1` 自動補填）。
 
 每次發版前手動新增該版本區塊，內容涵蓋從上一個版本 tag 以來的所有變更。
