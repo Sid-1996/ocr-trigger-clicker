@@ -14,7 +14,7 @@ Someone already made a task file (JSON). You just load it and run.
 
 Extract it, run `ocr-trigger-clicker.exe`
 
-> If your target app runs as Administrator (most games do), **right-click → Run as Administrator** on this exe too, or clicks won't register.
+> Usually it works fine without admin rights. If nothing happens when the tool runs, try **right-click → Run as Administrator**.
 
 ### ② Download a task
 
@@ -74,7 +74,7 @@ For detailed tutorials, see the [documentation site](https://sid-1996.github.io/
 
 ### Nothing happens when I start?
 
-Most common cause: **not running as Administrator**. Games usually run with admin rights; the tool needs the same level to send clicks. Close it, right-click → Run as Administrator.
+First check: is the right window selected? Is the tool actually running? If both are fine, try **right-click → Run as Administrator** and start again.
 
 ### My resolution isn't 1920×1080?
 
