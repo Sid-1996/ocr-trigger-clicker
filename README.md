@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/version-0.1.1-blue?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/github/v/release/Sid-1996/ocr-trigger-clicker?style=flat-square&color=blue" alt="Version">
   <img src="https://img.shields.io/github/downloads/Sid-1996/ocr-trigger-clicker/total?label=%E4%B8%8B%E8%BC%89%E6%AC%A1%E6%95%B8&color=238636&style=flat-square" alt="Downloads">
   <img src="https://img.shields.io/github/stars/Sid-1996/ocr-trigger-clicker?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/license/Sid-1996/ocr-trigger-clicker?style=flat-square" alt="License">
