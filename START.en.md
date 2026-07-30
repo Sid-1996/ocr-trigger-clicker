@@ -62,6 +62,8 @@ Same as above — [download ZIP](https://github.com/Sid-1996/ocr-trigger-clicker
 4. Add another step: choose "**click**" → pick where to click
 5. Hit "▶Test" to verify it works
 
+> 💡 **Fastest way:** open "OCR Diagnostic" to see every text found on screen, find your target, click "Create as new rule" — detection text and position are filled in automatically. You only need to add the action.
+
 ### ④ Start
 
 Click "Start" → check the groups you want → go.

@@ -20,6 +20,7 @@
 - **Chain multiple steps** — detect → click → wait → detect → drag… runs all the way through like a recorded macro.
 - **Switch between tasks** — save each game or workflow as a separate file. One-click switch.
 - **Resolution-proof** — coordinates auto-scale. Plug in a monitor or resize the window — no reconfiguring.
+- **Set up rules visually** — open the OCR diagnostic panel, see every text string on screen, click one to create a rule. No measuring coordinates or tweaking parameters.
 
 ---
 
