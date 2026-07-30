@@ -18,6 +18,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="OCR Trigger Clicker — 螢幕文字偵測自動點擊工具">
 <meta name="twitter:description" content="綠色免安裝 Windows 工具，用 OCR 偵測螢幕文字後自動點擊／鍵盤操作。">
+<meta name="theme-color" content="#0d1117">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -27,503 +28,787 @@
   "applicationCategory": "UtilityApplication",
   "description": "透過 OCR 文字辨識偵測螢幕特定文字，自動執行滑鼠點擊與鍵盤操作的 Windows 綠色工具。",
   "author": { "@type": "Person", "name": "Sid" },
-  "softwareVersion": "0.1.1",
+  "softwareVersion": "0.1.7",
   "license": "https://github.com/Sid-1996/ocr-trigger-clicker/blob/master/LICENSE",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" }
 }
 </script>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 800px; margin: 0 auto; padding: 0 20px 60px; line-height: 1.8; color: #c9d1d9; background: #0d1117; }
-  h1 { border-bottom: 2px solid #30363d; padding-bottom: 10px; color: #e6edf3; font-size: 1.8em; }
-  h2 { margin-top: 40px; color: #e6edf3; border-left: 4px solid #1f6feb; padding-left: 12px; }
-  h3 { margin-top: 28px; color: #e6edf3; }
-  a { color: #58a6ff; }
-  a:hover { text-decoration: underline; }
-  code { background: #161b22; padding: 2px 6px; border-radius: 3px; font-size: .9em; color: #c9d1d9; }
-  ul, ol { padding-left: 22px; }
-  li { margin: 8px 0; }
-  .badge { display: inline-block; background: #1f6feb; color: #fff; padding: 3px 12px; border-radius: 12px; font-size: .8em; margin-right: 4px; }
-  .badge.gray { background: #6e7681; }
-  .badge.green { background: #238636; }
-  hr { border: none; border-top: 1px solid #30363d; margin: 40px 0; }
-  img.screenshot { max-width: 100%; border: 1px solid #30363d; border-radius: 8px; margin: 16px 0; cursor: zoom-in; }
-  .cta { text-align: center; margin: 32px 0; padding: 24px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; }
-  .cta a { display: inline-block; background: #238636; color: #fff; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-size: 1.1em; font-weight: 600; }
-  .cta a:hover { background: #2ea043; }
-  .cta .sub { margin-top: 8px; font-size: .85em; color: #8b949e; }
-  .start-flow { margin: 24px 0 8px; padding: 20px; background: linear-gradient(180deg, #161b22 0%, #0f141a 100%); border: 1px solid #30363d; border-radius: 12px; }
-  .start-flow h2 { margin-top: 0; }
-  .path-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-  .path-card { appearance: none; border: 1px solid #30363d; background: #0d1117; color: #e6edf3; border-radius: 10px; padding: 16px; text-align: left; cursor: pointer; min-height: 120px; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
-  .path-card:hover { transform: translateY(-2px); border-color: #58a6ff; background: #111827; }
-  .path-card.active { border-color: #2ea043; box-shadow: 0 0 0 1px rgba(46,160,67,.25) inset; }
-  .path-card .tag { display: inline-block; font-size: .78em; color: #8b949e; margin-bottom: 8px; }
-  .path-card strong { display: block; margin-bottom: 6px; font-size: 1.02em; }
-  .path-card span { display: block; color: #c9d1d9; font-size: .92em; line-height: 1.6; }
-  .path-hint { margin-top: 12px; color: #8b949e; font-size: .92em; }
-  @media (max-width: 720px) {
-    .path-grid { grid-template-columns: 1fr; }
-    .start-flow { padding: 16px; }
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-card: #1c2333;
+    --accent: #238636;
+    --accent-hover: #2ea043;
+    --accent-blue: #1f6feb;
+    --accent-orange: #d29922;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --border: #30363d;
+    --border-hover: #58a6ff;
+    --gradient: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a2332 100%);
   }
-  .faq q { font-style: italic; color: #8b949e; display: block; margin: 4px 0 12px 16px; border-left: 2px solid #30363d; padding-left: 12px; }
-  .principle { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 16px 0; }
-  .principle strong { color: #58a6ff; }
-  .pattern { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 16px 0; }
-  .pattern h4 { margin: 0 0 8px; color: #e6edf3; }
-  .step-flow { background: #161b22; border-left: 3px solid #238636; padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; font-family: monospace; color: #8b949e; }
-  .step-flow .arrow { color: #58a6ff; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.7;
+  }
+  a { color: var(--accent-blue); text-decoration: none; transition: color 0.2s; }
+  a:hover { color: #79c0ff; }
+  code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 3px; font-size: .9em; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+  /* ── Nav ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,17,23,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0.7rem 0;
+  }
+  nav .container { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem; }
+  nav .logo { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+  nav .logo span { color: var(--accent); }
+  nav ul { list-style: none; display: flex; gap: 1rem; flex-wrap: wrap; }
+  nav ul li a { color: var(--text-secondary); font-size: 0.85rem; font-weight: 500; }
+  nav ul li a:hover { color: var(--accent); }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    padding: 4.5rem 0 3.5rem;
+    background: var(--gradient);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 80px);
+    pointer-events: none;
+  }
+  .hero .container { position: relative; z-index: 1; }
+  .hero .subtitle {
+    display: inline-block;
+    background: rgba(0,0,0,0.35);
+    padding: 0.35rem 1.2rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 1.2rem;
+  }
+  .hero h1 { font-size: 2.6rem; font-weight: 800; margin-bottom: 0.5rem; letter-spacing: 1px; }
+  .hero p { font-size: 1.1rem; color: rgba(255,255,255,0.8); max-width: 700px; margin: 0 auto 2rem; }
+  .hero .actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 0.7rem 2rem; border-radius: 8px;
+    font-weight: 600; font-size: 1rem; transition: all 0.25s; border: none; cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); color: #fff; transform: translateY(-2px); }
+  .btn-outline { background: transparent; color: #fff; border: 2px solid rgba(255,255,255,0.4); }
+  .btn-outline:hover { border-color: #fff; background: rgba(255,255,255,0.08); color: #fff; transform: translateY(-2px); }
+
+  /* ── Section ── */
+  section { padding: 3.5rem 0; }
+  section h2 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.4rem; text-align: center; }
+  section .section-desc { text-align: center; color: var(--text-secondary); max-width: 650px; margin: 0 auto 2.5rem; font-size: 1rem; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* ── Path Cards ── */
+  .path-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+  .path-card {
+    appearance: none; border: 1px solid var(--border); background: var(--bg-secondary);
+    color: var(--text-primary); border-radius: 10px; padding: 1.2rem; text-align: left;
+    cursor: pointer; min-height: 110px; transition: transform .15s, border-color .15s, background .15s;
+    font-family: inherit;
+  }
+  .path-card:hover { transform: translateY(-3px); border-color: var(--border-hover); background: #111827; }
+  .path-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(35,134,54,.25) inset; }
+  .path-card .tag { display: inline-block; font-size: .78em; color: var(--text-muted); margin-bottom: 6px; }
+  .path-card strong { display: block; margin-bottom: 4px; font-size: 1em; }
+  .path-card span { display: block; color: var(--text-secondary); font-size: .88em; line-height: 1.5; }
+
+  /* ── Feature Cards ── */
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.2rem; }
+  .feature-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.5rem; transition: transform 0.2s, border-color 0.2s;
+  }
+  .feature-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+  .feature-card .icon { font-size: 1.8rem; margin-bottom: 0.6rem; }
+  .feature-card h3 { font-size: 1.05rem; margin-bottom: 0.3rem; }
+  .feature-card p { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.6; }
+
+  /* ── Screenshots ── */
+  .screenshot { max-width: 100%; border: 1px solid var(--border); border-radius: 10px; cursor: zoom-in; transition: transform 0.2s; }
+  .screenshot:hover { transform: scale(1.01); }
+  figcaption { font-size: .85em; color: var(--text-muted); text-align: center; margin-top: 6px; margin-bottom: 1.5rem; }
+
+  /* ── Principle Cards ── */
+  .principle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.2rem; }
+  .principle-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 1.4rem;
+  }
+  .principle-card strong { color: var(--accent); font-size: 1.05rem; display: block; margin-bottom: 0.4rem; }
+  .principle-card p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem; }
+
+  /* ── Pattern Cards ── */
+  .pattern-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.4rem; margin-bottom: 1rem;
+  }
+  .pattern-card h4 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+  .pattern-card p { color: var(--text-secondary); font-size: 0.9rem; }
+  .step-flow {
+    background: var(--bg-primary); border-left: 3px solid var(--accent-blue);
+    padding: 10px 14px; margin: 10px 0; border-radius: 0 6px 6px 0;
+    font-family: monospace; font-size: 0.88em; color: var(--text-secondary);
+  }
+  .step-flow .arrow { color: var(--accent-blue); }
+
+  /* ── Req Cards ── */
+  .req-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  .req-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.2rem; text-align: center;
+  }
+  .req-card .req-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+  .req-card h4 { font-size: 0.95rem; margin-bottom: 0.2rem; }
+  .req-card p { font-size: 0.85rem; color: var(--text-muted); }
+
+  /* ── Download Box ── */
+  .download-box {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 2rem; text-align: center;
+  }
+  .download-box .version { font-size: 2.2rem; font-weight: 800; color: var(--accent); }
+  .download-box .meta { color: var(--text-muted); font-size: 0.88rem; margin: 0.5rem 0 1.5rem; }
+  .download-box .actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+  /* ── FAQ ── */
+  .faq-item {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 0.7rem; overflow: hidden;
+  }
+  .faq-question {
+    width: 100%; background: none; border: none; color: var(--text-primary);
+    font-size: 0.95rem; font-weight: 600; padding: 0.9rem 1.2rem; text-align: left;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    font-family: inherit;
+  }
+  .faq-question::after { content: '+'; font-size: 1.2rem; color: var(--accent); transition: transform 0.2s; }
+  .faq-question[aria-expanded="true"]::after { content: '−'; }
+  .faq-answer { padding: 0 1.2rem 1rem; color: var(--text-secondary); font-size: 0.9rem; display: none; line-height: 1.7; }
+  .faq-answer.open { display: block; }
+  .faq-answer ul { padding-left: 1.2rem; margin: 6px 0; }
+  .faq-answer li { margin: 4px 0; }
+
+  /* ── Footer ── */
+  footer {
+    border-top: 1px solid var(--border); padding: 2rem 0; text-align: center;
+    color: var(--text-muted); font-size: 0.85rem;
+  }
+  footer .links { margin-bottom: 0.5rem; }
+  footer .links a { margin: 0 0.5rem; font-size: 0.9rem; color: var(--text-secondary); }
+  footer .links a:hover { color: var(--accent); }
+
+  /* ── Lightbox ── */
   #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.88); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
   #lightbox img { max-width: 92%; max-height: 92%; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,.6); }
   #lightbox.show { display: flex; }
-  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #30363d; font-size: .85em; color: #8b949e; text-align: center; }
+
+  /* ── Game Task CTA ── */
+  .game-cta {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.5rem; text-align: center;
+  }
+  .game-cta h4 { margin-bottom: 0.3rem; }
+  .game-cta p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 1.7rem; }
+    .hero p { font-size: 0.95rem; }
+    nav ul { gap: 0.6rem; }
+    nav ul li a { font-size: 0.78rem; }
+    section { padding: 2.5rem 0; }
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>OCR Trigger Clicker</h1>
-  <p>
-    <span class="badge green">v0.1.7</span>
-    <span class="badge gray">綠色免安裝</span>
-    <span class="badge green">繁體中文 OCR</span>
-    <span class="badge orange"><a href="starsavior.html" style="color:#fff;text-decoration:none;">遊戲任務</a></span>
-  </p>
-  <p>一套 Windows 上的 OCR 自動化工具：偵測螢幕特定文字後，自動執行滑鼠點擊或鍵盤操作。適合遊戲輔助、重複性表單操作、即時監控觸發等場景。</p>
-</header>
-
+<!-- ════════════ Nav ════════════ -->
 <nav>
-  <h2>目錄</h2>
-  <ul>
-    <li><a href="#features">核心功能</a></li>
-    <li><a href="#guide">使用指引</a></li>
-    <li><a href="#tools">工具教學</a></li>
-    <li><a href="#principles">規則設計原則</a></li>
-    <li><a href="#patterns">常見腳本模式</a></li>
-    <li><a href="#examples">腳本設計範例</a></li>
-    <li><a href="starsavior.html">遊戲任務：星之救援者 →</a></li>
-    <li><a href="#faq">常見問題</a></li>
-    <li><a href="#requirements">系統需求</a></li>
-    <li><a href="#download">下載</a></li>
-  </ul>
+  <div class="container">
+    <a href="#" class="logo">OCR <span>Trigger</span> Clicker</a>
+    <ul>
+      <li><a href="#features">功能</a></li>
+      <li><a href="#screenshots">截圖</a></li>
+      <li><a href="#guide">使用</a></li>
+      <li><a href="#tools">工具</a></li>
+      <li><a href="#patterns">模式</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#download">下載</a></li>
+      <li><a href="https://github.com/Sid-1996/ocr-trigger-clicker" target="_blank">GitHub</a></li>
+    </ul>
+  </div>
 </nav>
 
-<div class="cta">
-  <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">前往 GitHub 下載</a>
-  <a href="starsavior.html" style="display:inline-block;background:#1f6feb;color:#fff;padding:12px 32px;border-radius:6px;text-decoration:none;font-size:1.1em;font-weight:600;margin:4px;">看看遊戲任務怎麼用 →</a>
-  <div class="sub">v0.1.7 — Windows 10/11 64-bit — 單執行檔，免安裝</div>
-  <div style="margin-top:10px;font-size:.9em;">
-    第一次用？→ <a href="https://github.com/Sid-1996/ocr-trigger-clicker/blob/master/START.md">快速上手指南</a>
-    在 GitHub 上，3 分鐘從下載到啟動
+<!-- ════════════ Hero ════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="subtitle">Windows 10/11 · 綠色免安裝 · 開源 AGPLv3 · <span id="hero-version">v0.1.7</span></div>
+    <h1>OCR Trigger Clicker</h1>
+    <p>免寫程式的 Windows 自動化工具 — 偵測螢幕文字後自動點擊與按鍵。支援繁中 / 簡中 UI、ROI 區域設定、圖像比對、多步驟流程。</p>
+    <div class="actions">
+      <a href="#download" class="btn btn-primary">下載最新版本</a>
+      <a href="#guide" class="btn btn-outline">快速上手</a>
+      <a href="https://github.com/Sid-1996/ocr-trigger-clicker" target="_blank" class="btn btn-outline">GitHub 原始碼</a>
+    </div>
   </div>
-</div>
+</section>
 
-<section class="start-flow" id="start">
-  <h2>先選你現在要做什麼</h2>
-  <p>這不是一份要從頭讀完的文件。先點一個情境，直接跳到你需要的段落。</p>
-  <div class="path-grid">
-    <button class="path-card" type="button" data-target="guide">
-      <span class="tag">第一次使用</span>
-      <strong>我要先跑起來</strong>
-      <span>看最短流程：下載、開啟、選視窗、加規則、啟動。</span>
-    </button>
-    <button class="path-card" type="button" data-target="tools">
-      <span class="tag">工具操作</span>
-      <strong>我要學怎麼用工具</strong>
-      <span>OCR 診斷、ROI 框選、點擊選取、圖像比對、乾跑測試。</span>
-    </button>
-    <button class="path-card" type="button" data-target="patterns">
-      <span class="tag">設計腳本</span>
-      <strong>我想設計自己的腳本</strong>
-      <span>先看設計原則和常見模式，再套用到你的場景。</span>
-    </button>
-    <button class="path-card" type="button" data-target="examples">
-      <span class="tag">看範例</span>
-      <strong>我想看完整的腳本</strong>
-      <span>4 個完整範例：循環任務、錯誤攔截、數值監控、圖示比對。</span>
-    </button>
-    <button class="path-card" type="button" data-target="faq">
-      <span class="tag">卡住了</span>
-      <strong>我遇到問題了</strong>
-      <span>先看常見問題，通常能快速判斷是權限還是設定檔。</span>
-    </button>
+<!-- ════════════ Path Cards ════════════ -->
+<section style="padding:2.5rem 0 1rem;">
+  <div class="container">
+    <p style="text-align:center;color:var(--text-secondary);margin-bottom:1.2rem;">先選你現在要做什麼</p>
+    <div class="path-grid">
+      <button class="path-card" type="button" data-target="guide">
+        <span class="tag">第一次使用</span>
+        <strong>我要先跑起來</strong>
+        <span>下載、開啟、選視窗、加規則、啟動。</span>
+      </button>
+      <button class="path-card" type="button" data-target="tools">
+        <span class="tag">工具操作</span>
+        <strong>我要學怎麼用工具</strong>
+        <span>OCR 診斷、ROI 框選、點擊選取、圖像比對、乾跑測試。</span>
+      </button>
+      <button class="path-card" type="button" data-target="patterns">
+        <span class="tag">設計腳本</span>
+        <strong>我想設計自己的腳本</strong>
+        <span>先看設計原則和常見模式，再套用到你的場景。</span>
+      </button>
+      <button class="path-card" type="button" data-target="examples">
+        <span class="tag">看範例</span>
+        <strong>我想看完整的腳本</strong>
+        <span>4 個完整範例：循環任務、錯誤攔截、數值監控、圖示比對。</span>
+      </button>
+      <button class="path-card" type="button" data-target="faq">
+        <span class="tag">卡住了</span>
+        <strong>我遇到問題了</strong>
+        <span>先看常見問題，通常能快速判斷是權限還是設定檔。</span>
+      </button>
+    </div>
   </div>
-  <p class="path-hint" id="path-hint">提示：第一次使用通常先看「我要先跑起來」，再去 OCR 診斷調 ROI。</p>
 </section>
 
 <hr>
 
-<main>
+<!-- ════════════ Features ════════════ -->
 <section id="features">
-  <h2>核心功能</h2>
-  <ul>
-    <li><strong>OCR 文字辨識</strong> — 基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI（感興趣區域）精確比對，避免全螢幕干擾。</li>
-    <li><strong>群組系統</strong> — 規則依群組執行，支援循環執行／執行一次／重複 N 次，可獨立停用。</li>
-    <li><strong>Steps 步驟系統</strong> — 每條規則由有序步驟組成：偵測（detect）、點擊（click）、按鍵（key）、等待（wait）、跳轉（jump）、數值比對（compare）、圖像比對（match_image）、滾輪（scroll）、拖曳（drag）。<strong>建議優先選用 match_image（圖示比對），比 OCR 快 10~50 倍、抗背景文字干擾；只有在模板無法區分時才改用 OCR detect。</strong></li>
-    <li><strong>常駐監控</strong> — 不受群組流程影響，每幀獨立執行，適合錯誤攔截。</li>
-    <li><strong>多任務管理</strong> — 不同場景（不同遊戲、不同表單）可建立獨立任務，規則完全隔離，快速切換。</li>
-    <li><strong>OCR 即時診斷</strong> — 即時顯示目前視窗內所有可辨識文字及其位置與信心度，大幅降低 ROI 設定難度。</li>
-    <li><strong>可選前景保護</strong> — 安全模式，開啟後只在目標視窗位於前景時才執行點擊，避免干擾其他操作。</li>
-    <li><strong>系統托盤常駐</strong> — 關閉視窗縮小至系統托盤背景執行，可透過設定調整關閉行為或啟用關閉確認。</li>
-    <li><strong>on_fail 通知</strong> — 步驟失敗時可發送系統通知並自動停止指定群組。</li>
-    <li><strong>規則匯入／匯出</strong> — 任務可匯出為 JSON 檔，分享給他人或備份。</li>
-    <li><strong>圖示模板比對（match_image）</strong> — 以圖找圖，支援多尺度搜尋與 NMS 篩選，適合無文字的按鈕或圖示辨識。</li>
-    <li><strong>步驟層級失敗處理（on_fail）</strong> — 支援停止規則、按鍵、跳躍步驟、跳躍群組、系統通知等多種異常流程控制。</li>
-  </ul>
+  <div class="container">
+    <h2>核心功能</h2>
+    <p class="section-desc">一套工具涵蓋文字偵測、圖像比對、流程編排與多任務管理。</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="icon">🔍</div>
+        <h3>OCR 文字辨識</h3>
+        <p>基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI 精確比對，避免全螢幕干擾。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🖼️</div>
+        <h3>圖像模板比對</h3>
+        <p>以圖找圖，支援多尺度搜尋與 NMS 篩選。適合無文字的按鈕或圖示辨識，效能比 OCR 快 10~50 倍。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔗</div>
+        <h3>多步驟流程</h3>
+        <p>每條規則由有序步驟組成：偵測、點擊、按鍵、等待、跳轉、數值比對、圖像比對、滾輪、拖曳。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📂</div>
+        <h3>多任務管理</h3>
+        <p>不同場景（不同遊戲、不同表單）建立獨立任務，規則完全隔離，一鍵切換。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">👁️</div>
+        <h3>OCR 即時診斷</h3>
+        <p>即時顯示目前視窗內所有可辨識文字及其位置與信心度，按兩下直接建立規則。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🛡️</div>
+        <h3>安全與通知</h3>
+        <p>可選前景保護、系統托盤常駐、on_fail 通知與自動停止群組，長時間運行也安心。</p>
+      </div>
+    </div>
+  </div>
 </section>
 
+<hr>
+
+<!-- ════════════ Screenshots ════════════ -->
 <section id="screenshots">
-  <h2>介面截圖</h2>
-  <figure>
-    <img class="screenshot" src="images/gui-main.png" alt="OCR Trigger Clicker 工具主介面 — 視窗選取、任務管理、規則列表與編輯區" loading="lazy">
-    <figcaption style="font-size:.85em;color:#8b949e;">主介面：視窗選擇、任務管理、規則編輯</figcaption>
-  </figure>
-  <figure>
-    <img class="screenshot" src="images/ocr-diagnostic.png" alt="OCR 即時診斷功能 — 顯示視窗內所有可辨識文字、位置與信心度" loading="lazy">
-    <figcaption style="font-size:.85em;color:#8b949e;">OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
-  </figure>
-  <figure>
-    <img class="screenshot" src="images/gui2.png" alt="圖示模板比對 match_image 步驟設定 — 選取範本圖片、框選 ROI、設定門檻值與 on_fail 行為" loading="lazy">
-    <figcaption style="font-size:.85em;color:#8b949e;">圖示比對步驟：選取範本圖片、設定 ROI 與相似度門檻、on_fail 行為</figcaption>
-  </figure>
+  <div class="container">
+    <h2>介面截圖</h2>
+    <p class="section-desc">深色主題、中文介面，規則列表與步驟編輯一目瞭然。</p>
+    <figure>
+      <img class="screenshot" src="images/gui-main.png" alt="OCR Trigger Clicker 工具主介面" loading="lazy">
+      <figcaption>主介面：視窗選擇、任務管理、規則編輯</figcaption>
+    </figure>
+    <figure>
+      <img class="screenshot" src="images/ocr-diagnostic.png" alt="OCR 即時診斷功能" loading="lazy">
+      <figcaption>OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
+    </figure>
+    <figure>
+      <img class="screenshot" src="images/gui2.png" alt="圖示模板比對步驟設定" loading="lazy">
+      <figcaption>圖示比對步驟：選取範本圖片、設定 ROI 與相似度門檻</figcaption>
+    </figure>
+  </div>
 </section>
 
 <hr>
 
+<!-- ════════════ Guide ════════════ -->
 <section id="guide">
-  <h2>使用指引</h2>
+  <div class="container">
+    <h2>使用指引</h2>
+    <p class="section-desc">從下載到啟動，最快 3 分鐘。</p>
 
-  <h3>快速入門</h3>
-  <ol>
-    <li><strong>下載解壓縮</strong>：從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
-    <li><strong>選目標視窗</strong>：在工具列選取你要操控的視窗（遊戲、ERP 系統、瀏覽器等）。</li>
-    <li><strong>建立群組</strong>：右鍵 → 新增群組。預設是「執行一次」+「依序執行」，代表跑完一輪就停。</li>
-    <li><strong>加規則</strong>：在群組內新增規則，第一步選「偵測（detect）」，輸入你要找的文字。</li>
-    <li><strong>用 OCR 診斷確認</strong>：按「OCR 診斷」確認文字有沒有被偵測到，再決定要不要框 ROI。</li>
-    <li><strong>加動作步驟</strong>：偵測後面加「點擊（click）」或「按鍵（key）」，設定你要觸發的動作。</li>
-    <li><strong>測試</strong>：按「▶測試」確認規則是否正常觸發。OK 就按「啟動」開始跑。</li>
-  </ol>
+    <h3 style="margin-top:0;">快速入門</h3>
+    <ol style="padding-left:1.2rem;color:var(--text-secondary);line-height:2;">
+      <li><strong>下載解壓縮</strong>：從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases">GitHub Releases</a> 下載 <code>ocr-trigger-clicker.zip</code>，解壓縮後執行 <code>ocr-trigger-clicker.exe</code>。</li>
+      <li><strong>選目標視窗</strong>：在工具列選取你要操控的視窗（遊戲、ERP 系統、瀏覽器等）。</li>
+      <li><strong>建立群組</strong>：右鍵 → 新增群組。預設是「執行一次」+「依序執行」。</li>
+      <li><strong>加規則</strong>：在群組內新增規則，第一步選「偵測（detect）」，輸入你要找的文字。</li>
+      <li><strong>用 OCR 診斷確認</strong>：按「OCR 診斷」確認文字有沒有被偵測到。</li>
+      <li><strong>加動作步驟</strong>：偵測後面加「點擊（click）」或「按鍵（key）」。</li>
+      <li><strong>測試</strong>：按「▶測試」確認規則是否正常觸發。OK 就按「啟動」開始跑。</li>
+    </ol>
 
-  <h3>進階技巧</h3>
-  <ul>
-    <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快。建議只框選包含目標文字的最小範圍。</li>
-    <li><strong>加等待</strong>：在動作步驟之間加「等待（wait）」，讓畫面有時間變化，避免動作太快抓不到狀態。</li>
-    <li><strong>用 jump 跳轉</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
-    <li><strong>用 compare 做數值判斷</strong>：對 ROI 內的數字做大於／小於／等於判斷，適合監控數值變化。</li>
-    <li><strong>用 match_image 比對圖示</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕或圖示辨識。</li>
-    <li><strong>善用常駐監控</strong>：勾選「常駐監控」讓規則每幀都跑，適合做錯誤攔截或緊急告警。</li>
-    <li><strong>前景保護</strong>：開啟後只在目標視窗位於前景時才執行點擊，避免干擾其他操作。</li>
-  </ul>
+    <h3 style="margin-top:1.5rem;">進階技巧</h3>
+    <ul style="padding-left:1.2rem;color:var(--text-secondary);line-height:2;">
+      <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快。建議只框選包含目標文字的最小範圍。</li>
+      <li><strong>加等待</strong>：在動作步驟之間加「等待（wait）」，讓畫面有時間變化。</li>
+      <li><strong>用 jump 跳轉</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
+      <li><strong>用 compare 做數值判斷</strong>：對 ROI 內的數字做大於／小於／等於判斷。</li>
+      <li><strong>用 match_image 比對圖示</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕辨識。</li>
+      <li><strong>善用常駐監控</strong>：勾選「常駐監控」讓規則每幀都跑，適合做錯誤攔截。</li>
+    </ul>
+  </div>
 </section>
 
 <hr>
 
+<!-- ════════════ Tools ════════════ -->
 <section id="tools">
-  <h2>工具教學</h2>
-  <p>每個工具都有專屬功能，搭配使用能大幅降低設定難度。</p>
+  <div class="container">
+    <h2>工具教學</h2>
+    <p class="section-desc">每個工具都有專屬功能，搭配使用能大幅降低設定難度。</p>
 
-  <h3 id="tool-ocr">OCR 診斷面板</h3>
-  <p>即時顯示目標視窗中所有可辨識的文字、位置與信心度。</p>
-  <ol>
-    <li>按主介面上的「OCR 診斷」按鈕。</li>
-    <li>面板開啟後，即時掃描目標視窗，列出所有辨識到的文字。</li>
-    <li>點選任一筆文字，可以看到它的位置（ROI）和信心度。</li>
-    <li>如果文字有被偵測到，直接按「建立為新規則」自動帶入文字和 ROI。</li>
-    <li>如果沒有偵測到，嘗試調整 ROI 區域或簡化文字內容。</li>
-  </ol>
-  <figure>
-    <img class="screenshot" src="images/ocr-diagnostic.png" alt="OCR 診斷面板介面" loading="lazy">
-    <figcaption style="font-size:.85em;color:#8b949e;">OCR 診斷面板：即時掃描，點選文字可自動建立規則</figcaption>
-  </figure>
+    <div class="pattern-card">
+      <h4>🔍 OCR 診斷面板</h4>
+      <p>即時顯示目標視窗中所有可辨識的文字、位置與信心度。</p>
+      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+        <li>按主介面上的「OCR 診斷」按鈕。</li>
+        <li>面板開啟後，即時掃描目標視窗，列出所有辨識到的文字。</li>
+        <li>點選任一筆文字，可以看到它的位置（ROI）和信心度。</li>
+        <li>按「建立為新規則」自動帶入文字和 ROI。</li>
+      </ol>
+    </div>
 
-  <h3 id="tool-roi">ROI 框選</h3>
-  <p>ROI（Region of Interest）就是你要偵測的畫面範圍。範圍越小，速度越快、準確度越高。</p>
-  <ol>
-    <li>在偵測步驟中，按「框選偵測區域」按鈕。</li>
-    <li>主視窗會自動最小化，目標視窗跳到前景。</li>
-    <li>在目標視窗上拖曳滑鼠，框選你要偵測的區域。</li>
-    <li>放開滑鼠後自動回到主視窗，ROI 座標自動填入。</li>
-    <li>確認 ROI 位置正確，按「▶測試」驗證。</li>
-  </ol>
+    <div class="pattern-card">
+      <h4>📐 ROI 框選</h4>
+      <p>ROI（Region of Interest）就是你要偵測的畫面範圍。範圍越小，速度越快、準確度越高。</p>
+      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+        <li>在偵測步驟中，按「框選偵測區域」按鈕。</li>
+        <li>主視窗自動最小化，目標視窗跳到前景。</li>
+        <li>在目標視窗上拖曳滑鼠，框選你要偵測的區域。</li>
+        <li>放開滑鼠後自動回到主視窗，ROI 座標自動填入。</li>
+      </ol>
+    </div>
 
-  <h3 id="tool-click">Click Picker（點擊座標選取）</h3>
-  <p>選取你要點擊的精確位置。</p>
-  <ol>
-    <li>在點擊步驟中，按「選取點擊座標」按鈕。</li>
-    <li>主視窗最小化，目標視窗跳到前景。</li>
-    <li>在目標視窗上單擊你要點擊的位置。</li>
-    <li>自動回到主視窗，座標自動填入。</li>
-    <li>可搭配「隨機偏移」避免被檢測為機器人。</li>
-  </ol>
+    <div class="pattern-card">
+      <h4>🖱️ Click Picker（點擊座標選取）</h4>
+      <p>選取你要點擊的精確位置。</p>
+      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+        <li>在點擊步驟中，按「選取點擊座標」按鈕。</li>
+        <li>主視窗最小化，目標視窗跳到前景。</li>
+        <li>在目標視窗上單擊你要點擊的位置。</li>
+        <li>自動回到主視窗，座標自動填入。可搭配「隨機偏移」避免被檢測。</li>
+      </ol>
+    </div>
 
-  <h3 id="tool-match">match_image 圖像比對</h3>
-  <p>以圖找圖，適合偵測無文字的按鈕或圖示。<strong>效能約為 OCR（detect）的 10~50 倍，且不受背景文字干擾；建議優先選用。</strong></p>
-  <ol>
-    <li>在步驟中選擇「match_image（圖像比對）」。</li>
-    <li>按「選取範本圖片」載入你要比對的圖片（例如按鈕截圖）。</li>
-    <li>按「框選偵測區域」框選搜尋範圍。</li>
-    <li>調整「相似度門檻」：越高越嚴格，越低越寬鬆。建議從 0.7 開始調。</li>
-    <li>（選擇性）勾選「比對顏色」：預設只比形狀（灰階），勾選後會額外比對顏色，可降低誤判但對光影變化較敏感，適合按鈕顏色是關鍵辨識特徵的情境。</li>
-    <li>按「測試比對」確認是否命中。命中會顯示匹配位置。</li>
-  </ol>
+    <div class="pattern-card">
+      <h4>🖼️ match_image 圖像比對</h4>
+      <p>以圖找圖，效能約為 OCR 的 10~50 倍，且不受背景文字干擾。建議優先選用。</p>
+      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+        <li>在步驟中選擇「match_image（圖像比對）」。</li>
+        <li>按「選取範本圖片」載入你要比對的圖片。</li>
+        <li>按「框選偵測區域」框選搜尋範圍。</li>
+        <li>調整「相似度門檻」：越高越嚴格，建議從 0.7 開始調。</li>
+        <li>按「測試比對」確認是否命中。</li>
+      </ol>
+    </div>
 
-  <h3 id="tool-notify">notify（提示訊息）</h3>
-  <p>在流程中插入一則畫面右下角的提示，不影響規則繼續執行，適合標示流程階段或提醒手動操作。</p>
-  <ol>
-    <li>在步驟中選擇「notify（提示訊息）」。</li>
-    <li>輸入要顯示的訊息文字。</li>
-    <li>規則執行到此步驟時，訊息會自動在螢幕右下角顯示約 2 秒後消失。</li>
-    <li>可搭配 on_fail 的「通知並停止群組」動作，在步驟失敗時顯示通知並暫停流程。</li>
-  </ol>
-
-  <h3 id="tool-dryrun">乾跑測試（Dry-run）</h3>
-  <p>不實際執行動作，先看規則會發生什麼事。</p>
-  <ol>
-    <li>選取你要測試的規則。</li>
-    <li>按「▶測試」按鈕。</li>
-    <li>程式會模擬執行：偵測步驟會實際截圖辨識，但點擊／按鍵不會真的執行。</li>
-    <li>查看結果：偵測有沒有找到字、座標對不對、後續步驟會不會執行。</li>
-    <li>根據結果調整參數，再測一次。</li>
-  </ol>
+    <div class="pattern-card">
+      <h4>🧪 乾跑測試（Dry-run）</h4>
+      <p>不實際執行動作，先看規則會發生什麼事。</p>
+      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+        <li>選取你要測試的規則。</li>
+        <li>按「▶測試」按鈕。偵測步驟會實際截圖辨識，但點擊／按鍵不會真的執行。</li>
+        <li>查看結果，根據結果調整參數再測一次。</li>
+      </ol>
+    </div>
+  </div>
 </section>
 
 <hr>
 
+<!-- ════════════ Design Principles ════════════ -->
 <section id="principles">
-  <h2>規則設計原則</h2>
-  <p>理解這三個原則，就能設計出大部分的腳本。</p>
-
-  <div class="principle">
-    <strong>原則一：失敗就跳</strong>
-    <p>規則的步驟從上往下跑，但如果某一步失敗（on_fail 設「停止規則」），整條規則就結束，後面的步驟全部跳過。</p>
-    <p>所以：<strong>動作步驟一定要放在偵測後面</strong>，偵測失敗就不會誤觸發。</p>
-  </div>
-
-  <div class="principle">
-    <strong>原則二：等待只在成功後</strong>
-    <p>等待步驟放在偵測後面 → 只有偵測成功才會等待那幾毫秒。偵測失敗 → 等待直接跳過，不會卡住。</p>
-    <p>這是安全的設計，不用擔心等待會造成卡關。</p>
-  </div>
-
-  <div class="principle">
-    <strong>原則三：背景規則適合攔截型</strong>
-    <p>背景規則每幀都跑，不受群組指標影響。適合做緊急攔截（例如出現錯誤訊息時立刻按掉）。</p>
-    <p>一般任務放在群組規則就好，不需要勾選「常駐監控」。</p>
+  <div class="container">
+    <h2>規則設計原則</h2>
+    <p class="section-desc">理解這三個原則，就能設計出大部分的腳本。</p>
+    <div class="principle-grid">
+      <div class="principle-card">
+        <strong>原則一：失敗就跳</strong>
+        <p>規則的步驟從上往下跑，但如果某一步失敗（on_fail 設「停止規則」），整條規則就結束，後面的步驟全部跳過。</p>
+        <p style="color:var(--text-primary);margin-top:6px;"><strong>所以：動作步驟一定要放在偵測後面</strong>，偵測失敗就不會誤觸發。</p>
+      </div>
+      <div class="principle-card">
+        <strong>原則二：等待只在成功後</strong>
+        <p>等待步驟放在偵測後面 → 只有偵測成功才會等待那幾毫秒。偵測失敗 → 等待直接跳過，不會卡住。</p>
+        <p style="color:var(--text-primary);margin-top:6px;">這是安全的設計，不用擔心等待會造成卡關。</p>
+      </div>
+      <div class="principle-card">
+        <strong>原則三：背景規則適合攔截型</strong>
+        <p>背景規則每幀都跑，不受群組指標影響。適合做緊急攔截（例如出現錯誤訊息時立刻按掉）。</p>
+        <p style="color:var(--text-primary);margin-top:6px;">一般任務放在群組規則就好，不需要勾選「常駐監控」。</p>
+      </div>
+    </div>
   </div>
 </section>
 
 <hr>
 
+<!-- ════════════ Patterns ════════════ -->
 <section id="patterns">
-  <h2>常見腳本模式</h2>
-  <p>以下四種模式涵蓋 80% 的使用場景。</p>
+  <div class="container">
+    <h2>常見腳本模式</h2>
+    <p class="section-desc">以下四種模式涵蓋 80% 的使用場景。</p>
 
-  <div class="pattern">
-    <h4>模式一：循環任務</h4>
-    <p>偵測到特定文字 → 執行動作 → 等待畫面變化 → 再偵測。重複循環。</p>
-    <div class="step-flow">
-      detect（文字A）<span class="arrow">→</span> click <span class="arrow">→</span> wait 1000ms <span class="arrow">→</span> detect（文字B）<span class="arrow">→</span> click <span class="arrow">→</span> wait ...
+    <div class="pattern-card">
+      <h4>模式一：循環任務</h4>
+      <p>偵測到特定文字 → 執行動作 → 等待畫面變化 → 再偵測。重複循環。</p>
+      <div class="step-flow">
+        detect（文字A）<span class="arrow">→</span> click <span class="arrow">→</span> wait 1000ms <span class="arrow">→</span> detect（文字B）<span class="arrow">→</span> click <span class="arrow">→</span> wait ...
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">適用：遊戲日常 farming、表單重複填寫、批次處理。</p>
     </div>
-    <p>適用：遊戲日常 farming、表單重複填寫、批次處理。</p>
-  </div>
 
-  <div class="pattern">
-    <h4>模式二：錯誤攔截</h4>
-    <p>背景規則每幀檢查，偵測到錯誤訊息就自動按掉。</p>
-    <div class="step-flow">
-      detect（錯誤訊息）<span class="arrow">→</span> click（確認按鈕）
+    <div class="pattern-card">
+      <h4>模式二：錯誤攔截</h4>
+      <p>背景規則每幀檢查，偵測到錯誤訊息就自動按掉。</p>
+      <div class="step-flow">
+        detect（錯誤訊息）<span class="arrow">→</span> click（確認按鈕）
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">適用：長時間運算時自動處理彈窗、遊戲掉線自動重連。</p>
     </div>
-    <p>適用：長時間運算時自動處理彈窗、遊戲掉線自動重連。</p>
-  </div>
 
-  <div class="pattern">
-    <h4>模式三：數值監控</h4>
-    <p>偵測特定數字，超過／低於門檻就觸發動作。</p>
-    <div class="step-flow">
-      compare（數值 >= 100）<span class="arrow">→</span> click / key
+    <div class="pattern-card">
+      <h4>模式三：數值監控</h4>
+      <p>偵測特定數字，超過／低於門檻就觸發動作。</p>
+      <div class="step-flow">
+        compare（數值 >= 100）<span class="arrow">→</span> click / key
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">適用：監控遊戲血量、進度百分比、庫存數量。</p>
     </div>
-    <p>適用：監控遊戲血量、進度百分比、庫存數量。</p>
-  </div>
 
-  <div class="pattern">
-    <h4>模式四：圖示比對</h4>
-    <p>無文字時用圖片比對偵測按鈕或圖示。</p>
-    <div class="step-flow">
-      match_image（範本圖）<span class="arrow">→</span> click（匹配位置）
+    <div class="pattern-card">
+      <h4>模式四：圖示比對</h4>
+      <p>無文字時用圖片比對偵測按鈕或圖示。</p>
+      <div class="step-flow">
+        match_image（範本圖）<span class="arrow">→</span> click（匹配位置）
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">適用：遊戲介面按鈕辨識、無文字的 UI 元素。</p>
     </div>
-    <p>適用：遊戲介面按鈕辨識、無文字的 UI 元素。</p>
   </div>
 </section>
 
 <hr>
 
+<!-- ════════════ Examples ════════════ -->
 <section id="examples">
-  <h2>腳本設計範例</h2>
-  <p>四個完整範例，從簡單到進階。你可以直接複製步驟順序到你的規則中。</p>
+  <div class="container">
+    <h2>腳本設計範例</h2>
+    <p class="section-desc">四個完整範例，從簡單到進階。可以直接複製步驟順序到你的規則中。</p>
 
-  <h3>範例一：遊戲日常 Farming</h3>
-  <p>場景：偵測到 NPC 對話「要開始了嗎？」→ 按「確定」→ 等 2 秒 → 偵測「任務完成」→ 按「領取獎勵」。</p>
-  <div class="step-flow">
-    步驟 1: detect「要開始了嗎？」<span class="arrow">→</span><br>
-    步驟 2: click「確定」<span class="arrow">→</span><br>
-    步驟 3: wait 2000ms <span class="arrow">→</span><br>
-    步驟 4: detect「任務完成」<span class="arrow">→</span><br>
-    步驟 5: click「領取獎勵」
-  </div>
-  <p>群組設定：「執行一次」，規則放「依序執行」。完成一輪後手動再按「啟動」，或改「循環執行」自動重複。</p>
+    <div class="pattern-card">
+      <h4>範例一：遊戲日常 Farming</h4>
+      <p>偵測到 NPC 對話「要開始了嗎？」→ 按「確定」→ 等 2 秒 → 偵測「任務完成」→ 按「領取獎勵」。</p>
+      <div class="step-flow">
+        步驟 1: detect「要開始了嗎？」<span class="arrow">→</span><br>
+        步驟 2: click「確定」<span class="arrow">→</span><br>
+        步驟 3: wait 2000ms <span class="arrow">→</span><br>
+        步驟 4: detect「任務完成」<span class="arrow">→</span><br>
+        步驟 5: click「領取獎勵」
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">群組設定：「執行一次」。完成一輪後手動再按「啟動」，或改「循環執行」自動重複。</p>
+    </div>
 
-  <h3>範例二：錯誤自動處理</h3>
-  <p>場景：遊戲彈出「連線中斷」視窗，自動按「重新連接」。</p>
-  <div class="step-flow">
-    步驟 1: detect「連線中斷」<span class="arrow">→</span><br>
-    步驟 2: click「重新連接」
-  </div>
-  <p>勾選「常駐監控」，讓這條規則每幀都檢查。on_fail 用預設的「停止規則」就好——沒偵測到就跳過，不會卡住。</p>
+    <div class="pattern-card">
+      <h4>範例二：錯誤自動處理</h4>
+      <p>遊戲彈出「連線中斷」視窗，自動按「重新連接」。</p>
+      <div class="step-flow">
+        步驟 1: detect「連線中斷」<span class="arrow">→</span><br>
+        步驟 2: click「重新連接」
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">勾選「常駐監控」，讓這條規則每幀都檢查。沒偵測到就跳過，不會卡住。</p>
+    </div>
 
-  <h3>範例三：血量低於門檻自動喝藥</h3>
-  <p>場景：偵測到血量數字 <= 30% 就自動喝藥。</p>
-  <div class="step-flow">
-    步驟 1: compare（ROI: 血量區域）數值 <= 30 <span class="arrow">→</span><br>
-    步驟 2: key「F1」（喝藥快捷鍵）
-  </div>
-  <p>compare 步驟會自動從 ROI 中抓數字，不需要 OCR 文字偵測。群組設定「循環執行」讓它持續監控。</p>
+    <div class="pattern-card">
+      <h4>範例三：血量低於門檻自動喝藥</h4>
+      <p>偵測到血量數字 &lt;= 30% 就自動喝藥。</p>
+      <div class="step-flow">
+        步驟 1: compare（ROI: 血量區域）數值 &lt;= 30 <span class="arrow">→</span><br>
+        步驟 2: key「F1」（喝藥快捷鍵）
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">compare 步驟會自動從 ROI 中抓數字。群組設定「循環執行」讓它持續監控。</p>
+    </div>
 
-  <h3>範例四：偵測圖示按鈕自動點擊</h3>
-  <p>場景：遊戲中出現特定圖示（例如寶箱），自動點擊拾取。</p>
-  <div class="step-flow">
-    步驟 1: match_image（範本: 寶箱截圖）<span class="arrow">→</span><br>
-    步驟 2: click（匹配位置）
-  </div>
-  <p>相似度門檻從 0.7 開始調。太高會漏掉（不同解析度），太低會誤判。先用「測試比對」確認命中率再正式啟動。</p>
-</section>
-
-<hr>
-
-<section id="gametasks">
-  <h2>遊戲任務展示：星之救援者 StarSavior</h2>
-  <p>這套工具已經實際用於 <strong>星之救援者 (StarSavior)</strong> 的每日任務自動化，包含完整的每日流程與跑馬事件輔助。下載任務 JSON 匯入後即可使用。</p>
-  <div class="pattern">
-    <h4>每日任務（11 個群組）</h4>
-    <p>掛機獎勵 → 重新派遣 → 戰鬥探索掃蕩 → 帕萊斯立方 → 星際迴廊 → 付費商店 → 啟示商店 → 好友 → 信件檢查。全部自動完成。</p>
-    <div class="step-flow">
-      match_image(驚嘆號) <span class="arrow">→</span> click <span class="arrow">→</span> detect(獎勵) <span class="arrow">→</span> click <span class="arrow">→</span> detect(派遣完成) <span class="arrow">→</span> click <span class="arrow">→</span> detect(掃蕩戰鬥) <span class="arrow">→</span> click <span class="arrow">→</span> ... 70+ 步驟全自動
+    <div class="pattern-card">
+      <h4>範例四：偵測圖示按鈕自動點擊</h4>
+      <p>遊戲中出現特定圖示（例如寶箱），自動點擊拾取。</p>
+      <div class="step-flow">
+        步驟 1: match_image（範本: 寶箱截圖）<span class="arrow">→</span><br>
+        步驟 2: click（匹配位置）
+      </div>
+      <p style="color:var(--text-muted);font-size:0.85rem;">相似度門檻從 0.7 開始調。先用「測試比對」確認命中率再正式啟動。</p>
     </div>
   </div>
-  <div class="pattern">
-    <h4>跑馬輔助（parallel 模式）</h4>
-    <p>使用 parallel 並行模式每幀掃描隨機事件，自動應對 26 種固定事件 + 體力型/力量型跑馬 + 16 種支援卡事件。</p>
+</section>
+
+<hr>
+
+<!-- ════════════ Game Tasks ════════════ -->
+<section id="gametasks">
+  <div class="container">
+    <h2>遊戲任務展示</h2>
+    <p class="section-desc">這套工具已經實際用於星之救援者 (StarSavior) 的每日任務自動化。</p>
+    <div class="game-cta">
+      <h4>⭐ 星之救援者 StarSavior</h4>
+      <p>完整的每日流程（11 個群組、70+ 步驟）與跑馬事件輔助（26 種事件）。下載任務 JSON 匯入後即可使用。</p>
+      <a href="starsavior.html" class="btn btn-primary" style="font-size:0.9rem;padding:0.5rem 1.5rem;">查看完整介紹與下載 →</a>
+    </div>
   </div>
-  <p style="text-align:center;margin-top:16px;"><a href="starsavior.html" style="display:inline-block;background:#238636;color:#fff;padding:10px 28px;border-radius:6px;text-decoration:none;font-weight:600;">查看完整介紹與下載 →</a></p>
 </section>
 
 <hr>
 
+<!-- ════════════ FAQ ════════════ -->
 <section id="faq">
-  <h2>常見問題</h2>
+  <div class="container">
+    <h2>常見問題</h2>
+    <p class="section-desc">初次使用前建議先閱讀，多數問題都能在這裡找到解答。</p>
 
-  <h3>需要安裝 Python 或任何環境嗎？</h3>
-  <p>不需要。下載 ZIP 解壓縮後直接執行 <code>ocr-trigger-clicker.exe</code> 即可。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">需要安裝 Python 或任何環境嗎？</button>
+      <div class="faq-answer">不需要。下載 ZIP 解壓縮後直接執行 <code>ocr-trigger-clicker.exe</code> 即可。</div>
+    </div>
 
-  <h3>需要安裝任何外部程式嗎？</h3>
-  <p>不需要。滑鼠與鍵盤模擬使用 pynput（Win32 SendInput API），完全內建，無需下載或安裝任何外部程式。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">需要安裝任何外部程式嗎？</button>
+      <div class="faq-answer">不需要。滑鼠與鍵盤模擬使用 pynput（Win32 SendInput API），完全內建。</div>
+    </div>
 
-  <h3>支援哪些語言的文字辨識？</h3>
-  <p>預設使用 RapidOCR 通用模型，辨識效果以繁體中文與簡體中文最佳。可透過 <code>custom_models/</code> 自訂模型。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">支援哪些語言的文字辨識？</button>
+      <div class="faq-answer">預設使用 RapidOCR 通用模型，辨識效果以繁體中文與簡體中文最佳。可透過 <code>custom_models/</code> 自訂模型。</div>
+    </div>
 
-  <h3>OCR 辨識速度如何？</h3>
-  <p>一般情況下每秒可處理 5–15 次，取決於 ROI 大小與 CPU/GPU 效能。支援 DirectML GPU 加速（需 DirectX 12 顯卡）。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">OCR 辨識速度如何？</button>
+      <div class="faq-answer">一般情況下每秒可處理 5–15 次，取決於 ROI 大小與 CPU/GPU 效能。支援 DirectML GPU 加速（需 DirectX 12 顯卡）。</div>
+    </div>
 
-  <h3>可以比對圖示或按鈕圖片嗎？</h3>
-  <p>可以。步驟類型選擇 <code>match_image</code>（圖像比對），載入範本圖片並設定相似度門檻，即可在 ROI 區域內以模板比對方式偵測圖示或按鈕位置。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">可以比對圖示或按鈕圖片嗎？</button>
+      <div class="faq-answer">可以。步驟類型選擇 <code>match_image</code>（圖像比對），載入範本圖片並設定相似度門檻即可。</div>
+    </div>
 
-  <h3>規則沒偵測到文字會怎樣？會卡住嗎？</h3>
-  <p>規則的步驟是從上往下跑的，但如果某一步失敗（on_fail 設「停止規則」），整條規則就結束，後面的步驟全部跳過。</p>
-  <p>所以把等待放在偵測後面很安全：</p>
-  <ul>
-    <li>偵測成功 → 執行等待 → 繼續下一步。精準控制節奏。</li>
-    <li>偵測失敗 → 直接跳過等待和後續動作，不會卡關。</li>
-  </ul>
-  <p>注意：當等待正在倒數時，程式的<strong>全部規則</strong>（含背景規則）都會暫停，只有按「停止」才能中斷。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">規則沒偵測到文字會怎樣？會卡住嗎？</button>
+      <div class="faq-answer">
+        不會卡住。規則的步驟從上往下跑，但如果某一步失敗（on_fail 設「停止規則」），整條規則就結束，後面的步驟全部跳過。
+        <ul>
+          <li>偵測成功 → 執行等待 → 繼續下一步。</li>
+          <li>偵測失敗 → 直接跳過等待和後續動作，不會卡關。</li>
+        </ul>
+        注意：當等待正在倒數時，全部規則（含背景規則）都會暫停，只有按「停止」才能中斷。
+      </div>
+    </div>
 
-  <h3>多個規則可以同時執行嗎？</h3>
-  <p>群組內的規則依序執行，一次只執行一條，觸發成功後才推進到下一條。常駐監控規則則每幀都會執行，不受群組順序影響。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">多個規則可以同時執行嗎？</button>
+      <div class="faq-answer">群組內的規則依序執行，一次只執行一條。常駐監控規則則每幀都會執行，不受群組順序影響。</div>
+    </div>
 
-  <h3>依序跟並行有什麼差別？</h3>
-  <p><strong>依序（↻）</strong>：從第一條規則開始，沒觸發就卡住（一直重試同一條），觸發了才換下一條。像排隊。</p>
-  <p><strong>並行（∥）</strong>：每幀從頭掃全部規則，第一條符合的就做，做完就結束這一輪。下幀重新從頭掃。像搶答。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">依序跟並行有什麼差別？</button>
+      <div class="faq-answer">
+        <strong>依序（↻）</strong>：從第一條規則開始，沒觸發就卡住（一直重試），觸發了才換下一條。像排隊。<br>
+        <strong>並行（∥）</strong>：每幀從頭掃全部規則，第一條符合的就做，做完就結束這一輪。像搶答。
+      </div>
+    </div>
 
-  <h3>要怎麼讓程式先做 A 再做 B？</h3>
-  <p>把 A 規則放在 B 前面（同群組用「依序執行」），A 觸發後指標才會走到 B。或在不同群組，把 A 群組排在 B 群組前面。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">要怎麼讓程式先做 A 再做 B？</button>
+      <div class="faq-answer">把 A 規則放在 B 前面（同群組用「依序執行」），A 觸發後指標才會走到 B。或在不同群組，把 A 群組排在 B 群組前面。</div>
+    </div>
 
-  <h3>規則設定檔存在哪裡？</h3>
-  <p>設定檔與任務資料儲存在 <code>%APPDATA%\ocr-trigger-clicker\</code>，解除安裝或刪除 exe 後設定仍會保留。</p>
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">規則設定檔存在哪裡？</button>
+      <div class="faq-answer">設定檔與任務資料儲存在 <code>%APPDATA%\ocr-trigger-clicker\</code>，刪除 exe 後設定仍會保留。</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">遊戲沒反應怎麼辦？</button>
+      <div class="faq-answer">試試<strong>按右鍵 → 以系統管理員身分執行</strong>。部分遊戲需要管理員權限才能接收模擬輸入。</div>
+    </div>
+  </div>
 </section>
-
-<section id="requirements">
-  <h2>系統需求</h2>
-  <ul>
-    <li>Windows 10 / 11（64 位元）</li>
-    <li>不需要任何外部執行環境，下載解壓縮後直接執行</li>
-    <li>支援 DirectX 12 的 GPU（選擇性，可加速 OCR 辨識）</li>
-  </ul>
-</section>
-
-<section id="download">
-  <h2>下載</h2>
-  <p>目前版本：<strong>v0.1.7</strong></p>
-  <ul>
-    <li>下載：<a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" rel="noopener noreferrer">GitHub Releases</a></li>
-    <li>原始碼：<a href="https://github.com/Sid-1996/ocr-trigger-clicker" rel="noopener noreferrer">github.com/Sid-1996/ocr-trigger-clicker</a></li>
-  </ul>
-</section>
-</main>
 
 <hr>
 
+<!-- ════════════ Requirements ════════════ -->
+<section id="requirements">
+  <div class="container">
+    <h2>系統需求</h2>
+    <p class="section-desc">幾乎什麼都不用準備。</p>
+    <div class="req-grid">
+      <div class="req-card">
+        <div class="req-icon">🖥️</div>
+        <h4>作業系統</h4>
+        <p>Windows 10 / 11（64 位元）</p>
+      </div>
+      <div class="req-card">
+        <div class="req-icon">📦</div>
+        <h4>安裝</h4>
+        <p>免安裝，ZIP 解壓縮直接執行</p>
+      </div>
+      <div class="req-card">
+        <div class="req-icon">⚡</div>
+        <h4>GPU（選用）</h4>
+        <p>DirectX 12 可加速 OCR</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- ════════════ Download ════════════ -->
+<section id="download">
+  <div class="container">
+    <h2>下載</h2>
+    <p class="section-desc">最新穩定版本，歡迎下載使用或貢獻原始碼。</p>
+    <div class="download-box">
+      <div class="version" id="dl-version">v0.1.7</div>
+      <div class="meta">Windows 10/11 64-bit · 綠色免安裝 · 單執行檔</div>
+      <div class="actions">
+        <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" target="_blank" class="btn btn-primary">下載最新版本</a>
+        <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" target="_blank" class="btn btn-outline">所有版本</a>
+        <a href="https://github.com/Sid-1996/ocr-trigger-clicker/archive/refs/heads/master.zip" target="_blank" class="btn btn-outline">原始碼 ZIP</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr>
+
+<!-- ════════════ Support ════════════ -->
+<section id="support">
+  <div class="container">
+    <h2>☕ 贊助</h2>
+    <p class="section-desc">如果這個工具對你有幫助，歡迎用你喜歡的方式支持我。</p>
+    <div style="text-align:center;">
+      <a href="https://p.ecpay.com.tw/E0E3A" target="_blank" style="display:inline-block;margin:0.3rem;"><img src="https://img.shields.io/badge/ECPAY-請喝咖啡-238636?style=for-the-badge" alt="ECPAY"></a>
+      <a href="https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6" target="_blank" style="display:inline-block;margin:0.3rem;"><img src="https://img.shields.io/badge/PayPal-請喝咖啡-00457C?style=for-the-badge" alt="PayPal"></a>
+      <a href="https://afdian.com/a/sid-1996" target="_blank" style="display:inline-block;margin:0.3rem;"><img src="https://img.shields.io/badge/愛發電-贊助開發者-EA4AAA?style=for-the-badge" alt="愛發電"></a>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ Footer ════════════ -->
 <footer>
-  <p><a href="starsavior.html">星之救援者 StarSavior 自動化腳本</a> &nbsp;|&nbsp; 作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
-  <p style="margin-top:4px;">發現問題？請到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues">Issues</a> 回報</p>
-  <p style="margin-top:4px;">想分享或取得現成任務檔案？前往 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB">任務檔案分享 Discussions</a></p>
-  <p style="margin-top:4px;">使用心得與功能建議歡迎到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/discussions">GitHub Discussions</a> 交流</p>
-  <p style="margin-top:4px;">☕ 支持開發：<a href="https://p.ecpay.com.tw/E0E3A">ECPAY</a> / <a href="https://www.paypal.com/ncp/payment/9TGC4B3MYM9A6">PayPal</a> / <a href="https://afdian.com/a/sid-1996">愛發電</a></p>
+  <div class="container">
+    <div class="links">
+      <a href="https://github.com/Sid-1996/ocr-trigger-clicker" target="_blank">GitHub</a>
+      <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" target="_blank">Releases</a>
+      <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues" target="_blank">Issues</a>
+      <a href="https://github.com/Sid-1996/ocr-trigger-clicker/discussions" target="_blank">Discussions</a>
+      <a href="starsavior.html">StarSavior 任務</a>
+      <a href="https://github.com/Sid-1996/ocr-trigger-clicker/blob/master/LICENSE" target="_blank">License</a>
+    </div>
+    <p>&copy; 2024–2026 Sid · Released under the AGPLv3 License</p>
+  </div>
 </footer>
 
+<!-- ════════════ Lightbox ════════════ -->
 <div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大檢視"></div>
+
 <script>
-const sections = {
+// ── Dynamic version ──
+fetch('https://raw.githubusercontent.com/Sid-1996/ocr-trigger-clicker/master/latest_version.txt')
+  .then(function(r) { return r.text(); })
+  .then(function(v) {
+    var ver = v.trim();
+    if (!ver) return;
+    var el1 = document.getElementById('hero-version');
+    var el2 = document.getElementById('dl-version');
+    if (el1) el1.textContent = 'v' + ver;
+    if (el2) el2.textContent = 'v' + ver;
+  })
+  .catch(function() {});
+
+// ── FAQ accordion ──
+document.querySelectorAll('.faq-question').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', !expanded);
+    btn.nextElementSibling.classList.toggle('open');
+  });
+});
+
+// ── Path cards ──
+var sections = {
   guide: document.getElementById('guide'),
   tools: document.getElementById('tools'),
   patterns: document.getElementById('patterns'),
   examples: document.getElementById('examples'),
-  faq: document.getElementById('faq'),
+  faq: document.getElementById('faq')
 };
-const hint = document.getElementById('path-hint');
 document.querySelectorAll('.path-card').forEach(function(card) {
   card.onclick = function() {
-    const target = this.getAttribute('data-target');
-    const section = sections[target];
+    var target = this.getAttribute('data-target');
+    var section = sections[target];
     if (section) {
       section.scrollIntoView({ behavior: 'smooth', block: 'start' });
       document.querySelectorAll('.path-card').forEach(function(node) {
         node.classList.toggle('active', node === card);
       });
-      if (hint) {
-        if (target === 'guide') {
-          hint.textContent = '先完成快速入門，再回來看工具教學和進階技巧。';
-        } else if (target === 'tools') {
-          hint.textContent = '每個工具都有專屬功能，搭配使用能大幅降低設定難度。';
-        } else if (target === 'patterns') {
-          hint.textContent = '先理解設計原則，再套用常見模式到你的場景。';
-        } else if (target === 'examples') {
-          hint.textContent = '看完整範例，直接複製步驟順序到你的規則中。';
-        } else if (target === 'faq') {
-          hint.textContent = '如果有問題，先看常見問題；通常權限問題最常見。';
-        }
-      }
     }
   };
 });
 
+// ── Screenshot lightbox ──
 document.querySelectorAll('.screenshot').forEach(function(img) {
   img.onclick = function() {
     var lb = document.getElementById('lightbox');
