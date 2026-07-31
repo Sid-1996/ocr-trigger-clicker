@@ -3023,6 +3023,7 @@ class MainWindow(QMainWindow):
             self._current_task: str = ""
             self._groups: list[RuleGroup] = []
             self._collapsed_groups: set[str] = set()
+            self._suppress_collapse = False
             self._is_starting = False
             self._notif_stack = _NotificationStack()
             self._updating = False
@@ -3954,17 +3955,21 @@ class MainWindow(QMainWindow):
         self._rule_list.blockSignals(False)
         self._rule_hint.setVisible(len(self._rules) == 0)
 
-        if selected_item:
-            self._rule_list.setCurrentItem(selected_item)
-        elif self._rule_list.topLevelItemCount() > 0:
-            first_item = self._rule_list.topLevelItem(0)
-            if first_item.childCount() > 0:
-                self._rule_list.setCurrentItem(first_item.child(0))
+        self._suppress_collapse = True
+        try:
+            if selected_item:
+                self._rule_list.setCurrentItem(selected_item)
+            elif self._rule_list.topLevelItemCount() > 0:
+                first_item = self._rule_list.topLevelItem(0)
+                if first_item.childCount() > 0:
+                    self._rule_list.setCurrentItem(first_item.child(0))
+                else:
+                    self._rule_list.setCurrentItem(first_item)
             else:
-                self._rule_list.setCurrentItem(first_item)
-        else:
-            self._selected_rule_id = None
-            self._show_rule_detail(None)
+                self._selected_rule_id = None
+                self._show_rule_detail(None)
+        finally:
+            self._suppress_collapse = False
 
         has_enabled = any(g.enabled for g in self._groups if g.id != "__uncategorized__")
         self._toggle_all_btn.setText(
@@ -4031,12 +4036,16 @@ class MainWindow(QMainWindow):
             _walk(self._rule_list.topLevelItem(i))
 
     def _on_rule_item_collapsed(self, item):
+        if self._suppress_collapse:
+            return
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
             self._collapsed_groups.add(data[1])
             self._persist_collapsed()
 
     def _on_rule_item_expanded(self, item):
+        if self._suppress_collapse:
+            return
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and data[0] == "group":
             self._collapsed_groups.discard(data[1])
