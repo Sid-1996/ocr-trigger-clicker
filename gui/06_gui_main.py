@@ -1514,6 +1514,7 @@ class _DetectStepForm(QWidget):
         self._rules_provider = rules_provider
         self._exclude_rule_id = exclude_rule_id
         self._groups_provider = groups_provider
+        self._list = parent_list
         p = step.params
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
