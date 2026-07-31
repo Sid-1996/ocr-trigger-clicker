@@ -74,6 +74,9 @@
   .dl-card .dl-btn:hover { background: #2ea043; }
   @media (max-width: 640px) { .dl-grid { grid-template-columns: 1fr; } }
   footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #30363d; font-size: .85em; color: #8b949e; text-align: center; }
+  #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.88); z-index: 999; cursor: zoom-out; justify-content: center; align-items: center; }
+  #lightbox img { max-width: 92%; max-height: 92%; border-radius: 6px; box-shadow: 0 0 40px rgba(0,0,0,.6); }
+  #lightbox.show { display: flex; }
 </style>
 </head>
 <body>
@@ -302,5 +305,15 @@
   <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
 </footer>
 
+<div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大檢視"></div>
+<script>
+document.querySelectorAll('.screenshot').forEach(function(img) {
+  img.onclick = function() {
+    var lb = document.getElementById('lightbox');
+    lb.querySelector('img').src = this.src;
+    lb.classList.add('show');
+  };
+});
+</script>
 </body>
 </html>
