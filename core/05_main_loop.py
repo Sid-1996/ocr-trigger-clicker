@@ -305,7 +305,7 @@ class MainLoop:
             return cached
 
         if is_full:
-            results = recognize(img, preprocess=False, max_side_len=480, min_confidence=0.25)
+            results = recognize(img, preprocess=False, max_side_len=720, min_confidence=0.25)
         else:
             h, w = img.shape[:2]
             x1 = max(0, int(roi["x"]))
