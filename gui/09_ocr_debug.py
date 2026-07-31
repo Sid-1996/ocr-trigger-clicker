@@ -340,7 +340,9 @@ class OcrDebugPanel(QWidget):
             if self._latest_raw is None:
                 return
             h, w = self._latest_raw.shape[:2]
-            self._info_label.setText(T("ocr_debug.info_label", ms=elapsed_ms, n=len(results)))
+            self._info_label.setText(
+                T("ocr_debug.info_label", ms=round(elapsed_ms), n=len(results))
+            )
             self._summary_label.setText(
                 T(
                     "ocr_debug.summary_text",
@@ -349,7 +351,7 @@ class OcrDebugPanel(QWidget):
                     w=w,
                     h=h,
                     n=len(results),
-                    ms=elapsed_ms,
+                    ms=round(elapsed_ms),
                 )
             )
             self._status_bar.showMessage(
@@ -359,7 +361,7 @@ class OcrDebugPanel(QWidget):
                     w=w,
                     h=h,
                     n=len(results),
-                    ms=elapsed_ms,
+                    ms=round(elapsed_ms),
                 )
             )
         except Exception:
