@@ -1,6 +1,7 @@
 import re
 import threading
 import time
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import numpy as np
@@ -200,6 +201,13 @@ class TestRunController:
                             }
                         )
                     else:
+                        best_ratio = 0.0
+                        if match_mode == "fuzzy" and results_ocr and text:
+                            target_lower = text.lower()
+                            for r in results_ocr:
+                                ratio = SequenceMatcher(None, target_lower, r.text.lower()).ratio()
+                                if ratio > best_ratio:
+                                    best_ratio = ratio
                         log.append(
                             T(
                                 "test.detect_miss",
@@ -207,6 +215,7 @@ class TestRunController:
                                 text=text,
                                 mode=match_mode,
                                 threshold=threshold,
+                                best_pct=f"{best_ratio * 100:.0f}",
                             )
                         )
                         of_hint = of_summary(p.get("on_fail", "stop"))
@@ -505,7 +514,7 @@ class TestRunController:
                         cur_size = [wr["w"] - chrome[0], wr["h"] - chrome[1]]
                     else:
                         cur_size = None
-                    results = _main_loop_mod.match_template(
+                    results, best_below = _main_loop_mod.match_template(
                         img,
                         tmpl_path,
                         roi,
@@ -515,6 +524,7 @@ class TestRunController:
                         current_size=cur_size,
                         match_color=match_color,
                         color_tolerance=color_tolerance,
+                        return_best=True,
                     )
                     tmpl_name = (
                         T("test.template_embedded") if tmpl_data.strip() else Path(tmpl_path).stem
@@ -567,6 +577,7 @@ class TestRunController:
                                 idx=idx + 1,
                                 name=tmpl_name,
                                 threshold=threshold,
+                                best_pct=f"{best_below * 100:.0f}",
                                 suffix=of_suffix,
                             )
                         )

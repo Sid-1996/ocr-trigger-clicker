@@ -1,4 +1,31 @@
 ﻿
+## [v0.1.8] - 2026-07-31
+
+### 新增
+- 規則列表新增**一鍵啟動/取消**按鈕，批量切換所有群組啟用狀態（i18n zh_TW/zh_CN/en）
+- 偵測/比較步驟全圖 OCR 時發出**效能警告**，執行日誌面板顯示實際耗時，建議框選 ROI 提升速度
+
+### 修復
+- 切換任務後群組收起狀態正確保留，不再自動展開第一個群組
+- 群組展開/收起時的視覺殘影消除，UI 過渡更流暢
+- `_DetectStepForm` 補上遺漏的 `self._list` 賦值，修復框選偵測區域時 crash
+- 迴圈停止時執行日誌最終 flush，解決成功步驟不顯示的問題
+- 管理員權限從預設改為僅除錯建議
+- 三處 slice 入口補 `int()` 防禦，排除 float ROI 繞過轉換造成切片 crash
+- OCR 診斷頁面耗時 ms 取整數
+- 全圖 OCR `max_side_len` 從 480 改為 720，提高偵測精度；還原 ROI 分支 `max_side_len=0`
+- `.gitignore` 放行 `docs/tasks/` 讓任務 JSON 可被網站下載
+- `app.log` backupCount 7→1，`startup_error.log` 改覆蓋模式
+
+### 文件
+- 全新視覺設計 index.html — 漸層 Hero、Sticky Nav、Card Grid、FAQ Accordion
+- 優化三個語言版本 README 視覺排版
+- 開發者文件移入 `docs/dev/`，新增快速上手指南 START.md
+- 記錄 max_side_len 精度陷阱到 TECHNICAL.md
+- 清除 README 與網站中 AHK/AutoHotkey 殘留提及
+- 修復 CHANGELOG.md 舊版本中文亂碼
+- 刪除已完成的 PLAN_optimizations.md 與 UI_OPTIMIZATION_PLAN.md
+
 ## [v0.1.7] - 2026-07-29
 
 ### 變更
