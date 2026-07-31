@@ -278,6 +278,22 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 每次發版前手動新增該版本區塊，內容涵蓋從上一個版本 tag 以來的所有變更。
 `release.ps1` 會自動解析該區塊作為 GitHub release notes。
 
+## 任務 JSON 同步（GitHub Pages）
+
+本地任務目錄 `%APPDATA%\ocr-trigger-clicker\tasks\` 是唯一事實來源。
+`docs/tasks/` 是 GitHub Pages 提供下載的鏡像，兩者需手動同步。
+
+**流程：**
+1. **比較差異**：用 Python 載入兩邊 JSON，比對 groups/rules 數量、enabled 狀態、step 內容
+2. **覆蓋檔案**：`Copy-Item` 從本地複製到 `docs/tasks/`
+3. **更新 HTML**：`docs/starsavior.html` 中的群組數、群組名稱、enabled 狀態、描述文字需同步
+4. **提交**：一個 commit 包含 JSON + HTML（`docs: sync task JSON from local and update starsavior.html descriptions`）
+
+**注意：**
+- `.gitignore` 已放行 `!docs/tasks/`，不需要額外處理
+- HTML 下載連結是相對路徑 `tasks/XXX.json`，只要 JSON 檔名不變就不需改链接
+- 體力型/力量型跑馬通常是二選一，使用者自行啟停，HTML 需補充此說明
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships. The user is vibe coding — they will never type `/graphify` or any flag themselves. You decide when to use it, based on the rules below. Don't ask for permission first.
