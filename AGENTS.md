@@ -24,7 +24,6 @@
 | `docs/dev/TECHNICAL.md` | 開發者 | 技術規格與比較表 |
 | `docs/dev/ARCHITECTURE.md` | 開發者 | 系統架構與模組地圖 |
 | `docs/dev/CHANGELOG.md` | 開發者 | 版本記錄 |
-| `docs/dev/UI_OPTIMIZATION_PLAN.md` | 開發者 | UI 改造筆記 |
 | `AGENTS.md` | AI agent | 本檔案 — 工作規範與流程 |
 | `docs/index.html` | 使用者 | 完整教學網站 |
 | `docs/starsavior.html` | 使用者 | StarSavior 遊戲任務頁 |
