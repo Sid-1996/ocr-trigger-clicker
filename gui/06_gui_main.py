@@ -3957,11 +3957,11 @@ class MainWindow(QMainWindow):
         if selected_item:
             self._rule_list.setCurrentItem(selected_item)
         elif self._rule_list.topLevelItemCount() > 0:
-            self._rule_list.topLevelItem(0).setExpanded(True)
-            if self._rule_list.topLevelItem(0).childCount() > 0:
-                self._rule_list.setCurrentItem(self._rule_list.topLevelItem(0).child(0))
+            first_item = self._rule_list.topLevelItem(0)
+            if first_item.childCount() > 0:
+                self._rule_list.setCurrentItem(first_item.child(0))
             else:
-                self._rule_list.setCurrentItem(self._rule_list.topLevelItem(0))
+                self._rule_list.setCurrentItem(first_item)
         else:
             self._selected_rule_id = None
             self._show_rule_detail(None)
