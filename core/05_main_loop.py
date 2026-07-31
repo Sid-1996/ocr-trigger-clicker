@@ -97,7 +97,9 @@ def poll_roi_value(
         if img is not None:
             roi_img = crop_roi(img, roi)
             if roi_img is not None:
-                results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+                results = recognize(
+                    roi_img, preprocess=False, max_side_len=480, min_confidence=0.25
+                )
                 for r in results:
                     val = extract_number(r.text, pick)
                     if val is not None:
@@ -305,7 +307,7 @@ class MainLoop:
             return cached
 
         if is_full:
-            results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            results = recognize(img, preprocess=False, max_side_len=480, min_confidence=0.25)
         else:
             h, w = img.shape[:2]
             x1 = max(0, int(roi["x"]))
@@ -315,7 +317,7 @@ class MainLoop:
             if x2 <= x1 or y2 <= y1:
                 return []
             roi_img = img[y1:y2, x1:x2]
-            results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            results = recognize(roi_img, preprocess=False, max_side_len=480, min_confidence=0.25)
             for r in results:
                 r.x += x1
                 r.y += y1
