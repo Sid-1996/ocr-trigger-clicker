@@ -17,7 +17,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 - `core/00_logging_config.py` — 日誌初始化（rotation、等級、格式）
 - `core/01_screenshot.py` — 視窗截圖核心（mss 截圖含邊框 / GDI 備援僅客戶區）
 - `core/02_ocr_engine.py` — OCR 引擎封裝（RapidOCR），`recognize()` / `find_text()`
-- `core/03_ahk_socket.py` — AutoHotkey TCP 通訊層
+- `core/03_pynput_input.py` — pynput 輸入模擬（SendInput，取代 AutoHotkey）
 - `core/04_rule_engine.py` — 規則引擎 re-export hub + 16 個 self-check 測試（527 行）
 - `core/rule_models.py` — 規則/步驟/群組資料模型（`Rule`、`Step`、`RuleGroup`、`ImportPreview` dataclass）
 - `core/rule_migration.py` — 舊格式 v1→v2/v2→v3 遷移、步驟參數正規化（`_STEP_DEFAULTS`）

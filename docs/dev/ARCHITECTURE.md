@@ -341,7 +341,7 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 ```
 MainLoop.emergency_stop()
   → self._emergency_event.set()
-  → _ahk.send_emergency_stop()
+  → send_emergency_stop()
      → log + return True（無外部行程可殺）
 ```
 
