@@ -50,6 +50,17 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 
 ---
 
+## Known Pitfalls
+
+### max_side_len 限制 OCR 輸入尺寸 — 精度嚴重下降 ❌
+
+- **嘗試**：限制 `max_side_len=480/720` 降低全圖 OCR 耗時（從 ~870ms 降至 ~300ms）
+- **結果**：遊戲內小字（如「作戰」）被縮到無法辨識，偵測率暴跌
+- **結論**：`max_side_len` 只適合大文字 UI（選單、對話框），遊戲場景不可用
+- **正確做法**：保持 `max_side_len=0`（原始精度），用 ROI 框選偵測區域提升效能
+
+---
+
 ## Related Documents
 
 - [System Architecture](./ARCHITECTURE.md)
