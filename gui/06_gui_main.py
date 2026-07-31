@@ -3971,6 +3971,18 @@ class MainWindow(QMainWindow):
         finally:
             self._suppress_collapse = False
 
+        self._rule_list.blockSignals(True)
+        try:
+            for i in range(self._rule_list.topLevelItemCount()):
+                item = self._rule_list.topLevelItem(i)
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data[0] in ("group", "bg_group"):
+                    gid = data[1]
+                    if gid != _expand_gid:
+                        item.setExpanded(gid not in self._collapsed_groups)
+        finally:
+            self._rule_list.blockSignals(False)
+
         has_enabled = any(g.enabled for g in self._groups if g.id != "__uncategorized__")
         self._toggle_all_btn.setText(
             T("main.toggle_all_off") if has_enabled else T("main.toggle_all_on")
