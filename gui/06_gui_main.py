@@ -3274,9 +3274,13 @@ class MainWindow(QMainWindow):
         self._add_rule_btn.setToolTip(T("tooltip.add_rule"))
         self._del_rule_btn = QPushButton(T("main.delete"))
         self._del_rule_btn.setToolTip(T("tooltip.delete_rule"))
+        self._toggle_all_btn = QPushButton(T("main.toggle_all_on"))
+        self._toggle_all_btn.setToolTip(T("tooltip.toggle_all_groups"))
+        self._toggle_all_btn.clicked.connect(self._toggle_all_groups)
         rule_btn_bar.addWidget(self._add_group_btn)
         rule_btn_bar.addWidget(self._add_rule_btn)
         rule_btn_bar.addWidget(self._del_rule_btn)
+        rule_btn_bar.addWidget(self._toggle_all_btn)
         left_layout.addLayout(rule_btn_bar)
 
         rules_layout.addWidget(left_widget, 1)
@@ -3962,6 +3966,11 @@ class MainWindow(QMainWindow):
             self._selected_rule_id = None
             self._show_rule_detail(None)
 
+        has_enabled = any(g.enabled for g in self._groups if g.id != "__uncategorized__")
+        self._toggle_all_btn.setText(
+            T("main.toggle_all_off") if has_enabled else T("main.toggle_all_on")
+        )
+
     def _update_rule_status(self):
         if not self._loop or not self._loop.is_running:
             if self._loop is not None:
@@ -4348,6 +4357,15 @@ class MainWindow(QMainWindow):
         if group is None or group.id == "__uncategorized__":
             return
         group.enabled = not group.enabled
+        self._refresh_rule_list()
+        self._flush_save()
+
+    def _toggle_all_groups(self):
+        has_enabled = any(g.enabled for g in self._groups if g.id != "__uncategorized__")
+        new_state = not has_enabled
+        for g in self._groups:
+            if g.id != "__uncategorized__":
+                g.enabled = new_state
         self._refresh_rule_list()
         self._flush_save()
 
