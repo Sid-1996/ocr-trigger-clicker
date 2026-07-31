@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-from typing import Optional
 
 import pynput.keyboard
 import pynput.mouse
@@ -229,22 +228,6 @@ def send_hold_key(key: str, duration_ms: int = 0) -> bool:
 def send_emergency_stop() -> bool:
     _log.warning("緊急停止請求 (pynput 無外部行程，僅記錄)")
     return True
-
-
-def is_ahk_available() -> bool:
-    return True
-
-
-def init_ahk(*args, **kwargs) -> bool:
-    return True
-
-
-def download_ahk() -> bool:
-    return True
-
-
-def set_ahk_health_callback(cb: Optional[callable]) -> None:
-    pass
 
 
 def shutdown() -> None:

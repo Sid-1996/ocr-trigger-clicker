@@ -2471,7 +2471,6 @@ class _InlineActionEditor(QWidget):
         return {"type": "key", "key": self._key.currentData() or self._key.currentText()}
 
 
-_ahk_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 MainLoop = _main_loop_mod.MainLoop
 
@@ -3113,7 +3112,6 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(T("status.partial_init_error", e=e))
 
     def _init_input_async(self):
-        self._ahk_ready = True
         self._update_input_status(True)
         self._status_bar.showMessage("✔ Input 已就緒", 3000)
 

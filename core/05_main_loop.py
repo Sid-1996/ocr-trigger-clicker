@@ -19,7 +19,7 @@ from i18n import T  # noqa: E402
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
-_ahk = load_sibling("pynput_input", "core/03_pynput_input.py")
+_input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
@@ -274,13 +274,13 @@ class MainLoop:
         return None
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
-        return _ahk.send_click(x, y, button)
+        return _input_mod.send_click(x, y, button)
 
     def _send_key(self, key: str) -> bool:
-        return _ahk.send_key(key)
+        return _input_mod.send_key(key)
 
     def _send_scroll(self, direction: str) -> bool:
-        return _ahk.send_scroll(1, direction)
+        return _input_mod.send_scroll(1, direction)
 
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
@@ -687,7 +687,7 @@ class MainLoop:
 
         hold_ms = params.get("hold_ms", 0)
         if hold_ms > 0:
-            ok = _ahk.send_hold_key(key, hold_ms)
+            ok = _input_mod.send_hold_key(key, hold_ms)
         else:
             ok = self._send_key(key)
         if ok:
@@ -738,7 +738,7 @@ class MainLoop:
         sex, sey = self._to_screen_coords(ctx.rect, sx + dx, sy + dy)
 
         activate_window(self._window_title)
-        ok = _ahk.send_drag(ssx, ssy, sex, sey, button)
+        ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
         if not ok:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
@@ -1303,7 +1303,7 @@ class MainLoop:
         self._emergency_event.set()
         self._stop_event.set()
         self._pause_event.set()
-        _ahk.send_emergency_stop()
+        _input_mod.send_emergency_stop()
         if self.on_emergency:
             self.on_emergency()
 
@@ -1498,10 +1498,10 @@ if __name__ == "__main__":
     assert result.action == "stop", "on_fail stop should return stop"
 
     mock_called = []
-    _orig_k = _ahk.send_key
-    _ahk.send_key = lambda k: mock_called.append(k) or True  # type: ignore[assignment]
+    _orig_k = _input_mod.send_key
+    _input_mod.send_key = lambda k: mock_called.append(k) or True  # type: ignore[assignment]
     result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
-    _ahk.send_key = _orig_k
+    _input_mod.send_key = _orig_k
     assert result.action == "continue", "on_fail key should return continue"
     assert ctx.on_fail_fired, "on_fail key should set on_fail_fired"
     assert mock_called == ["Escape"], f"on_fail key should send Escape, got {mock_called}"

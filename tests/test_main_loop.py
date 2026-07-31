@@ -16,7 +16,7 @@ from _loader import load_sibling  # noqa: E402
 from core.rule_models import Rule, RuleGroup, Step  # noqa: E402
 
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
-_ahk = load_sibling("pynput_input", "core/03_pynput_input.py")
+_input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl.img_to_b64
@@ -205,10 +205,10 @@ def test_handle_on_fail_stop_key():
     assert result.action == "stop"
 
     mock_called = []
-    _orig_k = _ahk.send_key
-    _ahk.send_key = lambda k: mock_called.append(k) or True
+    _orig_k = _input_mod.send_key
+    _input_mod.send_key = lambda k: mock_called.append(k) or True
     result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
-    _ahk.send_key = _orig_k
+    _input_mod.send_key = _orig_k
     assert result.action == "continue"
     assert mock_called == ["Escape"]
 
