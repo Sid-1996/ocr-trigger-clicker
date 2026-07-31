@@ -3,7 +3,7 @@
   "last_window": "StarSavior",
   "hide_startup_guide": true,
   "max_cps": 5,
-  "scan_interval_ms": 250,
+  "scan_interval_ms": 300,
   "default_match_mode": "fuzzy",
   "close_behavior": "quit",
   "show_close_confirm": false,
