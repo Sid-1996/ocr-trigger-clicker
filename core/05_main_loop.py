@@ -168,6 +168,7 @@ class MainLoop:
         self._group_rounds_completed: dict[str, int] = {}
         self._process_counter: int = 0
         self._match_image_warn_counter: dict[str, int] = {}
+        self._detect_warn_counter: dict[str, int] = {}
         self._fail_since: dict[
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
@@ -253,6 +254,7 @@ class MainLoop:
             self._rule_pointer = 0
             self._group_rounds_completed.clear()
             self._match_image_warn_counter.clear()
+            self._detect_warn_counter.clear()
             self._fail_since.clear()
             self._last_active_rule_id = None
             self._update_has_detect()
@@ -305,7 +307,7 @@ class MainLoop:
             return cached
 
         if is_full:
-            results = recognize(img, preprocess=False, max_side_len=720, min_confidence=0.25)
+            results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
         else:
             h, w = img.shape[:2]
             x1 = max(0, int(roi["x"]))
@@ -378,7 +380,21 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.detect_empty"))
 
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
+        roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        if roi_is_empty and ctx.img.shape[1] > 800:
+            last = self._detect_warn_counter.get(rule.id, 0)
+            self._detect_warn_counter[rule.id] = last + 1
+            if last % 30 == 0:
+                self._log("⚠ 偵測文字未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
+                if self.on_warning:
+                    self.on_warning(
+                        "偵測文字未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域"
+                    )
+        t_ocr = time.monotonic()
         results = self._ocr_region(ctx.img, roi)
+        if roi_is_empty and ctx.img.shape[1] > 800:
+            elapsed_ms = (time.monotonic() - t_ocr) * 1000
+            self._log(f"規則「{rule.name}」全圖 OCR 耗時 {elapsed_ms:.0f} ms")
         if not results:
             return self._handle_on_fail(params, ctx, rule)
 
@@ -448,7 +464,21 @@ class MainLoop:
 
     def _handle_compare(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
+        roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        if roi_is_empty and ctx.img.shape[1] > 800:
+            last = self._detect_warn_counter.get(rule.id, 0)
+            self._detect_warn_counter[rule.id] = last + 1
+            if last % 30 == 0:
+                self._log("⚠ 比較數值未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選搜尋區域")
+                if self.on_warning:
+                    self.on_warning(
+                        "比較數值未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域"
+                    )
+        t_ocr = time.monotonic()
         results = self._ocr_region(ctx.img, roi)
+        if roi_is_empty and ctx.img.shape[1] > 800:
+            elapsed_ms = (time.monotonic() - t_ocr) * 1000
+            self._log(f"規則「{rule.name}」全圖 OCR 耗時 {elapsed_ms:.0f} ms")
         combined = " ".join(r.text for r in results)
         pattern = params.get("pattern", r"-?\d+\.?\d*")
         m = re.search(pattern, combined)
