@@ -118,6 +118,7 @@ class StepContext:
     on_fail_fired: bool = False
     step_idx: int = -1
     best_confidence: float = -1.0
+    ocr_elapsed_ms: float = 0
 
 
 @dataclass
@@ -393,8 +394,7 @@ class MainLoop:
         t_ocr = time.monotonic()
         results = self._ocr_region(ctx.img, roi)
         if roi_is_empty and ctx.img.shape[1] > 800:
-            elapsed_ms = (time.monotonic() - t_ocr) * 1000
-            self._log(f"規則「{rule.name}」全圖 OCR 耗時 {elapsed_ms:.0f} ms")
+            ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
         if not results:
             return self._handle_on_fail(params, ctx, rule)
 
@@ -477,8 +477,7 @@ class MainLoop:
         t_ocr = time.monotonic()
         results = self._ocr_region(ctx.img, roi)
         if roi_is_empty and ctx.img.shape[1] > 800:
-            elapsed_ms = (time.monotonic() - t_ocr) * 1000
-            self._log(f"規則「{rule.name}」全圖 OCR 耗時 {elapsed_ms:.0f} ms")
+            ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
         combined = " ".join(r.text for r in results)
         pattern = params.get("pattern", r"-?\d+\.?\d*")
         m = re.search(pattern, combined)
@@ -906,7 +905,10 @@ class MainLoop:
     def _build_ok_detail(self, step, ctx: StepContext) -> str:
         t = step.type
         if t in ("detect", "compare") and ctx.matched_text and hasattr(ctx.matched_text, "text"):
-            return ctx.matched_text.text[:15]
+            detail = ctx.matched_text.text[:15]
+            if ctx.ocr_elapsed_ms > 0:
+                detail += f" ({ctx.ocr_elapsed_ms:.0f}ms)"
+            return detail
         if t == "click" and ctx.matched_text and hasattr(ctx.matched_text, "text"):
             return ctx.matched_text.text[:15]
         if t == "key":
@@ -917,7 +919,10 @@ class MainLoop:
             )
         if t == "compare" and ctx.matched_box:
             num = ctx.matched_box.get("number", "")
-            return str(num) if num != "" else ""
+            detail = str(num) if num != "" else ""
+            if ctx.ocr_elapsed_ms > 0:
+                detail += f" ({ctx.ocr_elapsed_ms:.0f}ms)"
+            return detail
         if t == "scroll":
             dirs = {
                 "WheelDown": T("exec_log.dir.down"),

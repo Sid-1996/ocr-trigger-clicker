@@ -512,6 +512,71 @@ MainLoop.emergency_stop()
 | 座標驗證 | `03_pynput_input.py` `_validate_coords()` | 使用 `GetSystemMetrics(VIRTUALSCREEN)` 確保點擊不超出多螢幕範圍 |
 | 關閉行為設定 | `06_gui_main.py` `SettingsDialog` | 可選「縮小至托盤」或「直接關閉」，關閉前可跳出確認對話框 |
 
+## 日誌架構（三通道）
+
+`MainLoop` 有三種日誌通道，用途不同，**不可混用**：
+
+| 通道 | 方法 | 寫入目標 | GUI 可見？ | 適用場景 |
+|------|------|----------|-----------|----------|
+| 檔案日誌 | `self._log()` | Python `logging` → `app.log` | ❌ 只有檔案 | debug 記錄、非 GUI 訊息 |
+| 執行日誌 | `self._log_exec()` | `self._execution_log` (deque) | ✅ 執行日誌面板 | 步驟成功/失敗/跳轉等結果 |
+| 通知彈窗 | `self.on_warning()` | Qt signal → 系統托盤通知 | ✅ 通知彈窗 | 需要使用者注意的警告 |
+
+### 執行日誌面板資料流
+
+```
+_handle_detect / _handle_compare / _handle_click / ...
+       │
+       ▼  回傳 StepResult
+_run_rule()
+       │
+       ├── result.action == "ok"    → _log_exec(rule, i, type, "ok", detail)
+       ├── result.action == "stop"  → _log_exec(rule, i, type, "stop", detail)
+       └── result.action == "jump"  → _log_exec(rule, i, type, "jump", detail)
+                                       │
+                                       ▼
+                               self._execution_log.append({ts, rule_name, step_idx, ...})
+                                       │
+                                       ▼
+                               GUI _update_exec_log() ← 定時輪詢
+                                       │
+                                       ▼
+                               _exec_log_widget._populate(entries)
+```
+
+### 常見錯誤
+
+**錯誤：在 step handler 中用 `self._log()` 報告執行結果**
+```python
+# ❌ 錯誤：只寫入 app.log，GUI 執行日誌面板看不到
+self._log(f"規則「{rule.name}」全圖 OCR 耗時 {elapsed_ms:.0f} ms")
+```
+
+**正確：透過 `_log_exec` 或在 detail 中附加資訊**
+```python
+# ✅ 正確：透過 StepContext 傳遞，由 _build_ok_detail 組裝進執行日誌
+ctx.ocr_elapsed_ms = elapsed_ms  # 在 handler 中設定
+# → _build_ok_detail 會自動附加 "(871ms)" 到 detail 字串
+```
+
+### `_build_ok_detail` 產生的 detail 格式
+
+| step_type | detail 內容 |
+|-----------|------------|
+| detect | 匹配到的文字（前 15 字） |
+| compare | 匹配到的數值 |
+| match_image | `信心度 XX%` |
+| click | 匹配到的文字（前 15 字） |
+| key | 按鍵名稱 |
+| scroll | 方向 + 次數 |
+| drag | 目標類型 |
+
+### 執行日誌 dedup 機制
+
+- `result == "completed"`（輪次完成）：同一規則 1 秒內只記一次
+- 其他 result：同一 `rule_name:step_idx` + 同一 `result+detail` 組合只記一次
+- `maxlen=10`：只保留最近 10 筆
+
 ## 開發注意事項
 
 ### 新增規則欄位時需同步
