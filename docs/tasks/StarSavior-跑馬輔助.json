@@ -40,7 +40,7 @@
     {
       "id": "group_65292e04",
       "name": "體力型跑馬",
-      "enabled": false,
+      "enabled": true,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -57,7 +57,7 @@
     {
       "id": "group_ab1510a9",
       "name": "力量型跑馬",
-      "enabled": true,
+      "enabled": false,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -2459,7 +2459,7 @@
               "h": 0.06481481481481481,
               "roi_coord": "client"
             },
-            "threshold": 0.9,
+            "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
             "on_fail": "stop"
@@ -2578,7 +2578,7 @@
               "h": 0.06851851851851852,
               "roi_coord": "client"
             },
-            "threshold": 0.9,
+            "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
             "on_fail": "stop"
@@ -2638,7 +2638,7 @@
               "h": 0.06481481481481481,
               "roi_coord": "client"
             },
-            "threshold": 0.9,
+            "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
             "on_fail": "stop"
@@ -2672,7 +2672,7 @@
               "h": 0.06574074074074074,
               "roi_coord": "client"
             },
-            "threshold": 0.9,
+            "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
             "on_fail": "stop"
@@ -2691,9 +2691,11 @@
     }
   ],
   "_collapsed_groups": [
+    "group_b96d8712",
+    "group_aaf9e64a",
+    "group_ab1510a9",
     "group_c12c5d3c",
-    "group_65292e04",
-    "group_ab1510a9"
+    "group_65292e04"
   ],
   "window_title": "StarSavior",
   "capture_size": [

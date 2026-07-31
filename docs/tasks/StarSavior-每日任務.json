@@ -2003,12 +2003,13 @@
         {
           "type": "click",
           "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
+            "target": "custom",
+            "x": 0.07864583333333333,
+            "y": 0.9111111111111111,
             "button": "left",
             "random_offset": 3,
-            "text": ""
+            "text": "",
+            "roi_coord": "client"
           }
         },
         {
@@ -3563,17 +3564,19 @@
     }
   ],
   "_collapsed_groups": [
-    "group_39a1b80d",
+    "group_a1d5b815",
     "group_53eec035",
-    "group_3c07d078",
-    "group_e8efb9ff",
-    "group_36068123",
     "group_8db83f5b",
-    "group_266e1f8c",
-    "group_fdab3a16",
+    "group_f1d46de3",
     "group_40b2992f",
+    "group_266e1f8c",
+    "__default__",
+    "group_36068123",
     "group_261f6f66",
-    "group_a1d5b815"
+    "group_fdab3a16",
+    "group_e8efb9ff",
+    "group_39a1b80d",
+    "group_3c07d078"
   ],
   "capture_size": [
     1920,
