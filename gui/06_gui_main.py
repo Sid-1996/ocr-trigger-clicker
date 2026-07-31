@@ -3850,6 +3850,7 @@ class MainWindow(QMainWindow):
         return QIcon(pix)
 
     def _refresh_rule_list(self, _expand_gid: str | None = None):
+        self._rule_list.setUpdatesEnabled(False)
         self._rule_list.blockSignals(True)
         self._rule_list.clear()
         rule_map = {r.id: r for r in self._rules}
@@ -3987,12 +3988,14 @@ class MainWindow(QMainWindow):
         self._toggle_all_btn.setText(
             T("main.toggle_all_off") if has_enabled else T("main.toggle_all_on")
         )
+        self._rule_list.setUpdatesEnabled(True)
 
     def _update_rule_status(self):
         if not self._loop or not self._loop.is_running:
             if self._loop is not None:
                 self._stop_loop()
                 return
+            self._rule_list.setUpdatesEnabled(False)
             self._rule_list.blockSignals(True)
             try:
                 for i in range(self._rule_list.topLevelItemCount()):
@@ -4003,6 +4006,7 @@ class MainWindow(QMainWindow):
             finally:
                 self._rule_list.blockSignals(False)
             self._refresh_rule_list()
+            self._rule_list.setUpdatesEnabled(True)
             return
         statuses = self._loop.get_rules_status()
         status_map = {s["id"]: s for s in statuses}
