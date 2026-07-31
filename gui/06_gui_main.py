@@ -5327,6 +5327,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_exec_log_timer"):
             self._exec_log_timer.stop()
         if self._loop:
+            entries = self._loop.get_execution_log()
+            self._exec_log_widget._populate(entries)
             self._loop.stop()
             self._loop = None
         self._window_lost = False
