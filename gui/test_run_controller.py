@@ -17,6 +17,9 @@ capture_window_content = getattr(_main_loop_mod, "capture_window_content", lambd
 get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
 _capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
 capture_frame = _capture_pipeline.capture_frame
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+is_black_capture = _pw_mod.is_black_capture
+is_admin = _pw_mod.is_admin
 recognize = _main_loop_mod.recognize
 
 
@@ -136,6 +139,10 @@ class TestRunController:
             win._edit_test_btn.setText(T("ui.test"))
             QMessageBox.warning(win, T("test.title"), T("test.capture_failed", title=title))
             return
+        # 後台模式截圖全黑 + 非系統管理員 → 靜默警告插入日誌
+        if mode != "pynput" and is_black_capture(img) and not is_admin():
+            black_warn = T("bg_capture.black_admin_warn")
+            warn = f"{warn}\n{black_warn}" if warn else black_warn
         logging.debug(
             "規則測試: mode=%s 截圖 %dx%d 視窗=%s", mode, img.shape[1], img.shape[0], title
         )

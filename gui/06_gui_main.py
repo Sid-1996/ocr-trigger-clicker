@@ -1361,6 +1361,10 @@ class _MatchImageStepForm(QWidget):
             self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
+        # 後台模式截圖全黑 + 非系統管理員 → 併入靜默警告
+        if mode != "pynput" and is_black_capture(img) and not is_admin():
+            _black_warn = T("bg_capture.black_admin_warn")
+            _mode_warn = f"{_mode_warn}\n{_black_warn}" if _mode_warn else _black_warn
         h, w = img.shape[:2]
         logging.debug(
             "圖片比對: mode=%s 截圖 %dx%d 視窗=%s 模板=%s 閾值=%.2f match_color=%s tol=%d",
@@ -2566,6 +2570,10 @@ crop_roi = _main_loop_mod.crop_roi
 get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
 _capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
 capture_frame = _capture_pipeline.capture_frame
+
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+is_black_capture = _pw_mod.is_black_capture
+is_admin = _pw_mod.is_admin
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -5511,6 +5519,20 @@ class MainWindow(QMainWindow):
             )
             if resp != QMessageBox.StandardButton.Yes:
                 return
+        # 後台模式：啟動前先截一張測試幀，全黑 + 非系統管理員 → 彈窗（關鍵防線）
+        if self._is_bg_mode():
+            _hwnd = get_window_hwnd(title)
+            _test_img = capture_frame("postmessage", title, hwnd=_hwnd)
+            if _test_img is not None and is_black_capture(_test_img) and not is_admin():
+                resp2 = QMessageBox.warning(
+                    self,
+                    T("bg_capture.black_admin_title"),
+                    T("bg_capture.black_admin_warn"),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if resp2 != QMessageBox.StandardButton.Yes:
+                    return
         self._is_starting = True
         if self._is_bg_mode():
             activate_window_bg(title)

@@ -14,6 +14,21 @@ _gdi32 = ctypes.windll.gdi32
 _user32 = ctypes.windll.user32
 
 
+def is_admin() -> bool:
+    """目前行程是否以系統管理員權限執行。"""
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def is_black_capture(img) -> bool:
+    """PrintWindow 權限失敗時回傳零初始化 bitmap（全像素為 0）；真實畫面再暗也有非零像素。"""
+    if img is None or img.size == 0:
+        return False
+    return not img.any()
+
+
 class _BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [
         ("biSize", wintypes.DWORD),
