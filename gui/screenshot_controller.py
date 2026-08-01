@@ -8,8 +8,8 @@ get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 capture = _main_loop_mod.capture
 get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
-_pw_mod = load_sibling("print_window", "core/15_print_window.py")
-capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
+_pipe_mod = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+capture_frame = _pipe_mod.capture_frame
 
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl_mod.img_to_b64
@@ -45,10 +45,7 @@ class ScreenshotController:
         title = win._window_combo.currentText()
         if self._is_bg_mode():
             hwnd = get_window_hwnd(title) if title else None
-            if hwnd:
-                img = capture_print_window_hwnd(hwnd)
-            else:
-                img = None
+            img = capture_frame("postmessage", title, hwnd=hwnd)
             if img is not None:
                 mod = load_sibling("bg_roi_selector", "gui/17_bg_roi_selector.py")
                 result = mod.select_roi_bg(win, img, title or "")
@@ -146,10 +143,7 @@ class ScreenshotController:
         title = win._window_combo.currentText()
         if self._is_bg_mode():
             hwnd = get_window_hwnd(title) if title else None
-            if hwnd:
-                img = capture_print_window_hwnd(hwnd)
-            else:
-                img = None
+            img = capture_frame("postmessage", title, hwnd=hwnd)
             if img is not None:
                 mod = load_sibling("bg_roi_selector", "gui/17_bg_roi_selector.py")
                 rect = mod.select_roi_bg(win, img, title or "")

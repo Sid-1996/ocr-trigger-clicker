@@ -38,6 +38,8 @@ get_window_rect = _screenshot.get_window_rect
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
+_capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+capture_frame = _capture_pipeline.capture_frame
 activate_window = _screenshot.activate_window
 get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 is_window_foreground = _perf.is_window_foreground
@@ -87,13 +89,18 @@ def extract_number(text: str, pick: str) -> float | None:
 
 
 def poll_roi_value(
-    roi: dict, pick: str, timeout_ms: int, title: str, stop_event=None
+    roi: dict,
+    pick: str,
+    timeout_ms: int,
+    title: str,
+    stop_event=None,
+    mode: str = "pynput",
 ) -> float | None:
     deadline = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < deadline:
         if stop_event and stop_event.is_set():
             return None
-        img = capture(title)
+        img = capture_frame(mode, title)
         if img is None:
             img = capture_window_content(title)
         if img is not None:
@@ -1200,22 +1207,15 @@ class MainLoop:
                         self._foreground_only
                         and self._window_hwnd
                         and not is_window_foreground(self._window_hwnd)
+                        and self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                        in (None, "pynput")
                     ):
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
                     t0 = time.monotonic()
-                    img = capture(self._window_title)
-                    if img is None:
-                        img = capture_window_content(self._window_title)
-                        if img is not None:
-                            chrome = get_window_client_offset(self._window_title) or (0, 0)
-                            full_h, full_w = rect["h"], rect["w"]
-                            if img.shape[0] != full_h or img.shape[1] != full_w:
-                                padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
-                                cx, cy = chrome
-                                padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
-                                img = padded
+                    mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                    img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
                     t1 = time.monotonic()
                     if img is None:
                         if iteration % 30 == 0:
@@ -1480,6 +1480,11 @@ if __name__ == "__main__":
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig",
+        (),
+        {"get_setting": lambda self, win, key="interaction_mode": "pynput"},
+    )()
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
     print("  [OK] _to_screen_coords")

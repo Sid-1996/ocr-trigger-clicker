@@ -12,7 +12,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
@@ -1315,42 +1314,23 @@ class _MatchImageStepForm(QWidget):
         color_tolerance = self._color_tolerance.value()
         mode = _get_interaction_mode()
         hwnd = get_window_hwnd(title) if title else None
-        img = capture_print_window_hwnd(hwnd) if hwnd else None
-        if img is None:
-            if mode == "pynput":
-                win = self.window()
-                if isinstance(win, QMainWindow):
-                    was_maxed = win.isMaximized()
-                    win.showMinimized()
-                    QApplication.processEvents()
-                    time.sleep(0.08)
-                    activate_window(title)
-                    time.sleep(0.12)
-                img = capture(title)
-                if img is None:
-                    img = capture_window_content(title)
-                    if img is not None:
-                        wr_tmp = get_window_rect(title)
-                        if wr_tmp:
-                            chrome_tmp = get_window_client_offset(title) or (0, 0)
-                            full_h, full_w = wr_tmp["h"], wr_tmp["w"]
-                            if img.shape[0] != full_h or img.shape[1] != full_w:
-                                padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
-                                cx_tmp, cy_tmp = chrome_tmp
-                                padded[
-                                    cy_tmp : cy_tmp + img.shape[0], cx_tmp : cx_tmp + img.shape[1]
-                                ] = img
-                                img = padded
-                if isinstance(win, QMainWindow):
-                    if was_maxed:
-                        win.showMaximized()
-                    else:
-                        win.showNormal()
-                    win.activateWindow()
-            else:
-                img = capture(title)
-                if img is None:
-                    img = capture_window_content(title)
+        img = capture_frame(mode, title, hwnd=hwnd)
+        if img is None and mode == "pynput":
+            win = self.window()
+            if isinstance(win, QMainWindow):
+                was_maxed = win.isMaximized()
+                win.showMinimized()
+                QApplication.processEvents()
+                time.sleep(0.08)
+                activate_window(title)
+                time.sleep(0.12)
+            img = capture_frame(mode, title, hwnd=hwnd)
+            if isinstance(win, QMainWindow):
+                if was_maxed:
+                    win.showMaximized()
+                else:
+                    win.showNormal()
+                win.activateWindow()
         if img is None:
             self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
@@ -2519,16 +2499,13 @@ activate_window = _main_loop_mod.activate_window
 activate_window_bg = getattr(_main_loop_mod, "activate_window_bg", lambda title: False)
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
-capture = _main_loop_mod.capture
 recognize = _main_loop_mod.recognize
 find_text = _main_loop_mod.find_text
 poll_roi_value = _main_loop_mod.poll_roi_value
 crop_roi = _main_loop_mod.crop_roi
-capture_window_content = getattr(_main_loop_mod, "capture_window_content", lambda title: None)
 get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
-_pw_mod = load_sibling("print_window", "core/15_print_window.py")
-capture_print_window = getattr(_pw_mod, "capture_print_window", lambda title: None)
-capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
+_capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+capture_frame = _capture_pipeline.capture_frame
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -5018,10 +4995,7 @@ class MainWindow(QMainWindow):
         title = self._window_combo.currentText()
         if self._is_bg_mode():
             hwnd = get_window_hwnd(title) if title else None
-            if hwnd:
-                img = capture_print_window_hwnd(hwnd)
-            else:
-                img = None
+            img = capture_frame("postmessage", title, hwnd=hwnd)
             if img is not None:
                 mod = load_sibling("bg_click_picker", "gui/18_bg_click_picker.py")
                 result = mod.pick_click_position_bg(self, img, title or "")

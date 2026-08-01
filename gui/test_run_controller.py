@@ -12,11 +12,10 @@ from i18n import T
 
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 activate_window = _main_loop_mod.activate_window
-capture = _main_loop_mod.capture
 capture_window_content = getattr(_main_loop_mod, "capture_window_content", lambda title: None)
 get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
-_pw_mod = load_sibling("print_window", "core/15_print_window.py")
-capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
+_capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+capture_frame = _capture_pipeline.capture_frame
 recognize = _main_loop_mod.recognize
 
 
@@ -70,39 +69,36 @@ class TestRunController:
         QApplication.processEvents()
 
         mode = _get_interaction_mode()
+        hwnd = get_window_hwnd(title)
 
         if mode != "pynput":
-            hwnd = get_window_hwnd(title)
-            img = capture_print_window_hwnd(hwnd) if hwnd else None
+            img = capture_frame(mode, title, hwnd=hwnd)
         else:
-            # 前景模式：優先使用 PrintWindow 後台截圖，避免閃爍
-            hwnd = get_window_hwnd(title)
-            img = capture_print_window_hwnd(hwnd) if hwnd else None
+            # 前景模式：縮小主視窗 → 啟動目標視窗 → mss 截圖（避免閃爍優先）
+            was_maxed = win.isMaximized()
+            win.showMinimized()
+            QApplication.processEvents()
+            time.sleep(0.08)
+            activate_window(title)
+            time.sleep(0.12)
+            img = capture_frame(mode, title, hwnd=hwnd)
             if img is None:
-                was_maxed = win.isMaximized()
-                win.showMinimized()
-                QApplication.processEvents()
-                time.sleep(0.08)
-                activate_window(title)
-                time.sleep(0.12)
-                img = capture(title)
-                if img is None:
-                    img = capture_window_content(title)
-                    if img is not None:
-                        wr = get_window_rect(title)
-                        if wr:
-                            chrome = get_window_client_offset(title) or (0, 0)
-                            full_h, full_w = wr["h"], wr["w"]
-                            if img.shape[0] != full_h or img.shape[1] != full_w:
-                                padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
-                                cx, cy = chrome
-                                padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
-                                img = padded
-                if was_maxed:
-                    win.showMaximized()
-                else:
-                    win.showNormal()
-                win.activateWindow()
+                img = capture_window_content(title)
+                if img is not None:
+                    wr = get_window_rect(title)
+                    if wr:
+                        chrome = get_window_client_offset(title) or (0, 0)
+                        full_h, full_w = wr["h"], wr["w"]
+                        if img.shape[0] != full_h or img.shape[1] != full_w:
+                            padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                            cx, cy = chrome
+                            padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
+                            img = padded
+            if was_maxed:
+                win.showMaximized()
+            else:
+                win.showNormal()
+            win.activateWindow()
 
         win._edit_stack.setCurrentIndex(1)
         if img is None:

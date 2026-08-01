@@ -29,11 +29,10 @@ from i18n import T
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _bg_input = load_sibling("bg_input", "core/16_bg_input.py")
-_pw_mod = load_sibling("print_window", "core/15_print_window.py")
-capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
+_capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+capture_frame = _capture_pipeline.capture_frame
 
 activate_window = _screenshot.activate_window
-capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 recognize = _ocr.recognize
 
@@ -264,20 +263,16 @@ class OcrDebugPanel(QWidget):
 
     def _minimize_and_capture(self):
         mode = _get_interaction_mode()
+        title = self._window_title
+        hwnd = _screenshot.get_window_hwnd(title)
+
         if mode != "pynput":
-            hwnd = _screenshot.get_window_hwnd(self._window_title)
-            img = capture_print_window_hwnd(hwnd) if hwnd else None
-            source = T("ocr_debug.source_screen")
+            img = capture_frame(mode, title, hwnd=hwnd)
             if img is not None:
-                img = img[:, :, ::-1].copy()
-            return img, source
+                return img[:, :, ::-1].copy(), T("ocr_debug.source_screen")
+            return None, ""
 
-        # 前景模式：優先使用 PrintWindow 後台截圖，避免閃爍
-        hwnd = _screenshot.get_window_hwnd(self._window_title)
-        img = capture_print_window_hwnd(hwnd) if hwnd else None
-        if img is not None:
-            return img[:, :, ::-1].copy(), T("ocr_debug.source_screen")
-
+        # 前景模式：縮小主視窗 → 啟動目標視窗 → mss 截圖（避免閃爍優先）
         try:
             parent = self.parent() if self.parent() else None
             self_was_maxed = self.isMaximized()
@@ -288,22 +283,22 @@ class OcrDebugPanel(QWidget):
             QApplication.processEvents()
             time.sleep(0.08)
 
-            activate_window(self._window_title)
+            activate_window(title)
             QApplication.processEvents()
             time.sleep(0.12)
 
-            img = capture(self._window_title)
+            img = capture_frame(mode, title, hwnd=hwnd)
             source = T("ocr_debug.source_screen")
             if img is not None:
                 img = img[:, :, ::-1].copy()
 
             if img is None:
-                img = capture_window_content(self._window_title)
+                img = capture_window_content(title)
                 source = T("ocr_debug.source_gdi")
                 if img is not None:
-                    wr = _screenshot.get_window_rect(self._window_title)
+                    wr = _screenshot.get_window_rect(title)
                     if wr:
-                        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
+                        chrome = _screenshot.get_window_client_offset(title) or (0, 0)
                         full_h, full_w = wr["h"], wr["w"]
                         if img.shape[0] != full_h or img.shape[1] != full_w:
                             padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
