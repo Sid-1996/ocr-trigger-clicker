@@ -577,7 +577,12 @@ class TestRunController:
                         "規則測試: match_image 「%s」 閾值=%.2f roi=%s capture_size=%s current_size=%s",
                         tmpl_name,
                         threshold,
-                        {k: round(v, 3) for k, v in roi.items()} if isinstance(roi, dict) else roi,
+                        {
+                            k: round(v, 3) if isinstance(v, (int, float)) else v
+                            for k, v in roi.items()
+                        }
+                        if isinstance(roi, dict)
+                        else roi,
                         cs,
                         cur_size,
                     )

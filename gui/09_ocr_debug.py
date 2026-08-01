@@ -590,7 +590,7 @@ class OcrDebugPanel(QWidget):
             t_y,
             t_w,
             t_h,
-            {k: round(v, 3) for k, v in roi.items()},
+            {k: round(v, 3) if isinstance(v, (int, float)) else v for k, v in roi.items()},
         )
 
         self.template_requested.emit(
@@ -662,7 +662,7 @@ class OcrDebugPanel(QWidget):
             t_y,
             t_w,
             t_h,
-            {k: round(v, 3) for k, v in roi.items()},
+            {k: round(v, 3) if isinstance(v, (int, float)) else v for k, v in roi.items()},
         )
 
         self._status_bar.showMessage(
