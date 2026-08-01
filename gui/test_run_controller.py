@@ -1,3 +1,4 @@
+import logging
 import re
 import threading
 import time
@@ -106,6 +107,9 @@ class TestRunController:
             win._edit_test_btn.setText(T("ui.test"))
             QMessageBox.warning(win, T("test.title"), T("test.capture_failed", title=title))
             return
+        logging.debug(
+            "規則測試: mode=%s 截圖 %dx%d 視窗=%s", mode, img.shape[1], img.shape[0], title
+        )
         t = threading.Thread(target=self._run_rule_test, args=(rule, img), daemon=True)
         t.start()
 
@@ -568,6 +572,14 @@ class TestRunController:
                     )
                     tmpl_name = (
                         T("test.template_embedded") if tmpl_data.strip() else Path(tmpl_path).stem
+                    )
+                    logging.debug(
+                        "規則測試: match_image 「%s」 閾值=%.2f roi=%s capture_size=%s current_size=%s",
+                        tmpl_name,
+                        threshold,
+                        {k: round(v, 3) for k, v in roi.items()} if isinstance(roi, dict) else roi,
+                        cs,
+                        cur_size,
                     )
                     if results:
                         m = results[0]

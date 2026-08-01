@@ -1,10 +1,13 @@
 import logging
+import sys
 import threading
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 _LOG_DIR = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs"
 _handler = None
+_stream_handler = None
+_debug_enabled = False
 _lock = threading.Lock()
 
 
@@ -31,23 +34,38 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def _ensure_root_handler():
-    global _handler
+    global _handler, _stream_handler
     if _handler is not None:
         return
     with _lock:
         if _handler is not None:
             return
+        root = logging.getLogger()
+        fmt = logging.Formatter(
+            "%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
         log_dir = get_log_dir()
         _handler = TimedRotatingFileHandler(
             log_dir / "app.log", when="midnight", backupCount=1, encoding="utf-8"
         )
-        _handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-        )
-        root = logging.getLogger()
+        _handler.setFormatter(fmt)
         if _handler not in root.handlers:
             root.addHandler(_handler)
-        root.setLevel(logging.INFO)
+        # 開發時 cmd 視窗可即時看到 logging 輸出
+        if _stream_handler is None:
+            _stream_handler = logging.StreamHandler(sys.stdout)
+            _stream_handler.setFormatter(fmt)
+            if _stream_handler not in root.handlers:
+                root.addHandler(_stream_handler)
+        root.setLevel(logging.DEBUG if _debug_enabled else logging.INFO)
+
+
+def enable_debug() -> None:
+    global _debug_enabled
+    _debug_enabled = True
+    root = logging.getLogger()
+    _ensure_root_handler()
+    root.setLevel(logging.DEBUG)
+    for h in list(root.handlers):
+        h.setLevel(logging.DEBUG)

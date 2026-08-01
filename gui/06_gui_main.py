@@ -1336,6 +1336,17 @@ class _MatchImageStepForm(QWidget):
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
             return
         h, w = img.shape[:2]
+        logging.debug(
+            "圖片比對: mode=%s 截圖 %dx%d 視窗=%s 模板=%s 閾值=%.2f match_color=%s tol=%d",
+            mode,
+            w,
+            h,
+            title,
+            tmpl_path or "inline",
+            threshold,
+            match_color,
+            color_tolerance,
+        )
         wr = get_window_rect(title)
         chrome = get_window_client_offset(title) or (0, 0)
         cx, cy = chrome
@@ -1384,6 +1395,15 @@ class _MatchImageStepForm(QWidget):
         if results:
             best = results[0]
             pct = int(best.confidence * 100)
+            logging.debug(
+                "圖片比對: 命中 conf=%.3f (%d%%) 位置(%d,%d) %dx%d",
+                best.confidence,
+                pct,
+                best.x,
+                best.y,
+                best.w,
+                best.h,
+            )
             self._img_compare_result.setText(T("img_compare.hit", pct=pct))
             self._img_compare_result.setStyleSheet("color: #4caf50; font-weight: bold;")
         else:
@@ -1400,6 +1420,7 @@ class _MatchImageStepForm(QWidget):
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
+            logging.debug("圖片比對: 未命中 最高 conf=%.3f (%d%%)", top, top_pct)
             self._img_compare_result.setText(T("img_compare.miss", top_pct=top_pct))
             self._img_compare_result.setStyleSheet("color: #e53935; font-weight: bold;")
 
@@ -5885,6 +5906,8 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     _log_cfg.get_logger("gui")  # ensure root handler is set up
+    if "--debug" in sys.argv:
+        _log_cfg.enable_debug()
     _log_cfg.cleanup_stale_logs()
 
     # Read language preference before creating any GUI

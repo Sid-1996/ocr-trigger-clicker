@@ -269,6 +269,12 @@ class OcrDebugPanel(QWidget):
         if mode != "pynput":
             img = capture_frame(mode, title, hwnd=hwnd)
             if img is not None:
+                logging.debug(
+                    "OCR 診斷: 後台模式 mode=%s 截圖 %dx%d",
+                    mode,
+                    img.shape[1],
+                    img.shape[0],
+                )
                 return img[:, :, ::-1].copy(), T("ocr_debug.source_screen")
             return None, ""
 
@@ -290,6 +296,7 @@ class OcrDebugPanel(QWidget):
             img = capture_frame(mode, title, hwnd=hwnd)
             source = T("ocr_debug.source_screen")
             if img is not None:
+                logging.debug("OCR 診斷: 前景模式 mss 截圖 %dx%d", img.shape[1], img.shape[0])
                 img = img[:, :, ::-1].copy()
 
             if img is None:
@@ -356,6 +363,7 @@ class OcrDebugPanel(QWidget):
             opts = self._ocr_options()
             results = recognize(img, **opts)
             elapsed = (time.monotonic() - t0) * 1000
+            logging.debug("OCR 診斷: 辨識耗時 %.0fms 區塊 %d 個", elapsed, len(results))
             self._signals.ocr_done.emit(results, elapsed, request_id)
         except Exception:
             logging.exception("_do_ocr failed")
@@ -575,6 +583,16 @@ class OcrDebugPanel(QWidget):
         crop_bgr = _cv2.cvtColor(crop, _cv2.COLOR_RGB2BGR)
         template_b64 = _tmpl.img_to_b64(crop_bgr)
 
+        logging.debug(
+            "OCR 診斷: 建立模板規則 來源=%s 像素(%d,%d) %dx%d ROI=%s",
+            self._capture_source,
+            t_x,
+            t_y,
+            t_w,
+            t_h,
+            {k: round(v, 3) for k, v in roi.items()},
+        )
+
         self.template_requested.emit(
             {
                 "template_data": template_b64,
@@ -635,6 +653,16 @@ class OcrDebugPanel(QWidget):
                 "roi": roi,
                 "name": r.text,
             }
+        )
+
+        logging.debug(
+            "OCR 診斷: 建立模板步驟 來源=%s 像素(%d,%d) %dx%d ROI=%s",
+            self._capture_source,
+            t_x,
+            t_y,
+            t_w,
+            t_h,
+            {k: round(v, 3) for k, v in roi.items()},
         )
 
         self._status_bar.showMessage(

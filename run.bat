@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
 cd /d "%~dp0"
-python gui/06_gui_main.py
+python gui/06_gui_main.py --debug
 if errorlevel 1 (
     echo 啟動過程發生錯誤。
     if exist startup_error.log (
