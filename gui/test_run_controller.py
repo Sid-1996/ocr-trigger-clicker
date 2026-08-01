@@ -37,6 +37,11 @@ def _get_interaction_mode() -> str:
         return "pynput"
 
 
+def _template_type(ts: str) -> str:
+    """模板來源型別；舊任務（無 template_source）一律視為前景。"""
+    return "background" if ts == "background" else "foreground"
+
+
 find_text = _main_loop_mod.find_text
 crop_roi = _main_loop_mod.crop_roi
 get_window_rect = _main_loop_mod.get_window_rect
@@ -71,6 +76,30 @@ class TestRunController:
 
         mode = _get_interaction_mode()
         hwnd = get_window_hwnd(title)
+
+        # 測試為模擬預覽：模式不符只靜默寫入測試日誌，不彈窗
+        warn = ""
+        cur_tt = "background" if mode != "pynput" else "foreground"
+        cur_txt = (
+            T("combo.interaction_bg_pm") if cur_tt == "background" else T("combo.interaction_fg")
+        )
+        mismatched = []
+        for idx, step in enumerate(rule.steps, 1):
+            if step.type != "match_image":
+                continue
+            p = step.params
+            if not (p.get("template_data", "").strip() or p.get("template", "").strip()):
+                continue
+            tt = _template_type(str(p.get("template_source", "")))
+            if tt != cur_tt:
+                td = (
+                    T("combo.interaction_bg_pm")
+                    if tt == "background"
+                    else T("combo.interaction_fg")
+                )
+                mismatched.append(f"  • 步驟 {idx}（{td}）")
+        if mismatched:
+            warn = T("start.mode_mismatch_msg", cur=cur_txt, items="\n".join(mismatched))
 
         if mode != "pynput":
             img = capture_frame(mode, title, hwnd=hwnd)
@@ -110,15 +139,17 @@ class TestRunController:
         logging.debug(
             "規則測試: mode=%s 截圖 %dx%d 視窗=%s", mode, img.shape[1], img.shape[0], title
         )
-        t = threading.Thread(target=self._run_rule_test, args=(rule, img), daemon=True)
+        t = threading.Thread(target=self._run_rule_test, args=(rule, img, warn), daemon=True)
         t.start()
 
     # ── background thread ──
 
-    def _run_rule_test(self, rule, img):
+    def _run_rule_test(self, rule, img, warn=""):
         result = {}
         try:
             markers, log_lines = self._run_dry_run(rule, img)
+            if warn:
+                log_lines.insert(0, warn)
             annotated = self._draw_test_annotations(img.copy(), markers)
             result = {
                 "image": annotated,
