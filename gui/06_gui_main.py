@@ -1301,35 +1301,39 @@ class _MatchImageStepForm(QWidget):
         if self._is_bg_mode():
             img, _ = self._bg_capture(title)
         else:
-            win = self.window()
-            if isinstance(win, QMainWindow):
-                was_maxed = win.isMaximized()
-                win.showMinimized()
-                QApplication.processEvents()
-                time.sleep(0.08)
-                activate_window(title)
-                time.sleep(0.12)
-            img = capture(title)
+            # 前景模式：優先使用 PrintWindow 後台截圖，避免閃爍
+            hwnd = get_window_hwnd(title) if title else None
+            img = capture_print_window_hwnd(hwnd) if hwnd else None
             if img is None:
-                img = capture_window_content(title)
-                if img is not None:
-                    wr_tmp = get_window_rect(title)
-                    if wr_tmp:
-                        chrome_tmp = get_window_client_offset(title) or (0, 0)
-                        full_h, full_w = wr_tmp["h"], wr_tmp["w"]
-                        if img.shape[0] != full_h or img.shape[1] != full_w:
-                            padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
-                            cx_tmp, cy_tmp = chrome_tmp
-                            padded[
-                                cy_tmp : cy_tmp + img.shape[0], cx_tmp : cx_tmp + img.shape[1]
-                            ] = img
-                            img = padded
-            if isinstance(win, QMainWindow):
-                if was_maxed:
-                    win.showMaximized()
-                else:
-                    win.showNormal()
-                win.activateWindow()
+                win = self.window()
+                if isinstance(win, QMainWindow):
+                    was_maxed = win.isMaximized()
+                    win.showMinimized()
+                    QApplication.processEvents()
+                    time.sleep(0.08)
+                    activate_window(title)
+                    time.sleep(0.12)
+                img = capture(title)
+                if img is None:
+                    img = capture_window_content(title)
+                    if img is not None:
+                        wr_tmp = get_window_rect(title)
+                        if wr_tmp:
+                            chrome_tmp = get_window_client_offset(title) or (0, 0)
+                            full_h, full_w = wr_tmp["h"], wr_tmp["w"]
+                            if img.shape[0] != full_h or img.shape[1] != full_w:
+                                padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                                cx_tmp, cy_tmp = chrome_tmp
+                                padded[
+                                    cy_tmp : cy_tmp + img.shape[0], cx_tmp : cx_tmp + img.shape[1]
+                                ] = img
+                                img = padded
+                if isinstance(win, QMainWindow):
+                    if was_maxed:
+                        win.showMaximized()
+                    else:
+                        win.showNormal()
+                    win.activateWindow()
         if img is None:
             self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")

@@ -272,6 +272,12 @@ class OcrDebugPanel(QWidget):
                 img = img[:, :, ::-1].copy()
             return img, source
 
+        # 前景模式：優先使用 PrintWindow 後台截圖，避免閃爍
+        hwnd = _screenshot.get_window_hwnd(self._window_title)
+        img = capture_print_window_hwnd(hwnd) if hwnd else None
+        if img is not None:
+            return img[:, :, ::-1].copy(), T("ocr_debug.source_screen")
+
         try:
             parent = self.parent() if self.parent() else None
             self_was_maxed = self.isMaximized()

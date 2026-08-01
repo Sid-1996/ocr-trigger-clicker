@@ -75,30 +75,34 @@ class TestRunController:
             hwnd = get_window_hwnd(title)
             img = capture_print_window_hwnd(hwnd) if hwnd else None
         else:
-            was_maxed = win.isMaximized()
-            win.showMinimized()
-            QApplication.processEvents()
-            time.sleep(0.08)
-            activate_window(title)
-            time.sleep(0.12)
-            img = capture(title)
+            # 前景模式：優先使用 PrintWindow 後台截圖，避免閃爍
+            hwnd = get_window_hwnd(title)
+            img = capture_print_window_hwnd(hwnd) if hwnd else None
             if img is None:
-                img = capture_window_content(title)
-                if img is not None:
-                    wr = get_window_rect(title)
-                    if wr:
-                        chrome = get_window_client_offset(title) or (0, 0)
-                        full_h, full_w = wr["h"], wr["w"]
-                        if img.shape[0] != full_h or img.shape[1] != full_w:
-                            padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
-                            cx, cy = chrome
-                            padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
-                            img = padded
-            if was_maxed:
-                win.showMaximized()
-            else:
-                win.showNormal()
-            win.activateWindow()
+                was_maxed = win.isMaximized()
+                win.showMinimized()
+                QApplication.processEvents()
+                time.sleep(0.08)
+                activate_window(title)
+                time.sleep(0.12)
+                img = capture(title)
+                if img is None:
+                    img = capture_window_content(title)
+                    if img is not None:
+                        wr = get_window_rect(title)
+                        if wr:
+                            chrome = get_window_client_offset(title) or (0, 0)
+                            full_h, full_w = wr["h"], wr["w"]
+                            if img.shape[0] != full_h or img.shape[1] != full_w:
+                                padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                                cx, cy = chrome
+                                padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
+                                img = padded
+                if was_maxed:
+                    win.showMaximized()
+                else:
+                    win.showNormal()
+                win.activateWindow()
 
         win._edit_stack.setCurrentIndex(1)
         if img is None:
