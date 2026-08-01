@@ -31,6 +31,9 @@ _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _bg_input = load_sibling("bg_input", "core/16_bg_input.py")
 _capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
 capture_frame = _capture_pipeline.capture_frame
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+is_black_capture = _pw_mod.is_black_capture
+is_admin = _pw_mod.is_admin
 
 activate_window = _screenshot.activate_window
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
@@ -351,6 +354,10 @@ class OcrDebugPanel(QWidget):
             self._capture_btn.setText(T("ocr_debug.capture"))
             self._capture_btn.setEnabled(True)
             return
+
+        # 後台截圖全黑 + 非系統管理員 → 在資訊列提示（OCR 診斷為預覽，不彈窗）
+        if _get_interaction_mode() != "pynput" and is_black_capture(raw) and not is_admin():
+            self._info_label.setText(T("bg_capture.black_admin_warn"))
 
         self._latest_raw = raw
         self._ocr_busy = True
