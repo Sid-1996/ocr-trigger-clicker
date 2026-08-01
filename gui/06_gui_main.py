@@ -1314,9 +1314,10 @@ class _MatchImageStepForm(QWidget):
         color_tolerance = self._color_tolerance.value()
         mode = _get_interaction_mode()
         hwnd = get_window_hwnd(title) if title else None
-        img = capture_frame(mode, title, hwnd=hwnd)
-        if img is None and mode == "pynput":
+        if mode == "pynput":
+            # 前景模式：先縮小主視窗→激活目標→再 mss 截圖，避免主視窗蓋住目標畫面；finally 確保復原
             win = self.window()
+            _minimized = False
             if isinstance(win, QMainWindow):
                 was_maxed = win.isMaximized()
                 win.showMinimized()
@@ -1324,13 +1325,18 @@ class _MatchImageStepForm(QWidget):
                 time.sleep(0.08)
                 activate_window(title)
                 time.sleep(0.12)
+                _minimized = True
+            try:
+                img = capture_frame(mode, title, hwnd=hwnd)
+            finally:
+                if _minimized and isinstance(win, QMainWindow):
+                    if was_maxed:
+                        win.showMaximized()
+                    else:
+                        win.showNormal()
+                    win.activateWindow()
+        else:
             img = capture_frame(mode, title, hwnd=hwnd)
-            if isinstance(win, QMainWindow):
-                if was_maxed:
-                    win.showMaximized()
-                else:
-                    win.showNormal()
-                win.activateWindow()
         if img is None:
             self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
