@@ -79,6 +79,21 @@ def activate_window(title: str) -> bool:
         return False
 
 
+def activate_window_bg(title: str) -> bool:
+    """Activate window using WM_ACTIVATE (does not steal foreground focus)."""
+    hwnd = get_window_hwnd(title)
+    if hwnd is None:
+        return False
+    try:
+        user32 = ctypes.windll.user32
+        WM_ACTIVATE = 0x0006
+        WA_ACTIVE = 0x01
+        user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
+        return True
+    except Exception:
+        return False
+
+
 def get_window_rect(title: str) -> dict | None:
     try:
         matches = _matching_windows(title)

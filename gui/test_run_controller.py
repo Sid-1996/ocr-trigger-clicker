@@ -14,7 +14,29 @@ _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 activate_window = _main_loop_mod.activate_window
 capture = _main_loop_mod.capture
 capture_window_content = getattr(_main_loop_mod, "capture_window_content", lambda title: None)
+get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
 recognize = _main_loop_mod.recognize
+
+
+def _get_interaction_mode() -> str:
+    import json
+    from pathlib import Path
+
+    try:
+        from core._paths import _bundle_root, _is_frozen, get_data_path
+
+        if _is_frozen():
+            p = Path(get_data_path("config.json"))
+        else:
+            p = _bundle_root() / "config.json"
+        with open(p, encoding="utf-8") as f:
+            return json.load(f).get("interaction_mode", "pynput")
+    except Exception:
+        return "pynput"
+
+
 find_text = _main_loop_mod.find_text
 crop_roi = _main_loop_mod.crop_roi
 get_window_rect = _main_loop_mod.get_window_rect
@@ -46,20 +68,38 @@ class TestRunController:
         win._edit_test_btn.setEnabled(False)
         win._edit_test_btn.setText(T("test.testing"))
         QApplication.processEvents()
-        was_maxed = win.isMaximized()
-        win.showMinimized()
-        QApplication.processEvents()
-        time.sleep(0.08)
-        activate_window(title)
-        time.sleep(0.12)
-        img = capture(title)
-        if img is None:
-            img = capture_window_content(title)
-        if was_maxed:
-            win.showMaximized()
+
+        mode = _get_interaction_mode()
+
+        if mode != "pynput":
+            hwnd = get_window_hwnd(title)
+            img = capture_print_window_hwnd(hwnd) if hwnd else None
         else:
-            win.showNormal()
-        win.activateWindow()
+            was_maxed = win.isMaximized()
+            win.showMinimized()
+            QApplication.processEvents()
+            time.sleep(0.08)
+            activate_window(title)
+            time.sleep(0.12)
+            img = capture(title)
+            if img is None:
+                img = capture_window_content(title)
+                if img is not None:
+                    wr = get_window_rect(title)
+                    if wr:
+                        chrome = get_window_client_offset(title) or (0, 0)
+                        full_h, full_w = wr["h"], wr["w"]
+                        if img.shape[0] != full_h or img.shape[1] != full_w:
+                            padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                            cx, cy = chrome
+                            padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
+                            img = padded
+            if was_maxed:
+                win.showMaximized()
+            else:
+                win.showNormal()
+            win.activateWindow()
+
         win._edit_stack.setCurrentIndex(1)
         if img is None:
             win._edit_test_btn.setEnabled(True)

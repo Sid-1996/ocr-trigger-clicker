@@ -28,11 +28,31 @@ from i18n import T
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+_bg_input = load_sibling("bg_input", "core/16_bg_input.py")
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
 
 activate_window = _screenshot.activate_window
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 recognize = _ocr.recognize
+
+
+def _get_interaction_mode() -> str:
+    import json
+    from pathlib import Path
+
+    try:
+        from core._paths import _bundle_root, _is_frozen, get_data_path
+
+        if _is_frozen():
+            p = Path(get_data_path("config.json"))
+        else:
+            p = _bundle_root() / "config.json"
+        with open(p, encoding="utf-8") as f:
+            return json.load(f).get("interaction_mode", "pynput")
+    except Exception:
+        return "pynput"
 
 
 class _ImageLabel(QLabel):
@@ -243,6 +263,15 @@ class OcrDebugPanel(QWidget):
         return self._OCR_MODES["full_test"]
 
     def _minimize_and_capture(self):
+        mode = _get_interaction_mode()
+        if mode != "pynput":
+            hwnd = _screenshot.get_window_hwnd(self._window_title)
+            img = capture_print_window_hwnd(hwnd) if hwnd else None
+            source = T("ocr_debug.source_screen")
+            if img is not None:
+                img = img[:, :, ::-1].copy()
+            return img, source
+
         try:
             parent = self.parent() if self.parent() else None
             self_was_maxed = self.isMaximized()
@@ -265,6 +294,16 @@ class OcrDebugPanel(QWidget):
             if img is None:
                 img = capture_window_content(self._window_title)
                 source = T("ocr_debug.source_gdi")
+                if img is not None:
+                    wr = _screenshot.get_window_rect(self._window_title)
+                    if wr:
+                        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
+                        full_h, full_w = wr["h"], wr["w"]
+                        if img.shape[0] != full_h or img.shape[1] != full_w:
+                            padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                            cx, cy = chrome
+                            padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
+                            img = padded
 
             return img, source
         except Exception:
@@ -611,46 +650,73 @@ class OcrDebugPanel(QWidget):
         _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
         _input = load_sibling("pynput_input", "core/03_pynput_input.py")
 
-        _screenshot.activate_window(self._window_title)
-        QApplication.processEvents()
-        time.sleep(0.15)
-
         ocr_center_x = int(r.x + r.w / 2)
         ocr_center_y = int(r.y + r.h / 2)
 
         rect = _screenshot.get_window_rect(self._window_title)
 
-        if self._capture_source == T("ocr_debug.source_gdi"):
-            import ctypes
-            from ctypes import wintypes
+        # Check if background mode is active
+        mode = _get_interaction_mode()
 
+        if mode != "pynput":
+            # Background mode: use bg_input.click with client coordinates
             hwnd_val = _screenshot.get_window_hwnd(self._window_title)
-            if hwnd_val:
-                pt = wintypes.POINT()
-                pt.x, pt.y = 0, 0
-                ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
-                cx = pt.x + ocr_center_x
-                cy = pt.y + ocr_center_y
-            elif rect is not None:
+            if not hwnd_val:
+                self._status_bar.showMessage(
+                    T("ocr_debug.window_coords_failed", title=self._window_title)
+                )
+                return
+            # OCR coordinates are relative to the capture image
+            # For GDI/PrintWindow capture, they are client-relative
+            # For mss capture, they are window-relative (need to subtract chrome)
+            if self._capture_source == T("ocr_debug.source_gdi"):
+                client_x = ocr_center_x
+                client_y = ocr_center_y
+            else:
+                # mss capture: subtract chrome offset to get client coordinates
+                chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
+                client_x = ocr_center_x - chrome[0]
+                client_y = ocr_center_y - chrome[1]
+            _bg_input.set_method(mode)
+            click_ok = _bg_input.click(hwnd_val, client_x, client_y)
+            cx, cy = client_x, client_y
+        else:
+            # Foreground mode: use existing pynput logic
+            _screenshot.activate_window(self._window_title)
+            QApplication.processEvents()
+            time.sleep(0.15)
+
+            if self._capture_source == T("ocr_debug.source_gdi"):
+                import ctypes
+                from ctypes import wintypes
+
+                hwnd_val = _screenshot.get_window_hwnd(self._window_title)
+                if hwnd_val:
+                    pt = wintypes.POINT()
+                    pt.x, pt.y = 0, 0
+                    ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
+                    cx = pt.x + ocr_center_x
+                    cy = pt.y + ocr_center_y
+                elif rect is not None:
+                    cx = rect["x"] + ocr_center_x
+                    cy = rect["y"] + ocr_center_y
+                else:
+                    self._status_bar.showMessage(
+                        T("ocr_debug.window_coords_failed", title=self._window_title)
+                    )
+                    return
+                if rect is None:
+                    rect = {"x": cx - ocr_center_x, "y": cy - ocr_center_y, "w": 0, "h": 0}
+            else:
+                if rect is None:
+                    self._status_bar.showMessage(
+                        T("ocr_debug.window_coords_failed", title=self._window_title)
+                    )
+                    return
                 cx = rect["x"] + ocr_center_x
                 cy = rect["y"] + ocr_center_y
-            else:
-                self._status_bar.showMessage(
-                    T("ocr_debug.window_coords_failed", title=self._window_title)
-                )
-                return
-            if rect is None:
-                rect = {"x": cx - ocr_center_x, "y": cy - ocr_center_y, "w": 0, "h": 0}
-        else:
-            if rect is None:
-                self._status_bar.showMessage(
-                    T("ocr_debug.window_coords_failed", title=self._window_title)
-                )
-                return
-            cx = rect["x"] + ocr_center_x
-            cy = rect["y"] + ocr_center_y
 
-        click_ok = _input.send_click(cx, cy)
+            click_ok = _input.send_click(cx, cy)
         time.sleep(0.1)
 
         from PyQt6.QtCore import QPoint

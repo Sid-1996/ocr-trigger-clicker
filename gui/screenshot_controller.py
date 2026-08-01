@@ -3,9 +3,13 @@ from i18n import T
 
 _main_loop_mod = load_sibling("main_loop", "core/05_main_loop.py")
 activate_window = _main_loop_mod.activate_window
+activate_window_bg = getattr(_main_loop_mod, "activate_window_bg", lambda title: False)
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 capture = _main_loop_mod.capture
+get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
 
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl_mod.img_to_b64
@@ -31,24 +35,43 @@ class ScreenshotController:
     def __init__(self, win):
         self._win = win
 
+    def _is_bg_mode(self) -> bool:
+        ctrl = self._win._rule_config_ctrl
+        mode = ctrl.get_setting(self._win, "interaction_mode")
+        return mode is not None and mode != "pynput"
+
     def open_roi_selector(self):
         win = self._win
         title = win._window_combo.currentText()
-        if title:
-            activate_window(title)
-        mod = load_sibling("roi", "gui/07_gui_roi.py")
-        result = mod.select_roi(parent_window=win)
+        if self._is_bg_mode():
+            hwnd = get_window_hwnd(title) if title else None
+            if hwnd:
+                img = capture_print_window_hwnd(hwnd)
+            else:
+                img = None
+            if img is not None:
+                mod = load_sibling("bg_roi_selector", "gui/17_bg_roi_selector.py")
+                result = mod.select_roi_bg(win, img, title or "")
+            else:
+                result = None
+        else:
+            if title:
+                activate_window(title)
+            mod = load_sibling("roi", "gui/07_gui_roi.py")
+            result = mod.select_roi(parent_window=win)
         if not result:
             return None
+        win._edit_stack.setCurrentIndex(1)
+        win._status_bar.showMessage(
+            T("screenshot.roi_selected", x=result["x"], y=result["y"], w=result["w"], h=result["h"])
+        )
+        if result.get("roi_coord") == "client":
+            return result
         if title:
             wr = get_window_rect(title)
             if wr:
                 result["x"] -= wr["x"]
                 result["y"] -= wr["y"]
-        win._edit_stack.setCurrentIndex(1)
-        win._status_bar.showMessage(
-            T("screenshot.roi_selected", x=result["x"], y=result["y"], w=result["w"], h=result["h"])
-        )
         if title and wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
             cx, cy = chrome
@@ -95,6 +118,32 @@ class ScreenshotController:
     def open_capture_region(self):
         win = self._win
         title = win._window_combo.currentText()
+        if self._is_bg_mode():
+            hwnd = get_window_hwnd(title) if title else None
+            if hwnd:
+                img = capture_print_window_hwnd(hwnd)
+            else:
+                img = None
+            if img is not None:
+                mod = load_sibling("bg_roi_selector", "gui/17_bg_roi_selector.py")
+                rect = mod.select_roi_bg(win, img, title or "")
+            else:
+                rect = None
+            if not rect:
+                return None
+            b64 = img_to_b64(
+                img[rect["y"] : rect["y"] + rect["h"], rect["x"] : rect["x"] + rect["w"]]
+            )
+            roi_ratio = {
+                "x": rect["x"] / img.shape[1] if img.shape[1] > 0 else 0.0,
+                "y": rect["y"] / img.shape[0] if img.shape[0] > 0 else 0.0,
+                "w": rect["w"] / img.shape[1] if img.shape[1] > 0 else 0.0,
+                "h": rect["h"] / img.shape[0] if img.shape[0] > 0 else 0.0,
+                "roi_coord": "client",
+            }
+            win._status_bar.showMessage(T("screenshot.template_captured"))
+            win._edit_stack.setCurrentIndex(1)
+            return {"b64": b64, "roi": roi_ratio}
         if title:
             activate_window(title)
         mod = load_sibling("capture_region", "gui/14_capture_region.py")

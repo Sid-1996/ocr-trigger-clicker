@@ -1,4 +1,34 @@
 ﻿
+## [v0.1.9] - 2026-08-01
+
+### 新增
+- **後台操控功能**：新增兩種互動方法（前景 pynput / 後台 PostMessage），用戶可在偏好設定中選擇
+- `core/16_bg_input.py` — 後台互動模組，支援 PostMessage、pynput 兩種方法
+- `core/01_screenshot.py` 新增 `activate_window_bg()` — 用 WM_ACTIVATE 喚醒視窗（不偷焦點）
+- 偏好設定新增「互動方法」下拉選單，支援切換前景/後台模式
+- 狀態列顯示當前互動方法（前景/後台 PM）
+- 主循環根據互動方法自動選擇對應的點擊/按鍵/喚醒邏輯
+- **GUI 全面後台化**：選擇後台模式時，所有 GUI 操作在後台完成，不切換視窗
+  - `gui/17_bg_roi_selector.py` — 後台偵測區域選取器（PrintWindow 截圖 + QLabel）
+  - `gui/18_bg_click_picker.py` — 後台座標選取器（PrintWindow 截圖 + QLabel）
+  - 截圖/測試/點擊/框選/座標選取均已支援後台模式
+
+### 技術說明
+- 後台模式透過 PrintWindow 截圖 + PostMessage 點擊實現
+- Unity 遊戲不支援 PostMessage，需使用前景模式
+- 其他遊戲可嘗試後台模式，用戶需自行測試
+- 預設值 = `foreground`，不改變現有行為
+- 後台模式下 ROI/座標選取改用 GUI 內嵌截圖，不使用全螢幕 overlay
+- 後台模式完整支援：截圖、測試、點擊、拖曳、滾動、按鍵（含 hold）、框選、座標選取
+
+### 修復
+- 修復 `_activate_window()` 前景模式無限遞迴 bug
+- 修復測試按鈕在後台模式下仍切換視窗問題（test_run_controller、09_ocr_debug、06_gui_main）
+- 修復 `_send_scroll()` 未支援後台模式
+- 修復 `_handle_key(hold_ms)` 繞過後台輸入問題
+- 修復 `_handle_drag()` 未支援後台模式
+- 修復 OCR 診斷 `RuleConfigController(None)` crash
+
 ## [v0.1.8] - 2026-07-31
 
 ### 新增

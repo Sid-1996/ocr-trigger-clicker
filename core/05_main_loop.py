@@ -5,6 +5,7 @@ import sys as _sys
 import threading
 import time
 from collections import deque
+from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -20,6 +21,7 @@ from i18n import T  # noqa: E402
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
+_bg_input = load_sibling("bg_input", "core/16_bg_input.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
@@ -274,13 +276,38 @@ class MainLoop:
         return None
 
     def _send_click(self, x: int, y: int, button: str) -> bool:
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode and mode != "pynput" and self._window_hwnd:
+            _bg_input.set_method(mode)
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            pt = wintypes.POINT(x, y)
+            user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt))
+            return _bg_input.click(self._window_hwnd, pt.x, pt.y, button)
         return _input_mod.send_click(x, y, button)
 
     def _send_key(self, key: str) -> bool:
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode and mode != "pynput" and self._window_hwnd:
+            _bg_input.set_method(mode)
+            return _bg_input.send_key(self._window_hwnd, key)
         return _input_mod.send_key(key)
 
     def _send_scroll(self, direction: str) -> bool:
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode and mode != "pynput" and self._window_hwnd:
+            _bg_input.set_method(mode)
+            amount = 1 if direction in ("WheelDown", "WheelRight") else -1
+            return _bg_input.scroll(self._window_hwnd, 0, 0, amount)
         return _input_mod.send_scroll(1, direction)
+
+    def _activate_window(self) -> bool:
+        """Activate window using the appropriate method based on interaction mode."""
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode and mode != "pynput":
+            return _screenshot.activate_window_bg(self._window_title)
+        return _screenshot.activate_window(self._window_title)
 
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
@@ -550,7 +577,7 @@ class MainLoop:
 
         if action == "key":
             if fail_key:
-                activate_window(self._window_title)
+                self._activate_window()
                 self._send_key(fail_key)
                 ctx.triggered = True
                 ctx.on_fail_fired = True
@@ -661,7 +688,7 @@ class MainLoop:
         button = params.get("button", "left")
         sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
 
-        activate_window(self._window_title)
+        self._activate_window()
 
         ok = self._send_click(sx, sy, button)
         if ok:
@@ -683,11 +710,16 @@ class MainLoop:
             self._logger.debug("規則「%s」按鍵略過：工具處於前景", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
-        activate_window(self._window_title)
+        self._activate_window()
 
         hold_ms = params.get("hold_ms", 0)
         if hold_ms > 0:
-            ok = _input_mod.send_hold_key(key, hold_ms)
+            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            if mode and mode != "pynput" and self._window_hwnd:
+                _bg_input.set_method(mode)
+                ok = _bg_input.send_hold_key(self._window_hwnd, key, hold_ms)
+            else:
+                ok = _input_mod.send_hold_key(key, hold_ms)
         else:
             ok = self._send_key(key)
         if ok:
@@ -737,8 +769,13 @@ class MainLoop:
         ssx, ssy = self._to_screen_coords(ctx.rect, sx, sy)
         sex, sey = self._to_screen_coords(ctx.rect, sx + dx, sy + dy)
 
-        activate_window(self._window_title)
-        ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
+        self._activate_window()
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode and mode != "pynput" and self._window_hwnd:
+            _bg_input.set_method(mode)
+            ok = _bg_input.drag(self._window_hwnd, ssx, ssy, sex, sey, button)
+        else:
+            ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
         if not ok:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
@@ -758,7 +795,7 @@ class MainLoop:
         amount = params.get("amount", 1)
         delay_ms = params.get("delay_ms", 30)
 
-        activate_window(self._window_title)
+        self._activate_window()
         for _ in range(amount):
             ok = self._send_scroll(direction)
             if not ok:
@@ -1164,6 +1201,14 @@ class MainLoop:
                     img = capture(self._window_title)
                     if img is None:
                         img = capture_window_content(self._window_title)
+                        if img is not None:
+                            chrome = get_window_client_offset(self._window_title) or (0, 0)
+                            full_h, full_w = rect["h"], rect["w"]
+                            if img.shape[0] != full_h or img.shape[1] != full_w:
+                                padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                                cx, cy = chrome
+                                padded[cy : cy + img.shape[0], cx : cx + img.shape[1]] = img
+                                img = padded
                     t1 = time.monotonic()
                     if img is None:
                         if iteration % 30 == 0:

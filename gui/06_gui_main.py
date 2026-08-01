@@ -12,6 +12,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
@@ -1297,23 +1298,38 @@ class _MatchImageStepForm(QWidget):
         threshold = self._threshold.value()
         match_color = self._match_color.isChecked()
         color_tolerance = self._color_tolerance.value()
-        win = self.window()
-        if isinstance(win, QMainWindow):
-            was_maxed = win.isMaximized()
-            win.showMinimized()
-            QApplication.processEvents()
-            time.sleep(0.08)
-            activate_window(title)
-            time.sleep(0.12)
-        img = capture(title)
-        if img is None:
-            img = capture_window_content(title)
-        if isinstance(win, QMainWindow):
-            if was_maxed:
-                win.showMaximized()
-            else:
-                win.showNormal()
-            win.activateWindow()
+        if self._is_bg_mode():
+            img, _ = self._bg_capture(title)
+        else:
+            win = self.window()
+            if isinstance(win, QMainWindow):
+                was_maxed = win.isMaximized()
+                win.showMinimized()
+                QApplication.processEvents()
+                time.sleep(0.08)
+                activate_window(title)
+                time.sleep(0.12)
+            img = capture(title)
+            if img is None:
+                img = capture_window_content(title)
+                if img is not None:
+                    wr_tmp = get_window_rect(title)
+                    if wr_tmp:
+                        chrome_tmp = get_window_client_offset(title) or (0, 0)
+                        full_h, full_w = wr_tmp["h"], wr_tmp["w"]
+                        if img.shape[0] != full_h or img.shape[1] != full_w:
+                            padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+                            cx_tmp, cy_tmp = chrome_tmp
+                            padded[
+                                cy_tmp : cy_tmp + img.shape[0], cx_tmp : cx_tmp + img.shape[1]
+                            ] = img
+                            img = padded
+            if isinstance(win, QMainWindow):
+                if was_maxed:
+                    win.showMaximized()
+                else:
+                    win.showNormal()
+                win.activateWindow()
         if img is None:
             self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
@@ -2479,6 +2495,7 @@ list_windows = _main_loop_mod.list_windows
 load_rules = _main_loop_mod.load_rules
 save_rules = _main_loop_mod.save_rules
 activate_window = _main_loop_mod.activate_window
+activate_window_bg = getattr(_main_loop_mod, "activate_window_bg", lambda title: False)
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 capture = _main_loop_mod.capture
@@ -2487,6 +2504,10 @@ find_text = _main_loop_mod.find_text
 poll_roi_value = _main_loop_mod.poll_roi_value
 crop_roi = _main_loop_mod.crop_roi
 capture_window_content = getattr(_main_loop_mod, "capture_window_content", lambda title: None)
+get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
+_pw_mod = load_sibling("print_window", "core/15_print_window.py")
+capture_print_window = getattr(_pw_mod, "capture_print_window", lambda title: None)
+capture_print_window_hwnd = getattr(_pw_mod, "capture_print_window_hwnd", lambda hwnd: None)
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
@@ -2626,6 +2647,11 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(T("settings.title"))
         self.setMinimumWidth(420)
 
+        # Migrate deprecated "sendinput" to "pynput"
+        mode = self._ctrl.get_setting(win, "interaction_mode")
+        if mode == "sendinput":
+            self._ctrl.set_setting(win, "interaction_mode", "pynput")
+
         layout = QVBoxLayout(self)
 
         # ── 一般分頁 ──
@@ -2698,6 +2724,14 @@ class SettingsDialog(QDialog):
         aform = QFormLayout(auto)
         aform.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
+        self._interaction_mode = QComboBox()
+        self._interaction_mode.addItem(T("combo.interaction_fg"), "pynput")
+        self._interaction_mode.addItem(T("combo.interaction_bg_pm"), "postmessage")
+        idx = self._interaction_mode.findData(self._ctrl.get_setting(win, "interaction_mode"))
+        self._interaction_mode.setCurrentIndex(max(0, idx))
+        self._interaction_mode.setToolTip(T("settings.interaction_mode.tooltip"))
+        aform.addRow(T("settings.interaction_mode"), self._interaction_mode)
+
         self._mouse_btn = QComboBox()
         self._mouse_btn.addItem(T("combo.left"), "left")
         self._mouse_btn.addItem(T("combo.right"), "right")
@@ -2769,6 +2803,7 @@ class SettingsDialog(QDialog):
             self._win, "show_close_confirm", self._show_close_confirm.isChecked()
         )
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
+        self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
         self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
         self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
         self._ctrl.set_setting(self._win, "default_wait_ms", self._default_wait_ms.value())
@@ -3091,6 +3126,8 @@ class MainWindow(QMainWindow):
 
             self._restore_last_state()
             self._maybe_show_startup_guide()
+
+            self._update_interaction_mode_label()
 
             config = self._load_config()
             updated_ver = config.pop("just_updated", None)
@@ -3446,6 +3483,11 @@ class MainWindow(QMainWindow):
             "color: #27AE60; font-size: 11px; padding-right: 8px;"
         )
         self._status_bar.addPermanentWidget(self._input_status_label)
+        self._interaction_mode_label = QLabel("")
+        self._interaction_mode_label.setStyleSheet(
+            "color: #888; font-size: 11px; padding-right: 8px;"
+        )
+        self._status_bar.addPermanentWidget(self._interaction_mode_label)
         self._perf_timer = QTimer()
         self._perf_timer.timeout.connect(self._update_perf_display)
         self._perf_timer.start(1000)
@@ -3581,6 +3623,38 @@ class MainWindow(QMainWindow):
         else:
             self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._perf_label.setText(text)
+
+    def _update_interaction_mode_label(self):
+        """Update the interaction mode label in the status bar."""
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode_map = {
+            "pynput": "🟢 前景",
+            "postmessage": "🔵 後台 PM",
+        }
+        text = mode_map.get(mode, "🟢 前景")
+        self._interaction_mode_label.setText(text)
+
+    def _is_bg_mode(self) -> bool:
+        """Check if background mode is active."""
+        return self._rule_config_ctrl.get_setting(self, "interaction_mode") != "pynput"
+
+    def _bg_capture(self, title: str):
+        """Capture screenshot using the appropriate method based on interaction mode.
+        Returns (img, source_type) where source_type is 'bg', 'fg', or 'gdi'.
+        """
+        if self._is_bg_mode():
+            hwnd = get_window_hwnd(title)
+            if hwnd:
+                img = capture_print_window_hwnd(hwnd)
+                if img is not None:
+                    return img, "bg"
+        img = capture(title)
+        if img is not None:
+            return img, "fg"
+        img = capture_window_content(title)
+        if img is not None:
+            return img, "gdi"
+        return None, None
 
     # === Task list ===
     def _refresh_task_list(self):
@@ -4939,6 +5013,26 @@ class MainWindow(QMainWindow):
     def _on_pick_coord(self):
         """Open click picker overlay, return window-relative (x, y) or None."""
         title = self._window_combo.currentText()
+        if self._is_bg_mode():
+            hwnd = get_window_hwnd(title) if title else None
+            if hwnd:
+                img = capture_print_window_hwnd(hwnd)
+            else:
+                img = None
+            if img is not None:
+                mod = load_sibling("bg_click_picker", "gui/18_bg_click_picker.py")
+                result = mod.pick_click_position_bg(self, img, title or "")
+            else:
+                result = None
+            if result is None:
+                return None
+            # result is (x, y) in client-area pixels
+            h, w = img.shape[:2]
+            self._edit_stack.setCurrentIndex(1)
+            self._status_bar.showMessage(T("notif.coordinate_selected", x=result[0], y=result[1]))
+            if w > 0 and h > 0:
+                return (result[0] / w, result[1] / h)
+            return (0.0, 0.0)
         if title:
             activate_window(title)
         mod = load_sibling("click_picker", "gui/13_gui_click_picker.py")
@@ -5335,7 +5429,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, T("dialog.warning"), T("status.at_least_one_group"))
             return
         self._is_starting = True
-        activate_window(title)
+        if self._is_bg_mode():
+            activate_window_bg(title)
+        else:
+            activate_window(title)
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText(T("status.initializing"))
         self._status_bar.showMessage(T("status.initializing_ocr"))
@@ -5678,6 +5775,7 @@ class MainWindow(QMainWindow):
     def _open_settings(self):
         SettingsDialog(self).exec()
         self._rule_config_ctrl._config_cache = None
+        self._update_interaction_mode_label()
 
     def closeEvent(self, event):
         self._rule_config_ctrl._config_cache = None
