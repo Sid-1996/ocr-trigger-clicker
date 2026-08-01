@@ -97,6 +97,7 @@ class OcrDebugPanel(QWidget):
         self._annotated_pixmap: QPixmap | None = None
         self._crop_pixmap: QPixmap | None = None
         self._capture_source = ""
+        self._black_warn_text = ""
         self._selected_index = -1
         self._request_id = 0
         self._has_active_rule = False
@@ -339,6 +340,7 @@ class OcrDebugPanel(QWidget):
         self._capture_btn.setEnabled(False)
         self._capture_btn.setText(T("ocr_debug.recognizing"))
         self._info_label.setText("")
+        self._black_warn_text = ""
         self._selected_index = -1
         self._add_rule_btn.setEnabled(False)
         self._template_btn.setEnabled(False)
@@ -355,9 +357,9 @@ class OcrDebugPanel(QWidget):
             self._capture_btn.setEnabled(True)
             return
 
-        # 後台截圖全黑 + 非系統管理員 → 在資訊列提示（OCR 診斷為預覽，不彈窗）
+        # 後台截圖全黑 + 非系統管理員 → 暫存提示，待 OCR 完成後與耗時訊息合併顯示
         if _get_interaction_mode() != "pynput" and is_black_capture(raw) and not is_admin():
-            self._info_label.setText(T("bg_capture.black_admin_warn"))
+            self._black_warn_text = T("bg_capture.black_admin_warn")
 
         self._latest_raw = raw
         self._ocr_busy = True
@@ -395,9 +397,10 @@ class OcrDebugPanel(QWidget):
             if self._latest_raw is None:
                 return
             h, w = self._latest_raw.shape[:2]
-            self._info_label.setText(
-                T("ocr_debug.info_label", ms=round(elapsed_ms), n=len(results))
-            )
+            info_text = T("ocr_debug.info_label", ms=round(elapsed_ms), n=len(results))
+            if self._black_warn_text:
+                info_text = f"{info_text}  {self._black_warn_text}"
+            self._info_label.setText(info_text)
             self._summary_label.setText(
                 T(
                     "ocr_debug.summary_text",
