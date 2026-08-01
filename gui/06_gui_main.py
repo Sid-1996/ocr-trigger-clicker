@@ -5031,6 +5031,17 @@ class MainWindow(QMainWindow):
             self._edit_stack.setCurrentIndex(1)
             self._status_bar.showMessage(T("notif.coordinate_selected", x=result[0], y=result[1]))
             if w > 0 and h > 0:
+                chrome = get_window_client_offset(title) or (0, 0)
+                cx, cy = chrome
+                wr = get_window_rect(title) if title else None
+                if wr and wr["w"] > cx and wr["h"] > cy:
+                    client_w = wr["w"] - cx
+                    client_h = wr["h"] - cy
+                    if client_w > 0 and client_h > 0:
+                        return (
+                            max(0.0, (result[0] - cx) / client_w),
+                            max(0.0, (result[1] - cy) / client_h),
+                        )
                 return (result[0] / w, result[1] / h)
             return (0.0, 0.0)
         if title:

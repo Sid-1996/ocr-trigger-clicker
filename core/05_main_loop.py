@@ -773,7 +773,14 @@ class MainLoop:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         if mode and mode != "pynput" and self._window_hwnd:
             _bg_input.set_method(mode)
-            ok = _bg_input.drag(self._window_hwnd, ssx, ssy, sex, sey, button)
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            pt1 = wintypes.POINT(ssx, ssy)
+            user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt1))
+            pt2 = wintypes.POINT(sex, sey)
+            user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt2))
+            ok = _bg_input.drag(self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button)
         else:
             ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
         if not ok:
