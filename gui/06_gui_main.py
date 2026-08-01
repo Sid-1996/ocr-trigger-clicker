@@ -83,6 +83,21 @@ def _parse_version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.strip().split("."))
 
 
+def _get_interaction_mode() -> str:
+    """Read interaction mode directly from config.json (avoids needing MainWindow instance)."""
+    try:
+        from core._paths import _bundle_root, _is_frozen, get_data_path
+
+        if _is_frozen():
+            p = Path(get_data_path("config.json"))
+        else:
+            p = _bundle_root() / "config.json"
+        with open(p, encoding="utf-8") as f:
+            return json.load(f).get("interaction_mode", "pynput")
+    except Exception:
+        return "pynput"
+
+
 class _NoWheelCombo(QComboBox):
     def wheelEvent(self, e):
         e.ignore()
@@ -1298,13 +1313,11 @@ class _MatchImageStepForm(QWidget):
         threshold = self._threshold.value()
         match_color = self._match_color.isChecked()
         color_tolerance = self._color_tolerance.value()
-        if self._is_bg_mode():
-            img, _ = self._bg_capture(title)
-        else:
-            # 前景模式：優先使用 PrintWindow 後台截圖，避免閃爍
-            hwnd = get_window_hwnd(title) if title else None
-            img = capture_print_window_hwnd(hwnd) if hwnd else None
-            if img is None:
+        mode = _get_interaction_mode()
+        hwnd = get_window_hwnd(title) if title else None
+        img = capture_print_window_hwnd(hwnd) if hwnd else None
+        if img is None:
+            if mode == "pynput":
                 win = self.window()
                 if isinstance(win, QMainWindow):
                     was_maxed = win.isMaximized()
@@ -1334,6 +1347,10 @@ class _MatchImageStepForm(QWidget):
                     else:
                         win.showNormal()
                     win.activateWindow()
+            else:
+                img = capture(title)
+                if img is None:
+                    img = capture_window_content(title)
         if img is None:
             self._img_compare_result.setText(T("img_compare.capture_failed"))
             self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
@@ -3641,24 +3658,6 @@ class MainWindow(QMainWindow):
     def _is_bg_mode(self) -> bool:
         """Check if background mode is active."""
         return self._rule_config_ctrl.get_setting(self, "interaction_mode") != "pynput"
-
-    def _bg_capture(self, title: str):
-        """Capture screenshot using the appropriate method based on interaction mode.
-        Returns (img, source_type) where source_type is 'bg', 'fg', or 'gdi'.
-        """
-        if self._is_bg_mode():
-            hwnd = get_window_hwnd(title)
-            if hwnd:
-                img = capture_print_window_hwnd(hwnd)
-                if img is not None:
-                    return img, "bg"
-        img = capture(title)
-        if img is not None:
-            return img, "fg"
-        img = capture_window_content(title)
-        if img is not None:
-            return img, "gdi"
-        return None, None
 
     # === Task list ===
     def _refresh_task_list(self):
