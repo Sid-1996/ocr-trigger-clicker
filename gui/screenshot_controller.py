@@ -141,6 +141,7 @@ class ScreenshotController:
     def open_capture_region(self):
         win = self._win
         title = win._window_combo.currentText()
+        ts = "background" if self._is_bg_mode() else "foreground"
         if self._is_bg_mode():
             hwnd = get_window_hwnd(title) if title else None
             img = capture_frame("postmessage", title, hwnd=hwnd)
@@ -186,7 +187,7 @@ class ScreenshotController:
                 }
             win._status_bar.showMessage(T("screenshot.template_captured"))
             win._edit_stack.setCurrentIndex(1)
-            return {"b64": b64, "roi": roi_ratio}
+            return {"b64": b64, "roi": roi_ratio, "template_source": ts}
         if title:
             activate_window(title)
         mod = load_sibling("capture_region", "gui/14_capture_region.py")
@@ -199,7 +200,11 @@ class ScreenshotController:
             win._status_bar.showMessage(T("screenshot.template_captured"))
             win._edit_stack.setCurrentIndex(1)
             roi_ratio = self._capture_rect_to_roi(rect, title)
-            return {"b64": b64, "roi": roi_ratio} if roi_ratio else {"b64": b64}
+            return (
+                {"b64": b64, "roi": roi_ratio, "template_source": ts}
+                if roi_ratio
+                else {"b64": b64, "template_source": ts}
+            )
         if title:
             rx = rect["x"]
             ry = rect["y"]

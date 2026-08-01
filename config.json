@@ -15,5 +15,5 @@
   "default_template_threshold": 0.8,
   "default_color_tolerance": 10,
   "language": "zh_TW",
-  "interaction_mode": "pynput"
+  "interaction_mode": "postmessage"
 }

@@ -97,6 +97,19 @@ def _get_interaction_mode() -> str:
         return "pynput"
 
 
+def _template_type(ts: str) -> str:
+    """模板來源型別；舊任務（無 template_source）一律視為前景。"""
+    return "background" if ts == "background" else "foreground"
+
+
+def _current_template_type() -> str:
+    return "background" if _get_interaction_mode() != "pynput" else "foreground"
+
+
+def _type_display(tt: str) -> str:
+    return T("combo.interaction_bg_pm") if tt == "background" else T("combo.interaction_fg")
+
+
 class _NoWheelCombo(QComboBox):
     def wheelEvent(self, e):
         e.ignore()
@@ -1314,6 +1327,13 @@ class _MatchImageStepForm(QWidget):
         color_tolerance = self._color_tolerance.value()
         mode = _get_interaction_mode()
         hwnd = get_window_hwnd(title) if title else None
+        _tmpl_tt = _template_type(str(self._step.params.get("template_source", "")))
+        _cur_tt = _template_type("background" if mode != "pynput" else "foreground")
+        _mode_warn = (
+            T("img_compare.mode_mismatch", src=_type_display(_tmpl_tt), cur=_type_display(_cur_tt))
+            if _tmpl_tt != _cur_tt
+            else ""
+        )
         if mode == "pynput":
             # 前景模式：先縮小主視窗→激活目標→再 mss 截圖，避免主視窗蓋住目標畫面；finally 確保復原
             win = self.window()
@@ -1410,8 +1430,14 @@ class _MatchImageStepForm(QWidget):
                 best.w,
                 best.h,
             )
-            self._img_compare_result.setText(T("img_compare.hit", pct=pct))
-            self._img_compare_result.setStyleSheet("color: #4caf50; font-weight: bold;")
+            self._img_compare_result.setText(
+                T("img_compare.hit", pct=pct) + (f"\n{_mode_warn}" if _mode_warn else "")
+            )
+            self._img_compare_result.setStyleSheet(
+                "color: #e67e22; font-weight: bold;"
+                if _mode_warn
+                else "color: #4caf50; font-weight: bold;"
+            )
         else:
             fallback = _tmpl_mod.match_template(
                 img,
@@ -1427,8 +1453,14 @@ class _MatchImageStepForm(QWidget):
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
             logging.debug("圖片比對: 未命中 最高 conf=%.3f (%d%%)", top, top_pct)
-            self._img_compare_result.setText(T("img_compare.miss", top_pct=top_pct))
-            self._img_compare_result.setStyleSheet("color: #e53935; font-weight: bold;")
+            self._img_compare_result.setText(
+                T("img_compare.miss", top_pct=top_pct) + (f"\n{_mode_warn}" if _mode_warn else "")
+            )
+            self._img_compare_result.setStyleSheet(
+                "color: #e67e22; font-weight: bold;"
+                if _mode_warn
+                else "color: #e53935; font-weight: bold;"
+            )
 
     def _capture_template(self):
         if not self._capture_cb:
@@ -1436,6 +1468,7 @@ class _MatchImageStepForm(QWidget):
         data = self._capture_cb()
         if isinstance(data, dict):
             self._step.params["template_data"] = data.get("b64", "")
+            self._step.params["template_source"] = data.get("template_source", "")
             self._step.params.pop("template", None)
             if data.get("roi"):
                 self._step.params["roi"] = data["roi"]
@@ -5268,6 +5301,7 @@ class MainWindow(QMainWindow):
                     type="match_image",
                     params={
                         "template_data": data.get("template_data", ""),
+                        "template_source": _current_template_type(),
                         "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                         "threshold": cfg.get("default_template_threshold", 0.85),
                         "match_color": False,
@@ -5332,6 +5366,7 @@ class MainWindow(QMainWindow):
                 type="match_image",
                 params={
                     "template_data": data.get("template_data", ""),
+                    "template_source": _current_template_type(),
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "threshold": cfg.get("default_template_threshold", 0.85),
                     "match_color": False,
@@ -5443,6 +5478,39 @@ class MainWindow(QMainWindow):
         if not group_ids:
             QMessageBox.warning(self, T("dialog.warning"), T("status.at_least_one_group"))
             return
+        # 防呆：檢查所選群組內是否有模板來源與目前互動模式不符的 match_image 步驟
+        cur_tt = _current_template_type()
+        allowed_ids = {rid for g in self._groups if g.id in group_ids for rid in g.rule_ids}
+        rules_by_id = {r.id: r for r in self._rules}
+        mismatched = []
+        for rid in allowed_ids:
+            r = rules_by_id.get(rid)
+            if not r or not r.enabled:
+                continue
+            for idx, step in enumerate(r.steps, 1):
+                if step.type != "match_image":
+                    continue
+                p = step.params
+                if not (p.get("template_data", "").strip() or p.get("template", "").strip()):
+                    continue
+                tt = _template_type(str(p.get("template_source", "")))
+                if tt != cur_tt:
+                    mismatched.append((r.name, idx, _type_display(tt)))
+        if mismatched:
+            items = "\n".join(f"  • {name}（步驟 {idx}，{tt}）" for name, idx, tt in mismatched)
+            resp = QMessageBox.warning(
+                self,
+                T("start.mode_mismatch_title"),
+                T(
+                    "start.mode_mismatch_msg",
+                    cur=_type_display(cur_tt),
+                    items=items,
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if resp != QMessageBox.StandardButton.Yes:
+                return
         self._is_starting = True
         if self._is_bg_mode():
             activate_window_bg(title)
