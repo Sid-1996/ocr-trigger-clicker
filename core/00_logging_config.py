@@ -16,12 +16,14 @@ def get_log_dir() -> Path:
     return _LOG_DIR
 
 
-_STALE_FILES = ("debug.log", "run_stderr.log")
+_STALE_FILES = ("debug.log", "run_stderr.log", "triggers.jsonl")
 
 
 def cleanup_stale_logs() -> None:
     log_dir = get_log_dir()
-    for name in _STALE_FILES:
+    stale = list(_STALE_FILES)
+    stale += [p.name for p in log_dir.glob("triggers.jsonl*")]
+    for name in stale:
         try:
             (log_dir / name).unlink(missing_ok=True)
         except OSError:
@@ -72,6 +74,10 @@ def set_debug(enabled: bool) -> None:
         h.setLevel(level)
 
 
+def is_debug_enabled() -> bool:
+    return _debug_enabled
+
+
 def enable_debug() -> None:
     set_debug(True)
 
@@ -79,11 +85,14 @@ def enable_debug() -> None:
 if __name__ == "__main__":
     root = logging.getLogger()
     set_debug(False)
+    assert not is_debug_enabled()
     assert root.level == logging.INFO
     set_debug(True)
+    assert is_debug_enabled()
     assert root.level == logging.DEBUG
     assert all(h.level == logging.DEBUG for h in root.handlers)
     set_debug(False)
+    assert not is_debug_enabled()
     assert root.level == logging.INFO
     assert all(h.level == logging.INFO for h in root.handlers)
     print("logging_config self-check passed")

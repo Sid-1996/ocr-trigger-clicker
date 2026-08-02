@@ -65,7 +65,7 @@ def _ensure_main_logger() -> logging.Logger:
 
 
 def log_main(msg: str):
-    _ensure_main_logger().debug(msg)
+    _ensure_main_logger().info(msg)
 
 
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
