@@ -5,7 +5,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 # ocr-trigger-clicker 架構與陷阱筆記
 
-> 基準版本：git commit `e01a1e1` (2026-08-01, v0.1.8)
+> 基準版本：git commit `4c1844b` (2026-08-03, after v0.1.9 / Unreleased)
 > 本文件內容已逐項對照實際原始碼驗證（見文末驗證記錄），可信度高。
 > 行號參照可能因持續開發而偏移，建議以 `rg` 確認為準。
 
@@ -19,10 +19,17 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 |---|---|---|
 | `00_global_hotkey.py` | 全域熱鍵 F8 | 僅 hid=1，切換開始/暫停/停止 |
 | `00_logging_config.py` | 日誌初始化 | rotation、等級、格式 |
-| `01_screenshot.py` | 視窗截圖 | **mss → dxcam 雙層備援**，GDI 備援僅客戶區（見截圖備援鏈） |
+| `01_screenshot.py` | 視窗截圖 | mss → mss/DXGI 雙層備援，GDI 備援僅客戶區；統一管線見 `17_capture_pipeline` |
 | `02_ocr_engine.py` | OCR 引擎 | `_DEFAULT_MAX_SIDE_LEN = 480`，但主循環繞過此預設 |
 | `03_pynput_input.py` | 輸入模擬 | pynput SendInput，**取代已刪除的 AHK**（`03_ahk_socket.py` 不存在） |
 | `04_rule_engine.py` | 規則引擎 hub | re-export + 16 個 self-check |
+| `05_main_loop.py` | 主偵測迴圈 | 2224 行，整個應用的心臟（見規則執行引擎） |
+| `10_performance_monitor.py` | 效能監控 | FPS/CPU/記憶體、速率限制、`get_total_clicks()` |
+| `11_template_matching.py` | 模板比對 | OpenCV matchTemplate + NMS |
+| `12_updater.py` | 自動更新 | GitHub Releases 版本比對 |
+| `15_print_window.py` | PrintWindow 截圖（後台） | `capture_print_window` / `is_admin` / `is_black_capture` |
+| `16_bg_input.py` | 後台輸入 | PostMessage / pynput 雙模點擊、按鍵、拖曳、滾輪 |
+| `17_capture_pipeline.py` | 統一截圖管線 | `capture_frame()` 前景 mss / 後台 PrintWindow 單一入口 |
 | `box_utils.py` | 座標工具集 | 10 純函式 + 17 self-check（見 box_utils 小節） |
 | `rule_models.py` | 資料模型 | `Rule`、`Step`、`RuleGroup`、`ImportPreview` |
 | `rule_migration.py` | 舊格式遷移 | v1→v2/v2→v3 + `_STEP_DEFAULTS` |
@@ -30,22 +37,20 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `task_management.py` | 任務 CRUD | `list_tasks`/`load_task`/`save_task`/`import_task`/`export_task` |
 | `run_config.py` | 執行配置 | 視窗標題、執行模式、擷取尺寸 |
 | `file_utils.py` | 原子寫入 | `_replace_file()` |
-| `05_main_loop.py` | 主偵測迴圈 | 2182 行，整個應用的心臟（見規則執行引擎） |
-| `10_performance_monitor.py` | 效能監控 | FPS/CPU/記憶體、速率限制 |
-| `11_template_matching.py` | 模板比對 | OpenCV matchTemplate + NMS |
-| `12_updater.py` | 自動更新 | GitHub Releases 版本比對 |
-| `trigger_log.py` | 觸發紀錄 | JSONL 格式 |
 | `_paths.py` | 路徑集中 | `get_data_path`/`get_resource_path`/`_appdata_path` |
 
 ### gui/
 
 | 檔案 | 一行摘要 | 本 skill 關鍵細節 |
 |---|---|---|
-| `06_gui_main.py` | 主視窗 | 5826 行，含 `_ExecutionLogWidget`、`_StopGroupsPicker` |
-| `07_gui_roi.py` | ROI 框選 | 全螢幕 overlay |
-| `09_ocr_debug.py` | OCR 除錯 | 即時辨識結果 |
-| `13_gui_click_picker.py` | 點擊座標選取 | 螢幕绝对 → 比例座標 |
+| `06_gui_main.py` | 主視窗 | 6006 行，含 `_ExecutionLogWidget`、`_StopGroupsPicker`、`_open_log_viewer` |
+| `07_gui_roi.py` | ROI 框選 | 前景全螢幕 overlay |
+| `09_ocr_debug.py` | OCR 除錯 | 即時辨識結果、全黑偵測 |
+| `12_log_viewer.py` | LogViewer 日誌檢視器 | `LogViewer(QDialog)` 獨立視窗顯示 `app.log` |
+| `13_gui_click_picker.py` | 點擊座標選取 | 前景螢幕絕對 → 比例座標 |
 | `14_capture_region.py` | 模板擷取 | base64 編碼、capture_size |
+| `17_bg_roi_selector.py` | 後台 ROI 框選 | 後台影像像素 → 客戶區比例座標 |
+| `18_bg_click_picker.py` | 後台點擊座標選取 | 後台影像像素 → 客戶區比例座標 |
 | `group_settings_controller.py` | 群組設定 | 對話框邏輯 |
 | `rule_config_controller.py` | 規則設定 | 對話框邏輯 |
 | `screenshot_controller.py` | 截圖設定 | 對話框邏輯 |
@@ -60,7 +65,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `build.py` | PyInstaller 打包 + updater.exe 構建 |
 | `updater_main.py` | 獨立更新/重啟程序 |
 
-另有 `i18n/`（多語言，614 keys × 3 語言）與 `tests/`（pytest 單元測試）。
+另有 `i18n/`（多語言，631 keys × 3 語言）與 `tests/`（pytest 單元測試）。
 
 任務檔案實際路徑：`%APPDATA%\ocr-trigger-clicker\tasks\`（不在專案目錄內）。
 
@@ -70,17 +75,23 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 **`roi_coord: "client"` 機制。** ROI 比例預設以全視窗尺寸為基準儲存。若 `roi` 字典含 `"roi_coord": "client"`，代表比例是相對於客戶區（不含標題列/邊框）。還原時（`_resolve_roi()`）需呼叫 `get_window_client_offset()` 取得邊框偏移量，再轉換為含邊框的全視窗像素座標 —— 因為 `capture()` 截圖本身含邊框。忽略此標記會導致裁切區域系統性偏移。舊任務（無此標記）視為以全視窗比例儲存，向下相容。此機制在基準版本前已修補了多處遺漏（`_CompareStepForm`、OCR 診斷面板、舊檔載入路徑），commits：`2cc7db6`、`db094f4`、`2502b52`、`ff2ffb0`。
 
+**後台座標**：後台模式下的 ROI/點擊比例是相對於客戶區影像像素。`_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）讀取 `roi_coord` 標記，若為 `"client"` 即用 `client_offset` 轉換。後台選取器（GUI `17_bg_roi_selector`、`18_bg_click_picker`）輸出的座標已是含 `roi_coord:"client"` 的客戶區比例座標，由 `_resolve_*` 自動處理轉換。
+
 ## 截圖備援鏈
 
-`capture()`（主循環使用）有兩層備援：
+`17_capture_pipeline.py` `capture_frame(mode, title, hwnd)` 是**全應用唯一的截圖入口**（commit `cc0bcf1`），依 `interaction_mode`（config.json 中 `"pynput"`=前景 / 其他=後台）選擇路徑：
+
+**前景**（`_capture_foreground`，`17_capture_pipeline.py:31`）：
 1. **mss** — 跨平台截圖，含邊框（`_capture_mss`）
-2. **dxcam** — DXGI 截圖，速度最快但需 DirectX 支援（`_capture_dxcam`）
+2. **DXGI mss** — mss 改用 DXGI backend（`__mss_get_backend` runtime monkey-patch）
+3. 若 1+2 皆失敗 → 呼叫 `capture_window_content()` 作為最後 GDI 備援（PrintWindow → BitBlt），只取客戶區，會自動填補黑邊到全視窗大小
 
-若兩者皆回傳 None（例如目標視窗被完全遮蔽），主循環（`05_main_loop.py:96`）會呼叫 `capture_window_content()` 作為最後手段：
-1. **GDI PrintWindow** — 客戶區，不含邊框
-2. **GDI BitBlt** — 備援的備援
+**後台**（`_capture_background`，`17_capture_pipeline.py:41`）：
+- `capture_print_window()`（`15_print_window.py`）：GDI PrintWindow 直接取客戶區，全黑時 `is_black_capture()` 偵測 + 非管理員時精準提示（如鳴潮遊戲）
 
-**關鍵陷阱**：`capture()` 回傳 None 與回傳全黑圖像是不同的。若 mss/dxcam 回傳全黑但非 None，`capture_window_content()` 不會被呼叫。
+所有主循環 `_process_rules` 與 match_image 建立模板的截圖統一走 `capture_frame()`，確保模板與實際比對畫面來源一致。
+
+**關鍵陷阱**：後台 PrintWindow 全黑 ≠ 不可用——`is_black_capture()`（`15_print_window.py:25`，平均值<10、標準差<3 判斷為全黑）會先檢查是否為系統管理員，非管理員時提示權限不足（commit `4281972`、`e43b97c`）。
 
 ## box_utils 座標工具
 
@@ -113,22 +124,24 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 ## on_warning 回呼機制
 
-`MainLoop.on_warning: Optional[Callable[[str], None]]`（`05_main_loop.py:186`）
+`MainLoop.on_warning: Optional[Callable[[str], None]]`（`05_main_loop.py:195`）
 
 觸發時機：
-- 空 ROI + 畫面寬 > 800px（`05_main_loop.py:385-394`）
-- match_image 首次匹配成功（`05_main_loop.py:434-436`）
-- compare 步驟全圖 OCR（`05_main_loop.py:473-475`）
-- 流程停止（`05_main_loop.py:582-583`）
-- 規則異常（`05_main_loop.py:805-806`, `979-980`, `1023-1024`）
+- 空 ROI + 畫面寬 > 800px（`05_main_loop.py:432-433`）
+- match_image 首次匹配成功（`05_main_loop.py:475-476`）
+- compare 步驟全圖 OCR（`05_main_loop.py:513-514`）
+- 流程停止（`05_main_loop.py:621-622`，含 `[通知]` 前綴）
+- 規則異常（`05_main_loop.py:846-847`, `1059-1060`, `1083-1084`）
+- 全黑截圖警告（`05_main_loop.py:1232-1233`）
+- 背景截圖失敗（`05_main_loop.py:1357-1364`）
 
-GUI 連接：`loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)`（`gui/06_gui_main.py:2596`）
+GUI 連接：`loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)`（`gui/06_gui_main.py:2669`）
 
 ## 執行日誌面板
 
-`_ExecutionLogWidget`（`gui/06_gui_main.py:2906`）— 即時顯示規則逐步驟執行紀錄。
+`_ExecutionLogWidget`（`gui/06_gui_main.py:2993`）— 即時顯示規則逐步驟執行紀錄。
 
-**資料來源**：`MainLoop._log_exec()`（`05_main_loop.py:213-244`），每步執行結果寫入 `_execution_log` 佇列，GUI 定時拉取。
+**資料來源**：`MainLoop._log_exec()`（`05_main_loop.py:222-276`），每步執行結果寫入 `_execution_log` 佇列，GUI 定時拉取。
 
 **兩層抑制**（避免 flood）：
 1. **同 key 去重**：`_last_exec_log` 字典，相同 `(rule_name, step_idx)` 若 result+detail 不變則跳過
@@ -136,11 +149,63 @@ GUI 連接：`loop.on_warning = lambda msg: self._signals.warning_signal.emit(ms
 
 GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id + scroll 4 方向` 去重）。
 
-**人類可讀摘要**：`_infer_stop_detail()`（`05_main_loop.py:881`）產生 stop 原因，`_build_ok_detail()`（`05_main_loop.py:905`）產生 ok 摘要（含 match_image 百分比、scroll/drag 方向等）。
+**人類可讀摘要**：`_infer_stop_detail()`（`05_main_loop.py:922`）產生 stop 原因，`_build_ok_detail()`（`05_main_loop.py:943`）產生 ok 摘要（含 match_image 百分比、scroll/drag 方向等）。
+
+### 日誌架構（基準版本後新增）
+
+**LogViewer 日誌檢視器**（`gui/12_log_viewer.py:30` `LogViewer(QDialog)`）：
+- 開啟方式：工具列 Ctrl+L 或 `_open_log_viewer()`（`gui/06_gui_main.py:5645`），獨立 QDialog 視窗
+- 即時 tail `app.log`、層級過濾（INFO/WARNING/ERROR/DEBUG）、文字搜尋
+- 內容未變更時不強制捲動，使用者向上瀏覽不會被自動拉回底部（commit `27b9dfa`）
+- 關閉時停止刷新（commit `d640509`），同步 debug 狀態
+
+**`[exec]` 寫入 app.log**（commit `17d4735`、`249d2cf`）：觸發射紀錄已移除 `triggers.jsonl`，改為結構化 `[exec]` 行寫入 `app.log`（INFO 層級）。`_log_exec()` 每次執行紀錄也寫入 app.log，deque maxlen=10。
+
+**生命週期日誌**（commit `249d2cf`）：`log_main()` GUI 寫入提升為 INFO；`set_debug()`/`is_debug_enabled()` 於 `core/00_logging_config.py`；`cleanup_stale_logs()` 清理過期日誌（含 `triggers.jsonl*` glob）。
+
+**異常 traceback**（commit `20b9cf1`）：背景規則/規則/並行/主循環 4 處改為 `self._logger.exception()`，會自動附上完整 traceback。
+
+**循環停止統計**（commit `20b9cf1`）：`MainLoop._started_at` 記錄啟動時間戳，`PerformanceMonitor._total_clicks` + `get_total_clicks()` 累計點擊數。`stop()`（`05_main_loop.py:1264-1268`）輸出 `"循環停止：執行 {秒數} 秒，點擊 {次數} 次，規則 {數量} 條"`。
+
+## 後台操控模式（基準版本後新增）
+
+`interaction_mode` 存放於 `config.json`，由 `_get_interaction_mode()`（`gui/06_gui_main.py:85-95`）讀取，預設 `"pynput"`（前景）。非 `"pynput"` 即後台模式。OCR 診斷面板（`gui/09_ocr_debug.py:43-55`）也有獨立複本。
+
+### 截圖
+
+**單一管道**：`17_capture_pipeline.capture_frame()` — 前景走 mss 三層備援、後台走 PrintWindow。全路徑同源，確保模板建立與比對畫面一致。
+
+### 輸入
+
+`16_bg_input.py` — 雙模切換：前景用 pynput SendInput，後台用 PostMessage（`WM_LBUTTONDOWN`/`WM_KEYDOWN`/`WM_MOUSEWHEEL`/`WM_MOUSEMOVE`）。`click`/`send_key`/`scroll`/`drag`/`send_hold_key` 等 5 個入口自動依 `get_method()` 選路。
+
+後台輸入需視窗 hwnd，座標為**客戶區像素**（非螢幕絕對值），`_client_to_screen()` 轉換後形成 `lparam`。`_hold_key_postmessage()` 支援按住的組合鍵，`_drag_postmessage()` 模擬拖曳。
+
+### 座標
+
+後台模式下的 ROI/點擊比例是相對於客戶區影像像素（無邊框）。`roi_coord: "client"` 標記指示 `_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）需加 `client_offset` 校正。後台選取器（GUI `17_bg_roi_selector`、`18_bg_click_picker`）輸出已含此標記。
+
+### 座標選取器（後台）
+
+**`17_bg_roi_selector.py`** — 先 `activate_window(title)` 使視窗前景化、主視窗 minimize、PrintWindow 擷取靜態客戶區截圖、在截圖上拖曳選取 ROI（同樣比例介面），結果為含 `roi_coord:"client"` 的客戶區比例座標。
+
+**`18_bg_click_picker.py`** — 同樣 PrintWindow 截圖 + 單擊選取點，輸出含 `roi_coord:"client"` 的比例座標，使用 `ScreenToClient` 轉換（commit `e852d38`）。
+
+### 全黑偵測
+
+`is_black_capture()`（`15_print_window.py:25`）檢查 PrintWindow 輸出平均 <10、標準差 <3 則判為全黑。非管理員時提示權限不足（如鳴潮遊戲），commit `4281972`、`72a9456`。OCR 診斷面板（`gui/09_ocr_debug.py:356`）也會檢查全黑並合併提示。
+
+### 工具保護排除
+
+後台模式不會被工具前景保護擋下（commit `c2c5327`: `_ensure_window_foreground()` 在後台模式跳過保護）。
+
+### `template_source` 互動模式標記
+
+`match_image` 模板建立時記錄 `template_source`（前景/後台），於比對時檢查一致性，跨互動模式不得比對（commit `fddd7f7`），防止使用者偽造模板（前景建立 / 後台匹配或反之）。啟動時也會因銷毀不一致提示。
 
 ## 一鍵啟動/取消群組
 
-`_StopGroupsPicker`（`gui/06_gui_main.py:136`）+ `_toggle_all_groups()`（`gui/06_gui_main.py:4396`）
+`_StopGroupsPicker`（`gui/06_gui_main.py:164`）+ `_toggle_all_groups()`（`gui/06_gui_main.py:4497`）
 
 按鈕文字隨狀態切換：`T("main.toggle_all_on")` / `T("main.toggle_all_off")`。點擊後一次性切換所有群組的 `enabled` 狀態。
 
@@ -150,19 +215,19 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 **主循環執行順序**：每幀先跑所有 `background=True` 規則（獨立於群組、`jump` 步驟無效但 `on_fail.jump` 仍有效）→ 根據群組模式（`sequential` 用 `_rule_in_group_ptr` 指向單一規則 / `parallel` 從頭掃描只執行第一個觸發的規則）執行當前規則 → 規則內逐步驟執行，每步回傳 `continue` / `stop` / `jump_step` → 若 `ctx.triggered == True` 則 `_advance_rule_in_group()` 前進；否則停留原規則下幀重試 → 指標超出範圍時觸發 `_on_group_complete()`（依 `loop`/`once`/`repeat` 決定重置或前進；新建群組預設為 `once`，commit `3b171e6` 前為 `loop`）。
 
-**`fail_duration_sec`（已驗證，05_main_loop.py:173）**：
+**`fail_duration_sec`（已驗證，05_main_loop.py:182）**：
 ```python
 self._fail_since: dict[str, float] = {}  # key=f"{rule_id}:{step_idx}" -> first-fail monotonic timestamp
 ```
 邏輯：首次失敗時記錄 `time.monotonic()` 時間戳並回傳 `stop`（不觸發失敗動作，本幀提前結束、不設 triggered、下幀從步驟 0 重試）；後續每幀檢查 `now - first_fail < fail_duration`，未到時長持續回傳 `stop`。修復於 commit `4cb403c`：原本回傳 `continue` 會讓 `_run_rule` 誤判「等待中」為「本步驟已通過」，導致後續步驟（如 click）在容忍期內被誤觸發。成功偵測時（`_handle_detect`/`_handle_match_image`/`_handle_compare` 命中時）會主動 `pop` 該 key 清除失敗計時。`stop` 動作在 0 秒時維持向下相容寫法（純字串 `"stop"`），其餘動作一律帶 `fail_duration_sec` 欄位。
 
-**畫面變化檢測跳幀（已驗證，05_main_loop.py:1181）**：
+**畫面變化檢測跳幀（已驗證，05_main_loop.py:1209）**：
 ```python
 if change_ratio < 0.02 and not self._should_process_static_frame():
 ```
 是 AND 條件。`_should_process_static_frame()` 直接回傳 `self._has_detect_rules`（規則含 `detect`/`match_image` 步驟時為 True）。也就是說：畫面靜止且當前沒有需要偵測的規則時才跳過整幀處理。這個機制有單元測試覆蓋（1435-1488 行，Test 12）。診斷「規則明明該觸發卻沒反應」時，這是優先排查點之一——尤其當畫面長時間無變化、且規則集中沒有 detect 類步驟時。
 
-**notify 步驟類型（commit `5f0f187`）。** notify 是新的步驟類型，用於在螢幕右下角疊加顯示提示訊息，不影響規則流程（回傳 `continue`）。`_NotificationStack`（`gui/06_gui_main.py:2815`）使用 label 手動定位取代 QVBoxLayout（commit `e73dc86`），因為多則訊息在 QVBoxLayout 下會互相覆蓋。任務匯入白名單需含 `notify`，否則含此步驟的規則會被拒（commit `c89fdf1`）。
+**notify 步驟類型（commit `5f0f187`）。** notify 是新的步驟類型，用於在螢幕右下角疊加顯示提示訊息，不影響規則流程（回傳 `continue`）。`_NotificationStack`（`gui/06_gui_main.py:2908`）使用 label 手動定位取代 QVBoxLayout（commit `e73dc86`），因為多則訊息在 QVBoxLayout 下會互相覆蓋。任務匯入白名單需含 `notify`，否則含此步驟的規則會被拒（commit `c89fdf1`）。
 
 **match_image 雙階段驗證（commit `0516abc`、`a7394ef`）。** match_image 新增「比對顏色」選項（`match_color`），模板比對通過後再做顏色篩選：灰階只比形狀，啟用比對顏色則保留 BGR 三通道資訊，並以 `color_tolerance`（`core/11_template_matching.py:80`）過濾平均色差超過容許值的候選框。`color_tolerance` 預設值從 40 改為 100（commit `c6f044e`）。`_run_dry_run` 測試按鈕需同步傳遞 `match_color` 參數（commit `1fda9e2`）；圖片比對按鈕改讀 widget 即時值，不依賴 save()（commit `fac2cef`）。
 
@@ -178,7 +243,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 1. ~~打包遺漏陷阱（已解決）~~：`build.py` 的 `py_datas` 已於 commit `f45f9ad` 改為 glob 自動掃描 `core/` 和 `gui/` 下所有 `*.py`，新增檔案不再需要手動同步。
 
-2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`TestRunController.on_test_rule` → `_run_dry_run`，位於 `gui/test_run_controller.py`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_img_compare_match`，`gui/06_gui_main.py:1284`）只直接呼叫 `_tmpl_mod.match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
+2. **「測試」≠「測試比對」**：規則編輯面板的「測試」（`TestRunController.on_test_rule` → `_run_dry_run`，位於 `gui/test_run_controller.py`）是整條規則的乾執行，模擬全部步驟但不送出實際點擊/按鍵。`match_image` 步驟內的「測試比對」（`_img_compare_match`，`gui/06_gui_main.py:1311`）只直接呼叫 `_tmpl_mod.match_template()`，不經過規則引擎，與規則流程無關。修一個不會自動修好另一個。
 
 3. **背景規則自動脫離群組**：規則標記為 `background=True` 後會自動從所屬群組移除（顯示於樹狀圖「📡 常駐監控」節點），取消標記則移回「未歸類」群組。背景規則內的 `jump` 步驟對群組指標無效（執行前後會 save/restore `_rule_pointer`），但 `on_fail.jump` 仍可作用於同群組規則。
 
@@ -193,6 +258,14 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 8. **`max_side_len=0` 繞過預設**：`02_ocr_engine.py` 定義 `_DEFAULT_MAX_SIDE_LEN = 480`，但主循環 `_ocr_region()` 所有 `recognize()` 呼叫皆直接傳 `max_side_len=0`（無縮限），完全繞過此預設。若要限制全圖 OCR 尺寸，需在 `_ocr_region()` 修改，而非改 `_DEFAULT_MAX_SIDE_LEN`。
 
 9. **`capture()` 回傳 None ≠ 回傳黑圖像**：`capture()` 回傳 None 時，主循環才會呼叫 `capture_window_content()`（GDI 備援）。但若 mss/dxcam 回傳全黑但非 None 的圖像，GDI 備援不會被觸發。診斷「截圖全黑」問題時，先確認是 None 還是黑圖。
+
+10. **後台截圖全黑需管理員權限**（commit `4281972`、`e43b97c`、`72a9456`）：PrintWindow 對受保護視窗（如鳴潮遊戲）可能回全黑。`is_black_capture()`（`15_print_window.py:25`）自動偵測，非管理員時精準提示需以系統管理員權限執行。OCR 診斷面板（`gui/09_ocr_debug.py:356`）合併提示避免覆蓋。
+
+11. **後台座標轉換遺漏會系統性偏移**（已修復，commit `e852d38`）：ROI/點擊/擷取/拖曳 4 處需 `ScreenToClient` 轉換，漏一項即偏移。修復後後台座標 `roi_coord:"client"` 由 `_resolve_roi()`/`_resolve_point()` 自動處理。
+
+12. **後台模式不被工具前景保護誤擋**（已修復，commit `c2c5327`）：`_ensure_window_foreground()` 在後台模式跳過窗口保護。若後台執行時視窗不斷被拉回前景，檢查 `interaction_mode` 是否正確。
+
+13. **`template_source` match_image 互動模式防呆**（已實作，commit `fddd7f7`）：模板建立時記錄來源互動模式（前景/後台），比對時檢查一致性，跨模式不得比對（防止前景模板在後台誤用或反之）。跨模式比對會靜默失敗並寫入日誌警告。
 
 ## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267` + `eda47c2`）
 
@@ -215,22 +288,37 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 | `3c5ad4a` | 迴圈停止時執行日誌未 flush（成功步驟不顯示） |
 | `5ef4f5a` | `_DetectStepForm` 缺 `self._list` 賦值致框選偵測區域 crash |
 | `0fe678b` | F8 停止主循環時破壞視窗最大化狀態 |
+| `0c20b64` | 後台操控模式整合（PrintWindow 截圖、PostMessage 輸入、GUI 後台化） |
+| `e852d38` | 後台模式座標轉換錯誤（ROI/點擊/擷取/拖曳 4 處） |
+| `c2c5327` | 後台模式不再被工具前景保護誤擋 |
+| `4281972` | 後台截圖全黑偵測，非系統管理員時精準提醒（如鳴潮） |
+| `e43b97c` | 後台截圖失敗文案精簡 |
+| `72a9456` | OCR 診斷全黑提示改與耗時訊息合併顯示，避免被覆蓋 |
+| `6618a31` | 前景模式圖片比對先縮小主視窗再 mss 截圖並用 finally 復原 |
+| `d1df9dc` | 圖片比對回饋無法作用（`_MatchImageStepForm` 呼叫 MainWindow 方法崩潰） |
+| `ae68d27` | ROI debug 格式化對 `roi_coord` 字串值防呆 |
+| `fddd7f7` | `match_image` 模板標記來源互動模式並於比對/啟動防呆 |
+| `17d4735` | 統一執行事件寫入 app.log，移除無消費者 `triggers.jsonl` |
+| `249d2cf` | 清掃殘留 `triggers.jsonl`，新增 `is_debug_enabled`，生命週期事件提升為 INFO |
+| `27b9dfa` | LogViewer 內容未變更時不打斷捲動，向上瀏覽不再被自動拉回底部 |
+| `d640509` | LogViewer 關閉停止刷新，同步 debug 狀態，方法更名為 `_open_log_viewer` |
+| `20b9cf1` | 異常加 traceback，循環停止新增執行統計（秒數+點擊+規則數） |
 
 ## 未記錄子系統摘要（基準版本後新增）
 
 ### A. i18n 多語言系統（commit `21a611c` 起至 `ad9a65e`、`db7de24` 等）
 
-`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。三份 JSON（zh_TW/zh_CN/en.json 各 614 keys）均為扁平 dot-separated key。`i18n/check.py` 強制三語言 key set 一致。
+`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。三份 JSON（zh_TW/zh_CN/en.json 各 631 keys）均為扁平 dot-separated key。`i18n/check.py` 強制三語言 key set 一致。
 
 v0.1.8 新增 key：`main.toggle_all_on`、`main.toggle_all_off`、`tooltip.toggle_all_groups`。移除 AHK 相關 6 個 key（`status.ahk_*`、`dialog.install_ahk*`）。
 
-語言切換（`gui/06_gui_main.py:2756-2811`）→ 寫入 config.json → `subprocess.Popen(updater_main.py --mode=relaunch --wait-pid=<pid>)` → 等待舊 process 結束 → 啟動新 process。覆蓋範圍：~677 T() 呼叫，僅限 gui/ 層。`core/` 層無 i18n。
+語言切換（`gui/06_gui_main.py` near line 2891）→ 寫入 config.json → `subprocess.Popen(updater_main.py --mode=relaunch --wait-pid=<pid>)` → 等待舊 process 結束 → 啟動新 process。覆蓋範圍：~570+ T() 呼叫（`gui/06_gui_main.py` 內 571 次，加上各 controller/selectors），僅限 gui/ 層。`core/` 層無 i18n。
 
 ### B. 自動更新機制（commit `56ba94d`、`295b677` 等）
 
 四階段流程：
 1. **版本檢查**（`core/12_updater.py`）：GitHub raw `latest_version.txt` 比對 `__version__`
-2. **更新對話框**（`gui/06_gui_main.py:5610-5652` `_UpdateInfoDialog`）：釋出 notes + 自動更新/前往 Release/取消
+2. **更新對話框**（`gui/06_gui_main.py:5923` `_UpdateInfoDialog`，啟動處 near line 5664）：釋出 notes + 自動更新/前往 Release/取消
 3. **下載**（`core/12_updater.py:download_update`）：64KB chunks，ZIP 解壓至 `%TEMP%/ocr_update_RANDOM/staging/`
 4. **套用**（`updater_main.py --mode=update`）：
    - `os.rename(target→target_old)` 備份（同磁碟瞬間完成）
@@ -309,19 +397,22 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 
 以下項目已用 `rg` 直接對照原始碼第一手確認（非僅憑模型自我審查）。行號參照可能因持續開發而偏移，建議以 `rg` 確認為準。
 
-- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:173`，邏輯分布於 `_handle_detect`、`_handle_match_image`、`_handle_compare`、`_handle_on_fail`、`get_rules_status`。
+- `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:182`，邏輯分布於 `_handle_detect`、`_handle_match_image`、`_handle_compare`、`_handle_on_fail`、`get_rules_status`。
 - fail_duration_sec 修正（commit `4cb403c`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
-- 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1181` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
+- 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1209` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆直接讀取原始碼與執行測試腳本第一手確認。
 - 全域熱鍵 — `core/00_global_hotkey.py` 僅註冊 F8（hid=1），對應 `MainWindow._on_hotkey()` → `_toggle_start()`。
-- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON 各 614 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
+- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON 各 631 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
 - 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `%TEMP%/ocr_update_*/staging/`，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py` 含 copytree 逐檔複製、rollback、暫存目錄清理機制。
 - 路徑集中 — `core/_paths.py` 5 函式，取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
-- 截圖備援鏈 — `core/01_screenshot.py:189` `capture()` 為 mss → dxcam 雙層備援；`capture_window_content()`（line 285）為 GDI 備援（PrintWindow → BitBlt）。
-- `_log_exec` 去重 — `core/05_main_loop.py:213` 兩層抑制：同 key 去重 + completed 1 秒節流。
-- `on_warning` 觸發點 — `core/05_main_loop.py:186` 宣告，觸發於空 ROI 效能警告（line 385）、match_image 首次匹配（line 434）、compare 全圖 OCR（line 473）、流程停止（line 582）、規則異常（line 805/979/1023）。
-- `_toggle_all_groups` — `gui/06_gui_main.py:4396`，切換所有群組啟用狀態。
-- `_img_compare_match` 行號 — 已從 1282 偏移至 `gui/06_gui_main.py:1284`。
-- `_do_debounced_save` 行號 — 已從 4744 偏移至 `gui/06_gui_main.py:4855`。
+- 截圖 — `core/17_capture_pipeline.py:48` `capture_frame(mode, title, hwnd)` 為統一管線：前景 `_capture_foreground`（mss 三層備援）、後台 `_capture_background`（PrintWindow）。`core/15_print_window.py:25` `is_black_capture()` 全黑偵測。
+- `_log_exec` 去重 — `core/05_main_loop.py:222` 兩層抑制：同 key 去重 + completed 1 秒節流。
+- `on_warning` 觸發點 — `core/05_main_loop.py:195` 宣告，觸發於空 ROI 效能警告（line 432）、match_image 首次匹配（line 475）、compare 全圖 OCR（line 513）、流程停止（line 621）、規則異常（line 846/1059/1083）、全黑警告（line 1232）、背景截圖失敗（line 1357/1363）。
+- `_toggle_all_groups` — `gui/06_gui_main.py:4497`，切換所有群組啟用狀態。
+- `_img_compare_match` 行號 — `gui/06_gui_main.py:1311`。
+- `_do_debounced_save` 行號 — `gui/06_gui_main.py:4955`。
+- 後台模式 — `_get_interaction_mode()` 於 `gui/06_gui_main.py:85-95`，後台輸入 `core/16_bg_input.py:192` `click()`，後台 roi 選取 `gui/17_bg_roi_selector.py`、點擊選取 `gui/18_bg_click_picker.py`。
+- LogViewer — `gui/12_log_viewer.py:30` `LogViewer(QDialog)`，開啟於 `gui/06_gui_main.py:5645` `_open_log_viewer()`。
+- 停止統計 — `core/05_main_loop.py:1252-1268` `start()`/`stop()`，`_started_at` + `_total_clicks`（`core/10_performance_monitor.py` `get_total_clicks()`）。
 
 其餘內容來自代碼分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。
