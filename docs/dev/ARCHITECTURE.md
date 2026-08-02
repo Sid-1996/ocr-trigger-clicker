@@ -81,7 +81,8 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/09_ocr_debug.py` | OCR 除錯面板（即時截圖＋標註） | `OcrDebugPanel` |
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、下載、解壓、套用更新） | `check_for_update()`, `download_update()`, `apply_update()` |
-| `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()` |
+| `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
+| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、層級過濾、搜尋、DEBUG 切換） | `LogViewer` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊 |
 | `gui/group_settings_controller.py` | 群組設定對話框控制器（v0.0.10 從 MainWindow 拆出） | `GroupSettingsController` |
 | `gui/screenshot_controller.py` | 截圖／模板控制器（v0.0.10 從 MainWindow 拆出） | `ScreenshotController` |
@@ -518,9 +519,13 @@ MainLoop.emergency_stop()
 
 | 通道 | 方法 | 寫入目標 | GUI 可見？ | 適用場景 |
 |------|------|----------|-----------|----------|
-| 檔案日誌 | `self._log()` | Python `logging` → `app.log` | ❌ 只有檔案 | debug 記錄、非 GUI 訊息 |
-| 執行日誌 | `self._log_exec()` | `self._execution_log` (deque) | ✅ 執行日誌面板 | 步驟成功/失敗/跳轉等結果 |
+| 檔案日誌 | `self._log()` | Python `logging` → `app.log` | ✅ 日誌檢視器（LogViewer） | debug 記錄、非 GUI 訊息 |
+| 執行日誌 | `self._log_exec()` | `self._execution_log` (deque) **+ 同時寫入 `app.log`**（`[exec]` 行） | ✅ 執行日誌面板 + 日誌檢視器 | 步驟成功/失敗/跳轉等結果 |
 | 通知彈窗 | `self.on_warning()` | Qt signal → 系統托盤通知 | ✅ 通知彈窗 | 需要使用者注意的警告 |
+
+- `app.log` 路徑：`%APPDATA%\ocr-trigger-clicker\logs\app.log`，`core/00_logging_config.py` 統一管理（midnight 輪替）
+- `set_debug(enabled)` / `is_debug_enabled()`：runtime 雙向切換 DEBUG 層級（LogViewer 的「啟用詳細日誌」checkbox）
+- 生命週期事件（`log_main()`：循環開始/停止、視窗遺失、應用啟動）與執行事件（`[exec]`）皆為 INFO 層級
 
 ### 執行日誌面板資料流
 
@@ -534,14 +539,20 @@ _run_rule()
        ├── result.action == "stop"  → _log_exec(rule, i, type, "stop", detail)
        └── result.action == "jump"  → _log_exec(rule, i, type, "jump", detail)
                                        │
-                                       ▼
-                               self._execution_log.append({ts, rule_name, step_idx, ...})
+                                       ├── ▼
+                                       │   self._execution_log.append({ts, rule_name, step_idx, ...})
+                                       │   │
+                                       │   ▼
+                                       │   GUI _update_exec_log() ← 定時輪詢
+                                       │   │
+                                       │   ▼
+                                       │   _exec_log_widget._populate(entries)
                                        │
-                                       ▼
-                               GUI _update_exec_log() ← 定時輪詢
-                                       │
-                                       ▼
-                               _exec_log_widget._populate(entries)
+                                       └── ▼
+                                           self._logger.info("[exec] rule=... result=... detail=...")
+                                           │
+                                           ▼
+                                           app.log（LogViewer 每 1.5s tail 500 行）
 ```
 
 ### 常見錯誤

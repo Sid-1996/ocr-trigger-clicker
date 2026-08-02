@@ -20,6 +20,13 @@
 ### 修復
 - 後台模式（PostMessage）啟動後，click/key/scroll/drag 不再被「工具處於前景」保護誤擋（`_is_tool_foreground` 對後台模式直接回傳 False，前景模式行為不變）
 
+### 日誌系統整合
+- 執行事件統一寫入 `app.log`（`[exec]` 結構化行），移除無消費者的 `triggers.jsonl` 及舊檔清理
+- 「📂 日誌」按鈕改為開啟 **日誌檢視器**（LogViewer，`gui/12_log_viewer.py`）：tail app.log、層級過濾、關鍵字搜尋、DEBUG 即時切換、開啟資料夾
+- 新增 `set_debug()` / `is_debug_enabled()` 雙向切換，`--debug` 啟動旗標行為不變
+- 循環開始/停止等生命週期事件層級從 DEBUG 提升為 INFO（關閉 DEBUG 時仍可見）
+- LogViewer 關閉時停止定時刷新，並同步目前 debug 狀態
+
 
 ## [v0.1.9] - 2026-08-01
 
