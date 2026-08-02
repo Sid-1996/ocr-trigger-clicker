@@ -58,7 +58,6 @@ MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
 img_to_b64 = _tmpl.img_to_b64
 _logging_config = load_sibling("logging_config", "core/00_logging_config.py")
-_trigger_log = load_sibling("trigger_log", "core/trigger_log.py")
 
 
 def _ensure_main_logger() -> logging.Logger:
@@ -250,6 +249,14 @@ class MainLoop:
                 "result": result,
                 "detail": detail,
             }
+        )
+        self._logger.info(
+            "[exec] rule=%s step=%s type=%s result=%s detail=%s",
+            rule_name,
+            step_idx,
+            step_type,
+            result,
+            detail,
         )
 
     def get_execution_log(self) -> list[dict]:
@@ -1014,8 +1021,6 @@ class MainLoop:
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
                 if bg_ctx.triggered:
-                    task_name = Path(self._rules_path).stem if self._rules_path else ""
-                    _trigger_log.log_trigger(rule.id, rule.name, task_name, "background")
                     self._log_exec(rule.name, 0, "background", "triggered")
                 self._rule_pointer = saved_ptr
 
@@ -1060,13 +1065,6 @@ class MainLoop:
 
         if ctx.triggered or ctx.force_advance:
             if ctx.triggered:
-                task_name = Path(self._rules_path).stem if self._rules_path else ""
-                _trigger_log.log_trigger(
-                    rule.id,
-                    rule.name,
-                    task_name,
-                    group.id,
-                )
                 self._rule_completed.add(rule.id)
                 self._log_exec(rule.name, -1, "completed", "completed")
             self._last_active_rule_id = rule.id
@@ -1089,8 +1087,6 @@ class MainLoop:
                 if self.on_warning:
                     self.on_warning(f"並行規則「{r.name}」異常: {e}")
             if r_ctx.triggered:
-                task_name = Path(self._rules_path).stem if self._rules_path else ""
-                _trigger_log.log_trigger(r.id, r.name, task_name, group.id)
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.id)
                 self._log_exec(r.name, -1, "completed", "completed")

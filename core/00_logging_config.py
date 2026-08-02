@@ -61,11 +61,29 @@ def _ensure_root_handler():
         root.setLevel(logging.DEBUG if _debug_enabled else logging.INFO)
 
 
-def enable_debug() -> None:
+def set_debug(enabled: bool) -> None:
     global _debug_enabled
-    _debug_enabled = True
+    _debug_enabled = enabled
     root = logging.getLogger()
     _ensure_root_handler()
-    root.setLevel(logging.DEBUG)
+    level = logging.DEBUG if enabled else logging.INFO
+    root.setLevel(level)
     for h in list(root.handlers):
-        h.setLevel(logging.DEBUG)
+        h.setLevel(level)
+
+
+def enable_debug() -> None:
+    set_debug(True)
+
+
+if __name__ == "__main__":
+    root = logging.getLogger()
+    set_debug(False)
+    assert root.level == logging.INFO
+    set_debug(True)
+    assert root.level == logging.DEBUG
+    assert all(h.level == logging.DEBUG for h in root.handlers)
+    set_debug(False)
+    assert root.level == logging.INFO
+    assert all(h.level == logging.INFO for h in root.handlers)
+    print("logging_config self-check passed")
