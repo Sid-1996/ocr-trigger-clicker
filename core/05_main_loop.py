@@ -282,7 +282,7 @@ class MainLoop:
             idx += 1
         return None
 
-    def _send_click(self, x: int, y: int, button: str) -> bool:
+    def _send_click(self, x: int, y: int, button: str, hold_ms: int = 0) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         if mode and mode != "pynput" and self._window_hwnd:
             _bg_input.set_method(mode)
@@ -291,8 +291,8 @@ class MainLoop:
             user32 = ctypes.windll.user32
             pt = wintypes.POINT(x, y)
             user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt))
-            return _bg_input.click(self._window_hwnd, pt.x, pt.y, button)
-        return _input_mod.send_click(x, y, button)
+            return _bg_input.click(self._window_hwnd, pt.x, pt.y, button, hold_ms)
+        return _input_mod.send_click(x, y, button, hold_ms)
 
     def _send_key(self, key: str) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
@@ -736,6 +736,41 @@ class MainLoop:
 
         return StepResult("continue")
 
+    def _handle_mouse_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        button = params.get("button", "left")
+        hold_ms = params.get("hold_ms", 0)
+
+        if not self._can_perform_action():
+            self._logger.debug("規則「%s」滑鼠點擊略過：CPS 速率限制", rule.name)
+            return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
+        if self._is_tool_foreground():
+            self._logger.debug("規則「%s」滑鼠點擊略過：工具處於前景", rule.name)
+            return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
+
+        self._activate_window()
+
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode and mode != "pynput" and self._window_hwnd and ctx.rect:
+            cx = ctx.rect["x"] + ctx.rect["w"] // 2
+            cy = ctx.rect["y"] + ctx.rect["h"] // 2
+        else:
+            import ctypes
+
+            pt = wintypes.POINT()
+            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+            cx, cy = pt.x, pt.y
+
+        ok = self._send_click(cx, cy, button, hold_ms)
+        if ok:
+            self._perf.record_click()
+            ctx.triggered = True
+            self._log(
+                f"規則「{rule.name}」滑鼠點擊 ({cx},{cy})"
+                + (f" 按住 {hold_ms}ms" if hold_ms > 0 else "")
+            )
+
+        return StepResult("continue")
+
     def _handle_drag(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         target = params.get("target", "text_center")
         if target == "text_center":
@@ -862,6 +897,7 @@ class MainLoop:
             "detect": self._handle_detect,
             "click": self._handle_click,
             "key": self._handle_key,
+            "mouse_click": self._handle_mouse_click,
             "wait": self._handle_wait,
             "jump": self._handle_jump,
             "drag": self._handle_drag,
@@ -964,6 +1000,9 @@ class MainLoop:
             return ctx.matched_text.text[:15]
         if t == "key":
             return step.params.get("key", "")
+        if t == "mouse_click":
+            button = step.params.get("button", "left")
+            return {"left": T("combo.left"), "right": T("combo.right")}.get(button, button)
         if t == "match_image" and ctx.matched_text and hasattr(ctx.matched_text, "confidence"):
             return T(
                 "exec_log.detail.match_conf", confidence=f"{ctx.matched_text.confidence * 100:.0f}"
@@ -1495,10 +1534,12 @@ if __name__ == "__main__":
 
     # ── Test 4: _run_step dispatcher coverage ──
     test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ml._send_click = lambda x, y, button="left", hold_ms=0: True  # 防止 self-check 送出真實輸入
     for hn in [
         "detect",
         "click",
         "key",
+        "mouse_click",
         "wait",
         "jump",
         "drag",

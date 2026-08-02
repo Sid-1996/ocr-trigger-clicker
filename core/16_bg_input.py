@@ -71,7 +71,7 @@ def _make_lparam(x: int, y: int) -> int:
 
 
 # ── PostMessage method ──
-def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left") -> bool:
+def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     """Click using PostMessage (pure message, no cursor movement)."""
     try:
         lparam = _make_lparam(x, y)
@@ -90,7 +90,8 @@ def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left") -> bool:
         user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
         time.sleep(0.02)
         user32.PostMessageW(hwnd, down_msg, mk, lparam)
-        time.sleep(0.02)
+        if hold_ms > 0:
+            time.sleep(hold_ms / 1000.0)
         user32.PostMessageW(hwnd, up_msg, 0, lparam)
         return True
     except Exception as e:
@@ -126,7 +127,7 @@ def _scroll_postmessage(hwnd: int, x: int, y: int, amount: int) -> bool:
 
 
 # ── Pynput method (physical input, requires foreground) ──
-def _click_pynput(hwnd: int, x: int, y: int, button: str = "left") -> bool:
+def _click_pynput(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     """Click using pynput (physical input, requires foreground)."""
     try:
         import pynput.mouse
@@ -144,7 +145,10 @@ def _click_pynput(hwnd: int, x: int, y: int, button: str = "left") -> bool:
         mouse = pynput.mouse.Controller()
         mouse.position = (abs_x, abs_y)
         time.sleep(0.02)
-        mouse.click(btn)
+        mouse.press(btn)
+        if hold_ms > 0:
+            time.sleep(hold_ms / 1000.0)
+        mouse.release(btn)
         return True
     except Exception as e:
         _log.error("pynput click failed: %s", e)
@@ -185,13 +189,13 @@ def _scroll_pynput(hwnd: int, x: int, y: int, amount: int) -> bool:
 
 
 # ── Public API ──
-def click(hwnd: int, x: int, y: int, button: str = "left") -> bool:
+def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     """Click at (x, y) in client coordinates using the current method."""
     with _lock:
         if _method == "postmessage":
-            return _click_postmessage(hwnd, x, y, button)
+            return _click_postmessage(hwnd, x, y, button, hold_ms)
         elif _method == "pynput":
-            return _click_pynput(hwnd, x, y, button)
+            return _click_pynput(hwnd, x, y, button, hold_ms)
         return False
 
 

@@ -149,7 +149,7 @@ def _validate_coords(x: int, y: int) -> bool:
     return True
 
 
-def send_click(x: int, y: int, button: str = "left") -> bool:
+def send_click(x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     if not _validate_coords(x, y):
         return False
     btn = {"left": _Button.left, "right": _Button.right, "middle": _Button.middle}.get(
@@ -159,7 +159,10 @@ def send_click(x: int, y: int, button: str = "left") -> bool:
     with _lock:
         mouse.position = (x, y)
         time.sleep(0.01)
-        mouse.click(btn)
+        mouse.press(btn)
+        if hold_ms > 0:
+            time.sleep(hold_ms / 1000.0)
+        mouse.release(btn)
     return True
 
 

@@ -3,6 +3,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import cv2
@@ -62,6 +63,13 @@ def _make_ml():
     ml._pause_event = threading.Event()
     ml._emergency_event = threading.Event()
     ml._perf = _perf.PerformanceMonitor(max_cps=5)
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "pynput"}
+    )()
+    ml._execution_log = deque(maxlen=10)
+    ml._last_exec_log = {}
+    ml._rule_completed = set()
+    ml._last_completed_log = {}
     ml.on_error = None
     ml.on_warning = None
     ml.on_info = None
@@ -113,10 +121,14 @@ def test_run_step_dispatcher():
     ctx = StepContext(
         img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
     )
+    ml._send_click = lambda x, y, button="left", hold_ms=0: True  # 防止測試送出真實輸入
+    ml._send_key = lambda key: True
+    ml._send_scroll = lambda direction: True
     for hn in [
         "detect",
         "click",
         "key",
+        "mouse_click",
         "wait",
         "jump",
         "drag",
@@ -501,6 +513,7 @@ def test_handle_on_fail_skip():
     assert _skip_result.step_index == 3
     _stop_result = ml._handle_on_fail({"on_fail": "stop"}, ctx, test_rule)
     assert _stop_result.action == "stop"
+    ml._send_key = lambda key: True  # 防止測試送出真實按鍵
     _key_result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "F5"}}, ctx, test_rule)
     assert _key_result.action == "continue"
 

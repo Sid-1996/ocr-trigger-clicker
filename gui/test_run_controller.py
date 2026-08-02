@@ -563,6 +563,17 @@ class TestRunController:
                     s = T("test.key_hold", ms=hm) if hm else T("test.key_press")
                     log.append(T("test.key_action", idx=idx + 1, action=s, key=k))
 
+                elif step.type == "mouse_click":
+                    p = step.params
+                    btn = {"left": T("combo.left"), "right": T("combo.right")}.get(
+                        p.get("button", "left"), p.get("button", "left")
+                    )
+                    s = T("test.mouse_click_action", idx=idx + 1, button=btn)
+                    hm = p.get("hold_ms", 0)
+                    if hm:
+                        s += " " + T("test.key_hold", ms=hm)
+                    log.append(s)
+
                 elif step.type == "wait":
                     p = step.params
                     log.append(T("test.wait", idx=idx + 1, ms=p.get("ms", 500)))

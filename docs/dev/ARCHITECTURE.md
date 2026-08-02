@@ -136,6 +136,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `match_image` | 圖示模板比對，未命中則觸發 on_fail | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
 | `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`）、`x`, `y`, `button`, `random_offset` |
 | `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（pynput 格式）、`hold_ms` |
+| `mouse_click` | 滑鼠按鍵點擊（設 `ctx.triggered = True`），不需座標：前景點擊游標位置、後台點擊視窗中心 | `button`、`hold_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
@@ -223,7 +224,7 @@ v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 
 `StepContext.triggered` 是控制規則指標前進的核心旗標：
 
-- **設為 True 的步驟**：`click`、`key`、`notify`、`scroll`、`drag`（這些步驟代表「已執行動作」）
+- **設為 True 的步驟**：`click`、`key`、`mouse_click`、`notify`、`scroll`、`drag`（這些步驟代表「已執行動作」）
 - **不設 True 的步驟**：`detect`、`match_image`、`compare`、`wait`、`jump`（僅檢查或等待，非動作）
 - **規則完成後**：若 `ctx.triggered == True`，呼叫 `_advance_rule_in_group()` 前進到下一條規則；若 `False`，指標不動，下幀重複同一規則
 
