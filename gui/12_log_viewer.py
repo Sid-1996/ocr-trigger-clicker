@@ -22,6 +22,7 @@ _log_cfg = load_sibling("logging_config", "core/00_logging_config.py")
 
 _MAX_LINES = 500
 _REFRESH_MS = 1500
+_FOLLOW_TOLERANCE = 20
 
 _LEVEL_ORDER = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
 
@@ -34,6 +35,7 @@ class LogViewer(QDialog):
 
         self._log_path: Path = _log_cfg.get_log_dir() / "app.log"
         self._min_level = 1
+        self._last_text = ""
 
         layout = QVBoxLayout(self)
 
@@ -114,10 +116,19 @@ class LogViewer(QDialog):
                 continue
             filtered.append(line)
 
-        self._text.setPlainText("".join(filtered))
+        new_text = "".join(filtered)
+        if new_text == self._last_text:
+            return
+
+        bar = self._text.verticalScrollBar()
+        at_bottom = bar.value() >= bar.maximum() - _FOLLOW_TOLERANCE
+        saved = bar.value()
+
+        self._text.setPlainText(new_text)
+        self._last_text = new_text
+
         if filtered:
-            bar = self._text.verticalScrollBar()
-            bar.setValue(bar.maximum())
+            bar.setValue(bar.maximum() if at_bottom else min(saved, bar.maximum()))
 
     @staticmethod
     def _line_level(line: str) -> int:
