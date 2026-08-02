@@ -336,20 +336,6 @@ class TestRunController:
                         else:
                             log.append(T("test.click_target_no_detect", idx=idx + 1))
                             continue
-                    elif target == "click_text":
-                        ct = p.get("text", "").strip()
-                        if ct:
-                            r = recognize(
-                                img, preprocess=False, max_side_len=0, min_confidence=0.25
-                            )
-                            ms = find_text(r, ct, "contains", 0.8)
-                            if ms:
-                                m = ms[0]
-                                cx = int(m.x + m.w / 2)
-                                cy = int(m.y + m.h / 2)
-                            else:
-                                log.append(T("test.click_text_not_found", idx=idx + 1, text=ct))
-                                continue
                     elif target == "cursor":
                         btn = {"left": T("combo.left"), "right": T("combo.right")}.get(
                             p.get("button", "left"), p.get("button", "left")
@@ -392,20 +378,6 @@ class TestRunController:
                         else:
                             log.append(T("test.drag_start_no_detect", idx=idx + 1))
                             continue
-                    elif target == "click_text":
-                        ct = p.get("text", "").strip()
-                        if ct:
-                            r = recognize(
-                                img, preprocess=False, max_side_len=0, min_confidence=0.25
-                            )
-                            ms = find_text(r, ct, "contains", 0.8)
-                            if ms:
-                                m = ms[0]
-                                sx = int(m.x + m.w / 2)
-                                sy = int(m.y + m.h / 2)
-                            else:
-                                log.append(T("test.drag_text_not_found", idx=idx + 1, text=ct))
-                                continue
                     if sx is not None:
                         dx = p.get("dx", 0)
                         dy = p.get("dy", 0)

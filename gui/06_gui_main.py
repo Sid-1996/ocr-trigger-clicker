@@ -505,8 +505,6 @@ def _step_summary(step, rules_provider=None) -> str:
             return T("summary.click_target")
         if target == "custom":
             return T("summary.format_click", point=_fmt_point(p.get("x", 0), p.get("y", 0)))
-        if target == "click_text":
-            return T("summary.format_click_text", text=p.get("text", ""))
         if target == "cursor":
             return T("summary.click_cursor")
     if t == "key":
@@ -522,7 +520,6 @@ def _step_summary(step, rules_provider=None) -> str:
         base = {
             "text_center": T("summary.click_target"),
             "custom": T("step_form.text_coord"),
-            "click_text": T("step_form.text_label", text=p.get("text", "")),
         }.get(target, "?")
         return T("summary.format_drag", base=base, dx=dx, dy=dy)
     if t == "scroll":
@@ -1880,25 +1877,17 @@ class _ClickStepForm(QWidget):
         self._target = _NoWheelCombo()
         self._target.addItem(T("summary.click_target"), "text_center")
         self._target.addItem(T("step_form.text_coord"), "custom")
-        self._target.addItem(T("format.click_mode"), "click_text")
         self._target.addItem(T("step_form.click_target_cursor"), "cursor")
         self._target.setItemData(
             0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
         )
         self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
-        self._target.setItemData(
-            2, T("step_form.target_click_text_tip"), Qt.ItemDataRole.ToolTipRole
-        )
-        self._target.setItemData(3, T("step_form.target_cursor_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._target.setItemData(2, T("step_form.target_cursor_tip"), Qt.ItemDataRole.ToolTipRole)
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
         self._target.currentIndexChanged.connect(self._on_target_changed)
         form.addRow(T("step_form.click_target"), self._target)
-
-        self._click_text = QLineEdit(p.get("text", ""))
-        self._click_text.setVisible(p.get("target", "") == "click_text")
-        form.addRow(T("step_form.target_text"), self._click_text)
 
         self._coord_label = QLabel(_fmt_point(p.get("x", 0), p.get("y", 0)))
         self._pick_btn = QPushButton(T("step_form.pick_coord"))
@@ -1942,7 +1931,6 @@ class _ClickStepForm(QWidget):
     def _on_target_changed(self, idx):
         t = self._target.currentData()
         self._coord_row.setVisible(t == "custom")
-        self._click_text.setVisible(t == "click_text")
 
     def _pick_coord(self):
         if self._pick_cb:
@@ -1958,7 +1946,6 @@ class _ClickStepForm(QWidget):
 
     def save(self):
         self._step.params["target"] = self._target.currentData()
-        self._step.params["text"] = self._click_text.text().strip()
         self._step.params["button"] = self._button.currentData()
         self._step.params["random_offset"] = self._offset.value()
         self._step.params["hold_ms"] = self._hold_ms.value()
@@ -1978,23 +1965,15 @@ class _DragStepForm(QWidget):
         self._target = _NoWheelCombo()
         self._target.addItem(T("summary.click_target"), "text_center")
         self._target.addItem(T("step_form.text_coord"), "custom")
-        self._target.addItem(T("format.click_mode"), "click_text")
         self._target.setItemData(
             0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
         )
         self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
-        self._target.setItemData(
-            2, T("step_form.target_click_text_tip"), Qt.ItemDataRole.ToolTipRole
-        )
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
         self._target.currentIndexChanged.connect(self._on_target_changed)
         form.addRow(T("step_form.drag_start"), self._target)
-
-        self._click_text = QLineEdit(p.get("text", ""))
-        self._click_text.setVisible(p.get("target", "") == "click_text")
-        form.addRow(T("step_form.target_text"), self._click_text)
 
         self._coord_label = QLabel(_fmt_point(p.get("x", 0), p.get("y", 0)))
         self._pick_btn = QPushButton(T("step_form.pick_coord_short"))
@@ -2030,7 +2009,6 @@ class _DragStepForm(QWidget):
     def _on_target_changed(self, idx):
         t = self._target.currentData()
         self._coord_row.setVisible(t == "custom")
-        self._click_text.setVisible(t == "click_text")
 
     def _pick_coord(self):
         if self._pick_cb:
@@ -2045,7 +2023,6 @@ class _DragStepForm(QWidget):
 
     def save(self):
         self._step.params["target"] = self._target.currentData()
-        self._step.params["text"] = self._click_text.text().strip()
         self._step.params["dx"] = self._dx.value()
         self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
@@ -5048,12 +5025,6 @@ class MainWindow(QMainWindow):
                     warnings.append(T("notif.rule_validation_missing_rule", idx=i + 1))
             elif s.type == "match_image" and not s.params.get("template", "").strip():
                 warnings.append(T("notif.rule_validation_no_image", idx=i + 1))
-            elif (
-                s.type == "click"
-                and s.params.get("target") == "click_text"
-                and not s.params.get("text", "").strip()
-            ):
-                warnings.append(T("notif.rule_validation_empty_click", idx=i + 1))
             elif s.type == "notify" and not s.params.get("message", "").strip():
                 warnings.append(T("notif.rule_validation_empty_notify", idx=i + 1))
             elif s.type == "compare" and not s.params.get("pattern", "").strip():

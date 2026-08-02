@@ -22,7 +22,6 @@ _STEP_DEFAULTS = {
         "target": "text_center",
         "x": 0,
         "y": 0,
-        "text": "",
         "dx": 0,
         "dy": 0,
         "button": "left",
@@ -140,7 +139,6 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["target"] = str(base.get("target", "text_center"))
         base["x"] = _as_float(base.get("x", 0), 0)
         base["y"] = _as_float(base.get("y", 0), 0)
-        base["text"] = str(base.get("text", "")).strip()
         base["button"] = str(base.get("button", "left"))
         base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
         if step_type == "click":

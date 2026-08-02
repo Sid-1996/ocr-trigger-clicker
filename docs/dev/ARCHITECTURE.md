@@ -134,7 +134,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 |------|------|----------------|
 | `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
 | `match_image` | 圖示模板比對，未命中則觸發 on_fail | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
-| `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`/`click_text`/`cursor`）、`x`, `y`, `button`, `random_offset`, `hold_ms` |
+| `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`/`cursor`）、`x`, `y`, `button`, `random_offset`, `hold_ms` |
 | `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（pynput 格式）、`hold_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |

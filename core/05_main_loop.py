@@ -669,19 +669,6 @@ class MainLoop:
             cx += dx
             cy += dy
             matched_text = ""
-        elif target == "click_text":
-            click_text = params.get("text", "")
-            if not click_text:
-                return StepResult("stop", detail=T("exec_log.detail.click_text_empty"))
-            results = self._ocr_region(ctx.img, None)
-            clk_matches = find_text(results, click_text, "contains", 0.8)
-            if not clk_matches:
-                return StepResult(
-                    "stop", detail=T("exec_log.detail.not_found", text=click_text[:15])
-                )
-            cx = clk_matches[0].center_x + dx
-            cy = clk_matches[0].center_y + dy
-            matched_text = clk_matches[0].text
         elif target == "cursor":
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
             if mode and mode != "pynput" and self._window_hwnd and ctx.rect:
@@ -767,18 +754,6 @@ class MainLoop:
             sx, sy = self._resolve_point(
                 params.get("x", 0), params.get("y", 0), ctx.rect, params.get("roi_coord")
             )
-        elif target == "click_text":
-            click_text = params.get("text", "")
-            if not click_text:
-                return StepResult("stop", detail=T("exec_log.detail.click_text_empty"))
-            results = self._ocr_region(ctx.img, None)
-            matches = find_text(results, click_text, "contains", 0.8)
-            if not matches:
-                return StepResult(
-                    "stop", detail=T("exec_log.detail.not_found", text=click_text[:15])
-                )
-            sx = matches[0].center_x
-            sy = matches[0].center_y
         else:
             return StepResult("stop", detail=T("exec_log.detail.unknown_drag_target"))
 
@@ -957,9 +932,6 @@ class MainLoop:
             target = step.params.get("target", "text_center")
             if target == "text_center" and ctx.matched_text is None:
                 return T("exec_log.detail.no_target")
-            if target == "click_text":
-                text = step.params.get("text", "")
-                return T("exec_log.detail.not_found", text=text[:15]) if text else ""
             return ""
         if t == "match_image":
             if ctx.best_confidence >= 0:
