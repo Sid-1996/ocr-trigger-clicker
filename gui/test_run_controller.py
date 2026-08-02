@@ -143,9 +143,7 @@ class TestRunController:
         if mode != "pynput" and is_black_capture(img) and not is_admin():
             black_warn = T("bg_capture.black_admin_warn")
             warn = f"{warn}\n{black_warn}" if warn else black_warn
-        logging.debug(
-            "規則測試: mode=%s 截圖 %dx%d 視窗=%s", mode, img.shape[1], img.shape[0], title
-        )
+        logging.debug("rule_test: mode=%s %dx%d win=%s", mode, img.shape[1], img.shape[0], title)
         t = threading.Thread(target=self._run_rule_test, args=(rule, img, warn), daemon=True)
         t.start()
 
@@ -594,7 +592,7 @@ class TestRunController:
                         T("test.template_embedded") if tmpl_data.strip() else Path(tmpl_path).stem
                     )
                     logging.debug(
-                        "規則測試: match_image 「%s」 閾值=%.2f roi=%s capture_size=%s current_size=%s",
+                        "rule_test: match_image '%s' thresh=%.2f roi=%s",
                         tmpl_name,
                         threshold,
                         {
@@ -603,8 +601,6 @@ class TestRunController:
                         }
                         if isinstance(roi, dict)
                         else roi,
-                        cs,
-                        cur_size,
                     )
                     if results:
                         m = results[0]

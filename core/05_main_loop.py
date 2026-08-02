@@ -686,10 +686,8 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.unknown_click_target"))
 
         if not self._can_perform_action():
-            self._logger.debug("規則「%s」點擊略過：CPS 速率限制", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
-            self._logger.debug("規則「%s」點擊略過：工具處於前景", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
         button = params.get("button", "left")
@@ -718,10 +716,8 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.key_empty"))
 
         if not self._can_perform_action():
-            self._logger.debug("規則「%s」按鍵略過：CPS 速率限制", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
-            self._logger.debug("規則「%s」按鍵略過：工具處於前景", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
         self._activate_window()
@@ -758,10 +754,8 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.unknown_drag_target"))
 
         if not self._can_perform_action():
-            self._logger.debug("規則「%s」拖曳略過：CPS 速率限制", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
-            self._logger.debug("規則「%s」拖曳略過：工具處於前景", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
         dx = params.get("dx", 0)
@@ -794,10 +788,8 @@ class MainLoop:
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         if not self._can_perform_action():
-            self._logger.debug("規則「%s」滾輪略過：CPS 速率限制", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
-            self._logger.debug("規則「%s」滾輪略過：工具處於前景", rule.name)
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
         direction = params.get("direction", "WheelDown")

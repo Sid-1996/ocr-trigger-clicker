@@ -29,7 +29,7 @@ def handle_native_event(eventType, message):
                 logger.info(f"handle_native_event: WM_HOTKEY wParam={wparam} ({name})")
                 return True, 0, int(wparam)
             else:
-                logger.debug(f"handle_native_event: WM_HOTKEY wParam={wparam} (不在 _HOTKEYS 中)")
+                logger.debug(f"WM_HOTKEY wParam={wparam} not registered")
                 return True, 0, None
     return False, 0, None
 

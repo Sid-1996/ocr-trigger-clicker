@@ -84,14 +84,12 @@ def load_groups(path: str) -> list[RuleGroup]:
     if not isinstance(groups, list):
         return []
     groups = [_dict_to_group(g) for g in groups]
-    logging.debug("[load_groups] loaded=%s", [(g.id, list(g.rule_ids)) for g in groups])
+    logging.debug("[load_groups] n=%d", len(groups))
     return groups
 
 
 def save_groups(groups: list[RuleGroup], path: str) -> bool:
-    logging.debug(
-        "[save_groups] path=%s groups=%s", path, [(g.id, list(g.rule_ids)) for g in groups]
-    )
+    logging.debug("[save_groups] path=%s n=%d", path, len(groups))
     tmp_path: str = ""
     try:
         data = {"groups": [_group_to_dict(g) for g in groups]}
@@ -147,12 +145,12 @@ def load_rules(path: str) -> list[Rule]:
         return []
     rules_data = data.get("rules", [])
     rules = [_dict_to_rule(r) for r in rules_data]
-    logging.debug("[load_rules] loaded=%s", [(r.id, r.name) for r in rules])
+    logging.debug("[load_rules] n=%d", len(rules))
     return rules
 
 
 def save_rules(rules: list[Rule], path: str) -> bool:
-    logging.debug("[save_rules] path=%s rules=%s", path, [(r.id, r.name) for r in rules])
+    logging.debug("[save_rules] path=%s n=%d", path, len(rules))
     tmp_path: str = ""
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}

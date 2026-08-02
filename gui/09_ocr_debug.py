@@ -273,12 +273,7 @@ class OcrDebugPanel(QWidget):
         if mode != "pynput":
             img = capture_frame(mode, title, hwnd=hwnd)
             if img is not None:
-                logging.debug(
-                    "OCR 診斷: 後台模式 mode=%s 截圖 %dx%d",
-                    mode,
-                    img.shape[1],
-                    img.shape[0],
-                )
+                logging.debug("ocr_dbg: bg mode=%s %dx%d", mode, img.shape[1], img.shape[0])
                 return img[:, :, ::-1].copy(), T("ocr_debug.source_screen")
             return None, ""
 
@@ -300,7 +295,7 @@ class OcrDebugPanel(QWidget):
             img = capture_frame(mode, title, hwnd=hwnd)
             source = T("ocr_debug.source_screen")
             if img is not None:
-                logging.debug("OCR 診斷: 前景模式 mss 截圖 %dx%d", img.shape[1], img.shape[0])
+                logging.debug("ocr_dbg: fg mss %dx%d", img.shape[1], img.shape[0])
                 img = img[:, :, ::-1].copy()
 
             if img is None:
@@ -372,7 +367,7 @@ class OcrDebugPanel(QWidget):
             opts = self._ocr_options()
             results = recognize(img, **opts)
             elapsed = (time.monotonic() - t0) * 1000
-            logging.debug("OCR 診斷: 辨識耗時 %.0fms 區塊 %d 個", elapsed, len(results))
+            logging.debug("ocr_dbg: %.0fms %d blocks", elapsed, len(results))
             self._signals.ocr_done.emit(results, elapsed, request_id)
         except Exception:
             logging.exception("_do_ocr failed")
@@ -594,7 +589,7 @@ class OcrDebugPanel(QWidget):
         template_b64 = _tmpl.img_to_b64(crop_bgr)
 
         logging.debug(
-            "OCR 診斷: 建立模板規則 來源=%s 像素(%d,%d) %dx%d ROI=%s",
+            "ocr_dbg: template rule src=%s px=(%d,%d) %dx%d roi=%s",
             self._capture_source,
             t_x,
             t_y,
@@ -666,7 +661,7 @@ class OcrDebugPanel(QWidget):
         )
 
         logging.debug(
-            "OCR 診斷: 建立模板步驟 來源=%s 像素(%d,%d) %dx%d ROI=%s",
+            "ocr_dbg: template step src=%s px=(%d,%d) %dx%d roi=%s",
             self._capture_source,
             t_x,
             t_y,

@@ -1366,12 +1366,10 @@ class _MatchImageStepForm(QWidget):
             _mode_warn = f"{_mode_warn}\n{_black_warn}" if _mode_warn else _black_warn
         h, w = img.shape[:2]
         logging.debug(
-            "圖片比對: mode=%s 截圖 %dx%d 視窗=%s 模板=%s 閾值=%.2f match_color=%s tol=%d",
+            "img_compare: mode=%s %dx%d thresh=%.2f match_color=%s tol=%d",
             mode,
             w,
             h,
-            title,
-            tmpl_path or "inline",
             threshold,
             match_color,
             color_tolerance,
@@ -1425,13 +1423,9 @@ class _MatchImageStepForm(QWidget):
             best = results[0]
             pct = int(best.confidence * 100)
             logging.debug(
-                "圖片比對: 命中 conf=%.3f (%d%%) 位置(%d,%d) %dx%d",
+                "img_compare: hit conf=%.3f (%d%%)",
                 best.confidence,
                 pct,
-                best.x,
-                best.y,
-                best.w,
-                best.h,
             )
             self._img_compare_result.setText(
                 T("img_compare.hit", pct=pct) + (f"\n{_mode_warn}" if _mode_warn else "")
@@ -1455,7 +1449,7 @@ class _MatchImageStepForm(QWidget):
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
-            logging.debug("圖片比對: 未命中 最高 conf=%.3f (%d%%)", top, top_pct)
+            logging.debug("img_compare: miss top=%.3f", top)
             self._img_compare_result.setText(
                 T("img_compare.miss", top_pct=top_pct) + (f"\n{_mode_warn}" if _mode_warn else "")
             )
@@ -3704,7 +3698,7 @@ class MainWindow(QMainWindow):
             self._save_timer.stop()
             self._save_current_rule()
         if not name:
-            logging.debug('[task changed] rules=0, task=""')
+            logging.debug("[task changed] rules=0")
             self._rules = []
             self._current_task = ""
             self._refresh_rule_list()
@@ -4310,7 +4304,7 @@ class MainWindow(QMainWindow):
         group_map = {g.id: g for g in self._groups}
         self._groups = [group_map[gid] for gid in new_group_ids if gid in group_map]
         self._rules = new_order
-        logging.debug("[reorder] drag-drop, ids=[%s]", ",".join(r.id for r in self._rules))
+        logging.debug("[reorder] ids=[%s]", ",".join(r.id for r in self._rules))
         self._flush_save()
         self._reapply_group_buttons()
 
@@ -4423,11 +4417,7 @@ class MainWindow(QMainWindow):
         removed = [r for r in self._rules if r.id in target.rule_ids]
         self._rules = [r for r in self._rules if r.id not in target.rule_ids]
         target.rule_ids.clear()
-        logging.debug(
-            "[clear uncategorized] removed=%d rules, ids=[%s]",
-            len(removed),
-            ",".join(r.id for r in removed),
-        )
+        logging.debug("[clear uncategorized] removed=%d", len(removed))
         self._selected_rule_id = None
         self._flush_save()
         self._refresh_rule_list()
@@ -4563,7 +4553,7 @@ class MainWindow(QMainWindow):
         removed = [r for r in self._rules if r.id in group.rule_ids]
         self._rules = [r for r in self._rules if r.id not in group.rule_ids]
         self._groups = [g for g in self._groups if g.id != gid]
-        logging.debug('[delete group] group="%s", removed=%d rules', group.name, len(removed))
+        logging.debug('[delete group] "%s" removed=%d', group.name, len(removed))
         self._flush_save()
         self._selected_rule_id = None
         self._refresh_rule_list()
@@ -4648,7 +4638,7 @@ class MainWindow(QMainWindow):
         )
         self._rules.append(rule)
         logging.debug(
-            '[add rule] manual, name="%s", id=%s, background=%s',
+            '[add rule] "%s" id=%s bg=%s',
             rule.name,
             rule.id,
             rule.background,
@@ -4903,11 +4893,10 @@ class MainWindow(QMainWindow):
         new_rule.name = self._next_duplicate_name(src_rule.name)
         self._rules.append(new_rule)
         logging.debug(
-            '[duplicate rule] manual (to group), name="%s", id=%s <- %s, group="%s"',
+            '[dup rule] "%s" id=%s <- %s',
             new_rule.name,
             new_rule.id,
             src_rule.id,
-            target_group.name,
         )
         target_group.rule_ids.append(new_rule.id)
         self._flush_save()
