@@ -54,6 +54,7 @@
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |
 | 📐 | **Resolution-proof** | Coordinates auto-scale — plug in a monitor or resize, no reconfiguring |
 | 👁️ | **Set up rules visually** | OCR diagnostic panel lists every text on screen — double-click to create a rule |
+| 🎮 | **Background (daemon) mode** | PrintWindow capture + PostMessage clicks — run with the window minimized or covered, without stealing focus |
 
 ---
 

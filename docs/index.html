@@ -686,7 +686,7 @@
 
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">可以後台掛機嗎？</button>
-      <div class="faq-answer">不行。工具直接讀取螢幕畫面進行辨識，執行時目標視窗必須保持在前景，不能被其他視窗遮蓋或最小化。</div>
+      <div class="faq-answer">可以。偏好設定中選擇「後台模式」（PostMessage）後，工具改用 PrintWindow 截圖 + PostMessage 點擊，目標視窗可最小化或遮蓋，不搶焦點。部分遊戲（如 Unity）不支援 PostMessage，需改回前景模式。</div>
     </div>
   </div>
 </section>
