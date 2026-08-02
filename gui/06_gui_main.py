@@ -2583,6 +2583,9 @@ _MAX_IMPORT_SIZE = _rule_mod._MAX_IMPORT_SIZE
 _ocr_debug_mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
 OcrDebugPanel = _ocr_debug_mod.OcrDebugPanel
 
+_log_viewer_mod = load_sibling("log_viewer", "gui/12_log_viewer.py")
+LogViewer = _log_viewer_mod.LogViewer
+
 _group_settings_mod = load_sibling("group_settings_controller", "gui/group_settings_controller.py")
 GroupSettingsController = _group_settings_mod.GroupSettingsController
 
@@ -5643,8 +5646,11 @@ class MainWindow(QMainWindow):
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
 
     def _open_log_dir(self):
-        log_path = Path.home() / "AppData" / "Roaming" / "ocr-trigger-clicker" / "logs"
-        os.startfile(log_path)
+        if not hasattr(self, "_log_viewer") or self._log_viewer is None:
+            self._log_viewer = LogViewer(self)
+        self._log_viewer.show()
+        self._log_viewer.raise_()
+        self._log_viewer.activateWindow()
 
     # === About & Version ===
     def _show_about(self):

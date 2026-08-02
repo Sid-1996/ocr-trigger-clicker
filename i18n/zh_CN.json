@@ -158,7 +158,7 @@
   "tooltip.add_rule": "新增一条空白规则 (Ctrl+N)",
   "tooltip.delete_rule": "删除目前选取的项目 (Del)",
   "tooltip.toggle_all_groups": "启动或取消所有群组",
-  "tooltip.open_log": "打开日志目录",
+  "tooltip.open_log": "打开日志查看器",
   "tooltip.group_item": "右键可重命名、群组设置、上移／下移、删除",
   "tooltip.rule_item": "右键可复制规则、移动到其他群组",
   "tooltip.stop_group_selected": "已选：\n{names}",
@@ -621,5 +621,13 @@
   "exec_log.detail.drag_offset": "→ ({dx},{dy})",
   "exec_log.detail.fail_use_key": "{fail_name}失败，使用「{key}」",
   "exec_log.detail.not_found": "未找到「{text}」",
-  "exec_log.detail.template_miss": "未命中（最佳 {confidence}%）"
+  "exec_log.detail.template_miss": "未命中（最佳 {confidence}%）",
+  "log_viewer.title": "日志查看器",
+  "log_viewer.filter": "级别：",
+  "log_viewer.level_all": "全部",
+  "log_viewer.level_info": "INFO+",
+  "log_viewer.level_debug": "DEBUG+",
+  "log_viewer.search_placeholder": "搜索关键字…",
+  "log_viewer.debug_toggle": "启用详细日志",
+  "log_viewer.open_dir": "打开文件夹"
 }

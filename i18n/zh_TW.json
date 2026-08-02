@@ -158,7 +158,7 @@
   "tooltip.add_rule": "新增一條空白規則 (Ctrl+N)",
   "tooltip.delete_rule": "刪除目前選取的項目 (Del)",
   "tooltip.toggle_all_groups": "啟動或取消所有群組",
-  "tooltip.open_log": "開啟日誌目錄",
+  "tooltip.open_log": "開啟日誌檢視器",
   "tooltip.group_item": "右鍵可重新命名、群組設定、上移／下移、刪除",
   "tooltip.rule_item": "右鍵可複製規則、移動到其他群組",
   "tooltip.stop_group_selected": "已選：\n{names}",
@@ -621,5 +621,13 @@
   "exec_log.detail.drag_offset": "→ ({dx},{dy})",
   "exec_log.detail.fail_use_key": "{fail_name}失敗，使用「{key}」",
   "exec_log.detail.not_found": "未找到「{text}」",
-  "exec_log.detail.template_miss": "未命中（最佳 {confidence}%）"
+  "exec_log.detail.template_miss": "未命中（最佳 {confidence}%）",
+  "log_viewer.title": "日誌檢視器",
+  "log_viewer.filter": "層級：",
+  "log_viewer.level_all": "全部",
+  "log_viewer.level_info": "INFO+",
+  "log_viewer.level_debug": "DEBUG+",
+  "log_viewer.search_placeholder": "搜尋關鍵字…",
+  "log_viewer.debug_toggle": "啟用詳細日誌",
+  "log_viewer.open_dir": "開啟資料夾"
 }

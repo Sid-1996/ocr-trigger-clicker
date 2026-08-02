@@ -158,7 +158,7 @@
   "tooltip.add_rule": "Add a new blank rule (Ctrl+N)",
   "tooltip.delete_rule": "Delete the currently selected item (Del)",
   "tooltip.toggle_all_groups": "Enable or disable all groups",
-  "tooltip.open_log": "Open log directory",
+  "tooltip.open_log": "Open log viewer",
   "tooltip.group_item": "Right-click to rename, group settings, move up/down, delete",
   "tooltip.rule_item": "Right-click to copy rule, move to another group",
   "tooltip.stop_group_selected": "Selected:\n{names}",
@@ -621,5 +621,13 @@
   "exec_log.detail.drag_offset": "→ ({dx},{dy})",
   "exec_log.detail.fail_use_key": "{fail_name} failed, use 「{key}」",
   "exec_log.detail.not_found": "「{text}」 not found",
-  "exec_log.detail.template_miss": "Miss (best {confidence}%)"
+  "exec_log.detail.template_miss": "Miss (best {confidence}%)",
+  "log_viewer.title": "Log Viewer",
+  "log_viewer.filter": "Level:",
+  "log_viewer.level_all": "All",
+  "log_viewer.level_info": "INFO+",
+  "log_viewer.level_debug": "DEBUG+",
+  "log_viewer.search_placeholder": "Search keywords…",
+  "log_viewer.debug_toggle": "Enable detailed logging",
+  "log_viewer.open_dir": "Open Folder"
 }
