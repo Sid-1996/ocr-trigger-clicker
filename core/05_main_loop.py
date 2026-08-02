@@ -1342,6 +1342,10 @@ class MainLoop:
         try:
             import ctypes
 
+            # 後台模式（PostMessage）不依賴前景焦點，工具在前景不影響操作，不需此保護
+            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            if mode and mode != "pynput":
+                return False
             return ctypes.windll.user32.GetForegroundWindow() == self._tool_hwnd
         except Exception:
             return False
