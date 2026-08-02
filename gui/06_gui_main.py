@@ -3479,7 +3479,7 @@ class MainWindow(QMainWindow):
         self._open_log_btn = QPushButton(T("main.log"))
         self._open_log_btn.setToolTip(T("tooltip.open_log"))
         self._open_log_btn.setStyleSheet("color: #888888;")
-        self._open_log_btn.clicked.connect(self._open_log_dir)
+        self._open_log_btn.clicked.connect(self._open_log_viewer)
         btn_row = QWidget()
         btn_layout = QHBoxLayout(btn_row)
         btn_layout.setContentsMargins(0, 0, 0, 0)
@@ -5645,7 +5645,7 @@ class MainWindow(QMainWindow):
         )
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
 
-    def _open_log_dir(self):
+    def _open_log_viewer(self):
         if not hasattr(self, "_log_viewer") or self._log_viewer is None:
             self._log_viewer = LogViewer(self)
         self._log_viewer.show()

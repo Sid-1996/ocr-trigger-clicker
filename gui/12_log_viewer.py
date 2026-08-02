@@ -55,6 +55,7 @@ class LogViewer(QDialog):
         toolbar.addWidget(self._search_edit, 1)
 
         self._debug_toggle = QCheckBox(T("log_viewer.debug_toggle"))
+        self._debug_toggle.setChecked(_log_cfg.is_debug_enabled())
         self._debug_toggle.toggled.connect(self._on_debug_toggled)
         toolbar.addWidget(self._debug_toggle)
 
@@ -75,6 +76,10 @@ class LogViewer(QDialog):
         self._timer.start()
 
         self._refresh()
+
+    def closeEvent(self, event):
+        self._timer.stop()
+        super().closeEvent(event)
 
     def _on_debug_toggled(self, enabled: bool):
         _log_cfg.set_debug(enabled)
