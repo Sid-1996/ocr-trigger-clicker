@@ -134,6 +134,7 @@ class PerformanceMonitor:
         self._last_fps_sample = 0.0
         self._fps_cached: float = 0.0
         self._last_loop_time: float = 0.0
+        self._total_clicks = 0
 
         self._cpu_above_threshold_since: Optional[float] = None
         self._cpu_warned = False
@@ -215,6 +216,7 @@ class PerformanceMonitor:
 
     def record_click(self):
         with self._lock:
+            self._total_clicks += 1
             self._click_timestamps.append(time.monotonic())
 
     def record_ocr_failure(self):
@@ -349,6 +351,10 @@ class PerformanceMonitor:
     def get_click_rate(self) -> float:
         with self._lock:
             return self._get_click_rate_raw()
+
+    def get_total_clicks(self) -> int:
+        with self._lock:
+            return self._total_clicks
 
     def _get_click_rate_raw(self) -> float:
         cutoff = time.monotonic() - 1.0

@@ -152,6 +152,7 @@ class MainLoop:
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
         self._max_cps = max_cps
         self._verbose = verbose
+        self._started_at = 0.0
         self._window_hwnd = get_window_hwnd_orig(window_title)
         self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
 
@@ -1012,7 +1013,7 @@ class MainLoop:
                 try:
                     self._run_rule(rule, img, rect, bg_ctx, background=True)
                 except Exception as e:
-                    self._log(f"背景規則「{rule.name}」異常: {e}")
+                    self._logger.exception("背景規則「%s」異常: %s", rule.name, e)
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
                 if bg_ctx.triggered:
@@ -1054,7 +1055,7 @@ class MainLoop:
         try:
             self._run_rule(rule, img, rect, ctx)
         except Exception as e:
-            self._log(f"規則「{rule.name}」處理異常: {e}")
+            self._logger.exception("規則「%s」處理異常: %s", rule.name, e)
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
@@ -1078,7 +1079,7 @@ class MainLoop:
             try:
                 self._run_rule(r, img, rect, r_ctx)
             except Exception as e:
-                self._log(f"並行規則「{r.name}」異常: {e}")
+                self._logger.exception("並行規則「%s」異常: %s", r.name, e)
                 if self.on_warning:
                     self.on_warning(f"並行規則「{r.name}」異常: {e}")
             if r_ctx.triggered:
@@ -1236,7 +1237,7 @@ class MainLoop:
                             )
 
                 except Exception as e:
-                    self._log(f"主循環異常: {e}")
+                    self._logger.exception("主循環異常: %s", e)
                     if self.on_error:
                         self.on_error(f"主循環異常: {e}")
 
@@ -1249,6 +1250,7 @@ class MainLoop:
                 self.on_finished()
 
     def start(self) -> None:
+        self._started_at = time.monotonic()
         log_main(f"循環開始，目標視窗「{self._window_title}」")
         self._execution_log.clear()
         self._last_exec_log.clear()
@@ -1260,7 +1262,11 @@ class MainLoop:
         self._thread.start()
 
     def stop(self) -> None:
-        log_main("循環停止")
+        elapsed = time.monotonic() - self._started_at if self._started_at else 0.0
+        log_main(
+            f"循環停止：執行 {elapsed:.0f} 秒，點擊 {self._perf.get_total_clicks()} 次，"
+            f"規則 {len(self._rules)} 條"
+        )
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
