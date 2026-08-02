@@ -35,17 +35,18 @@
 
 ## Build & Packaging
 
-- Single executable bundled via PyInstaller (`build.py`)
+- Onedir bundle via PyInstaller (`build.py`)
 - Windows 10/11 64-bit only
 - No Python runtime required for end users
-- Dependencies: PySide6, rapidocr-onnxruntime, opencv-python-headless, mss, pynput
+- Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python-headless, mss, pynput, dxcam
 - Optional GPU acceleration: DirectML via DirectX 12
+- Foreground input via pynput (SendInput); background mode via Win32 PostMessage + PrintWindow capture
 
 ```powershell
 python build.py
 ```
 
-Output: `dist/ocr-trigger-clicker.exe`
+Output: `dist/ocr-trigger-clicker/` (onedir, includes `ocr-trigger-clicker.exe` + `updater.exe` + `_internal/`)
 Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 
 ---
@@ -65,5 +66,4 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 
 - [System Architecture](./ARCHITECTURE.md)
 - [Changelog](./CHANGELOG.md)
-- [Development Notes](./AGENTS.md)
-- [Optimization Plans](./PLAN_optimizations.md)
+- [Development Notes](../../AGENTS.md)

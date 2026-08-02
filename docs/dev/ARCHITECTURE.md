@@ -9,11 +9,12 @@
 | 層級 | 技術 | 用途 |
 |------|------|------|
 | 語言 | Python 3.12 | 主程式 |
-| GUI | PyQt6 | 設定視窗、偵測日誌、除錯面板 |
+| GUI | PyQt6 | 設定視窗、偵測日誌、除錯面板、日誌檢視器 |
 | OCR | rapidocr-onnxruntime (DirectML + CPU) | 文字辨識 |
 | 影像處理 | OpenCV (cv2), numpy | 截圖、縮放、二值化、差異偵測 |
-| 輸入模擬 | pynput | 滑鼠點擊／移動、鍵盤按鍵（SendInput） |
-| 截圖備援 | dxcam / mss / GDI | DXGI → mss → GDI PrintWindow/BitBlt 三層備援 |
+| 輸入模擬（前景） | pynput | 滑鼠點擊／移動、鍵盤按鍵（SendInput） |
+| 輸入模擬（後台） | Win32 PostMessage | 後台模式不搶焦點模擬輸入 |
+| 截圖 | mss / dxcam / GDI PrintWindow | 前景 mss → dxcam → GDI 備援；後台 PrintWindow |
 | 作業系統 | Windows (GDI / win32 API) | 視窗列舉、DPI 縮放、前景判斷 |
 
 ## 模組地圖與依賴關係
@@ -33,7 +34,7 @@ load_sibling("screenshot", "core/01_screenshot.py")
 
 ```
 gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──→  core/02_ocr_engine
-                  │               └──→  core/05_main_loop     ──→  core/01_screenshot
+                  │               └──→  core/05_main_loop     ──→  core/17_capture_pipeline
                    │               └──→  core/03_pynput_input  ──→  core/02_ocr_engine
                    │               └──→  gui/09_ocr_debug      ──→  core/03_pynput_input
                   │               └──→  gui/07_gui_roi        ──→  core/04_rule_engine
@@ -42,18 +43,24 @@ gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──�
                   │               └──→  core/11_template_matching
                   │               └──→  core/12_updater
                   │               └──→  core/00_global_hotkey
+                  │               └──→  core/00_logging_config
+                  │               └──→  core/16_bg_input
                   │               └──→  gui/group_settings_controller
                   │               └──→  gui/screenshot_controller
                   │               └──→  gui/rule_config_controller
                   │               └──→  gui/test_run_controller
                   │
-core/05_main_loop ──→  _loader ──→  core/01_screenshot
+core/05_main_loop ──→  _loader ──→  core/17_capture_pipeline
                    │               └──→  core/02_ocr_engine
                     │               └──→  core/03_pynput_input
+                    │               └──→  core/16_bg_input
                     │               └──→  core/04_rule_engine
                    │               └──→  core/10_performance_monitor
                    │               └──→  core/11_template_matching
                    │               └──→  core/00_logging_config
+                   │
+core/17_capture_pipeline ──→ _loader ──→  core/01_screenshot
+                    │               └──→  core/15_print_window
                    │
 core/03_pynput_input                              （無外部依賴，螢幕邊界檢查內聯於模組本身）
 ```
@@ -62,9 +69,9 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 
 | 檔案 | 角色 | 對外暴露 |
 |------|------|----------|
-| `core/01_screenshot.py` | 視窗擷取 | `capture()`, `capture_window_content()`, `list_windows()`, `get_window_rect()`, `activate_window()` |
+| `core/01_screenshot.py` | 視窗擷取 | `capture()`, `capture_window_content()`, `list_windows()`, `get_window_rect()`, `activate_window()`, `activate_window_bg()` |
 | `core/02_ocr_engine.py` | OCR 引擎 | `init_engine()`, `recognize()`, `find_text()`, `OcrResult` |
-| `core/03_pynput_input.py` | 輸入模擬（pynput SendInput） | `send_click()`, `send_key()`, `send_scroll()`, `send_drag()`, `send_hold_key()` |
+| `core/03_pynput_input.py` | 輸入模擬（前景 pynput SendInput） | `send_click()`, `send_key()`, `send_scroll()`, `send_drag()`, `send_hold_key()` |
 | `core/box_utils.py` | 座標工具集（純函式） | `roi_center()`, `roi_to_pixels()`, `roi_crop()`, `roi_sanitize()`, `box_to_rect()` 等 10 函式 |
 | `core/04_rule_engine.py` | 規則引擎 re-export hub（委派給 6 個子模組） | `Rule`, `RuleGroup`, `Step`, `load_groups()`, `save_groups()`, `load_rules()`, `save_rules()` |
 | `core/rule_models.py` | 資料模型（dataclass） | `Rule`, `RuleGroup`, `Step`, `ImportPreview` |
@@ -74,7 +81,10 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
 | `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
-| `core/10_performance_monitor.py` | 效能監控 + 速率限制 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()` |
+| `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
+| `core/16_bg_input.py` | 後台互動（PostMessage / pynput 切換） | `set_method()`, `click()`, `key()`, `drag()`, `scroll()` |
+| `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
+| `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
 | `core/11_template_matching.py` | 圖示模板比對 | `match_template()`, `nms_suppress()`, `MatchResult` |
 | `gui/06_gui_main.py` | 主視窗（工具列、規則編輯、狀態列、系統托盤、設定對話框） | `MainWindow`, `SettingsDialog` |
 | `gui/07_gui_roi.py` | 框選偵測區域（全螢幕 overlay） | `select_roi()` |
@@ -82,7 +92,9 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、下載、解壓、套用更新） | `check_for_update()`, `download_update()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
-| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、層級過濾、搜尋、DEBUG 切換） | `LogViewer` |
+| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、層級過濾、搜尋、DEBUG 切換、捲動保持） | `LogViewer` |
+| `gui/17_bg_roi_selector.py` | 後台偵測區域選取器（PrintWindow 截圖 + QLabel） | `BgRoiSelector` |
+| `gui/18_bg_click_picker.py` | 後台座標選取器（PrintWindow 截圖 + QLabel） | `BgClickPicker` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊 |
 | `gui/group_settings_controller.py` | 群組設定對話框控制器（v0.0.10 從 MainWindow 拆出） | `GroupSettingsController` |
 | `gui/screenshot_controller.py` | 截圖／模板控制器（v0.0.10 從 MainWindow 拆出） | `ScreenshotController` |
@@ -161,7 +173,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 
 定義於 `core/05_main_loop.py` 的 `MainLoop._loop()`。
 
-v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組佇列指標）與 `_rule_in_group_ptr`（群組內規則指標）共同控制執行順序。
+v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組佇列指標）與 `_rule_in_group_ptr`（群組內規則指標）共同控制執行順序。
 
 ```
                     ┌──────────────────┐
@@ -170,9 +182,10 @@ v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
                     └────────┬─────────┘
                              │
                     ┌────────▼─────────┐
-                     │  擷取視窗畫面     │  capture() 三層備援
-                     │  (mss → dxcam →  │
-                     │   GDI PrintWindow)│
+                     │  擷取視窗畫面     │  capture_frame() 統一管線
+                     │  (前景 mss →     │  依互動模式選唯一來源：
+                     │   dxcam → GDI;   │  前景 mss 三層備援 / 後台 PrintWindow
+                     │   後台 PrintWindow)│
                     └────────┬─────────┘
                              │
                     ┌────────▼─────────┐
@@ -275,12 +288,17 @@ v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 - **群組間隔**：每輪完成後依 `between_rounds_sec` 等待
 - **跳轉限制**：`jump` 僅限同群組內跳轉，跨群組跳轉被拒絕（pointer 不動）
 
-### 截圖三層備援機制
+### 截圖統一管線（capture_frame）
 
-1. **一線** `_capture_mss()`：透過 `mss` 擷取全視窗（含邊框標題列），需處理 DPI 縮放與多螢幕裁切
-2. **二線** `_capture_dxcam()`：mss 失敗時以 `dxcam`（DXGI 底層）截取視窗區域，相容性高於 mss
-3. **三線** `capture_window_content()`：dxcam 也失敗時以 GDI `PrintWindow`／`BitBlt` 僅擷取 client area
-   - `capture_window_content()` 結果由呼叫方使用，未以黑邊填補
+`core/17_capture_pipeline.py` 提供 `capture_frame(mode, title, hwnd)`，**全路徑同源**（建立模板／測試／圖片比對／主循環執行共用）：
+
+- **後台模式**（`mode != "pynput"`）：`capture_print_window_hwnd()`（或依 title 查 hwnd）→ PrintWindow 全視窗影像；失敗 fallback 到前景管線
+- **前景模式**（`mode == "pynput"`）三層備援：
+  1. `capture()`（mss 擷取全視窗，含 DPI 縮放與多螢幕裁切）
+  2. `_capture_dxcam()`（mss 失敗時 DXGI 底層，相容性較高）
+  3. `capture_window_content()`（GDI PrintWindow/BitBlt 僅 client area）→ `_pad_to_full()` 填補黑邊至全視窗大小
+
+後台 PrintWindow 同樣產出全視窗大小影像（黑邊於 chrome offset 位置），座標還原時以 `roi_coord:"client"` 標記區分客戶區基準。
 
 ## 座標系統三層說明
 
@@ -290,6 +308,7 @@ v0.3.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 |------|------|------|
 | **螢幕絕對** (screen-absolute) | ROI selector、click picker、`GetWindowRect` | 多螢幕虛擬桌面座標 |
 | **視窗相對** (window-relative) | OCR 辨識結果、主循環內部運算 | 以視窗左上角為 `(0,0)`，單位像素 |
+| **客戶區比例** (client-ratio) | 後台 ROI/座標選取器、`roi_coord:"client"` 標記 | 0~1 比值，基準為客戶區（不含標題列/邊框） |
 | **視窗比例** (window-ratio) | ROI 儲存值、點擊座標儲存值 | 0~1 比值，與視窗解析度無關 |
 | **影像像素** (image pixel) | numpy array `[h, w, 3]` | 截圖陣列索引 |
 
@@ -302,8 +321,9 @@ OCR 辨識                     視窗相對          × 暫不轉換，保留像
 debug panel 建立規則         視窗相對          ÷ win_size → 比例座標                   視窗比例
 框選偵測區域 (gui_roi)       螢幕絕對          (螢幕 - win_rect) ÷ win_size → 比例      視窗比例
 選取點擊座標 (click_picker)  螢幕絕對          (螢幕 - win_rect) ÷ win_size → 比例      視窗比例
+後台框選/座標 (bg selectors) 影像像素          (像素 - chrome) ÷ client_size → 比例     客戶區比例
 主循環 _resolve_roi()        視窗比例          × 當前 capture 圖寬高 → 像素              影像像素
-主循環 _resolve_point()      視窗比例          × 當前視窗寬高 → 像素 → +win_rect        螢幕絕對（送 AHK）
+主循環 _resolve_point()      視窗比例          × 當前視窗寬高 → 像素 → +win_rect        螢幕絕對（送 pynput / PostMessage）
 ```
 
 ### 比例轉換實作
@@ -313,13 +333,13 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 - `_resolve_roi(roi_dict, img_width, img_height)` → `(x, y, w, h)` 像素整數，用於影像裁切
 - `_resolve_point(point_dict, win_width, win_height)` → `(x, y)` 像素整數，加上視窗偏移後送 `send_click()`
 
-## 輸入模擬（pynput）
+## 輸入模擬（前景 pynput / 後台 PostMessage）
 
-### 實作方式
+互動方法由 `interaction_mode` 決定（`foreground` / `postmessage`），`MainLoop._send_click` / `_send_key` / `_send_drag` / `_send_scroll` 依模式分派到對應輸入模組。
+
+### 前景：pynput（SendInput）
 
 `core/03_pynput_input.py` 使用 `pynput.mouse.Controller` 與 `pynput.keyboard.Controller`（底層為 Windows `SendInput` API），所有操作皆為同步、無外部行程。
-
-### 支援功能
 
 | 函式 | 用途 | 底層實作 |
 |------|------|----------|
@@ -329,6 +349,15 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 | `send_drag(x1,y1,x2,y2,button)` | 拖曳 | `press` at (x1,y1) → `position = (x2,y2)` → `release` |
 | `send_scroll(amount, direction)` | 滾輪 | `mouse.scroll(dx, dy)` |
 | `send_emergency_stop()` | 緊急停止（in-process noop） | 僅 log + return True，`MainLoop._stop_event` 為實際中斷來源 |
+
+### 後台：PostMessage
+
+`core/16_bg_input.py` 以 Win32 `PostMessage` 直接對目標視窗送出 `WM_LBUTTONDOWN`/`WM_KEYDOWN` 等訊息，**不搶焦點、不需視窗在前景**（適合後台掛機）。使用前 `ScreenToClient` 將螢幕絕對座標轉為客戶區座標。
+
+- `set_method(method)`：切換 PostMessage / pynput（pynput 作為後台模式的 fallback）
+- `click(hwnd, x, y, button, hold_ms)` / `key(hwnd, vk, hold_ms)` / `drag(hwnd, x1,y1,x2,y2, button)` / `scroll(hwnd, ...)`
+
+> 限制：Unity 遊戲不支援 PostMessage，需使用前景模式。
 
 ### 按鍵對應
 
@@ -382,6 +411,7 @@ MainLoop.emergency_stop()
 | `last_window` | str | "" | 上次選取的目標視窗標題 |
 | `last_task` | str | "" | 上次選取的任務名稱 |
 | `simplified_mode` | bool | false | 簡易模式（隱藏進階選項） |
+| `interaction_mode` | str | `"pynput"` | 互動方法：`"pynput"`（前景 SendInput）／`"postmessage"`（後台 PostMessage） |
 | `close_behavior` | str | `"tray"` | 關閉按鈕行為：`"tray"`（縮小至托盤）／`"quit"`（直接關閉） |
 | `show_close_confirm` | bool | true | 關閉前是否顯示確認對話框 |
 
@@ -507,7 +537,8 @@ MainLoop.emergency_stop()
 | 螢幕邊界檢查 | `03_pynput_input.py` | `send_click()`／`send_drag()` 前檢查座標是否在虛擬螢幕範圍內 |
 | 全域速率限制 (CPS) | `10_performance_monitor.py` | 限制每秒點擊 ≤ 5 次，違規 3 次自動暫停偵測 |
 | 前景保護 (目標視窗) | `05_main_loop.py` | 僅在目標視窗為前景時才執行點擊，非前景時靜默等待 |
-| 前景保護 (工具視窗) | `05_main_loop.py` | 工具自身視窗在前景時自動暫停 click/key/drag/scroll，防止誤搶焦點 |
+| 前景保護 (工具視窗) | `05_main_loop.py` | 工具自身視窗在前景時自動暫停 click/key/drag/scroll，防止誤搶焦點（後台模式直接回傳 False，不誤擋） |
+| 後台全黑偵測 | `15_print_window.py` `is_black_capture()` | 後台截圖全像素為零才命中（暗色遊戲不誤判）；搭配 `is_admin()` 提醒以系統管理員重啟 |
 | OCR 連續失敗重啟 | `02_ocr_engine.py` | 連續 5 次失敗 → 重建引擎實例 |
 | 視窗消失自動暫停 | `05_main_loop.py` | `get_window_rect()` 回傳 None → 暫停循環，每 5 秒檢查視窗是否重現 |
 | 座標驗證 | `03_pynput_input.py` `_validate_coords()` | 使用 `GetSystemMetrics(VIRTUALSCREEN)` 確保點擊不超出多螢幕範圍 |
@@ -523,9 +554,16 @@ MainLoop.emergency_stop()
 | 執行日誌 | `self._log_exec()` | `self._execution_log` (deque) **+ 同時寫入 `app.log`**（`[exec]` 行） | ✅ 執行日誌面板 + 日誌檢視器 | 步驟成功/失敗/跳轉等結果 |
 | 通知彈窗 | `self.on_warning()` | Qt signal → 系統托盤通知 | ✅ 通知彈窗 | 需要使用者注意的警告 |
 
-- `app.log` 路徑：`%APPDATA%\ocr-trigger-clicker\logs\app.log`，`core/00_logging_config.py` 統一管理（midnight 輪替）
+- `app.log` 路徑：`%APPDATA%\ocr-trigger-clicker\logs\app.log`，`core/00_logging_config.py` 統一管理（midnight 輪替，backupCount=1）
 - `set_debug(enabled)` / `is_debug_enabled()`：runtime 雙向切換 DEBUG 層級（LogViewer 的「啟用詳細日誌」checkbox）
 - 生命週期事件（`log_main()`：循環開始/停止、視窗遺失、應用啟動）與執行事件（`[exec]`）皆為 INFO 層級
+- 循環停止時 `log_main()` 輸出統計：執行秒數、點擊次數（`PerformanceMonitor.get_total_clicks()`）、規則數
+- `cleanup_stale_logs()`：啟動時刪除 `debug.log` / `run_stderr.log` / `triggers.jsonl*` 舊檔
+
+### LogViewer 捲動行為
+
+- 每 1.5s 定時 tail app.log（500 行），內容未變時**不重繪**（`_last_text` 比對）
+- 自動捲到底僅在接近底部時（距底 ≤ `_FOLLOW_TOLERANCE=20`）；向上瀏覽歷史時保留捲動位置，不被新內容拉回
 
 ### 執行日誌面板資料流
 

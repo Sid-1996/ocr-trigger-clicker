@@ -6,7 +6,7 @@
 - **最小主義，務實**。最好的程式碼是從未被寫出的程式碼（YAGNI）。
 - **社群標準優先，不造輪子**。匯入匯出用 JSON `_meta` schema、有現成函式庫就用、不重做別人做過的事。
 - **普通使用者面向**。進階選項摺疊隱藏、預設行為簡單直覺、不讓使用者看到實作細節。
-- **刪除優先於新增**。功能不必要就砍（熱鍵、強制前景、排程器），減少維護負擔。
+- **刪除優先於新增**。功能不必要就砍（排程器、強制前景），減少維護負擔。保留的例外：F8 全域熱鍵（開始/暫停/停止）有實際用途，勿刪。
 - **不懶惰的地方**：信任邊界驗證、資料遺失防止、安全性。
 
 ### 目標方向
@@ -112,7 +112,7 @@ pwsh -Command "
 
 ## 座標系統
 
-所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。
+所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。後台模式（`roi_coord:"client"`）以客戶區為基準。
 
 | 來源 | 原始座標系 | 轉換方式 |
 |---|---|---|
@@ -120,13 +120,14 @@ pwsh -Command "
 | debug panel「建立為新規則」 | 視窗相對（同上） | ÷ win_size → 比例座標 |
 | 框選偵測區域 (ROI selector) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
 | 選取點擊座標 (click picker) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
+| 後台框選/座標 (bg selectors) | 影像像素 | (像素 - chrome) ÷ client_size → 客戶區比例 |
 
 ### 主循環處理
 
-1. `capture()` 透過 mss 截取全視窗（含邊框標題列），回傳影像 = 全視窗大小
+1. `capture_frame()` 依互動模式選唯一截圖來源（前景 mss 三層備援 / 後台 PrintWindow），回傳影像 = 全視窗大小
 2. 若 mss 失敗，fallback `capture_window_content()` 只取得 client area
    - 自動填補黑邊到全視窗大小（使用 `get_window_client_offset` 計算 chrome offset）
-3. `_process_rules` 對每個規則：`_resolve_roi()` 將比例座標 × 當前尺寸 → 像素 → 裁切 ROI → OCR → 比對 → `_resolve_point()` → AHK 點擊
+3. `_process_rules` 對每個規則：`_resolve_roi()` 將比例座標 × 當前尺寸 → 像素 → 裁切 ROI → OCR → 比對 → `_resolve_point()` → pynput / PostMessage 點擊
 
 ### 通用 UI 流程（兩者一致）
 
