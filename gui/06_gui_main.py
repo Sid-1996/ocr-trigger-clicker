@@ -4216,7 +4216,7 @@ class MainWindow(QMainWindow):
                 if prev_rule:
                     prev_rule.name = self._edit_name.text()
                     prev_rule.enabled = self._edit_enabled.isChecked()
-                    logging.info(
+                    logging.debug(
                         "[_on_rule_selected] prev=%s checkbox=%s prev_bg=%s groups=%s",
                         prev_rule.name,
                         self._edit_background.isChecked(),
@@ -4248,9 +4248,6 @@ class MainWindow(QMainWindow):
         self._show_rule_detail(None)
 
     def _on_rules_reordered(self):
-        logging.warning(
-            "[_on_rules_reordered] FIRED topLevelCount=%d", self._rule_list.topLevelItemCount()
-        )
         new_order = []
         seen = set()
         new_group_ids = []
@@ -4359,7 +4356,7 @@ class MainWindow(QMainWindow):
         if rule is None:
             return
         _before_groups = [(g.id, list(g.rule_ids)) for g in self._groups]
-        logging.info(
+        logging.debug(
             "[background_changed] rule=%s background=%s state=%s _selected=%s groups_before=%s",
             rule.name,
             rule.background,
@@ -4387,7 +4384,7 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(
                 T("notif.rule_removed_from_uncategorized", name=rule.name), 4000
             )
-        logging.info(
+        logging.debug(
             "[background_changed] AFTER rules_bg=%s groups=%s",
             [(r.name, r.background) for r in self._rules],
             [(g.id, list(g.rule_ids)) for g in self._groups],
@@ -4952,14 +4949,14 @@ class MainWindow(QMainWindow):
 
     def _schedule_save(self):
         bg_ids = [r.id for r in self._rules if r.background]
-        logging.info("[save] _schedule_save: rules=%d, background=%s", len(self._rules), bg_ids)
+        logging.debug("[save] _schedule_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.start()
 
     def _do_debounced_save(self) -> None:
         if not self._current_task:
             return
         task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
-        logging.info(
+        logging.debug(
             "[_do_debounced_save] rules(%d)=%s groups=%s",
             len(self._rules),
             [r.name for r in self._rules],
@@ -4976,7 +4973,7 @@ class MainWindow(QMainWindow):
 
     def _flush_save(self) -> None:
         bg_ids = [r.id for r in self._rules if r.background]
-        logging.info("[save] _flush_save: rules=%d, background=%s", len(self._rules), bg_ids)
+        logging.debug("[save] _flush_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.stop()
         self._do_debounced_save()
         _main_loop_mod.log_main(T("status.task_saved", count=len(self._rules)))

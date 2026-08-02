@@ -447,7 +447,6 @@ class MainLoop:
 
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = matches[0]
-        self._log(f"規則「{rule.name}」匹配文字「{ctx.matched_text.text}」")
         return StepResult("continue")
 
     def _handle_match_image(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -500,7 +499,6 @@ class MainLoop:
 
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = results[0]
-        self._log(f"規則「{rule.name}」模板匹配成功 (conf={results[0].confidence})")
         return StepResult("continue")
 
     def _handle_compare(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -552,7 +550,6 @@ class MainLoop:
             "number": num,
             "text": combined[:64],
         }
-        self._log(f"規則「{rule.name}」比較 {num} {op} {val} → 成立")
         return StepResult("continue")
 
     def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -820,14 +817,12 @@ class MainLoop:
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         ms = params.get("ms", 500)
         if ms > 0:
-            self._log(f"規則「{rule.name}」等待 {ms}ms 開始")
             t0 = time.monotonic()
             interrupted = self._stop_event.wait(timeout=ms / 1000.0)
             elapsed = (time.monotonic() - t0) * 1000
             if interrupted:
                 self._log(f"規則「{rule.name}」等待中斷（stop_event），經過 {elapsed:.0f}ms")
                 return StepResult("stop", detail=T("exec_log.detail.interrupted"))
-            self._log(f"規則「{rule.name}」等待完成，實際經過 {elapsed:.0f}ms")
         return StepResult("continue")
 
     def _handle_jump(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
