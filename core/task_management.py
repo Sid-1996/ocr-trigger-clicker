@@ -96,7 +96,6 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         "detect",
         "click",
         "key",
-        "mouse_click",
         "wait",
         "jump",
         "drag",

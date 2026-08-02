@@ -389,7 +389,6 @@ _STEP_TYPE_ICONS = {
     "compare": "🔢",
     "click": "🖱",
     "key": "⌨",
-    "mouse_click": "🖲",
     "wait": "⏱",
     "jump": "↩",
     "drag": "↗",
@@ -403,7 +402,6 @@ _STEP_TYPE_LABELS = {
     "compare": T("step_form.step_compare"),
     "click": T("step_form.step_click"),
     "key": T("step_form.step_key"),
-    "mouse_click": T("step_form.step_mouse_click"),
     "wait": T("step_form.step_wait"),
     "jump": T("step_form.step_jump"),
     "drag": T("step_form.step_drag"),
@@ -415,7 +413,6 @@ _STEP_COLORS = {
     "detect": "#4A90D9",
     "click": "#27AE60",
     "key": "#F39C12",
-    "mouse_click": "#E67E22",
     "wait": "#95A5A6",
     "jump": "#9B59B6",
     "compare": "#1ABC9C",
@@ -510,17 +507,10 @@ def _step_summary(step, rules_provider=None) -> str:
             return T("summary.format_click", point=_fmt_point(p.get("x", 0), p.get("y", 0)))
         if target == "click_text":
             return T("summary.format_click_text", text=p.get("text", ""))
+        if target == "cursor":
+            return T("summary.click_cursor")
     if t == "key":
         return T("summary.format_key_press", key=p.get("key", ""))
-    if t == "mouse_click":
-        btn = {"left": T("combo.left"), "right": T("combo.right")}.get(
-            p.get("button", "left"), p.get("button", "left")
-        )
-        s = T("summary.format_mouse_click", button=btn)
-        hm = p.get("hold_ms", 0)
-        if hm:
-            s += " " + T("test.key_hold", ms=hm)
-        return s
     if t == "wait":
         return T("summary.format_wait", ms=p.get("ms", 500))
     if t == "jump":
@@ -1009,8 +999,6 @@ class _StepListWidget(QWidget):
             return _ClickStepForm(self, step, idx, self._click_pick_callback)
         if t == "key":
             return _KeyStepForm(self, step, idx)
-        if t == "mouse_click":
-            return _MouseClickStepForm(self, step, idx)
         if t == "wait":
             return _WaitStepForm(self, step, idx)
         if t == "jump":
@@ -1893,6 +1881,7 @@ class _ClickStepForm(QWidget):
         self._target.addItem(T("summary.click_target"), "text_center")
         self._target.addItem(T("step_form.text_coord"), "custom")
         self._target.addItem(T("format.click_mode"), "click_text")
+        self._target.addItem(T("step_form.click_target_cursor"), "cursor")
         self._target.setItemData(
             0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
         )
@@ -1900,6 +1889,7 @@ class _ClickStepForm(QWidget):
         self._target.setItemData(
             2, T("step_form.target_click_text_tip"), Qt.ItemDataRole.ToolTipRole
         )
+        self._target.setItemData(3, T("step_form.target_cursor_tip"), Qt.ItemDataRole.ToolTipRole)
         t_idx = self._target.findData(p.get("target", "text_center"))
         if t_idx >= 0:
             self._target.setCurrentIndex(t_idx)
@@ -1940,6 +1930,13 @@ class _ClickStepForm(QWidget):
         self._offset.setValue(p.get("random_offset", 3))
         adv_form.addRow(T("format.random_jitter"), self._offset)
 
+        self._hold_ms = _NoWheelSpin()
+        self._hold_ms.setRange(0, 60000)
+        self._hold_ms.setSuffix(" ms")
+        self._hold_ms.setValue(p.get("hold_ms", 0))
+        self._hold_ms.setToolTip(T("tooltip.hold_ms"))
+        adv_form.addRow(T("step_form.hold_label"), self._hold_ms)
+
         form.addRow(self._adv_container)
 
     def _on_target_changed(self, idx):
@@ -1964,6 +1961,7 @@ class _ClickStepForm(QWidget):
         self._step.params["text"] = self._click_text.text().strip()
         self._step.params["button"] = self._button.currentData()
         self._step.params["random_offset"] = self._offset.value()
+        self._step.params["hold_ms"] = self._hold_ms.value()
 
 
 class _DragStepForm(QWidget):
@@ -2413,34 +2411,6 @@ class _KeyStepForm(QWidget):
 
     def save(self):
         self._step.params["key"] = self._key.currentData() or self._key.currentText()
-        self._step.params["hold_ms"] = self._hold_ms.value()
-
-
-class _MouseClickStepForm(QWidget):
-    def __init__(self, parent_list, step, idx):
-        super().__init__()
-        self._list = parent_list
-        self._step = step
-        form = QFormLayout(self)
-        form.setContentsMargins(12, 6, 12, 6)
-
-        self._button = _NoWheelCombo()
-        self._button.addItem(T("combo.left"), "left")
-        self._button.addItem(T("combo.right"), "right")
-        b_idx = self._button.findData(step.params.get("button", "left"))
-        if b_idx >= 0:
-            self._button.setCurrentIndex(b_idx)
-        form.addRow(T("format.mouse_button"), self._button)
-
-        self._hold_ms = _NoWheelSpin()
-        self._hold_ms.setRange(0, 60000)
-        self._hold_ms.setSuffix(" ms")
-        self._hold_ms.setValue(step.params.get("hold_ms", 0))
-        self._hold_ms.setToolTip(T("tooltip.hold_ms"))
-        form.addRow(T("step_form.hold_label"), self._hold_ms)
-
-    def save(self):
-        self._step.params["button"] = self._button.currentData()
         self._step.params["hold_ms"] = self._hold_ms.value()
 
 
@@ -3511,7 +3481,6 @@ class MainWindow(QMainWindow):
             ("compare", T("step.compare_label"), T("step_form.step_compare_desc")),
             ("click", T("step.click_label"), T("step_form.step_click_desc")),
             ("key", T("step.key_label"), T("step_form.step_key_desc")),
-            ("mouse_click", T("step.mouse_click_label"), T("step_form.step_mouse_click_desc")),
             ("drag", T("step.drag_label"), T("step_form.step_drag_desc")),
             ("scroll", T("step.scroll_label"), T("step_form.step_scroll_desc")),
             ("wait", T("step.wait_label"), T("step_form.step_wait_desc")),
@@ -4740,10 +4709,6 @@ class MainWindow(QMainWindow):
             )
             default_params.setdefault(
                 "random_offset", self._rule_config_ctrl.get_setting(self, "default_random_offset")
-            )
-        if step_type == "mouse_click":
-            default_params.setdefault(
-                "button", self._rule_config_ctrl.get_setting(self, "default_mouse_button")
             )
         if step_type == "wait":
             default_params["ms"] = self._rule_config_ctrl.get_setting(self, "default_wait_ms", 500)

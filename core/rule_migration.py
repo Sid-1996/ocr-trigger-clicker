@@ -15,9 +15,9 @@ _STEP_DEFAULTS = {
         "y": 0,
         "button": "left",
         "random_offset": 3,
+        "hold_ms": 0,
     },
     "key": {"key": "", "hold_ms": 0},
-    "mouse_click": {"button": "left", "hold_ms": 0},
     "drag": {
         "target": "text_center",
         "x": 0,
@@ -142,6 +142,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["y"] = _as_float(base.get("y", 0), 0)
         base["text"] = str(base.get("text", "")).strip()
         base["button"] = str(base.get("button", "left"))
+        base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
         if step_type == "click":
             base["random_offset"] = max(0, _as_int(base.get("random_offset", 3), 3))
         else:
@@ -149,9 +150,6 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
             base["dy"] = _as_int(base.get("dy", 0), 0)
     elif step_type == "key":
         base["key"] = str(base.get("key", ""))
-        base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
-    elif step_type == "mouse_click":
-        base["button"] = str(base.get("button", "left"))
         base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
     elif step_type == "scroll":
         base["direction"] = str(base.get("direction", "WheelDown"))

@@ -350,6 +350,16 @@ class TestRunController:
                             else:
                                 log.append(T("test.click_text_not_found", idx=idx + 1, text=ct))
                                 continue
+                    elif target == "cursor":
+                        btn = {"left": T("combo.left"), "right": T("combo.right")}.get(
+                            p.get("button", "left"), p.get("button", "left")
+                        )
+                        s = T("test.cursor_click", idx=idx + 1, button=btn)
+                        hm = p.get("hold_ms", 0)
+                        if hm:
+                            s += " " + T("test.key_hold", ms=hm)
+                        log.append(s)
+                        continue
                     if cx is not None:
                         log.append(
                             T(
@@ -562,17 +572,6 @@ class TestRunController:
                     hm = p.get("hold_ms", 0)
                     s = T("test.key_hold", ms=hm) if hm else T("test.key_press")
                     log.append(T("test.key_action", idx=idx + 1, action=s, key=k))
-
-                elif step.type == "mouse_click":
-                    p = step.params
-                    btn = {"left": T("combo.left"), "right": T("combo.right")}.get(
-                        p.get("button", "left"), p.get("button", "left")
-                    )
-                    s = T("test.mouse_click_action", idx=idx + 1, button=btn)
-                    hm = p.get("hold_ms", 0)
-                    if hm:
-                        s += " " + T("test.key_hold", ms=hm)
-                    log.append(s)
 
                 elif step.type == "wait":
                     p = step.params

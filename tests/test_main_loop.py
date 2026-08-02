@@ -128,7 +128,6 @@ def test_run_step_dispatcher():
         "detect",
         "click",
         "key",
-        "mouse_click",
         "wait",
         "jump",
         "drag",
@@ -202,6 +201,36 @@ def test_handle_click_no_match():
     ctx.matched_text = None
     result = ml._handle_click({"target": "text_center"}, ctx, test_rule)
     assert result.action == "stop"
+
+
+# ── _handle_click cursor target (background = window center) ──
+
+
+def test_handle_click_cursor_bg():
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "dxcam"}
+    )()
+    captured = {}
+    ml._send_click = lambda x, y, button="left", hold_ms=0: (
+        captured.update(x=x, y=y, button=button, hold_ms=hold_ms) or True
+    )
+    ml._activate_window = lambda: True
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8),
+        rect={"x": 100, "y": 200, "w": 800, "h": 600},
+    )
+    result = ml._handle_click(
+        {"target": "cursor", "button": "right", "hold_ms": 150}, ctx, test_rule
+    )
+    assert result.action == "continue"
+    assert captured["x"] == 100 + 400
+    assert captured["y"] == 200 + 300
+    assert captured["button"] == "right"
+    assert captured["hold_ms"] == 150
+    assert ctx.triggered
 
 
 # ── _handle_on_fail (stop/key) ──
