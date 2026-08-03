@@ -56,6 +56,9 @@
 - **異常排障**：背景/規則/並行/主循環異常改寫入完整 traceback（`_logger.exception()`）
 - **循環停止統計**：`PerformanceMonitor` 新增 `_total_clicks` 計數，停止時輸出「執行 X 秒，點擊 X 次，規則 X 條」
 
+### 文件
+- 說明「依序執行」時什麼算觸發：只有實體動作步驟（點擊/按鍵/拖曳/滾輪）或 on_fail advance 才算完成推進；僅「通知(notify)」不會推進、會一直重複通知（docs/index.html FAQ 與規則設計原則同步更新）
+
 ## [v0.1.8] - 2026-07-31
 
 ### 新增

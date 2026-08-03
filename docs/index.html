@@ -493,6 +493,11 @@
         <p>背景規則每幀都跑，不受群組指標影響。適合做緊急攔截（例如出現錯誤訊息時立刻按掉）。</p>
         <p style="color:var(--text-primary);margin-top:6px;">一般任務放在群組規則就好，不需要勾選「常駐監控」。</p>
       </div>
+      <div class="principle-card">
+        <strong>原則四：要推進就靠動作步驟</strong>
+        <p>一條規則要「完成並進到下一條」，必須有實體動作步驟（點擊／按鍵／拖曳／滾輪）。如果只放「偵測＋通知(notify)」，規則會一直重複通知、卡在原地。</p>
+        <p style="color:var(--text-primary);margin-top:6px;">想做「各自出現就提醒」請改用「常駐監控」，想依序處理就加動作步驟。</p>
+      </div>
     </div>
   </div>
 </section>
@@ -665,6 +670,7 @@
       <button class="faq-question" aria-expanded="false">依序跟並行有什麼差別？</button>
       <div class="faq-answer">
         <strong>依序（↻）</strong>：從第一條規則開始，沒觸發就卡住（一直重試），觸發了才換下一條。像排隊。<br>
+        <span style="color:var(--text-muted);font-size:0.85rem;">💡 什麼算「觸發」：要做出實體動作（點擊／按鍵／拖曳／滾輪），或用 on_fail「跳過此規則（advance）」才代表完成、進到下一條。只放「通知(notify)」不算動作——規則會一直重複通知、卡在原地。</span><br>
         <strong>並行（∥）</strong>：每幀從頭掃全部規則，第一條符合的就做，做完就結束這一輪。像搶答。
       </div>
     </div>
