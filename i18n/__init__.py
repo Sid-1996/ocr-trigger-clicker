@@ -10,7 +10,11 @@ _cache: dict[str, dict[str, str]] = {}
 
 
 def set_language(lang: str) -> None:
+    # ponytail: 語言檔不存在（如舊 config 存了已淘汰的 zh_CN）時 fallback 繁中，避免 T() 逐 key 警告
     global _current
+    path = _dir / f"{lang}.json"
+    if not path.exists():
+        lang = "zh_TW"
     _current = lang
 
 

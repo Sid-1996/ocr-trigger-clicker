@@ -19,7 +19,7 @@
 
 | 路徑 | 對象 | 用途 |
 |---|---|---|
-| `README.md` / `.en.md` / `.zh-CN.md` | 使用者 | 專案首頁、下載連結 |
+| `README.md` / `.en.md` | 使用者 | 專案首頁、下載連結 |
 | `START.md` / `START.en.md` | 使用者 | 快速上手指南（3 分鐘） |
 | `docs/dev/TECHNICAL.md` | 開發者 | 技術規格與比較表 |
 | `docs/dev/ARCHITECTURE.md` | 開發者 | 系統架構與模組地圖 |
