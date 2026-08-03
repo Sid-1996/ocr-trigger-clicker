@@ -1,5 +1,12 @@
 ﻿
 
+## [Unreleased]
+
+### 新增
+- **重疊 OCR 區域合併**：`core/05_main_loop.py::_ocr_region` 對同幀重疊的 ROI 合併共用單次辨識（superset 重用 / overlap union），讓大量重疊的 `detect` 規則（如同跑馬對話叢集）由 N 次 OCR 降為 1 次。並行掃描模式效益最大。
+- **OCR 合併回歸測試**：`tests/test_ocr_merge.py` 用真實任務 `StarSavior-跑馬輔助.json` 的 OCR detect 步，對 3 張實境偵測圖（`tests/data/test*.png`），驗證 current vs merged 行為等價（不漏目標、不誤觸發）且呼叫次數不變差。本機 RapidOCR 模型缺失時自動 skip。
+- 真實偵測圖收錄於 `tests/data/`，做為 OCR 的穩定性回歸基準
+
 ## [v0.1.9] - 2026-08-03
 
 ### 新增
