@@ -8,7 +8,8 @@ if errorlevel 1 (
         type startup_error.log
         del startup_error.log
     )
+    REM 錯誤時暫停，讓開發者能讀錯誤訊息；正常結束則自動關閉視窗。
+    pause
 ) else (
     echo 程式已結束。
 )
-pause
