@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v0.1.9] - 2026-08-03
+
 ### 新增
 - **後台操控功能**：新增兩種互動方法（前景 pynput / 後台 PostMessage），用戶可在偏好設定中選擇
 - `core/16_bg_input.py` — 後台互動模組，支援 PostMessage、pynput 兩種方法
