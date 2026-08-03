@@ -343,30 +343,73 @@ class MainLoop:
         is_full = roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         if is_full:
             cache_key = ("__full__",)
-        else:
-            cache_key = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
-        cached = self._frame_ocr_cache.get(cache_key)
+            cached = self._frame_ocr_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            self._frame_ocr_cache[cache_key] = results
+            return results
+
+        h, w = img.shape[:2]
+        x1 = max(0, int(roi["x"]))
+        y1 = max(0, int(roi["y"]))
+        x2 = min(w, int(roi["x"]) + int(roi["w"]))
+        y2 = min(h, int(roi["y"]) + int(roi["h"]))
+        if x2 <= x1 or y2 <= y1:
+            return []
+        rect = (x1, y1, x2 - x1, y2 - y1)
+
+        cached = self._frame_ocr_cache.get(rect)
         if cached is not None:
             return cached
 
-        if is_full:
-            results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
-        else:
-            h, w = img.shape[:2]
-            x1 = max(0, int(roi["x"]))
-            y1 = max(0, int(roi["y"]))
-            x2 = min(w, int(roi["x"]) + int(roi["w"]))
-            y2 = min(h, int(roi["y"]) + int(roi["h"]))
-            if x2 <= x1 or y2 <= y1:
-                return []
-            roi_img = img[y1:y2, x1:x2]
-            results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-            for r in results:
-                r.x += x1
-                r.y += y1
-                r.center_x = r.x + r.w // 2
-                r.center_y = r.y + r.h // 2
-        self._frame_ocr_cache[cache_key] = results
+        # 1) Superset reuse: if an already-OCR'd rect fully contains this one,
+        #    reuse its results filtered to this rect (no extra OCR call).
+        for key, res in list(self._frame_ocr_cache.items()):
+            if not isinstance(key, tuple) or len(key) != 4:
+                continue
+            cx1, cy1, cw, ch = key
+            if cx1 <= x1 and cy1 <= y1 and cx1 + cw >= x2 and cy1 + ch >= y2:
+                return [
+                    r
+                    for r in res
+                    if not (r.x + r.w <= x1 or r.y + r.h <= y1 or r.x >= x2 or r.y >= y2)
+                ]
+
+        # 2) Overlapping cached rect: expand to the union and OCR the union once,
+        #    then filter to this rect. Overlapping small ROIs → one OCR call.
+        for key in list(self._frame_ocr_cache.keys()):
+            if not isinstance(key, tuple) or len(key) != 4:
+                continue
+            cx1, cy1, cw, ch = key
+            if cx1 < x2 and cy1 < y2 and cx1 + cw > x1 and cy1 + ch > y1:
+                ux, uy = min(cx1, x1), min(cy1, y1)
+                ux2, uy2 = max(cx1 + cw, x2), max(cy1 + ch, y2)
+                urect = (ux, uy, ux2 - ux, uy2 - uy)
+                if urect == rect:
+                    continue
+                uimg = img[uy:uy2, ux:ux2]
+                results = recognize(uimg, preprocess=False, max_side_len=0, min_confidence=0.25)
+                for r in results:
+                    r.x += ux
+                    r.y += uy
+                    r.center_x = r.x + r.w // 2
+                    r.center_y = r.y + r.h // 2
+                self._frame_ocr_cache[urect] = results
+                return [
+                    r
+                    for r in results
+                    if not (r.x + r.w <= x1 or r.y + r.h <= y1 or r.x >= x2 or r.y >= y2)
+                ]
+
+        roi_img = img[y1:y2, x1:x2]
+        results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+        for r in results:
+            r.x += x1
+            r.y += y1
+            r.center_x = r.x + r.w // 2
+            r.center_y = r.y + r.h // 2
+        self._frame_ocr_cache[rect] = results
         return results
 
     def _resolve_roi(self, roi: dict, rect: dict) -> dict:
@@ -2220,5 +2263,58 @@ if __name__ == "__main__":
     assert len(ml._execution_log) == 1
     assert ml._execution_log[0]["result"] == "stop"
     print("  [OK] Suppression: completed → second stop logged again")
+
+    # ── Test 31: merged-ROI OCR reuse ──
+    _ml_ocr = MainLoop.__new__(MainLoop)
+    _ml_ocr._frame_ocr_cache = {}
+    _ocalls = {"n": 0}
+    _orig_rec = recognize
+
+    def _fake_reco(bx, roi_offset=None, preprocess=False, max_side_len=0, min_confidence=0.25):
+        _ocalls["n"] += 1
+        hh, ww = bx.shape[:2]
+        ox = roi_offset.get("x", 0) if roi_offset else 0
+        oy = roi_offset.get("y", 0) if roi_offset else 0
+        return [
+            OcrResult(
+                text="對 話",
+                x=ox + ww // 2 - 4,
+                y=oy + hh // 2 - 4,
+                w=8,
+                h=8,
+                confidence=0.9,
+            )
+        ]
+
+    recognize = _fake_reco
+    _mimg = np.zeros((400, 400, 3), dtype=np.uint8)
+
+    # nested subset ROI contained in an already-OCR'd larger ROI → single OCR call
+    _ra = _ml_ocr._ocr_region(_mimg, {"x": 10, "y": 10, "w": 100, "h": 60})
+    _rb = _ml_ocr._ocr_region(_mimg, {"x": 20, "y": 15, "w": 40, "h": 30})
+    assert _ocalls["n"] == 1, "contained ROI should reuse one recognize call"
+    assert [r.text for r in _ra] == ["對 話"] and [r.text for r in _rb] == ["對 話"]
+    print("  [OK] merged nested ROI: single recognize, both hit")
+
+    # disjoint far-apart ROI → separate call each
+    _ml_ocr._frame_ocr_cache = {}
+    _ocalls["n"] = 0
+    _ra = _ml_ocr._ocr_region(_mimg, {"x": 10, "y": 10, "w": 30, "h": 40})
+    _rb = _ml_ocr._ocr_region(_mimg, {"x": 300, "y": 200, "w": 30, "h": 40})
+    assert _ocalls["n"] == 2, "disjoint ROI must use separate recognize calls"
+    print("  [OK] disjoint ROI: separate recognize calls")
+
+    # overlapping-but-not-contained ROI → union expansion, cluster still low-call
+    _ml_ocr._frame_ocr_cache = {}
+    _ocalls["n"] = 0
+    _ra = _ml_ocr._ocr_region(_mimg, {"x": 10, "y": 10, "w": 30, "h": 30})
+    _rb = _ml_ocr._ocr_region(_mimg, {"x": 25, "y": 25, "w": 30, "h": 30})
+    _rc = _ml_ocr._ocr_region(_mimg, {"x": 28, "y": 28, "w": 10, "h": 10})
+    assert _ocalls["n"] <= 3, f"overlapping cluster should stay low-call, got {_ocalls['n']}"
+    assert [r.text for r in _rc] == ["對 話"]
+    print("  [OK] overlapping cluster: low calls + all rules hit")
+
+    recognize = _orig_rec
+    print("  [OK] Test 31 complete")
 
     print("\n=== All 30 tests passed ===")
