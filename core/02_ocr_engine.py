@@ -10,7 +10,6 @@ from typing import Callable, Optional
 
 import cv2
 import numpy as np
-import rapidocr_onnxruntime
 from rapidocr_onnxruntime import RapidOCR
 
 _engine = None
@@ -114,17 +113,35 @@ def init_engine() -> None:
 
         _engine = RapidOCR(**kwargs)
 
-        _ver = getattr(rapidocr_onnxruntime, "__version__", None)
-        if _ver != "1.3.22":
+        # 記錄實際版本供除錯：模組本身沒定義 __version__，改用套件中繼資料。
+        try:
+            from importlib.metadata import version as _pkg_version
+
+            _ver = _pkg_version("rapidocr-onnxruntime")
+        except Exception:
+            _ver = "unknown"
+
+        # patch 相容性驗證：不寫死版本字串，改檢查被 patch 的方法結構是否仍符合預期。
+        # 只有新版改動 resize_norm_img 簽名或拿掉 rec_image_shape 導致 patch 失效時才警告。
+        _rec_cls = type(_engine.text_rec)
+        _sig_ok = _rec_cls.resize_norm_img.__code__.co_argcount == 3
+        _shape_ok = hasattr(_engine.text_rec, "rec_image_shape")
+        logging.info(
+            "RapidOCR %s 已載入（patch 相容：sig=%s, rec_image_shape=%s）",
+            _ver,
+            _sig_ok,
+            _shape_ok,
+        )
+        if not (_sig_ok and _shape_ok):
             logging.warning(
-                "RapidOCR 版本 %s 與預期 1.3.22 不符，resize_norm_img patch 可能需要重新驗證",
-                _ver or "(unknown)",
+                "RapidOCR %s 的 resize_norm_img 結構與預期不符，patch 可能失效，請重新驗證",
+                _ver,
             )
 
         # 修正：v5 mobile rec 模型的 input width 是靜態 320，但 RapidOCR 的 resize_norm_img
         # 會根據 max_wh_ratio 動態計算 padding 寬度，導致寬度 >320 時模型 crash。
         # 這裡 monkey-patch 把 width 限制在 rec_image_shape[2]（320）以內。
-        _orig_resize = type(_engine.text_rec).resize_norm_img
+        _orig_resize = _rec_cls.resize_norm_img
 
         def _patched_resize(self, img, max_wh_ratio):
             max_wh_ratio = min(max_wh_ratio, self.rec_image_shape[2] / self.rec_image_shape[1])
