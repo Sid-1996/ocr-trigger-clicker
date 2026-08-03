@@ -86,6 +86,10 @@
 
 `%APPDATA%\ocr-trigger-clicker\` 底下。砍掉 exe 設定還在，不用擔心。
 
+### 後台截圖黑畫面 / 後台沒用？
+
+後台截圖黑畫面 → 用**系統管理員**身分重開工具（按右鍵 → 以系統管理員身分執行）。多數 Unity 遊戲不支援後台操控（遊戲底層限制，非工具問題），需改回前景模式。
+
 ### 更多問題？
 
 → [完整 FAQ](https://sid-1996.github.io/ocr-trigger-clicker/#faq)

@@ -86,6 +86,10 @@ Ratio coordinates auto-adapt to different resolutions, but ROI positions may nee
 
 `%APPDATA%\ocr-trigger-clicker\` — delete the exe and your settings stay.
 
+### Background capture is black / background mode doesn't work?
+
+Black screenshot → restart the tool **as Administrator** (right-click → Run as Administrator). Most Unity games don't support background control (a game-engine limitation, not a tool issue) — switch back to foreground mode.
+
 ### More questions?
 
 → [Full FAQ](https://sid-1996.github.io/ocr-trigger-clicker/#faq)

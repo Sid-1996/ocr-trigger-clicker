@@ -54,7 +54,7 @@
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |
 | 📐 | **Resolution-proof** | Coordinates auto-scale — plug in a monitor or resize, no reconfiguring |
 | 👁️ | **Set up rules visually** | OCR diagnostic panel lists every text on screen — double-click to create a rule |
-| 🎮 | **Background (daemon) mode** | PrintWindow capture + PostMessage clicks — run with the window minimized or covered, without stealing focus |
+| 🎮 | **Background (daemon) mode** | PrintWindow capture + PostMessage clicks — run with the window minimized or covered, without stealing focus (most Unity games don't support background mode — that's a game-engine limitation, not a tool issue) |
 
 ---
 
@@ -73,7 +73,7 @@
 
 - **Windows 10 / 11** (64-bit)
 - No installation or Python needed — download the ZIP, extract, run
-- If nothing happens, try **right-click → Run as Administrator**
+- If nothing happens, or background capture comes back as a black screen, try **right-click → Run as Administrator**
 
 ---
 

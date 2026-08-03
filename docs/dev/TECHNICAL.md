@@ -60,6 +60,20 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 - **結論**：`max_side_len` 只適合大文字 UI（選單、對話框），遊戲場景不可用
 - **正確做法**：保持 `max_side_len=0`（原始精度），用 ROI 框選偵測區域提升效能
 
+### 後台操控對 Unity 大多無效 — 遊戲底層限制，非工具問題 ⚠️
+
+- **現象**：後台模式（PrintWindow 截圖 + PostMessage 輸入）對多數 Unity 開發的遊戲無效——截圖黑畫面或輸入無反應
+- **底層原因（科普）**：
+  - **輸入**：PostMessage 是把視窗訊息塞進目標視窗的 Win32 舊式訊息佇列；Unity 的輸入多走 **Raw Input / 低階注入** 與自家輸入系統，不接受這條路徑 → 點了沒反應
+  - **渲染**：PrintWindow 要求目標以「相容繪圖」把自己畫出來；Unity 用 GPU（DXGI / Direct3D）直接渲染，不公開這條 PrintWindow 路徑 → 截不到畫面內容
+- **結論**：這是遊戲引擎的平台／底層設計，工具無法逾越，**不是工具缺陷**。此類遊戲請改用**前景模式（pynput）**
+
+### 後台截圖全黑 — 試試系統管理員 👑
+
+- **現象**：部分遊戲（如鳴潮）在後台模式截圖全黑、OCR 偵測不到任何字
+- **原因**：非系統管理員權限下，遊戲拒絕把畫面繪製給 PrintWindow；`core/15_print_window.py` 的 `is_black_capture()` / `is_admin()` 即用以偵測此情況，並於啟動前提醒
+- **解法**：以**系統管理員**身分啟動工具（右鍵 → 以系統管理員身分執行）
+
 ---
 
 ## Related Documents
