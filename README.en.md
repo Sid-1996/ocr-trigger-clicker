@@ -6,7 +6,7 @@
 
 <p align="center">
   <em>A no-code Windows automation tool — detects text on screen and automatically clicks and types</em><br>
-  Traditional Chinese / Simplified Chinese UI · Author: Sid
+  Traditional Chinese / English UI · Author: Sid
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.md">繁體中文</a>
+  <strong>English</strong> · <a href="./README.md">繁體中文</a>
 </p>
 
 ---

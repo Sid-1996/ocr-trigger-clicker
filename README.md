@@ -6,7 +6,7 @@
 
 <p align="center">
   <em>免寫程式的 Windows 自動化工具 — 偵測螢幕文字後自動點擊與按鍵</em><br>
-  支援繁體中文 / 簡體中文 UI 切換 · Author: Sid
+  支援繁體中文 / English UI 切換 · Author: Sid
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.en.md">English</a> · <a href="./README.zh-CN.md">简体中文</a> · <strong>繁體中文</strong>
+  <a href="./README.en.md">English</a> · <strong>繁體中文</strong>
 </p>
 
 ---
