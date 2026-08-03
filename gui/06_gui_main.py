@@ -5392,7 +5392,7 @@ class MainWindow(QMainWindow):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(T("main.start"))
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(T("dialog.group_ok"))
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)

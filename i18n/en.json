@@ -123,6 +123,7 @@
   "dialog.export_task": "Export Task",
   "dialog.about": "About OCR Trigger Clicker",
   "dialog.group_selection": "Select Groups to Execute",
+  "dialog.group_ok": "Start",
   "dialog.test_result": "Test Result (Visualized)",
   "dialog.cannot_delete": "Cannot Delete",
   "dialog.uncategorized_system": "\"Uncategorized\" is a system group and cannot be deleted.\nUse the right-click menu \"Clear Uncategorized\" to remove all rules.",
