@@ -1,9 +1,9 @@
 {
-  "last_task": "test",
-  "last_window": "StarSavior",
+  "last_task": "holo-dream",
+  "last_window": "hololive-Dreams",
   "hide_startup_guide": true,
   "max_cps": 5,
-  "scan_interval_ms": 500,
+  "scan_interval_ms": 300,
   "default_match_mode": "fuzzy",
   "close_behavior": "quit",
   "show_close_confirm": false,

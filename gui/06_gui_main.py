@@ -3528,6 +3528,7 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(T("main.ready"))
         self._perf_label = QLabel(T("fps.idle"))
         self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
+        self._perf_label.setToolTip(T("fps.tooltip"))
         self._status_bar.addPermanentWidget(self._perf_label)
         self._input_status_label = QLabel("🟢 Input")
         self._input_status_label.setStyleSheet(
