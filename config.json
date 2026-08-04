@@ -1,9 +1,9 @@
 {
-  "last_task": "HololiveDream",
-  "last_window": "LostSword",
+  "last_task": "StarSavior-跑馬輔助",
+  "last_window": "StarSavior",
   "hide_startup_guide": true,
   "max_cps": 5,
-  "scan_interval_ms": 300,
+  "scan_interval_ms": 100,
   "default_match_mode": "fuzzy",
   "close_behavior": "quit",
   "show_close_confirm": false,
@@ -14,7 +14,7 @@
   "default_fuzzy_threshold": 0.8,
   "default_template_threshold": 0.8,
   "default_color_tolerance": 10,
-  "language": "en",
+  "language": "zh_TW",
   "interaction_mode": "pynput",
   "notify_resource_warn": false
 }

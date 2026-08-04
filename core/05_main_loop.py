@@ -140,6 +140,35 @@ class StepResult:
     detail: str = ""
 
 
+def _prematch_pure(
+    img: np.ndarray,
+    template_path: str,
+    roi: dict | None,
+    threshold: float,
+    template_data: str | None,
+    capture_size,
+    current_size,
+    match_color: bool,
+    color_tolerance,
+):
+    """執行緒池純計算函式：只跑 match_template，不碰任何執行個體狀態、不讀檔、
+    不呼叫 Win32。capture_size/current_size/roi 皆由主執行緒預算後傳入，避免
+    N 次/幀的重複 I/O（變慢元兇）。回傳 match_template(return_best=True) 原始結果。
+    """
+    return match_template(
+        img,
+        template_path,
+        roi,
+        threshold,
+        template_data=template_data,
+        capture_size=capture_size,
+        current_size=current_size,
+        match_color=match_color,
+        color_tolerance=color_tolerance,
+        return_best=True,
+    )
+
+
 class MainLoop:
     def __init__(
         self,
@@ -425,7 +454,7 @@ class MainLoop:
         self._frame_ocr_cache[rect] = results
         return results
 
-    def _resolve_roi(self, roi: dict, rect: dict) -> dict:
+    def _resolve_roi(self, roi: dict, rect: dict, chrome: tuple | None = None) -> dict:
         x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
         if x == 0 and y == 0 and w == 0 and h == 0:
             return roi
@@ -434,7 +463,9 @@ class MainLoop:
             return roi
         if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
             if roi.get("roi_coord") == "client":
-                chrome = get_window_client_offset(self._window_title) or (0, 0)
+                # ponytail: chrome 可由呼叫端預算後傳入，避免平行預算時 N 次重複 Win32 呼叫
+                if chrome is None:
+                    chrome = get_window_client_offset(self._window_title) or (0, 0)
                 cx, cy = chrome
                 client_w = W - cx
                 client_h = H - cy
@@ -1146,17 +1177,38 @@ class MainLoop:
             if pool is None:
                 pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
                 self._prematch_pool = pool
+            # ponytail: 共享預算——capture_size/chrome/current_size 主線程只算一次，
+            # 各 worker 不再各自讀檔/呼叫 Win32（否則 N 次/幀的重複 I/O 是變慢元兇）。
+            capture_size = get_capture_size(self._rules_path)
+            chrome = get_window_client_offset(self._window_title)
+            if chrome:
+                current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
+            else:
+                current_size = [rect["w"], rect["h"]]
             for rid in group.rule_ids:
                 r = self._rule_map.get(rid)
                 if r is None or not r.enabled or not r.steps:
                     continue
                 if r.steps[0].type != "match_image":
                     continue
-                tdata = r.steps[0].params.get("template_data", "")
-                tpath = r.steps[0].params.get("template", "")
+                p = r.steps[0].params
+                tdata = p.get("template_data", "")
+                tpath = p.get("template", "")
                 if not tdata.strip() and not tpath.strip():
                     continue
-                pending[rid] = pool.submit(self._prematch_match, r, img, rect)
+                roi = self._resolve_roi(p.get("roi", {}), rect, chrome)
+                pending[rid] = pool.submit(
+                    _prematch_pure,
+                    img,
+                    tpath,
+                    roi,
+                    p.get("threshold", 0.8),
+                    tdata or None,
+                    capture_size,
+                    current_size,
+                    p.get("match_color", False),
+                    p.get("color_tolerance", 100),
+                )
 
         triggered = False
         for rid in group.rule_ids:
@@ -1186,33 +1238,6 @@ class MainLoop:
                 triggered = True
         if triggered and group.mode == "once":
             self._advance_group_queue()
-
-    def _prematch_match(self, rule: Rule, img: np.ndarray, rect: dict):
-        """在執行緒池中計算規則第一個 match_image step 的原始 match_template 結果。
-
-        只搬移純計算；參數解析與 match_template 完全複製 _handle_match_image 的呼叫契約，
-        回傳元組 (results, best_below) 供 _handle_match_image 消費。warning/log 不在此發生。
-        """
-        p = rule.steps[0].params
-        capture_size = get_capture_size(self._rules_path)
-        chrome = get_window_client_offset(self._window_title)
-        if chrome:
-            current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
-        else:
-            current_size = [rect["w"], rect["h"]]
-        roi = self._resolve_roi(p.get("roi", {}), rect)
-        return match_template(
-            img,
-            p.get("template", ""),
-            roi,
-            p.get("threshold", 0.8),
-            template_data=p.get("template_data", "") or None,
-            capture_size=capture_size,
-            current_size=current_size,
-            match_color=p.get("match_color", False),
-            color_tolerance=p.get("color_tolerance", 100),
-            return_best=True,
-        )
 
     def _advance_rule_in_group(self):
         group = self._current_group()
