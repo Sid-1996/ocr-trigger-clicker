@@ -58,6 +58,7 @@ def _make_ml():
     ml._frame_diff_ratio = 0.0
     ml._has_detect_rules = False
     ml._frame_ocr_cache = {}
+    ml._ocr_cache_hits = 0
     ml._logger = logging.getLogger("main_loop_test")
     ml._stop_event = threading.Event()
     ml._pause_event = threading.Event()
@@ -187,6 +188,56 @@ def test_handle_detect_empty_text():
     )
     result = ml._handle_detect({"text": "", "roi": None}, ctx, test_rule)
     assert result.action == "stop"
+
+
+# ── _ocr_region cache-hit marker ──
+
+
+def test_ocr_region_cache_hit_marker():
+    """Second detect on a ROI served by _ocr_region superset cache must flag
+    ocr_cache_hit and _build_ok_detail must render the shared-cache marker."""
+    ml = _make_ml()
+    ml._frame_ocr_cache = {}
+    ml._ocr_cache_hits = 0
+    calls = []
+
+    OrigResult = _ml_mod.OcrResult
+
+    def fake_recognize(img, **kw):
+        calls.append(int(img.shape[1]))
+        # Result at (0,0) in sub-image; after shift by roi1's x1=10,y=10
+        # lands at (10,10,10,10) — well inside roi2 at (10,10,30,30).
+        return [OrigResult(text="對話", x=0, y=0, w=10, h=10, confidence=0.9)]
+
+    orig = _ml_mod.recognize
+    _ml_mod.recognize = fake_recognize
+    try:
+        img = np.zeros((400, 400, 3), dtype=np.uint8)
+        # roi1 is large, roi2 is a strict subset fully containing the shifted result
+        roi1 = {"x": 10, "y": 10, "w": 100, "h": 60}
+        roi2 = {"x": 10, "y": 10, "w": 30, "h": 30}
+
+        hits_before = ml._ocr_cache_hits
+        ml._ocr_region(img, roi1)
+        assert len(calls) == 1, "first call should run recognize"
+        assert ml._ocr_cache_hits == hits_before, "first call is a miss"
+
+        hits_before = ml._ocr_cache_hits
+        r2 = ml._ocr_region(img, roi2)
+        assert ml._ocr_cache_hits > hits_before, "nested ROI must be flagged as cache hit"
+        assert len(calls) == 1, "nested ROI should reuse cache, no extra recognize"
+
+        # Verify the detail renderer shows the marker
+        ctx = StepContext(img=img, rect={"x": 0, "y": 0, "w": 400, "h": 400})
+        ctx.matched_text = r2[0]
+        ctx.ocr_cache_hit = True
+        ctx.ocr_elapsed_ms = 0
+        detail = ml._build_ok_detail(Step(type="detect", params={}), ctx)
+        assert "共用快取" in detail, f"renderer should show shared-cache marker, got: {detail}"
+        assert "0ms" in detail
+    finally:
+        _ml_mod.recognize = orig
+
 
 
 # ── _handle_click without matched_text ──

@@ -127,6 +127,7 @@ class StepContext:
     step_idx: int = -1
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
+    ocr_cache_hit: bool = False
 
 
 @dataclass
@@ -168,6 +169,7 @@ class MainLoop:
         self._frame_diff_ratio: float = 0.0
         self._has_detect_rules: bool = False
         self._frame_ocr_cache: dict = {}
+        self._ocr_cache_hits: int = 0
 
         self._rule_pointer: int = 0
         self._groups: list[RuleGroup] = load_groups(rules_path)
@@ -345,6 +347,7 @@ class MainLoop:
             cache_key = ("__full__",)
             cached = self._frame_ocr_cache.get(cache_key)
             if cached is not None:
+                self._ocr_cache_hits += 1
                 return cached
             results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
             self._frame_ocr_cache[cache_key] = results
@@ -361,6 +364,7 @@ class MainLoop:
 
         cached = self._frame_ocr_cache.get(rect)
         if cached is not None:
+            self._ocr_cache_hits += 1
             return cached
 
         # 1) Superset reuse: if an already-OCR'd rect fully contains this one,
@@ -370,6 +374,7 @@ class MainLoop:
                 continue
             cx1, cy1, cw, ch = key
             if cx1 <= x1 and cy1 <= y1 and cx1 + cw >= x2 and cy1 + ch >= y2:
+                self._ocr_cache_hits += 1
                 return [
                     r
                     for r in res
@@ -477,7 +482,9 @@ class MainLoop:
                         "偵測文字未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域"
                     )
         t_ocr = time.monotonic()
+        hits_before = self._ocr_cache_hits
         results = self._ocr_region(ctx.img, roi)
+        ctx.ocr_cache_hit = self._ocr_cache_hits > hits_before
         if roi_is_empty and ctx.img.shape[1] > 800:
             ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
         if not results:
@@ -558,7 +565,9 @@ class MainLoop:
                         "比較數值未設定搜尋區域，效能會嚴重下降，建議在步驟中框選搜尋區域"
                     )
         t_ocr = time.monotonic()
+        hits_before = self._ocr_cache_hits
         results = self._ocr_region(ctx.img, roi)
+        ctx.ocr_cache_hit = self._ocr_cache_hits > hits_before
         if roi_is_empty and ctx.img.shape[1] > 800:
             ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
         combined = " ".join(r.text for r in results)
@@ -987,7 +996,9 @@ class MainLoop:
         t = step.type
         if t in ("detect", "compare") and ctx.matched_text and hasattr(ctx.matched_text, "text"):
             detail = ctx.matched_text.text[:15]
-            if ctx.ocr_elapsed_ms > 0:
+            if ctx.ocr_cache_hit:
+                detail += " (0ms, 共用快取)"
+            elif ctx.ocr_elapsed_ms > 0:
                 detail += f" ({ctx.ocr_elapsed_ms:.0f}ms)"
             return detail
         if t == "click" and ctx.matched_text and hasattr(ctx.matched_text, "text"):
@@ -1001,7 +1012,9 @@ class MainLoop:
         if t == "compare" and ctx.matched_box:
             num = ctx.matched_box.get("number", "")
             detail = str(num) if num != "" else ""
-            if ctx.ocr_elapsed_ms > 0:
+            if ctx.ocr_cache_hit:
+                detail += " (0ms, 共用快取)"
+            elif ctx.ocr_elapsed_ms > 0:
                 detail += f" ({ctx.ocr_elapsed_ms:.0f}ms)"
             return detail
         if t == "scroll":
@@ -1485,6 +1498,7 @@ if __name__ == "__main__":
     ml._frame_diff_ratio = 0.0
     ml._has_detect_rules = False
     ml._frame_ocr_cache = {}
+    ml._ocr_cache_hits = 0
     ml._execution_log = deque(maxlen=10)
     ml._last_exec_log = {}
     ml._rule_completed = set()
@@ -2267,6 +2281,7 @@ if __name__ == "__main__":
     # ── Test 31: merged-ROI OCR reuse ──
     _ml_ocr = MainLoop.__new__(MainLoop)
     _ml_ocr._frame_ocr_cache = {}
+    _ml_ocr._ocr_cache_hits = 0
     _ocalls = {"n": 0}
     _orig_rec = recognize
 
