@@ -2625,6 +2625,7 @@ def _get_images_dir() -> Path:
 class WorkerSignals(QObject):
     error_signal = pyqtSignal(str)
     warning_signal = pyqtSignal(str)
+    resource_warning_signal = pyqtSignal(str)
     info_signal = pyqtSignal(str)
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
@@ -2667,6 +2668,7 @@ class InitWorker(QThread):
                 loop.set_active_groups(self._active_group_ids)
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
             loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
+            loop.on_resource_warning = lambda msg: self._signals.resource_warning_signal.emit(msg)
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
             loop.on_emergency = lambda: self._signals.emergency_signal.emit()
@@ -2765,6 +2767,13 @@ class SettingsDialog(QDialog):
         self._show_close_confirm.setToolTip(T("settings.show_close_confirm.tooltip"))
         form.addRow("", self._show_close_confirm)
 
+        self._notify_resource_warn = QCheckBox(T("settings.notify_resource_warn"))
+        self._notify_resource_warn.setChecked(
+            self._ctrl.get_setting(win, "notify_resource_warn", True)
+        )
+        self._notify_resource_warn.setToolTip(T("settings.notify_resource_warn.tooltip"))
+        form.addRow("", self._notify_resource_warn)
+
         self._auto_update = QCheckBox(T("settings.auto_update"))
         self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check"))
         self._auto_update.setToolTip(T("settings.auto_update.tooltip"))
@@ -2852,6 +2861,9 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(self._win, "close_behavior", self._close_behavior.currentData())
         self._ctrl.set_setting(
             self._win, "show_close_confirm", self._show_close_confirm.isChecked()
+        )
+        self._ctrl.set_setting(
+            self._win, "notify_resource_warn", self._notify_resource_warn.isChecked()
         )
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
@@ -3590,6 +3602,7 @@ class MainWindow(QMainWindow):
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
         )
         self._signals.warning_signal.connect(self._notif_stack.push)
+        self._signals.resource_warning_signal.connect(self._on_resource_warning)
         self._signals.error_signal.connect(
             lambda msg: QMessageBox.warning(self, T("dialog.engine_error"), msg)
         )
@@ -3601,6 +3614,11 @@ class MainWindow(QMainWindow):
 
     def _on_ocr_health(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
+
+    def _on_resource_warning(self, msg: str):
+        self._status_bar.showMessage(f"⚠ {msg}", 5000)
+        if self._rule_config_ctrl.get_setting(self, "notify_resource_warn"):
+            self._notif_stack.push(msg)
 
     def _update_input_status(self, connected: bool):
         if connected:

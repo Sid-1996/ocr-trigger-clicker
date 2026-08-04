@@ -14,6 +14,9 @@
   "settings.show_close_confirm.tooltip": "按 X 時先問你「確定要關閉嗎？」，避免誤按。",
   "settings.auto_update": "啟動時自動檢查更新",
   "settings.auto_update.tooltip": "每次開啟程式時，自動到 GitHub 看看有沒有新版本。",
+  "settings.notify_resource_warn": "CPU/記憶體高負載時彈出通知",
+  "settings.notify_resource_warn.tooltip": "取消勾選僅停止彈出通知氣泡；狀態列的負載標記仍會照常顯示",
+
   "settings.language": "語言:",
   "settings.default_mouse_button": "預設滑鼠按鈕:",
   "settings.default_mouse_button.tooltip": "點擊預設用哪個鍵。大多數遊戲左鍵即可。",

@@ -24,6 +24,7 @@ class RuleConfigController:
         "default_random_offset": 3,
         "default_wait_ms": 500,
         "language": "zh_TW",
+        "notify_resource_warn": True,
     }
 
     def __init__(self):

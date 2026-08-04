@@ -14,6 +14,9 @@
   "settings.show_close_confirm.tooltip": "Ask 'Are you sure?' when clicking X to prevent accidental closes.",
   "settings.auto_update": "Check for updates on startup",
   "settings.auto_update.tooltip": "Automatically check GitHub for new versions every time the program starts.",
+  "settings.notify_resource_warn": "Notify on high CPU/memory load",
+  "settings.notify_resource_warn.tooltip": "Unchecking only stops the pop-up notification bubble; status-bar load indicators still show",
+
   "settings.language": "Language:",
   "settings.default_mouse_button": "Default mouse button:",
   "settings.default_mouse_button.tooltip": "Default mouse button for clicks. Left is suitable for most games.",

@@ -195,6 +195,7 @@ class MainLoop:
 
         self.on_error: Optional[Callable[[str], None]] = None
         self.on_warning: Optional[Callable[[str], None]] = None
+        self.on_resource_warning: Optional[Callable[[str], None]] = None
         self.on_info: Optional[Callable[[str], None]] = None
         self.on_window_lost: Optional[Callable[[], None]] = None
         self.on_emergency: Optional[Callable[[], None]] = None
@@ -1410,14 +1411,14 @@ class MainLoop:
     def _on_cpu_warn(self, pct: float):
         msg = f"CPU 使用率過高 ({pct:.0f}%)，請注意系統負載"
         self._log(msg)
-        if self.on_warning:
-            self.on_warning(msg)
+        if self.on_resource_warning:
+            self.on_resource_warning(msg)
 
     def _on_memory_warn(self, mb: float):
         msg = f"記憶體使用量過高 ({mb:.0f} MB)，請注意系統負載"
         self._log(msg)
-        if self.on_warning:
-            self.on_warning(msg)
+        if self.on_resource_warning:
+            self.on_resource_warning(msg)
 
     def get_perf_stats(self) -> dict:
         return self._perf.get_stats()
