@@ -1,10 +1,12 @@
 import logging
+import os
 import random
 import re
 import sys as _sys
 import threading
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -128,6 +130,7 @@ class StepContext:
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
     ocr_cache_hit: bool = False
+    prematch: Optional[dict] = None
 
 
 @dataclass
@@ -208,6 +211,10 @@ class MainLoop:
         self._perf.on_cpu_warn = self._on_cpu_warn
         self._perf.on_memory_warn = self._on_memory_warn
         self._perf.start()
+
+        # 平行預算執行緒池：供並行群組平行計算各規則的 match_image 結果。
+        # ponytail: 只在此類群組真正需要時才建立，避免背景全部開一條 pool。
+        self._prematch_pool: Optional[ThreadPoolExecutor] = None
 
         self._rules: list[Rule] = []
         self._logger = _ensure_main_logger()
@@ -530,21 +537,26 @@ class MainLoop:
         threshold = params.get("threshold", 0.8)
         match_color = params.get("match_color", False)
         color_tolerance = params.get("color_tolerance", 100)
-        results = match_template(
-            ctx.img,
-            template_path,
-            roi,
-            threshold,
-            template_data=template_data or None,
-            capture_size=capture_size,
-            current_size=current_size,
-            match_color=match_color,
-            color_tolerance=color_tolerance,
-            return_best=True,
-        )
-        best_below = -1.0
-        if isinstance(results, tuple):
-            results, best_below = results
+        # 若並行群組已為本 step（index 0）平行預算好 match_template，直接消費，
+        # 省去重複的找圖計算；步進>0或無預算時一律照舊即時計算。
+        if ctx.prematch and 0 in ctx.prematch:
+            results, best_below = ctx.prematch[0]
+        else:
+            results = match_template(
+                ctx.img,
+                template_path,
+                roi,
+                threshold,
+                template_data=template_data or None,
+                capture_size=capture_size,
+                current_size=current_size,
+                match_color=match_color,
+                color_tolerance=color_tolerance,
+                return_best=True,
+            )
+            best_below = -1.0
+            if isinstance(results, tuple):
+                results, best_below = results
         if not results:
             ctx.best_confidence = best_below
             return self._handle_on_fail(params, ctx, rule)
@@ -1124,6 +1136,28 @@ class MainLoop:
             self._advance_rule_in_group()
 
     def _run_parallel_group(self, group: RuleGroup, img: np.ndarray, rect: dict) -> None:
+        # 平行預算：收集本群組各規則第一個 match_image step 的參數（主執行緒解析），
+        # 把純 match_template 計算丟進執行緒池平行跑，結果以 rule_id 為鍵存入手稿 ctx.prematch。
+        # ponytail: 不跳過任何規則、不改執行路徑（warning/log/on_fail 仍由 _run_rule 依序處理），
+        # 只把「找圖計算」平行化後由 _handle_match_image 消費——行為完全等價。
+        pending: dict[str, object] = {}
+        pool = getattr(self, "_prematch_pool", None)
+        if pool is not None or len(group.rule_ids) >= 2:
+            if pool is None:
+                pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
+                self._prematch_pool = pool
+            for rid in group.rule_ids:
+                r = self._rule_map.get(rid)
+                if r is None or not r.enabled or not r.steps:
+                    continue
+                if r.steps[0].type != "match_image":
+                    continue
+                tdata = r.steps[0].params.get("template_data", "")
+                tpath = r.steps[0].params.get("template", "")
+                if not tdata.strip() and not tpath.strip():
+                    continue
+                pending[rid] = pool.submit(self._prematch_match, r, img, rect)
+
         triggered = False
         for rid in group.rule_ids:
             if triggered:
@@ -1132,6 +1166,12 @@ class MainLoop:
             if r is None or not r.enabled:
                 continue
             r_ctx = StepContext(img=img, rect=rect)
+            if rid in pending:
+                fut = pending[rid]
+                try:
+                    r_ctx.prematch = {0: fut.result()}
+                except Exception:
+                    r_ctx.prematch = None
             self._process_counter += 1
             try:
                 self._run_rule(r, img, rect, r_ctx)
@@ -1146,6 +1186,33 @@ class MainLoop:
                 triggered = True
         if triggered and group.mode == "once":
             self._advance_group_queue()
+
+    def _prematch_match(self, rule: Rule, img: np.ndarray, rect: dict):
+        """在執行緒池中計算規則第一個 match_image step 的原始 match_template 結果。
+
+        只搬移純計算；參數解析與 match_template 完全複製 _handle_match_image 的呼叫契約，
+        回傳元組 (results, best_below) 供 _handle_match_image 消費。warning/log 不在此發生。
+        """
+        p = rule.steps[0].params
+        capture_size = get_capture_size(self._rules_path)
+        chrome = get_window_client_offset(self._window_title)
+        if chrome:
+            current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
+        else:
+            current_size = [rect["w"], rect["h"]]
+        roi = self._resolve_roi(p.get("roi", {}), rect)
+        return match_template(
+            img,
+            p.get("template", ""),
+            roi,
+            p.get("threshold", 0.8),
+            template_data=p.get("template_data", "") or None,
+            capture_size=capture_size,
+            current_size=current_size,
+            match_color=p.get("match_color", False),
+            color_tolerance=p.get("color_tolerance", 100),
+            return_best=True,
+        )
 
     def _advance_rule_in_group(self):
         group = self._current_group()
@@ -1327,6 +1394,9 @@ class MainLoop:
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
+        if self._prematch_pool is not None:
+            self._prematch_pool.shutdown(wait=False)
+            self._prematch_pool = None
         self._perf.stop()
 
     def pause(self) -> None:

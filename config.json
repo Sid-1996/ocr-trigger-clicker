@@ -1,6 +1,6 @@
 {
-  "last_task": "holo-dream",
-  "last_window": "hololive-Dreams",
+  "last_task": "HololiveDream",
+  "last_window": "LostSword",
   "hide_startup_guide": true,
   "max_cps": 5,
   "scan_interval_ms": 300,
@@ -14,6 +14,7 @@
   "default_fuzzy_threshold": 0.8,
   "default_template_threshold": 0.8,
   "default_color_tolerance": 10,
-  "language": "zh_TW",
-  "interaction_mode": "pynput"
+  "language": "en",
+  "interaction_mode": "pynput",
+  "notify_resource_warn": false
 }
