@@ -116,24 +116,24 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 `02_ocr_engine.py` 定義 `_DEFAULT_MAX_SIDE_LEN = 480`，`recognize()` 預設使用此值將大圖縮小後再辨識。
 
-**但主循環完全繞過此預設**：`_ocr_region()`（`05_main_loop.py:300-328`）所有 `recognize()` 呼叫皆直接傳 `max_side_len=0`（無縮限）。ROI 分支裁切後的子圖也傳 0。
+**但主循環完全繞過此預設**：`_ocr_region()`（`05_main_loop.py:342-413`）所有 `recognize()` 呼叫皆直接傳 `max_side_len=0`（無縮限）。ROI 分支裁切後的子圖也傳 0。
 
 歷史：曾短暫實作全圖 `max_side_len=480`→`720` 限制（commits `c98b883`、`a4460a4`），後因偵測精度考量全數移除（commit `9ca2998`）。
 
-**效能警告**：空 ROI + 畫面寬度 > 800px 時，`_handle_detect` 會發出警告並透過 `on_warning` 通知 GUI（`05_main_loop.py:385-394`）。
+**效能警告**：空 ROI + 畫面寬度 > 800px 時，`_handle_detect` 會發出警告並透過 `on_warning` 通知 GUI（`05_main_loop.py:470-478`）。
 
 ## on_warning 回呼機制
 
 `MainLoop.on_warning: Optional[Callable[[str], None]]`（`05_main_loop.py:195`）
 
 觸發時機：
-- 空 ROI + 畫面寬 > 800px（`05_main_loop.py:432-433`）
-- match_image 首次匹配成功（`05_main_loop.py:475-476`）
-- compare 步驟全圖 OCR（`05_main_loop.py:513-514`）
-- 流程停止（`05_main_loop.py:621-622`，含 `[通知]` 前綴）
-- 規則異常（`05_main_loop.py:846-847`, `1059-1060`, `1083-1084`）
-- 全黑截圖警告（`05_main_loop.py:1232-1233`）
-- 背景截圖失敗（`05_main_loop.py:1357-1364`）
+- 空 ROI + 畫面寬 > 800px（`05_main_loop.py:480-481`）
+- match_image 首次匹配成功（`05_main_loop.py:526`）
+- compare 步驟全圖 OCR（`05_main_loop.py:564`）
+- 流程停止（`05_main_loop.py:674`，含 `[通知]` 前綴）
+- 規則異常（`05_main_loop.py:1116`, `1074`, `1140`）
+- 全黑截圖警告（`05_main_loop.py:1254`，log 而非 on_warning）
+- 背景截圖失敗（`15_print_window.py:149`）
 
 GUI 連接：`loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)`（`gui/06_gui_main.py:2669`）
 
@@ -141,7 +141,7 @@ GUI 連接：`loop.on_warning = lambda msg: self._signals.warning_signal.emit(ms
 
 `_ExecutionLogWidget`（`gui/06_gui_main.py:2993`）— 即時顯示規則逐步驟執行紀錄。
 
-**資料來源**：`MainLoop._log_exec()`（`05_main_loop.py:222-276`），每步執行結果寫入 `_execution_log` 佇列，GUI 定時拉取。
+**資料來源**：`MainLoop._log_exec()`（`05_main_loop.py:224-276`），每步執行結果寫入 `_execution_log` 佇列，GUI 定時拉取。
 
 **兩層抑制**（避免 flood）：
 1. **同 key 去重**：`_last_exec_log` 字典，相同 `(rule_name, step_idx)` 若 result+detail 不變則跳過
@@ -149,7 +149,7 @@ GUI 連接：`loop.on_warning = lambda msg: self._signals.warning_signal.emit(ms
 
 GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id + scroll 4 方向` 去重）。
 
-**人類可讀摘要**：`_infer_stop_detail()`（`05_main_loop.py:922`）產生 stop 原因，`_build_ok_detail()`（`05_main_loop.py:943`）產生 ok 摘要（含 match_image 百分比、scroll/drag 方向等）。
+**人類可讀摘要**：`_infer_stop_detail()`（`05_main_loop.py:974`）產生 stop 原因，`_build_ok_detail()`（`05_main_loop.py:995`）產生 ok 摘要（含 match_image 百分比、scroll/drag 方向等）。
 
 ### 日誌架構（基準版本後新增）
 
@@ -165,7 +165,7 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 **異常 traceback**（commit `20b9cf1`）：背景規則/規則/並行/主循環 4 處改為 `self._logger.exception()`，會自動附上完整 traceback。
 
-**循環停止統計**（commit `20b9cf1`）：`MainLoop._started_at` 記錄啟動時間戳，`PerformanceMonitor._total_clicks` + `get_total_clicks()` 累計點擊數。`stop()`（`05_main_loop.py:1264-1268`）輸出 `"循環停止：執行 {秒數} 秒，點擊 {次數} 次，規則 {數量} 條"`。
+**循環停止統計**（commit `20b9cf1`）：`MainLoop._started_at` 記錄啟動時間戳，`PerformanceMonitor._total_clicks` + `get_total_clicks()` 累計點擊數。`stop()`（`05_main_loop.py:1308-1321`）輸出 `"循環停止：執行 {秒數} 秒，點擊 {次數} 次，規則 {數量} 條"`。
 
 ## 後台操控模式（基準版本後新增）
 
@@ -399,20 +399,20 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 
 - `_fail_since` 字典與鍵值格式 `f"{rule_id}:{step_idx}"` — 確認存在於 `core/05_main_loop.py:182`，邏輯分布於 `_handle_detect`、`_handle_match_image`、`_handle_compare`、`_handle_on_fail`、`get_rules_status`。
 - fail_duration_sec 修正（commit `4cb403c`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
-- 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1209` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
+- 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1265` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆直接讀取原始碼與執行測試腳本第一手確認。
 - 全域熱鍵 — `core/00_global_hotkey.py` 僅註冊 F8（hid=1），對應 `MainWindow._on_hotkey()` → `_toggle_start()`。
 - i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON 各 631 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
 - 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `%TEMP%/ocr_update_*/staging/`，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py` 含 copytree 逐檔複製、rollback、暫存目錄清理機制。
 - 路徑集中 — `core/_paths.py` 5 函式，取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
 - 截圖 — `core/17_capture_pipeline.py:48` `capture_frame(mode, title, hwnd)` 為統一管線：前景 `_capture_foreground`（mss 三層備援）、後台 `_capture_background`（PrintWindow）。`core/15_print_window.py:25` `is_black_capture()` 全黑偵測。
-- `_log_exec` 去重 — `core/05_main_loop.py:222` 兩層抑制：同 key 去重 + completed 1 秒節流。
-- `on_warning` 觸發點 — `core/05_main_loop.py:195` 宣告，觸發於空 ROI 效能警告（line 432）、match_image 首次匹配（line 475）、compare 全圖 OCR（line 513）、流程停止（line 621）、規則異常（line 846/1059/1083）、全黑警告（line 1232）、背景截圖失敗（line 1357/1363）。
-- `_toggle_all_groups` — `gui/06_gui_main.py:4497`，切換所有群組啟用狀態。
+- `_log_exec` 去重 — `core/05_main_loop.py:224` 兩層抑制：同 key 去重 + completed 1 秒節流。
+- `on_warning` 觸發點 — `core/05_main_loop.py:195` 宣告，觸發於空 ROI 效能警告（line 480）、match_image 首次匹配（line 526）、compare 全圖 OCR（line 564）、流程停止（line 674）、規則異常（line 1116/1074/1140）、全黑警告（line 1254，log）、背景截圖失敗（`15_print_window.py:149`）。
+- `_toggle_all_groups` — `gui/06_gui_main.py:4496`，切換所有群組啟用狀態。
 - `_img_compare_match` 行號 — `gui/06_gui_main.py:1311`。
-- `_do_debounced_save` 行號 — `gui/06_gui_main.py:4955`。
+- `_do_debounced_save` 行號 — `gui/06_gui_main.py:4954`。
 - 後台模式 — `_get_interaction_mode()` 於 `gui/06_gui_main.py:85-95`，後台輸入 `core/16_bg_input.py:192` `click()`，後台 roi 選取 `gui/17_bg_roi_selector.py`、點擊選取 `gui/18_bg_click_picker.py`。
-- LogViewer — `gui/12_log_viewer.py:30` `LogViewer(QDialog)`，開啟於 `gui/06_gui_main.py:5645` `_open_log_viewer()`。
-- 停止統計 — `core/05_main_loop.py:1252-1268` `start()`/`stop()`，`_started_at` + `_total_clicks`（`core/10_performance_monitor.py` `get_total_clicks()`）。
+- LogViewer — `gui/12_log_viewer.py:30` `LogViewer(QDialog)`，開啟於 `gui/06_gui_main.py:5644` `_open_log_viewer()`。
+- 停止統計 — `core/05_main_loop.py:1308-1321` `start()`/`stop()`，`_started_at` + `_total_clicks`（`core/10_performance_monitor.py` `get_total_clicks()`）。
 
 其餘內容來自代碼分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。

@@ -80,12 +80,12 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/task_management.py` | 任務檔案 CRUD | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()` |
 | `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
-| `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
+| `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型 + 重疊 ROI OCR 合併） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
 | `core/16_bg_input.py` | 後台互動（PostMessage / pynput 切換） | `set_method()`, `click()`, `key()`, `drag()`, `scroll()` |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
 | `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
-| `core/11_template_matching.py` | 圖示模板比對 | `match_template()`, `nms_suppress()`, `MatchResult` |
+| `core/11_template_matching.py` | 圖示模板比對 + inline 模板 LRU 解碼快取 | `match_template()`, `nms_suppress()`, `MatchResult`, `clear_template_cache()` |
 | `gui/06_gui_main.py` | 主視窗（工具列、規則編輯、狀態列、系統托盤、設定對話框） | `MainWindow`, `SettingsDialog` |
 | `gui/07_gui_roi.py` | 框選偵測區域（全螢幕 overlay） | `select_roi()` |
 | `gui/09_ocr_debug.py` | OCR 除錯面板（即時截圖＋標註） | `OcrDebugPanel` |
