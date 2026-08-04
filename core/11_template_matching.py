@@ -1,6 +1,7 @@
 import base64
 import logging
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -61,6 +62,20 @@ def _resolve_template(template_path: str) -> Optional[Path]:
     return None
 
 
+@lru_cache(maxsize=64)
+def _decode_template(template_data: str):
+    """解碼 inline base64 模板為 BGR，跨幀複用。
+
+    回傳值是 numpy 陣列的引用，呼叫端不得就地修改。
+    """
+    return b64_to_img(template_data)
+
+
+def clear_template_cache():
+    """清除 inline 模板解碼快取（供測試或模板變更後重載）。"""
+    _decode_template.cache_clear()
+
+
 def match_template(
     img: np.ndarray,
     template_path: str,
@@ -77,7 +92,7 @@ def match_template(
     return_best: bool = False,
 ) -> list[MatchResult] | tuple[list[MatchResult], float]:
     if template_data:
-        template_bgr = b64_to_img(template_data)
+        template_bgr = _decode_template(template_data)
         tmpl_name = "inline"
         if template_bgr is None:
             log.warning("模板 base64 解碼失敗")
@@ -427,4 +442,25 @@ if __name__ == "__main__":
 
     Path(tmp2_path).unlink(missing_ok=True)
 
-    print("\n=== All 14 tests passed ===")
+    # ── Inline template decode cache ──
+    _, buf = cv2.imencode(".png", template)
+    tpl_b64 = base64.b64encode(buf).decode("ascii")
+
+    clear_template_cache()
+    r1 = match_template(img, "", threshold=0.5, template_data=tpl_b64)
+    assert len(r1) >= 1, "inline b64 template should match"
+    info1 = _decode_template.cache_info()
+    r2 = match_template(img, "", threshold=0.5, template_data=tpl_b64)
+    assert r2[0].x == r1[0].x and r2[0].y == r1[0].y
+    assert r2[0].confidence == r1[0].confidence
+    info2 = _decode_template.cache_info()
+    assert info2.hits > info1.hits, "second identical call should hit decode cache"
+    print(
+        f"  [OK] inline decode cache hit (hits {info1.hits} -> {info2.hits}, equivalence preserved)"
+    )
+
+    clear_template_cache()
+    assert _decode_template.cache_info().currsize == 0, "clear_template_cache should empty it"
+    print("  [OK] clear_template_cache empties cache")
+
+    print("\n=== All 16 tests passed ===")
