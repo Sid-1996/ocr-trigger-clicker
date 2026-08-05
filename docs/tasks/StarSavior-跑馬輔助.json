@@ -33,7 +33,9 @@
         "rule_c13265b6",
         "rule_717a1cb7",
         "rule_d7316328",
-        "rule_2b282d8b"
+        "rule_2b282d8b",
+        "rule_09d71a37",
+        "rule_64893aa5"
       ],
       "order": "parallel"
     },
@@ -66,7 +68,8 @@
         "rule_ca708cac",
         "rule_c9a5e4b1",
         "rule_1b96306e",
-        "rule_9e495d04"
+        "rule_9e495d04",
+        "rule_e0c3445b"
       ],
       "order": "parallel"
     },
@@ -106,10 +109,7 @@
       "between_rounds_sec": 0,
       "rule_ids": [
         "rule_ef5eef2a",
-        "75db8fc34f48",
-        "rule_3440bf07",
-        "rule_b61cb6a4",
-        "rule_b1b64857"
+        "rule_3440bf07"
       ],
       "order": "parallel"
     }
@@ -152,6 +152,7 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
+            "hold_ms": 0,
             "text": ""
           }
         },
@@ -207,7 +208,7 @@
           }
         }
       ],
-      "background": false,
+      "background": true,
       "notes": ""
     },
     {
@@ -300,7 +301,7 @@
           }
         }
       ],
-      "background": false,
+      "background": true,
       "notes": "出現重點委託關卡時，選擇並先移動到困難委託(是否接受取決於使用者)"
     },
     {
@@ -1342,7 +1343,7 @@
         {
           "type": "notify",
           "params": {
-            "message": "體力+12、韌性+8\n\n獲得潛能「速度星痕」\n\n獲得潛能「生命天賦」（9折）"
+            "message": "體力+12、韌性+8\n獲得潛能「速度星痕」\n獲得潛能「生命天賦」（9折）"
           }
         },
         {
@@ -1360,7 +1361,7 @@
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "體力+12、韌性+8\n獲得潛能「速度星痕」\n獲得潛能「生命天賦」（9折）"
     },
     {
       "id": "rule_f7d43426",
@@ -2002,15 +2003,9 @@
               "key": "Space"
             }
           }
-        },
-        {
-          "type": "notify",
-          "params": {
-            "message": "建議戰鬥!"
-          }
         }
       ],
-      "background": false,
+      "background": true,
       "notes": ""
     },
     {
@@ -2688,14 +2683,128 @@
       ],
       "background": false,
       "notes": ""
+    },
+    {
+      "id": "rule_09d71a37",
+      "name": "初版強化劑",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "初版強化劑",
+            "roi": {
+              "x": 0.11354166666666667,
+              "y": 0.1925925925925926,
+              "w": 0.09270833333333334,
+              "h": 0.06481481481481481,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop"
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "4",
+            "hold_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "notes": "一般不賭，選4選項回體力；賭了贏了起飛，輸了就可以準備殺了"
+    },
+    {
+      "id": "rule_e0c3445b",
+      "name": "向持劍石像祈禱。",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "向持劍石像祈禱。",
+            "roi": {
+              "x": 0.6854166666666667,
+              "y": 0.5527777777777778,
+              "w": 0.11614583333333334,
+              "h": 0.062037037037037036,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop"
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "1",
+            "hold_ms": 0
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
+    },
+    {
+      "id": "rule_64893aa5",
+      "name": "使用手持電風扇",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "使用手持電風扇°",
+            "roi": {
+              "x": 0.684375,
+              "y": 0.6175925925925926,
+              "w": 0.11822916666666666,
+              "h": 0.06666666666666667,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop"
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "1",
+            "hold_ms": 0
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 500
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "2",
+            "hold_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "notes": "有電扇就用，先按1在按2。"
     }
   ],
   "_collapsed_groups": [
-    "group_b96d8712",
     "group_aaf9e64a",
+    "group_65292e04",
     "group_ab1510a9",
-    "group_c12c5d3c",
-    "group_65292e04"
+    "group_b96d8712"
   ],
   "window_title": "StarSavior",
   "capture_size": [

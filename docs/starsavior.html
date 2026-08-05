@@ -89,7 +89,7 @@
     <span class="badge gray">1920x1080</span>
     <span class="badge gray">1600x900</span>
   </p>
-  <p>OCR Trigger Clicker 內建兩套可直接使用的 <strong>星之救援者 (StarSavior)</strong> 自動化任務：<strong>每日任務全自動</strong>（掛機獎勵 → 戰鬥探索 → 星際迴廊 → 商店 → 好友）與<strong>跑馬事件輔助</strong>（自動應對隨機事件、跳過戰鬥選項）。</p>
+  <p>OCR Trigger Clicker 內建兩套可直接使用的 <strong>星之救援者 (StarSavior)</strong> 自動化任務：<strong>每日任務全自動</strong>（掛機獎勵、派遣、戰鬥探索、星際迴廊、商店、好友、信件檢查、每日 PVP）與<strong>跑馬事件輔助</strong>（自動應對隨機事件、跳過戰鬥選項）。</p>
   <p>來源解析度：<strong>1920x1080</strong> 或 <strong>1600x900</strong>（16:9），繁體中文遊戲環境。</p>
 </header>
 
@@ -118,12 +118,12 @@
   <div class="dl-grid">
     <div class="dl-card">
       <h3>StarSavior-每日任務</h3>
-      <p>14 個群組，含掛機獎勵、戰鬥探索、星際迴廊、每日商店、好友、信件檢查等完整每日流程。</p>
+      <p>完整每日流程：掛機獎勵、派遣、戰鬥探索、星際迴廊、商店、好友、信件檢查、每日 PVP 等，可依需求自行啟停各群組。</p>
       <a class="dl-btn" href="tasks/StarSavior-每日任務.json" download>下載 JSON</a>
     </div>
     <div class="dl-card">
       <h3>StarSavior-跑馬輔助</h3>
-      <p>5 個群組，使用 parallel 模式並行偵測，自動應對固定事件與跑馬選項。</p>
+      <p>跑馬事件輔助，使用 parallel 模式並行偵測，自動應對固定事件與各類跑馬選項，可依角色屬性自行啟停。</p>
       <a class="dl-btn" href="tasks/StarSavior-跑馬輔助.json" download>下載 JSON</a>
     </div>
   </div>
@@ -144,70 +144,7 @@
 
 <section id="daily">
   <h2>每日任務流程</h2>
-  <p>共 <strong>13 個群組</strong>，依序執行：從掛機獎勵開始，依序完成派遣、戰鬥探索、星際迴廊、商店、好友、信件檢查。多數群組設為 <code>mode=once</code>，完成後自動跳下一群組。</p>
-
-  <div class="group-card">
-    <h4>掛機獎勵</h4>
-    <div class="meta">sequential · once</div>
-    <ul class="rule-list">
-      <li>點擊掛機獎勵(!) → 獲得獎勵 → 緊急支援 → 今日剩餘次數(12/11)</li>
-    </ul>
-    <div class="step-flow">
-      match_image(驚嘆號) <span class="arrow">→</span> click <span class="arrow">→</span> detect(獎勵文字) <span class="arrow">→</span> click <span class="arrow">→</span> detect(緊急支援) <span class="arrow">→</span> click <span class="arrow">→</span> 循環領完剩餘次數
-    </div>
-  </div>
-
-  <div class="group-card">
-    <h4>每日重新派遣</h4>
-    <div class="meta">sequential · once</div>
-    <ul class="rule-list">
-      <li>派遣完成 → 地區派遣 → 進入 → 一鍵領取 → 重新派遣</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>戰鬥探索（三輪掃蕩）</h4>
-    <div class="meta">sequential · once</div>
-    <ul class="rule-list">
-      <li>點擊方塊列表 → 燭光廣場 → 探索委託 → 3/3 → 掃蕩戰鬥 → MAX → 是否為三次 → 0/3點下一頁</li>
-      <li>重複三輪：掃蕩戰鬥(2) → MAX(2) → 是否為三次(2) → 0/3點下一頁(2) → 掃蕩戰鬥(3) → MAX(3) → 是否為三次(3)</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>回到廣場 + 帕萊斯立方</h4>
-    <div class="meta">sequential · loop / once</div>
-    <ul class="rule-list">
-      <li>探索委託→廣場（loop） → 帕萊斯立方領取 → 回到廣場（loop）</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>星際迴廊掃蕩 + 收尾</h4>
-    <div class="meta">sequential · once + loop</div>
-    <ul class="rule-list">
-      <li>星際迴廊入口檢查（match_image） → 掃蕩戰鬥 × N → 確認 → 返回上一頁</li>
-      <li>收尾：查看征服任務特徵 → 尋找紅點 → REWARD</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>每日好友 + 商店</h4>
-    <div class="meta">sequential · once</div>
-    <ul class="rule-list">
-      <li>好友：一鍵發送 → 一鍵領取</li>
-      <li>付費商店：免費禮包 → 確定購買</li>
-      <li>啟示商店：免費 → 購買觀測紀錄/報告書 → SALE 50% → MAX → 購買</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>檢查信件</h4>
-    <div class="meta">sequential · once</div>
-    <ul class="rule-list">
-      <li>查看信件圖示 → 一鍵領取 → 沒有收到的信件（match_image 通知）</li>
-    </ul>
-  </div>
+  <p>每日任務涵蓋掛機獎勵、重新派遣、戰鬥探索、帕萊斯立方、星際迴廊掃蕩與收尾、好友、付費/啟示商店、信件檢查、每日 PVP 等完整流程。多數群組設為 <code>mode=once</code>，完成後自動跳下一群組，可依需求自行啟停。</p>
 
   <figure>
     <img class="screenshot" src="game-images/starsavior-overview.png" alt="星之救援者 StarSavior 每日任務流程頁面概況" loading="lazy">
@@ -221,62 +158,13 @@
   <h2>跑馬輔助流程</h2>
   <p>跑馬輔助使用 <strong>parallel（並行）</strong> 模式搭配 <strong>loop（循環）</strong>，每幀從頭掃全部規則，第一個符合條件的事件觸發後執行對應按鍵操作。適合無法預測順序的隨機事件場景。</p>
 
-  <div class="group-card">
-    <h4>固定事件</h4>
-    <div class="meta">parallel · loop · 26 條規則</div>
-    <ul class="rule-list">
-      <li>文書工作總是晴轉陰、代為購買、迷宮探勘、繼續訓練、襲擊、突發遭遇史萊姆</li>
-      <li>溫泉慶典準備、莉賽特系列（日常/好運/假期/憂鬱）</li>
-      <li>為了未來的選擇、在這張卡牌上賭上一切、工坊的宣傳策略</li>
-      <li>沙灘排球比賽、簡單的測試、閒暇時間、偶然的發現</li>
-      <li>今日天氣（打雷/暴雪）、新設部門努力中</li>
-      <li>突發遭遇（強盜騎士/掠奪者）、花中隱藏的力量、意料之外的鼓勵</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>體力型跑馬</h4>
-    <div class="meta">parallel · loop · 6 條規則</div>
-    <ul class="rule-list">
-      <li>列車月台-卡萊德、向持花石像祈禱、風月堂的切磋修行</li>
-      <li>訓練的方向性、救援團補給、未知的商人</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>力量型跑馬</h4>
-    <div class="meta">parallel · loop · 5 條規則（預設停用）</div>
-    <ul class="rule-list">
-      <li>風月堂的切磋修行、訓練的方向性、救援團補給、未知的商人、列車月台-弗洛拉</li>
-    </ul>
-  </div>
+  <p>涵蓋<strong>固定事件</strong>、<strong>體力型跑馬</strong>、<strong>力量型跑馬</strong>、<strong>支援卡事件</strong>與<strong>自動輔助（防呆/便利）</strong>等類別，各類事件的規則內容與數量會隨版本調整。</p>
 
   <p style="font-size:.9em;color:#8b949e;margin:4px 0 12px;">體力型與力量型通常二選一，使用者依角色屬性自行啟停。</p>
 
-  <div class="group-card">
-    <h4>支援卡事件</h4>
-    <div class="meta">parallel · loop · 16 條規則</div>
-    <ul class="rule-list">
-      <li>請講關於初戀的故事、萬物的價值、兔子旁邊是兔子旁邊是兔子</li>
-      <li>顧客至上、變種兔子陷阱、稍不留神就會吃虧、湯為誰而煮</li>
-      <li>略感負擔的童心、訓練如實戰、在這行可是寶物</li>
-      <li>薇絲塔的戰術時光、蝦子的處世之道、午後沙龍</li>
-      <li>救命恩人、超越語言的體驗、並非雜技師</li>
-    </ul>
-  </div>
-
-  <div class="group-card">
-    <h4>自動輔助（防呆/便利）</h4>
-    <div class="meta">parallel · loop · 5 條規則</div>
-    <ul class="rule-list">
-      <li>入場選擇-快轉所有事件、自動返回（失敗率>50%時）</li>
-      <li>自動選擇-阿卡農、自動選擇-受理討伐委託、自動選擇-跳過戰鬥</li>
-    </ul>
-  </div>
-
   <figure>
     <img class="screenshot" src="game-images/starsavior-racing.png" alt="星之救援者 StarSavior 跑馬輔助規則列表" loading="lazy">
-    <figcaption style="font-size:.85em;color:#8b949e;">跑馬輔助：26 條固定事件 + 體力/力量型 + 支援卡事件，parallel 模式並行偵測</figcaption>
+    <figcaption style="font-size:.85em;color:#8b949e;">跑馬輔助：固定事件 + 體力/力量型跑馬 + 支援卡事件，parallel 模式並行偵測</figcaption>
   </figure>
 </section>
 
