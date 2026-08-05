@@ -75,6 +75,36 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 - **解法**：以**系統管理員**身分啟動工具（右鍵 → 以系統管理員身分執行）
 
 ---
+---
+
+## Performance Notes
+
+### 並行群組 match_image 預算（已實作）
+
+`core/05_main_loop.py` 的 `_run_parallel_group` 對並行（`order: parallel`）群組內所有 `match_image` 規則做**平行預算**——主線程一次算好 `capture_size` / `chrome` / `current_size` / `roi`，worker（`_prematch_pure` 模組級純函式）只跑 `match_template`，不碰執行個體狀態、不讀檔、不呼叫 Win32。結果由 `_handle_match_image` 消費（step 0 命中 `ctx.prematch`）。
+
+- **適用對象**：僅 `match_image` 步驟（純計算、執行緒安全）。`detect`/`compare` 走 OCR，維持順序（已有同幀 OCR 合併快取，不平行）。
+- **行為等價**：warning/log/on_fail/triggered/順序全由原 `_run_rule` 處理，命中哪條規則仍依 `rule_ids` 順序決定——使用者零感知（無新設定、無新 UI）。
+- **效益**：等待狀態（全不命中）下 N 條 match 從 O(N) 壓成 bounded；N=21 約 33ms → 16ms（~2 倍）。
+- **退化教訓**：曾誤讓 worker 各自讀檔/呼叫 Win32，N=21 反而 123ms（慢 4 倍）——已修正為主線程共享預算。
+
+### 命中率切換草案（未實作，待未來評估）
+
+並行預算在**命中密集場景**會略慢於純順序，因為順序靠 `break-on-first-hit` 短路（掃到命中就停），平行卻「全算再取第一個命中」。現況 N=21 下此劣勢無感（每幀差 ~2ms，500ms 掃描間隔下佔 0.4%），但 N 擴充到 80+ 且命中密集時可能微感。
+
+**觸發條件（未來若需實作）**：
+- 用滑動窗口追蹤最近 N 幀的命中率（命中幀 / 總幀）
+- 命中率 > 閾值（如 60%）持續 M 幀 → 切回順序（享受 break 短路）
+- 命中率 < 閾值持續 M 幀 → 切回平行（享受 O(N) 壓縮）
+- 需滯後（hysteresis）避免狀態擺盪
+
+**邊界**：N 小（如 ≤21）不值得切換（差距無感）；N 大且命中密集才有感。命中率切換的複雜度（狀態 + 滯後）在 N 小時是過度設計。
+
+**現況判斷**：N=21 實測良好，不需命中率切換。等使用者擴充規則到 80+ 且命中密集期有感再評估。
+
+---
+
+## Related Documents
 
 ## Related Documents
 
