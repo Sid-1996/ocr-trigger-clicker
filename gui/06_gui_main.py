@@ -432,6 +432,24 @@ def _resolve_rule_name(rule_id: str, rules_provider=None) -> str:
     return rule_id
 
 
+def _populate_rule_combo(combo, rules, groups=None, exclude_rule_id=""):
+    """依「群組 › 規則」階層填入跳轉目標下拉選單；未分群規則平鋪在最後。"""
+    combo.clear()
+    rule_map = {r.id: r for r in rules}
+    seen = set()
+    for g in groups or []:
+        for rid in g.rule_ids:
+            r = rule_map.get(rid)
+            if r is None or r.id == exclude_rule_id:
+                continue
+            combo.addItem(f"{g.name} › {r.name}", r.id)
+            seen.add(r.id)
+    for r in rules:
+        if r.id in seen or r.id == exclude_rule_id:
+            continue
+        combo.addItem(r.name, r.id)
+
+
 def _fmt_roi(roi: dict) -> str:
     x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
     if w <= 1.0 and h <= 1.0 and not (x == 0 and y == 0 and w == 0 and h == 0):
@@ -999,7 +1017,9 @@ class _StepListWidget(QWidget):
         if t == "wait":
             return _WaitStepForm(self, step, idx)
         if t == "jump":
-            return _JumpStepForm(self, step, idx, self._rules_provider, self._rule_id)
+            return _JumpStepForm(
+                self, step, idx, self._rules_provider, self._groups_provider, self._rule_id
+            )
         if t == "match_image":
             return _MatchImageStepForm(
                 self,
@@ -1221,10 +1241,12 @@ class _MatchImageStepForm(QWidget):
         jf = QHBoxLayout(self._of_jump_row)
         jf.setContentsMargins(0, 0, 0, 0)
         self._of_jump_combo = _NoWheelCombo()
-        rules = rules_provider() if rules_provider else []
-        for r in rules:
-            if r.id != self._exclude_rule_id:
-                self._of_jump_combo.addItem(r.name, r.id)
+        _populate_rule_combo(
+            self._of_jump_combo,
+            rules_provider() if rules_provider else [],
+            groups_provider() if groups_provider else [],
+            self._exclude_rule_id,
+        )
         if isinstance(raw_of, dict) and raw_of.get("action") == "jump":
             target_id = raw_of.get("rule_id", "")
             j_idx = self._of_jump_combo.findData(target_id)
@@ -1726,10 +1748,12 @@ class _DetectStepForm(QWidget):
         jf = QHBoxLayout(self._of_jump_row)
         jf.setContentsMargins(0, 0, 0, 0)
         self._of_jump_combo = _NoWheelCombo()
-        rules = self._rules_provider() if self._rules_provider else []
-        for r in rules:
-            if r.id != self._exclude_rule_id:
-                self._of_jump_combo.addItem(r.name, r.id)
+        _populate_rule_combo(
+            self._of_jump_combo,
+            self._rules_provider() if self._rules_provider else [],
+            self._groups_provider() if self._groups_provider else [],
+            self._exclude_rule_id,
+        )
         if isinstance(raw, dict) and raw.get("action") == "jump":
             target_id = raw.get("rule_id", "")
             j_idx = self._of_jump_combo.findData(target_id)
@@ -2190,11 +2214,13 @@ class _CompareStepForm(QWidget):
 
         self._of_jump_combo = _NoWheelCombo()
         self._of_jump_combo.setMinimumWidth(200)
-        rules = rules_provider() if rules_provider else []
         target_id = raw_of.get("rule_id", "") if isinstance(raw_of, dict) else ""
-        for r in rules:
-            if r.id != exclude_rule_id:
-                self._of_jump_combo.addItem(r.name, r.id)
+        _populate_rule_combo(
+            self._of_jump_combo,
+            rules_provider() if rules_provider else [],
+            groups_provider() if groups_provider else [],
+            exclude_rule_id,
+        )
         j_idx = self._of_jump_combo.findData(target_id)
         if j_idx >= 0:
             self._of_jump_combo.setCurrentIndex(j_idx)
@@ -2406,7 +2432,9 @@ class _WaitStepForm(QWidget):
 
 
 class _JumpStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, rules_provider=None, exclude_rule_id=""):
+    def __init__(
+        self, parent_list, step, idx, rules_provider=None, groups_provider=None, exclude_rule_id=""
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -2414,11 +2442,13 @@ class _JumpStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._combo = _NoWheelCombo()
-        rules = rules_provider() if rules_provider else []
         current_id = step.params.get("rule_id", "")
-        for r in rules:
-            if r.id != exclude_rule_id:
-                self._combo.addItem(r.name, r.id)
+        _populate_rule_combo(
+            self._combo,
+            rules_provider() if rules_provider else [],
+            groups_provider() if groups_provider else [],
+            exclude_rule_id,
+        )
         idx_r = self._combo.findData(current_id)
         if idx_r >= 0:
             self._combo.setCurrentIndex(idx_r)
