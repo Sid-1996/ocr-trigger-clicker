@@ -3,7 +3,7 @@
     {
       "id": "__default__",
       "name": "每日掛機獎勵",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -19,7 +19,7 @@
     {
       "id": "group_266e1f8c",
       "name": "每日重新派遣",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -35,7 +35,7 @@
     {
       "id": "group_39a1b80d",
       "name": "每日戰鬥探索",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -61,7 +61,7 @@
     {
       "id": "group_a1d5b815",
       "name": "從探索委託到廣場",
-      "enabled": false,
+      "enabled": true,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -73,7 +73,7 @@
     {
       "id": "group_fdab3a16",
       "name": "每日帕萊斯立方",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -87,7 +87,7 @@
     {
       "id": "group_36068123",
       "name": "從帕萊斯立方到廣場",
-      "enabled": false,
+      "enabled": true,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -99,7 +99,7 @@
     {
       "id": "group_261f6f66",
       "name": "星際迴廊入口檢查",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -111,7 +111,7 @@
     {
       "id": "group_e8efb9ff",
       "name": "每日星際迴廊掃蕩",
-      "enabled": false,
+      "enabled": true,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -128,7 +128,7 @@
     {
       "id": "group_3c07d078",
       "name": "星際迴廊收尾",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -142,7 +142,7 @@
     {
       "id": "group_40b2992f",
       "name": "每日好友",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -158,7 +158,7 @@
     {
       "id": "group_8db83f5b",
       "name": "每日付費商店",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -173,7 +173,7 @@
     {
       "id": "group_53eec035",
       "name": "每日啟示商店",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -196,7 +196,7 @@
     {
       "id": "group_f1d46de3",
       "name": "檢查信件",
-      "enabled": false,
+      "enabled": true,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -3907,19 +3907,20 @@
     }
   ],
   "_collapsed_groups": [
+    "group_3c07d078",
+    "group_8db83f5b",
+    "group_39a1b80d",
     "group_266e1f8c",
-    "group_fdab3a16",
-    "group_a1d5b815",
-    "group_261f6f66",
+    "group_36068123",
+    "group_2f0c668c",
+    "group_40b2992f",
     "group_f1d46de3",
     "group_53eec035",
-    "group_36068123",
-    "group_8db83f5b",
+    "group_e8efb9ff",
+    "group_fdab3a16",
+    "group_a1d5b815",
     "__default__",
-    "group_3c07d078",
-    "group_40b2992f",
-    "group_39a1b80d",
-    "group_e8efb9ff"
+    "group_261f6f66"
   ],
   "capture_size": [
     1920,
