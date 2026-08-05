@@ -78,6 +78,24 @@ def is_debug_enabled() -> bool:
     return _debug_enabled
 
 
+def clear_log_file(handler: "logging.Handler | None" = None) -> None:
+    # 清空 app.log 供乾淨起跑抓 bug 回報。要透過 handler 自己的 stream 截斷，
+    # 否則外開 handle 截斷會在檔頭留下 null 空洞（handler 內部位置未歸零）。
+    # startup_error.log 由啟動時整檔覆寫、無持有 handle，直接移除即可。
+    if handler is None:
+        _ensure_root_handler()
+        handler = _handler
+    if handler is not None:
+        try:
+            stream = handler.stream
+            stream.seek(0)
+            stream.truncate(0)
+            stream.flush()
+        except OSError:
+            pass
+    (get_log_dir() / "startup_error.log").unlink(missing_ok=True)
+
+
 def enable_debug() -> None:
     set_debug(True)
 
@@ -96,3 +114,21 @@ if __name__ == "__main__":
     assert root.level == logging.INFO
     assert all(h.level == logging.INFO for h in root.handlers)
     print("logging_config self-check passed")
+
+    # ── clear_log_file self-check：用臨時檔 handler，不碰真實 app.log ──
+    import tempfile
+
+    _tmp_dir = tempfile.TemporaryDirectory()
+    _tpath = Path(_tmp_dir.name) / "clear_test.log"
+    _tpath.write_text("old line\n", encoding="utf-8")
+    _th = TimedRotatingFileHandler(_tpath, when="midnight", backupCount=1, encoding="utf-8")
+    _th.stream.write("tail\n")
+    _th.stream.flush()
+    clear_log_file(_th)
+    _th.stream.write("new\n")
+    _th.stream.flush()
+    _th.close()
+    _content = _tpath.read_text(encoding="utf-8")
+    assert _content == "new\n", f"expected only new line, got {_content!r}"
+    _tmp_dir.cleanup()
+    print("  [OK] clear_log_file truncates without null-hole")

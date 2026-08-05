@@ -628,6 +628,8 @@
   "exec_log.detail.not_found": "「{text}」 not found",
   "exec_log.detail.template_miss": "Miss (best {confidence}%)",
   "log_viewer.title": "Log Viewer",
+  "log_viewer.clear": "Clear Log",
+  "log_viewer.clear_confirm": "Clear the log files (app.log / startup_error.log)? This cannot be undone.",
   "log_viewer.filter": "Level:",
   "log_viewer.level_all": "All",
   "log_viewer.level_info": "INFO+",

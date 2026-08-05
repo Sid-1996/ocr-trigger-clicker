@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
@@ -64,6 +65,10 @@ class LogViewer(QDialog):
         self._open_dir_btn = QPushButton(T("log_viewer.open_dir"))
         self._open_dir_btn.clicked.connect(self._open_dir)
         toolbar.addWidget(self._open_dir_btn)
+
+        self._clear_btn = QPushButton(T("log_viewer.clear"))
+        self._clear_btn.clicked.connect(self._on_clear)
+        toolbar.addWidget(self._clear_btn)
         layout.addLayout(toolbar)
 
         self._text = QPlainTextEdit()
@@ -93,6 +98,19 @@ class LogViewer(QDialog):
 
     def _open_dir(self):
         os.startfile(self._log_path.parent)
+
+    def _on_clear(self):
+        answer = QMessageBox.question(
+            self,
+            T("log_viewer.title"),
+            T("log_viewer.clear_confirm"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        _log_cfg.clear_log_file()
+        self._last_text = ""
+        self._refresh()
 
     def _tail_lines(self) -> list[str]:
         try:
@@ -142,6 +160,7 @@ if __name__ == "__main__":
     _log_cfg.set_debug(False)
     _log_cfg.set_debug(True)
     assert _log_cfg.get_logger("log_viewer").getEffectiveLevel() == 10
+    assert callable(_log_cfg.clear_log_file)
     _log_cfg.set_debug(False)
     v = LogViewer.__new__(LogViewer)
     v._log_path = _log_cfg.get_log_dir() / "app.log"
