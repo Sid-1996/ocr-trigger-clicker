@@ -221,6 +221,7 @@ class MainLoop:
         self._last_exec_log: dict[str, tuple] = {}
         self._rule_completed: set[str] = set()
         self._last_completed_log: dict[str, float] = {}
+        self._action_log_ts: dict[str, float] = {}
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -253,7 +254,17 @@ class MainLoop:
             f"應用啟動 v{__version__}，目標視窗「{window_title}」，載入 {len(self._rules)} 條規則"
         )
 
-    def _log(self, msg: str):
+    _ACTION_LOG_WINDOW = 1.0
+
+    def _log(self, msg: str, dedup_key: str | None = None):
+        # 滑動窗速率限制：同一 dedup_key（分類）每秒最多一筆，首筆立即印出、窗內重複丟棄，
+        # 純丟棄不累計、無 pending 狀態 → 不會有「尾段爆量次數遺失」的 bug。
+        if dedup_key is not None:
+            now = time.monotonic()
+            last = self._action_log_ts.get(dedup_key)
+            if last is not None and now - last < self._ACTION_LOG_WINDOW:
+                return
+            self._action_log_ts[dedup_key] = now
         self._logger.info(msg)
 
     _DETECT_STEP_TYPES = frozenset({"detect", "compare", "match_image"})
@@ -807,7 +818,10 @@ class MainLoop:
         if ok:
             self._perf.record_click()
             ctx.triggered = True
-            self._log(f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」")
+            self._log(
+                f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」",
+                dedup_key=f"{rule.id}:click",
+            )
 
         return StepResult("continue")
 
@@ -836,7 +850,10 @@ class MainLoop:
         if ok:
             self._perf.record_click()
             ctx.triggered = True
-            self._log(f"規則「{rule.name}」按鍵「{key}」")
+            self._log(
+                f"規則「{rule.name}」按鍵「{key}」",
+                dedup_key=f"{rule.id}:key:{key}",
+            )
 
         return StepResult("continue")
 
@@ -884,7 +901,10 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
         ctx.triggered = True
-        self._log(f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})")
+        self._log(
+            f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})",
+            dedup_key=f"{rule.id}:drag",
+        )
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -908,7 +928,10 @@ class MainLoop:
 
         self._perf.record_click()
         ctx.triggered = True
-        self._log(f"規則「{rule.name}」滾輪 {direction} x{amount}")
+        self._log(
+            f"規則「{rule.name}」滾輪 {direction} x{amount}",
+            dedup_key=f"{rule.id}:scroll",
+        )
         return StepResult("continue")
 
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -932,7 +955,10 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.jump_not_in_group"))
         self._rule_in_group_ptr = group.rule_ids.index(target_id)
         target_name = getattr(self._rule_map.get(target_id), "name", target_id)
-        self._log(f"規則「{rule.name}」跳轉至「{target_name}」")
+        self._log(
+            f"規則「{rule.name}」跳轉至「{target_name}」",
+            dedup_key=f"{rule.id}:jump",
+        )
         return StepResult("stop")
 
     def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -1599,6 +1625,7 @@ if __name__ == "__main__":
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}
+    ml._action_log_ts = {}
     ml._match_image_warn_counter = {}
     ml._last_active_rule_id = None
     ml._logger = logging.getLogger("main_loop_test")
@@ -2373,6 +2400,33 @@ if __name__ == "__main__":
     assert len(ml._execution_log) == 1
     assert ml._execution_log[0]["result"] == "stop"
     print("  [OK] Suppression: completed → second stop logged again")
+
+    # ── Test 30b: _log sliding-window rate limit ──
+    class _Probe(logging.Handler):
+        def __init__(self):
+            super().__init__()
+            self.records: list[str] = []
+
+        def emit(self, record):
+            self.records.append(record.getMessage())
+
+    ml._action_log_ts = {}
+    _probe = _Probe()
+    ml._logger.addHandler(_probe)
+    try:
+        ml._log("動作A", dedup_key="k1")
+        ml._log("動作A", dedup_key="k1")
+        assert _probe.records == ["動作A"], f"窗內重複應被丟棄, got {_probe.records}"
+        ml._action_log_ts["k1"] = time.monotonic() - 10.0
+        ml._log("動作A", dedup_key="k1")
+        assert _probe.records.count("動作A") == 2, "超窗後應重新印出"
+        ml._log("無去重訊息")
+        assert _probe.records.count("無去重訊息") == 1, "無 dedup_key 一律印出"
+        ml._log("動作B", dedup_key="k2")
+        assert _probe.records.count("動作B") == 1, "不同 key 互不干擾"
+    finally:
+        ml._logger.removeHandler(_probe)
+    print("  [OK] _log sliding-window rate limit")
 
     # ── Test 31: merged-ROI OCR reuse ──
     _ml_ocr = MainLoop.__new__(MainLoop)

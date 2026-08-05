@@ -71,6 +71,7 @@ def _make_ml():
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}
+    ml._action_log_ts = {}
     ml.on_error = None
     ml.on_warning = None
     ml.on_info = None
@@ -237,7 +238,6 @@ def test_ocr_region_cache_hit_marker():
         assert "0ms" in detail
     finally:
         _ml_mod.recognize = orig
-
 
 
 # ── _handle_click without matched_text ──
@@ -963,3 +963,29 @@ def test_on_fail_advance():
     assert ml._rule_in_group_ptr == 0
 
     ml._active_group_ids = []
+
+
+def test_log_sliding_window_rate_limit():
+    ml = _make_ml()
+    ml._action_log_ts = {}
+    seen = []
+
+    class _Probe(logging.Handler):
+        def emit(self, record):
+            seen.append(record.getMessage())
+
+    probe = _Probe()
+    ml._logger.addHandler(probe)
+    try:
+        ml._log("規則 A 點擊 (1,2) 匹配「X」", dedup_key="a:click")
+        ml._log("規則 A 點擊 (3,4) 匹配「Y」", dedup_key="a:click")
+        assert seen == ["規則 A 點擊 (1,2) 匹配「X」"], "窗內不同內容同 key 應只留首筆"
+        ml._action_log_ts["a:click"] = time.monotonic() - 5.0
+        ml._log("規則 A 點擊 (5,6) 匹配「Z」", dedup_key="a:click")
+        assert seen.count("規則 A 點擊 (5,6) 匹配「Z」") == 1, "超窗後應重新印出"
+        ml._log("規則 B 按鍵「1」", dedup_key="b:key:1")
+        assert seen.count("規則 B 按鍵「1」") == 1, "不同 key 互不干擾"
+        ml._log("群組完成")
+        assert seen.count("群組完成") == 1, "無 dedup_key 一律印出"
+    finally:
+        ml._logger.removeHandler(probe)
