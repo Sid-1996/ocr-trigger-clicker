@@ -1223,18 +1223,22 @@ class MainLoop:
                 if not tdata.strip() and not tpath.strip():
                     continue
                 roi = self._resolve_roi(p.get("roi", {}), rect, chrome)
-                pending[rid] = pool.submit(
-                    _prematch_pure,
-                    img,
-                    tpath,
-                    roi,
-                    p.get("threshold", 0.8),
-                    tdata or None,
-                    capture_size,
-                    current_size,
-                    p.get("match_color", False),
-                    p.get("color_tolerance", 100),
-                )
+                try:
+                    pending[rid] = pool.submit(
+                        _prematch_pure,
+                        img,
+                        tpath,
+                        roi,
+                        p.get("threshold", 0.8),
+                        tdata or None,
+                        capture_size,
+                        current_size,
+                        p.get("match_color", False),
+                        p.get("color_tolerance", 100),
+                    )
+                except RuntimeError:
+                    # 池已被外部 shutdown：本幀退回循序匹配，不讓主循環掛掉
+                    break
 
         triggered = False
         for rid in group.rule_ids:
@@ -1421,6 +1425,11 @@ class MainLoop:
 
                 self._stop_event.wait(self._interval)
         finally:
+            # ponytail: pool 只在 loop 執行緒使用，由擁有者在此關閉，
+            # 避免 stop()（GUI 執行緒）在 loop 仍 submit 時 shutdown 造成競態崩潰。
+            if self._prematch_pool is not None:
+                self._prematch_pool.shutdown(wait=False)
+                self._prematch_pool = None
             if self.on_finished:
                 self.on_finished()
 
@@ -1445,9 +1454,6 @@ class MainLoop:
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
-        if self._prematch_pool is not None:
-            self._prematch_pool.shutdown(wait=False)
-            self._prematch_pool = None
         self._perf.stop()
 
     def pause(self) -> None:
