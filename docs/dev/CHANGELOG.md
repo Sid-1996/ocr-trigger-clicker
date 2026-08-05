@@ -1,13 +1,47 @@
 ﻿
 
-## [Unreleased]
+## [v0.2.0] - 2026-08-05
 
-### 新增
-- **重疊 OCR 區域合併**：`core/05_main_loop.py::_ocr_region` 對同幀重疊的 ROI 合併共用單次辨識（superset 重用 / overlap union），讓大量重疊的 `detect` 規則（如同跑馬對話叢集）由 N 次 OCR 降為 1 次。並行掃描模式效益最大。
-- **OCR 合併回歸測試**：`tests/test_ocr_merge.py` 用真實任務 `StarSavior-跑馬輔助.json` 的 OCR detect 步，對 3 張實境偵測圖（`tests/data/test*.png`），驗證 current vs merged 行為等價（不漏目標、不誤觸發）且呼叫次數不變差。本機 RapidOCR 模型缺失時自動 skip。
-- 真實偵測圖收錄於 `tests/data/`，做為 OCR 的穩定性回歸基準
-- **inline 模板解碼快取**：`core/11_template_matching.py` 新增 `_decode_template()` LRU 快取（`maxsize=64`），同一 base64 模板跨幀只解碼一次，避免大型並行群組（如固定事件 21 條 match_image）每幀重複解碼。實境圖量測每幀省約 4~5ms（11~13%）。附 `clear_template_cache()` 供測試與模板重載。行為精確等價（快取與無快取的比對結果在 `tests/data` 三張圖上完全一致）。
-- **模板快取回歸測試**：`tests/test_template_cache.py` 用真實任務與 `tests/data` 圖，驗證快取等價性、命中率與 `clear_template_cache()`。
+### 給使用者
+
+#### 新增
+- **並行群組加速**：群組模式設為「並行」時，`match_image` 找圖計算改由多執行緒平行處理，大型並行群組（如固定事件 21 條模板）掃描明顯加快（實測快約 2 倍）
+- **重疊 OCR 區域合併**：同幀大量重疊的「偵測」規則（如跑馬對話叢集）合併共用單次辨識，掃描更順暢
+- **日誌檢視器「清除日誌」按鈕**：一鍵清空 app.log 與 startup_error.log，方便乾淨起跑抓問題
+- **設定新增「CPU/記憶體高載彈出通知」開關**：關閉後，系統高負載提醒只顯示在狀態列、不再彈出氣泡通知
+
+#### 變更
+- **動作日誌降噪**：同一動作（按鍵/點擊等）每秒最多記錄一筆，高頻操作不再洗版
+- 狀態列效能顯示「FPS」改名為「掃描/秒」，語意更精確，並新增懸停說明
+
+#### 修復
+- 修復停止任務時偶發報錯「主循環異常: cannot schedule new futures after shutdown」（並行預算執行緒池在停止時的競態）
+- 日誌檢視器清除日誌後畫面立即刷新
+- 執行日誌在 OCR 合併後顯示「共用快取」標記，取代易誤導的 0ms
+
+### 給開發者
+
+#### 效能與架構
+- **並行預算**：`_run_parallel_group` 以 `ThreadPoolExecutor`（惰性建池，`max_workers=min(8, cpu)`）平行化各規則首個 `match_image` 的 `_prematch_pure` 計算，行為與循序路徑語意等價（`tests/test_prematch_equiv.py` 全幀驗證）
+- **共享預算修正**：`capture_size` / `chrome` / `current_size` / `roi` 改由主執行緒計算一次傳給 worker，消除每 worker 重複讀檔 / Win32 呼叫的 I/O（實測 N=21：退化版慢 4 倍 → 改良版快 2 倍）
+- **prematch pool 生命週期**：`shutdown()` 自 `stop()`（GUI 執行緒）移至 `_loop` 的 `finally`（擁有者執行緒），消除「shutdown 後 submit」競態崩潰；`pool.submit` 加 `RuntimeError` 防禦，未來即使外部 shutdown 也只退回循序匹配
+- **OCR 合併**：`_ocr_region` 對同幀重疊 ROI 合併（superset 重用 / overlap union），重疊偵測規則由 N 次 OCR 降為 1 次；執行日誌以「共用快取」標記取代誤導 0ms
+- **inline 模板解碼 LRU 快取**：`_decode_template()`（`maxsize=64`）讓大型並行群組免每幀重複解碼（實測每幀省約 4~5ms / 11~13%），並提供 `clear_template_cache()` 供測試與模板重載
+- **`_log` 滑動窗速率限制**：每 dedup_key 每秒一筆，純丟棄不累計，無 pending 遺失 bug
+- **資源警告拆分**：新增 `on_resource_warning` 獨立回呼，`notify_resource_warn` 設定控制是否彈氣泡（狀態列照舊）
+
+#### 測試
+- 新增 `tests/test_ocr_merge.py`、`tests/test_template_cache.py`、`tests/test_prematch_equiv.py`；`tests/data/` 收錄 3 張實境偵測圖作為 OCR / 模板穩定性回歸基準
+- `tests/test_main_loop.py` 擴充：執行日誌共用快取標記、滑動窗速率限制
+- 修復 `test_log_sliding_window_rate_limit` 在 pytest 環境下失敗（補 `setLevel(INFO)`，與 standalone self-check 對齊）
+
+#### 文件
+- README / START / 網站 FAQ / TECHNICAL.md：補後台模式 Unity 底層限制與後台黑畫面系統管理員解法
+- TECHNICAL.md：並行預算現況與命中率切換草案
+- ARCHITECTURE.md / project-context SKILL：模組表與行號反映 OCR 合併 + 模板快取變更
+
+#### 相依套件
+- 無新增（沿用現有 pynput / dxcam / RapidOCR）
 
 ## [v0.1.9] - 2026-08-03
 
