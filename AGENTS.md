@@ -287,13 +287,14 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 **流程：**
 1. **比較差異**：用 Python 載入兩邊 JSON，比對 groups/rules 數量、enabled 狀態、step 內容
 2. **覆蓋檔案**：`Copy-Item` 從本地複製到 `docs/tasks/`
-3. **更新 HTML**：`docs/starsavior.html` 中的群組數、群組名稱、enabled 狀態、描述文字需同步
-4. **提交**：一個 commit 包含 JSON + HTML（`docs: sync task JSON from local and update starsavior.html descriptions`）
+3. **提交**：`git add -A` → commit + push 上傳 JSON 即可（commit 訊息：`docs: sync task JSON`）
+
+**HTML 不再逐次同步：** `docs/starsavior.html` 使用通用性介紹（不寫死群組數、群組名稱、規則清單、enabled 狀態），使用者下載 JSON 後自行啟停調整。因此任務內容更新時**不需要**改 HTML。僅當網頁的整體功能描述本身需要調整（例如新增/移除整個功能類別）時才動 HTML。
 
 **注意：**
 - `.gitignore` 已放行 `!docs/tasks/`，不需要額外處理
 - HTML 下載連結是相對路徑 `tasks/XXX.json`，只要 JSON 檔名不變就不需改链接
-- 體力型/力量型跑馬通常是二選一，使用者自行啟停，HTML 需補充此說明
+- 體力型/力量型跑馬通常是二選一，使用者自行啟停
 
 ## graphify
 
