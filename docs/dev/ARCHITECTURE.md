@@ -403,17 +403,17 @@ MainLoop.emergency_stop()
 
 ### 全域設定 config.json
 
-路徑：`<data_base>/config.json`（資料庫基底同任務目錄）
+路徑：`<data_base>/config.json`（資料庫基底同任務目錄，已移出版本控制，屬使用者設定）
 
-| Key | 型態 | 預設值 | 用途 |
-|-----|------|--------|------|
-| `hide_startup_guide` | bool | false | 是否隱藏新手導覽對話框 |
-| `last_window` | str | "" | 上次選取的目標視窗標題 |
-| `last_task` | str | "" | 上次選取的任務名稱 |
-| `simplified_mode` | bool | false | 簡易模式（隱藏進階選項） |
-| `interaction_mode` | str | `"pynput"` | 互動方法：`"pynput"`（前景 SendInput）／`"postmessage"`（後台 PostMessage） |
-| `close_behavior` | str | `"tray"` | 關閉按鈕行為：`"tray"`（縮小至托盤）／`"quit"`（直接關閉） |
-| `show_close_confirm` | bool | true | 關閉前是否顯示確認對話框 |
+> **欄位唯一事實來源**：`gui/rule_config_controller.py` 的 `DEFAULTS`。此處僅列出使用者常用欄位，完整清單與預設值以程式碼為準。
+
+| Key | 預設值 | 用途 |
+|-----|--------|------|
+| `interaction_mode` | `"pynput"` | 互動方法：`"pynput"`（前景 SendInput）／`"postmessage"`（後台 PostMessage） |
+| `close_behavior` | `"tray"` | 關閉按鈕行為：`"tray"`（縮小至托盤）／`"quit"`（直接關閉） |
+| `max_cps` | `5` | 全域速率限制（每秒點擊上限） |
+| `scan_interval_ms` | `500` | 主循環掃描間隔 |
+| `language` | `"zh_TW"` | 介面語言（`zh_TW`／`en`） |
 
 寫入時機：`SettingsDialog._on_accept()`（使用者按確定時一次性寫入全部值）。
 
@@ -535,7 +535,7 @@ MainLoop.emergency_stop()
 | 機制 | 位置 | 說明 |
 |------|------|------|
 | 螢幕邊界檢查 | `03_pynput_input.py` | `send_click()`／`send_drag()` 前檢查座標是否在虛擬螢幕範圍內 |
-| 全域速率限制 (CPS) | `10_performance_monitor.py` | 限制每秒點擊 ≤ 5 次，違規 3 次自動暫停偵測 |
+| 全域速率限制 (CPS) | `10_performance_monitor.py` | 限制每秒點擊上限（`max_cps` 可調，預設 5），違規 3 次自動暫停偵測 |
 | 前景保護 (目標視窗) | `05_main_loop.py` | 僅在目標視窗為前景時才執行點擊，非前景時靜默等待 |
 | 前景保護 (工具視窗) | `05_main_loop.py` | 工具自身視窗在前景時自動暫停 click/key/drag/scroll，防止誤搶焦點（後台模式直接回傳 False，不誤擋） |
 | 後台全黑偵測 | `15_print_window.py` `is_black_capture()` | 後台截圖全像素為零才命中（暗色遊戲不誤判）；搭配 `is_admin()` 提醒以系統管理員重啟 |
