@@ -109,7 +109,6 @@ class LogViewer(QDialog):
         if answer != QMessageBox.StandardButton.Yes:
             return
         _log_cfg.clear_log_file()
-        self._last_text = ""
         self._refresh()
 
     def _tail_lines(self) -> list[str]:
