@@ -3698,10 +3698,10 @@ class MainWindow(QMainWindow):
         """Update the interaction mode label in the status bar."""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         mode_map = {
-            "pynput": "🟢 前景",
-            "postmessage": "🔵 後台 PM",
+            "pynput": f"🟢 {T('combo.interaction_fg')}",
+            "postmessage": f"🔵 {T('combo.interaction_bg_pm')}",
         }
-        text = mode_map.get(mode, "🟢 前景")
+        text = mode_map.get(mode, f"🟢 {T('combo.interaction_fg')}")
         self._interaction_mode_label.setText(text)
 
     def _is_bg_mode(self) -> bool:
