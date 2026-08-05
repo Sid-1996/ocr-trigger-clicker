@@ -18,5 +18,6 @@ tasks/
 !docs/tasks/*
 /images/
 /stderr.txt
+/config.json
 
 graphify-out/
