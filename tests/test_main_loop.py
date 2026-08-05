@@ -71,7 +71,6 @@ def _make_ml():
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}
-    ml._action_log_buf = {}
     ml.on_error = None
     ml.on_warning = None
     ml.on_info = None
@@ -238,6 +237,7 @@ def test_ocr_region_cache_hit_marker():
         assert "0ms" in detail
     finally:
         _ml_mod.recognize = orig
+
 
 
 # ── _handle_click without matched_text ──
