@@ -968,6 +968,7 @@ def test_on_fail_advance():
 def test_log_sliding_window_rate_limit():
     ml = _make_ml()
     ml._action_log_ts = {}
+    ml._logger.setLevel(logging.INFO)  # pytest 環境 root 預設 WARNING，需明確放行 INFO
     seen = []
 
     class _Probe(logging.Handler):
