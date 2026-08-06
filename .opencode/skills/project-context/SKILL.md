@@ -155,7 +155,7 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 **LogViewer 日誌檢視器**（`gui/12_log_viewer.py:30` `LogViewer(QDialog)`）：
 - 開啟方式：工具列 Ctrl+L 或 `_open_log_viewer()`（`gui/06_gui_main.py:5645`），獨立 QDialog 視窗
-- 即時 tail `app.log`、層級過濾（INFO/WARNING/ERROR/DEBUG）、文字搜尋
+- 即時 tail `app.log`、文字搜尋（層級過濾已移除，詳細程度由「啟用詳細日誌」checkbox 控制）
 - 內容未變更時不強制捲動，使用者向上瀏覽不會被自動拉回底部（commit `27b9dfa`）
 - 關閉時停止刷新（commit `d640509`），同步 debug 狀態
 

@@ -92,7 +92,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、下載、解壓、套用更新） | `check_for_update()`, `download_update()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
-| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、層級過濾、搜尋、DEBUG 切換、捲動保持） | `LogViewer` |
+| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、DEBUG 切換、捲動保持） | `LogViewer` |
 | `gui/17_bg_roi_selector.py` | 後台偵測區域選取器（PrintWindow 截圖 + QLabel） | `BgRoiSelector` |
 | `gui/18_bg_click_picker.py` | 後台座標選取器（PrintWindow 截圖 + QLabel） | `BgClickPicker` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊 |

@@ -5,10 +5,8 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
@@ -25,8 +23,6 @@ _MAX_LINES = 500
 _REFRESH_MS = 1500
 _FOLLOW_TOLERANCE = 20
 
-_LEVEL_ORDER = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
-
 
 class LogViewer(QDialog):
     def __init__(self, parent=None):
@@ -35,22 +31,11 @@ class LogViewer(QDialog):
         self.resize(780, 520)
 
         self._log_path: Path = _log_cfg.get_log_dir() / "app.log"
-        self._min_level = 1
         self._last_text = ""
 
         layout = QVBoxLayout(self)
 
         toolbar = QHBoxLayout()
-        self._level_combo = QComboBox()
-        for key, label in (
-            ("all", T("log_viewer.level_all")),
-            ("info", T("log_viewer.level_info")),
-            ("debug", T("log_viewer.level_debug")),
-        ):
-            self._level_combo.addItem(label, key)
-        self._level_combo.currentIndexChanged.connect(self._refresh)
-        toolbar.addWidget(QLabel(T("log_viewer.filter")))
-        toolbar.addWidget(self._level_combo)
 
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText(T("log_viewer.search_placeholder"))
@@ -90,10 +75,6 @@ class LogViewer(QDialog):
 
     def _on_debug_toggled(self, enabled: bool):
         _log_cfg.set_debug(enabled)
-        if enabled:
-            self._level_combo.setCurrentIndex(self._level_combo.findData("debug"))
-        else:
-            self._level_combo.setCurrentIndex(self._level_combo.findData("info"))
         self._refresh()
 
     def _open_dir(self):
@@ -119,21 +100,13 @@ class LogViewer(QDialog):
             return []
 
     def _refresh(self):
-        key = self._level_combo.currentData()
-        self._min_level = {"all": 1, "info": 20, "debug": 10}.get(key, 1)
         query = self._search_edit.text().strip().lower()
 
         lines = self._tail_lines()
-        filtered = []
-        for line in lines:
-            level = self._line_level(line)
-            if level < self._min_level:
-                continue
-            if query and query not in line.lower():
-                continue
-            filtered.append(line)
+        if query:
+            lines = [line for line in lines if query in line.lower()]
 
-        new_text = "".join(filtered)
+        new_text = "".join(lines)
         if new_text == self._last_text:
             return
 
@@ -144,15 +117,8 @@ class LogViewer(QDialog):
         self._text.setPlainText(new_text)
         self._last_text = new_text
 
-        if filtered:
+        if lines:
             bar.setValue(bar.maximum() if at_bottom else min(saved, bar.maximum()))
-
-    @staticmethod
-    def _line_level(line: str) -> int:
-        for name, value in _LEVEL_ORDER.items():
-            if f"[{name}]" in line:
-                return value
-        return 1
 
 
 if __name__ == "__main__":
@@ -165,8 +131,4 @@ if __name__ == "__main__":
     v._log_path = _log_cfg.get_log_dir() / "app.log"
     lines = v._tail_lines()
     assert isinstance(lines, list)
-    assert LogViewer._line_level("x [DEBUG] y") == 10
-    assert LogViewer._line_level("x [INFO] y") == 20
-    assert LogViewer._line_level("x [WARNING] y") == 30
-    assert LogViewer._line_level("plain line") == 1
     print("log_viewer self-check passed")
