@@ -4266,13 +4266,6 @@ class MainWindow(QMainWindow):
                 if prev_rule:
                     prev_rule.name = self._edit_name.text()
                     prev_rule.enabled = self._edit_enabled.isChecked()
-                    logging.debug(
-                        "[_on_rule_selected] prev=%s checkbox=%s prev_bg=%s groups=%s",
-                        prev_rule.name,
-                        self._edit_background.isChecked(),
-                        prev_rule.background,
-                        [(g.id, list(g.rule_ids)) for g in self._groups],
-                    )
                     prev_rule.background = self._edit_background.isChecked()
                     prev_rule.notes = self._edit_notes.toPlainText()
                     prev_rule.steps = self._step_list.get_steps()
@@ -4354,7 +4347,6 @@ class MainWindow(QMainWindow):
         group_map = {g.id: g for g in self._groups}
         self._groups = [group_map[gid] for gid in new_group_ids if gid in group_map]
         self._rules = new_order
-        logging.debug("[reorder] ids=[%s]", ",".join(r.id for r in self._rules))
         self._flush_save()
         self._reapply_group_buttons()
 
@@ -4405,15 +4397,6 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
-        _before_groups = [(g.id, list(g.rule_ids)) for g in self._groups]
-        logging.debug(
-            "[background_changed] rule=%s background=%s state=%s _selected=%s groups_before=%s",
-            rule.name,
-            rule.background,
-            state,
-            self._selected_rule_id,
-            _before_groups,
-        )
         rule.background = bool(state)
         if rule.background:
             for g in self._groups:
@@ -4434,11 +4417,6 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(
                 T("notif.rule_removed_from_uncategorized", name=rule.name), 4000
             )
-        logging.debug(
-            "[background_changed] AFTER rules_bg=%s groups=%s",
-            [(r.name, r.background) for r in self._rules],
-            [(g.id, list(g.rule_ids)) for g in self._groups],
-        )
         self._flush_save()
         if self._loop:
             self._loop.reload_rules()
