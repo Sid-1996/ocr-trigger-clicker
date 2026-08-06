@@ -4998,8 +4998,6 @@ class MainWindow(QMainWindow):
         self._refresh_rule_list()
 
     def _schedule_save(self):
-        bg_ids = [r.id for r in self._rules if r.background]
-        logging.debug("[save] _schedule_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.start()
 
     def _do_debounced_save(self) -> None:
@@ -5007,10 +5005,7 @@ class MainWindow(QMainWindow):
             return
         task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         logging.debug(
-            "[_do_debounced_save] rules(%d)=%s groups=%s",
-            len(self._rules),
-            [r.name for r in self._rules],
-            [(g.id, list(g.rule_ids)) for g in self._groups],
+            "[_do_debounced_save] rules=%d groups=%d", len(self._rules), len(self._groups)
         )
         if self._loop:
             with self._loop._rules_lock:
