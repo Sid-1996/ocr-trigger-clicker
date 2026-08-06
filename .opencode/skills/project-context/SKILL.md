@@ -155,13 +155,13 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 **LogViewer 日誌檢視器**（`gui/12_log_viewer.py:30` `LogViewer(QDialog)`）：
 - 開啟方式：工具列 Ctrl+L 或 `_open_log_viewer()`（`gui/06_gui_main.py:5645`），獨立 QDialog 視窗
-- 即時 tail `app.log`、文字搜尋（層級過濾已移除，詳細程度由「啟用詳細日誌」checkbox 控制）
+- 即時 tail `app.log`、文字搜尋（層級過濾與「啟用詳細日誌」checkbox 已移除，主循環診斷全為 INFO 直接可見）
 - 內容未變更時不強制捲動，使用者向上瀏覽不會被自動拉回底部（commit `27b9dfa`）
-- 關閉時停止刷新（commit `d640509`），同步 debug 狀態
+- 關閉時停止刷新（commit `d640509`），重開經 `showEvent` 重新啟動 timer（commit `a21283d` 後）
 
 **`[exec]` 寫入 app.log**（commit `17d4735`、`249d2cf`）：觸發射紀錄已移除 `triggers.jsonl`，改為結構化 `[exec]` 行寫入 `app.log`（INFO 層級）。`_log_exec()` 每次執行紀錄也寫入 app.log，deque maxlen=10。
 
-**生命週期日誌**（commit `249d2cf`）：`log_main()` GUI 寫入提升為 INFO；`set_debug()`/`is_debug_enabled()` 於 `core/00_logging_config.py`；`cleanup_stale_logs()` 清理過期日誌（含 `triggers.jsonl*` glob）。
+**生命週期日誌**（commit `249d2cf`）：`log_main()` GUI 寫入提升為 INFO；`set_debug()`/`is_debug_enabled()` 於 `core/00_logging_config.py`，僅供開發者 `--debug` 啟動旗標使用（`gui/06_gui_main.py` `__main__`）；`cleanup_stale_logs()` 清理過期日誌（含 `triggers.jsonl*` glob）。
 
 **異常 traceback**（commit `20b9cf1`）：背景規則/規則/並行/主循環 4 處改為 `self._logger.exception()`，會自動附上完整 traceback。
 

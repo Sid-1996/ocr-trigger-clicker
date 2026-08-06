@@ -631,6 +631,5 @@
   "log_viewer.clear": "Clear Log",
   "log_viewer.clear_confirm": "Clear the log files (app.log / startup_error.log)? This cannot be undone.",
   "log_viewer.search_placeholder": "Search keywords…",
-  "log_viewer.debug_toggle": "Enable detailed logging",
   "log_viewer.open_dir": "Open Folder"
 }

@@ -92,7 +92,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、下載、解壓、套用更新） | `check_for_update()`, `download_update()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
-| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、DEBUG 切換、捲動保持） | `LogViewer` |
+| `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
 | `gui/17_bg_roi_selector.py` | 後台偵測區域選取器（PrintWindow 截圖 + QLabel） | `BgRoiSelector` |
 | `gui/18_bg_click_picker.py` | 後台座標選取器（PrintWindow 截圖 + QLabel） | `BgClickPicker` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊 |
@@ -555,7 +555,7 @@ MainLoop.emergency_stop()
 | 通知彈窗 | `self.on_warning()` | Qt signal → 系統托盤通知 | ✅ 通知彈窗 | 需要使用者注意的警告 |
 
 - `app.log` 路徑：`%APPDATA%\ocr-trigger-clicker\logs\app.log`，`core/00_logging_config.py` 統一管理（midnight 輪替，backupCount=1）
-- `set_debug(enabled)` / `is_debug_enabled()`：runtime 雙向切換 DEBUG 層級（LogViewer 的「啟用詳細日誌」checkbox）
+- `set_debug(enabled)` / `is_debug_enabled()`：DEBUG 層級切換，供開發者以 `--debug` 啟動旗標（`06_gui_main.py` `__main__`）取回規則存讀/GUI 編輯等內部診斷；一般使用者預設 root=INFO，主循環診斷與 `[exec]` 執行記錄皆為 INFO 可完整看到
 - 生命週期事件（`log_main()`：循環開始/停止、視窗遺失、應用啟動）與執行事件（`[exec]`）皆為 INFO 層級
 - 循環停止時 `log_main()` 輸出統計：執行秒數、點擊次數（`PerformanceMonitor.get_total_clicks()`）、規則數
 - `cleanup_stale_logs()`：啟動時刪除 `debug.log` / `run_stderr.log` / `triggers.jsonl*` 舊檔

@@ -4,7 +4,6 @@ from pathlib import Path
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QHBoxLayout,
     QLineEdit,
@@ -42,11 +41,6 @@ class LogViewer(QDialog):
         self._search_edit.textChanged.connect(self._refresh)
         toolbar.addWidget(self._search_edit, 1)
 
-        self._debug_toggle = QCheckBox(T("log_viewer.debug_toggle"))
-        self._debug_toggle.setChecked(_log_cfg.is_debug_enabled())
-        self._debug_toggle.toggled.connect(self._on_debug_toggled)
-        toolbar.addWidget(self._debug_toggle)
-
         self._open_dir_btn = QPushButton(T("log_viewer.open_dir"))
         self._open_dir_btn.clicked.connect(self._open_dir)
         toolbar.addWidget(self._open_dir_btn)
@@ -73,9 +67,11 @@ class LogViewer(QDialog):
         self._timer.stop()
         super().closeEvent(event)
 
-    def _on_debug_toggled(self, enabled: bool):
-        _log_cfg.set_debug(enabled)
+    def showEvent(self, event):
+        # 關閉（closeEvent）時停止 timer；重開（show）必須重新啟動，否則不再自動 tail
+        self._timer.start()
         self._refresh()
+        super().showEvent(event)
 
     def _open_dir(self):
         os.startfile(self._log_path.parent)
