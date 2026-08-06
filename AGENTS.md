@@ -49,13 +49,7 @@
    ```
    把 `<改動的檔案路徑>` 換成實際修改的檔案（例如 `core/04_rule_engine.py`）。單行 trivial 變更、或該檔案本來就沒有 self-check，跳過。不要依賴任何寫死的檔名清單——用「這次改了什麼檔」來判斷，而不是查表。
 
-3. **更新知識圖譜**（本次有改程式碼檔才需要，純文件/CHANGELOG/設定變更跳過）：
-   ```powershell
-   pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; graphify update ."
-   ```
-   純程式碼變動不吃 LLM/API，近乎免費。判斷細節見下方「graphify」章節。
-
-4. **add + commit + push**（一次完成）：
+3. **add + commit + push**（一次完成）：
    ```powershell
    pwsh -Command "
      [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -296,41 +290,6 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 - HTML 下載連結是相對路徑 `tasks/XXX.json`，只要 JSON 檔名不變就不需改链接
 - 體力型/力量型跑馬通常是二選一，使用者自行啟停
 
-## graphify
+## CodeGraph
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships. The user is vibe coding — they will never type `/graphify` or any flag themselves. You decide when to use it, based on the rules below. Don't ask for permission first.
-
-**Do NOT default to graphify for everything.** It's a tool for when you'd otherwise have to grep/read multiple files to understand how something connects. Using it on questions you can already answer from the file currently open, or on generic programming questions unrelated to this codebase, is wasted latency and tool calls for no benefit — skip it and just answer.
-
-### When to query (read-only, cheap — use freely within the rule below)
-
-Run `graphify query "<question>"` first, before grepping or reading multiple files by hand, ONLY when the question genuinely needs cross-file/architectural context, e.g.:
-- "how does X flow through the app", "what calls Y", "why does Z break when W changes"
-- non-trivial refactor/debug tasks where you don't already know the affected call sites
-
-Skip it (just answer directly or use `rg`) when:
-- The answer is fully visible in the file already open or just discussed
-- It's a one-file, one-function question ("what does this line do")
-- It's a generic Python/library question with nothing project-specific about it
-
-Use `graphify path "<A>" "<B>"` for a specific relationship, `graphify explain "<concept>"` for one node — both cheaper and more scoped than a full query.
-
-### When to update (near-free for code-only changes — bake into the commit step)
-
-`graphify update .` only re-extracts changed files and needs no LLM/API cost when every changed file is code (this project always is). Because of that, run it once as part of the commit workflow above — right before `git add -A` — not after every individual edit:
-
-```powershell
-pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; graphify update ."
-```
-
-Skip this step for pure non-code commits (docs-only, CHANGELOG, config) — nothing structural changed, nothing for the graph to catch.
-
-### When to fully rebuild (expensive — never automatic)
-
-`/graphify .` (no flags) reruns the entire pipeline: reclustering, community relabeling, full report regen. Only do this if the user explicitly asks for a full rebuild, or `graphify update .` reports the graph is stale/corrupt beyond what update can fix. Never trigger it just because a session started or because update "might as well" be a full run.
-
-### Misc
-
-- If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
-- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review, or when query/path/explain don't surface enough context.
-- Dirty `graphify-out/` files after hooks/incremental updates are expected — not a reason to skip graphify.
+專案已用 `codegraph init` 建過索引（`.codegraph/`），透過 MCP server 自動接給 agent 使用，不需要在這裡寫使用規則——`codegraph_explore` 由 agent 依需求自行判斷呼叫，索引也由檔案監控自動同步，commit 流程不需要任何額外步驟。

@@ -397,16 +397,16 @@ _STEP_TYPE_ICONS = {
 }
 
 _STEP_TYPE_LABELS = {
-    "detect": T("step_form.step_detect"),
-    "match_image": T("step_form.step_match_image"),
-    "compare": T("step_form.step_compare"),
-    "click": T("step_form.step_click"),
-    "key": T("step_form.step_key"),
-    "wait": T("step_form.step_wait"),
-    "jump": T("step_form.step_jump"),
-    "drag": T("step_form.step_drag"),
-    "scroll": T("step_form.step_scroll"),
-    "notify": T("step_form.step_notify"),
+    "detect": "step_form.step_detect",
+    "match_image": "step_form.step_match_image",
+    "compare": "step_form.step_compare",
+    "click": "step_form.step_click",
+    "key": "step_form.step_key",
+    "wait": "step_form.step_wait",
+    "jump": "step_form.step_jump",
+    "drag": "step_form.step_drag",
+    "scroll": "step_form.step_scroll",
+    "notify": "step_form.step_notify",
 }
 
 _STEP_COLORS = {
@@ -854,7 +854,8 @@ class _StepListWidget(QWidget):
             icon.setStyleSheet(f"color: {_color};")
         hl.addWidget(icon)
 
-        label = _STEP_TYPE_LABELS.get(step.type, step.type)
+        key = _STEP_TYPE_LABELS.get(step.type)
+        label = T(key) if key else step.type
         tl = QLabel(label)
         tl.setStyleSheet("font-weight:bold;")
         tl.setFixedWidth(60)
