@@ -3749,6 +3749,7 @@ class MainWindow(QMainWindow):
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_current_rule()
+            self._do_debounced_save()
         if not name:
             logging.debug("[task changed] rules=0")
             self._rules = []
@@ -5027,6 +5028,18 @@ class MainWindow(QMainWindow):
         self._do_debounced_save()
         _main_loop_mod.log_main(T("status.task_saved", count=len(self._rules)))
 
+    def _rule_hard_problems(self, rule) -> list[str]:
+        """真正執行前須攔截的問題（detect 空文字、自訂點擊 (0,0)）。"""
+        problems = []
+        for i, s in enumerate(rule.steps):
+            if s.type == "detect" and not s.params.get("text", "").strip():
+                problems.append(T("notif.rule_validation_empty_text", idx=i + 1))
+            elif s.type == "click" and s.params.get("target", "") == "custom":
+                x, y = s.params.get("x", 0), s.params.get("y", 0)
+                if x == 0 and y == 0:
+                    problems.append(T("notif.rule_validation_zero_click", idx=i + 1))
+        return problems
+
     def _save_current_rule(self):
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_save"))
@@ -5038,24 +5051,8 @@ class MainWindow(QMainWindow):
         rule.enabled = self._edit_enabled.isChecked()
         rule.notes = self._edit_notes.toPlainText()
         rule.steps = self._step_list.get_steps()
-        # 校驗 detect 步驟文字不可為空
-        for i, s in enumerate(rule.steps):
-            if s.type == "detect" and not s.params.get("text", "").strip():
-                QMessageBox.warning(
-                    self, T("dialog.save_failed"), T("notif.rule_validation_empty_text", idx=i + 1)
-                )
-                return
-            if s.type == "click" and s.params.get("target", "") == "custom":
-                x, y = s.params.get("x", 0), s.params.get("y", 0)
-                if x == 0 and y == 0:
-                    QMessageBox.warning(
-                        self,
-                        T("dialog.save_failed"),
-                        T("notif.rule_validation_zero_click", idx=i + 1),
-                    )
-                    return
         valid_ids = {r.id for r in self._rules}
-        warnings = []
+        warnings = self._rule_hard_problems(rule)
         for i, s in enumerate(rule.steps):
             if s.type == "jump":
                 tid = s.params.get("rule_id", "")
@@ -5540,6 +5537,21 @@ class MainWindow(QMainWindow):
             )
             if resp != QMessageBox.StandardButton.Yes:
                 return
+        # 防呆：檢查所選群組內的 detect 空文字 / 自訂點擊 (0,0)，執行前硬性攔截
+        hard_problems = []
+        for rid in allowed_ids:
+            r = rules_by_id.get(rid)
+            if not r or not r.enabled:
+                continue
+            for msg in self._rule_hard_problems(r):
+                hard_problems.append(f"  • {r.name}：{msg}")
+        if hard_problems:
+            QMessageBox.warning(
+                self,
+                T("dialog.warning"),
+                T("start.hard_problems_msg", items="\n".join(hard_problems)),
+            )
+            return
         # 後台模式：啟動前先截一張測試幀，全黑 + 非系統管理員 → 彈窗（關鍵防線）
         if self._is_bg_mode():
             _hwnd = get_window_hwnd(title)
@@ -5554,6 +5566,9 @@ class MainWindow(QMainWindow):
                 )
                 if resp2 != QMessageBox.StandardButton.Yes:
                     return
+        # 提交未存編輯並同步寫入磁碟，確保主迴圈讀到的是最新規則
+        self._save_current_rule()
+        self._flush_save()
         self._is_starting = True
         if self._is_bg_mode():
             activate_window_bg(title)

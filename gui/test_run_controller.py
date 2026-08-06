@@ -69,6 +69,10 @@ class TestRunController:
         if not rule:
             QMessageBox.warning(win, T("test.title"), T("test.select_rule"))
             return
+        problems = win._rule_hard_problems(rule)
+        if problems:
+            QMessageBox.warning(win, T("test.title"), "\n".join(problems))
+            return
         title = win._window_combo.currentText()
         if not title:
             QMessageBox.warning(win, T("test.title"), T("test.select_window"))

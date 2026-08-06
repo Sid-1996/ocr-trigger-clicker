@@ -356,6 +356,7 @@
   "img_compare.mode_mismatch": "⚠️ Template {src}, comparing in {cur} - use the same mode",
   "start.mode_mismatch_title": "Interaction mode mismatch",
   "start.mode_mismatch_msg": "Current mode is {cur}; these templates were made in another mode:\n{items}",
+  "start.hard_problems_msg": "These rules have incomplete steps, please fix first:\n{items}",
   "bg_capture.black_admin_warn": "Background capture failed: try running as Administrator!",
   "bg_capture.black_admin_title": "Background capture failed",
   "step_form.select_image": "Select Image",
