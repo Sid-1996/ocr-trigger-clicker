@@ -91,7 +91,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 所有主循環 `_process_rules` 與 match_image 建立模板的截圖統一走 `capture_frame()`，確保模板與實際比對畫面來源一致。
 
-**關鍵陷阱**：後台 PrintWindow 全黑 ≠ 不可用——`is_black_capture()`（`15_print_window.py:25`，平均值<10、標準差<3 判斷為全黑）會先檢查是否為系統管理員，非管理員時提示權限不足（commit `4281972`、`e43b97c`）。
+**關鍵陷阱**：後台 PrintWindow 全黑 ≠ 不可用——`is_black_capture()`（`15_print_window.py:25`，全像素為 0 才命中，真實畫面再暗也有非零像素）會先檢查是否為系統管理員，非管理員時提示權限不足（commit `4281972`、`e43b97c`）。
 
 ## box_utils 座標工具
 
@@ -193,7 +193,7 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 ### 全黑偵測
 
-`is_black_capture()`（`15_print_window.py:25`）檢查 PrintWindow 輸出平均 <10、標準差 <3 則判為全黑。非管理員時提示權限不足（如鳴潮遊戲），commit `4281972`、`72a9456`。OCR 診斷面板（`gui/09_ocr_debug.py:356`）也會檢查全黑並合併提示。
+`is_black_capture()`（`15_print_window.py:25`）檢查 PrintWindow 輸出全像素為 0 才判為全黑（真實畫面再暗也有非零像素；None/空圖回 False）。非管理員時提示權限不足（如鳴潮遊戲），commit `4281972`、`72a9456`。OCR 診斷面板（`gui/09_ocr_debug.py:356`）也會檢查全黑並合併提示。
 
 ### 工具保護排除
 
