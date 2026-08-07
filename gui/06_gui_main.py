@@ -2586,7 +2586,6 @@ get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 recognize = _main_loop_mod.recognize
 find_text = _main_loop_mod.find_text
-poll_roi_value = _main_loop_mod.poll_roi_value
 crop_roi = _main_loop_mod.crop_roi
 get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
 _capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")

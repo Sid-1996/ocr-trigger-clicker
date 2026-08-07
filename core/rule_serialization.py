@@ -175,12 +175,3 @@ def save_rules(rules: list[Rule], path: str) -> bool:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
         return False
-
-
-def set_active_groups(groups: list[RuleGroup]) -> None:
-    """Update the in-memory active group list (called from GUI)."""
-    pass
-
-
-def get_capture_size() -> dict:
-    return {}

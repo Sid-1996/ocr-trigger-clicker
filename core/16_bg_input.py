@@ -29,6 +29,7 @@ WM_RBUTTONUP = 0x0205
 WM_MBUTTONDOWN = 0x0207
 WM_MBUTTONUP = 0x0208
 WM_MOUSEWHEEL = 0x020A
+WM_MOUSEHWHEEL = 0x020E
 WM_MOUSEMOVE = 0x0200
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
@@ -114,12 +115,13 @@ def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
         return False
 
 
-def _scroll_postmessage(hwnd: int, x: int, y: int, amount: int) -> bool:
+def _scroll_postmessage(hwnd: int, x: int, y: int, amount: int, horizontal: bool = False) -> bool:
     """Scroll using PostMessage."""
     try:
         lparam = _make_lparam(x, y)
         wParam = (WHEEL_DELTA * amount) << 16
-        user32.PostMessageW(hwnd, WM_MOUSEWHEEL, wParam, lparam)
+        msg = WM_MOUSEHWHEEL if horizontal else WM_MOUSEWHEEL
+        user32.PostMessageW(hwnd, msg, wParam, lparam)
         return True
     except Exception as e:
         _log.error("PostMessage scroll failed: %s", e)
@@ -172,7 +174,7 @@ def _key_pynput(hwnd: int, vk_code: int, down: bool = True) -> bool:
         return False
 
 
-def _scroll_pynput(hwnd: int, x: int, y: int, amount: int) -> bool:
+def _scroll_pynput(hwnd: int, x: int, y: int, amount: int, horizontal: bool = False) -> bool:
     """Scroll using pynput."""
     try:
         import pynput.mouse
@@ -181,7 +183,8 @@ def _scroll_pynput(hwnd: int, x: int, y: int, amount: int) -> bool:
         abs_x, abs_y = _client_to_screen(hwnd, x, y)
         mouse.position = (abs_x, abs_y)
         time.sleep(0.02)
-        mouse.scroll(0, amount)
+        dx, dy = (amount, 0) if horizontal else (0, amount)
+        mouse.scroll(dx, dy)
         return True
     except Exception as e:
         _log.error("pynput scroll failed: %s", e)
@@ -237,13 +240,13 @@ def send_key(hwnd: int, key: str) -> bool:
         return False
 
 
-def scroll(hwnd: int, x: int, y: int, amount: int = 1) -> bool:
-    """Scroll at (x, y). Positive = up, negative = down."""
+def scroll(hwnd: int, x: int, y: int, amount: int = 1, horizontal: bool = False) -> bool:
+    """Scroll at (x, y). Positive = up/right, negative = down/left."""
     with _lock:
         if _method == "postmessage":
-            return _scroll_postmessage(hwnd, x, y, amount)
+            return _scroll_postmessage(hwnd, x, y, amount, horizontal)
         elif _method == "pynput":
-            return _scroll_pynput(hwnd, x, y, amount)
+            return _scroll_pynput(hwnd, x, y, amount, horizontal)
         return False
 
 
@@ -346,4 +349,24 @@ if __name__ == "__main__":
     except ValueError:
         print("  [OK] set_method('invalid') raises ValueError")
 
-    print("\n=== All 4 tests passed ===")
+    # 滾輪語意：正值 = 上/右、負值 = 下/左；水平方向送 WM_MOUSEHWHEEL
+    set_method("postmessage")
+    captured = {}
+    _orig_pm = user32.PostMessageW
+    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: captured.update(
+        msg=msg, wparam=wparam
+    ) or True
+    try:
+        _scroll_postmessage(1, 0, 0, -1)
+        assert captured["msg"] == WM_MOUSEWHEEL and captured["wparam"] < 0
+        _scroll_postmessage(1, 0, 0, 1)
+        assert captured["msg"] == WM_MOUSEWHEEL and captured["wparam"] > 0
+        _scroll_postmessage(1, 0, 0, 1, True)
+        assert captured["msg"] == WM_MOUSEHWHEEL and captured["wparam"] > 0
+        _scroll_postmessage(1, 0, 0, -1, True)
+        assert captured["msg"] == WM_MOUSEHWHEEL and captured["wparam"] < 0
+    finally:
+        user32.PostMessageW = _orig_pm
+    print("  [OK] scroll sign/axis: 下左負值、上右正值、水平送 WM_MOUSEHWHEEL")
+
+    print("\n=== All 5 tests passed ===")

@@ -81,42 +81,6 @@ def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
     return img[y1:y2, x1:x2]
 
 
-def extract_number(text: str, pick: str) -> float | None:
-    nums = re.findall(r"\d+(?:\.\d+)?", text)
-    if not nums:
-        return None
-    idx = 0 if pick == "first" else -1
-    return float(nums[idx])
-
-
-def poll_roi_value(
-    roi: dict,
-    pick: str,
-    timeout_ms: int,
-    title: str,
-    stop_event=None,
-    mode: str = "pynput",
-) -> float | None:
-    deadline = time.monotonic() + timeout_ms / 1000.0
-    while time.monotonic() < deadline:
-        if stop_event and stop_event.is_set():
-            return None
-        img = capture_frame(mode, title)
-        if img is None:
-            img = capture_window_content(title)
-        if img is not None:
-            roi_img = crop_roi(img, roi)
-            if roi_img is not None:
-                results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
-                for r in results:
-                    val = extract_number(r.text, pick)
-                    if val is not None:
-                        return val
-        if (stop_event or threading.Event()).wait(timeout=0.2):
-            return None
-    return None
-
-
 @dataclass
 class StepContext:
     img: np.ndarray
@@ -364,8 +328,13 @@ class MainLoop:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         if mode and mode != "pynput" and self._window_hwnd:
             _bg_input.set_method(mode)
-            amount = 1 if direction in ("WheelDown", "WheelRight") else -1
-            return _bg_input.scroll(self._window_hwnd, 0, 0, amount)
+            # 後台 scroll(): 正值 = 上/右，負值 = 下/左（見 bg_input.scroll docstring）
+            horizontal = direction in ("WheelLeft", "WheelRight")
+            if horizontal:
+                amount = 1 if direction == "WheelRight" else -1
+            else:
+                amount = -1 if direction == "WheelDown" else 1
+            return _bg_input.scroll(self._window_hwnd, 0, 0, amount, horizontal)
         return _input_mod.send_scroll(1, direction)
 
     def _activate_window(self) -> bool:
@@ -582,8 +551,11 @@ class MainLoop:
         color_tolerance = params.get("color_tolerance", 100)
         # 若並行群組已為本 step（index 0）平行預算好 match_template，直接消費，
         # 省去重複的找圖計算；步進>0或無預算時一律照舊即時計算。
-        if ctx.prematch and 0 in ctx.prematch:
+        # prematch 只對應第 0 步（並行群組預算的結果），非第 0 步或已消費後一律
+        # 即時計算，避免後續 match_image 步驟誤用第 0 步的 ROI/範本比對結果。
+        if ctx.step_idx == 0 and ctx.prematch and 0 in ctx.prematch:
             results, best_below = ctx.prematch[0]
+            ctx.prematch = None
         else:
             results = match_template(
                 ctx.img,
@@ -1032,6 +1004,17 @@ class MainLoop:
                 if idx >= len(rule.steps):
                     idx = len(rule.steps) - 1
                 if idx < 0:
+                    return
+                # 跳轉必須向前（GUI 也只允許向前 skip），否則可能跳轉成環卡死主執行緒
+                if idx <= i:
+                    if not background:
+                        self._log_exec(
+                            rule.name,
+                            i,
+                            step.type,
+                            "stop",
+                            "跳轉目標無效（需在目前步驟之後），中止",
+                        )
                     return
                 i = idx
                 continue
