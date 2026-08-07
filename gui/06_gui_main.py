@@ -502,6 +502,8 @@ def _step_summary(step, rules_provider=None) -> str:
         parts.append(T("summary.whole_window") if zero_roi else _fmt_roi(roi))
         th = p.get("threshold", 0.8)
         parts.append(T("summary.format_threshold", threshold=th))
+        if p.get("match_color"):
+            parts.append(T("summary.format_color_match", tolerance=p.get("color_tolerance", 100)))
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
@@ -520,13 +522,23 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "click":
         target = p.get("target", "text_center")
         if target == "text_center":
-            return T("summary.click_target")
-        if target == "custom":
-            return T("summary.format_click", point=_fmt_point(p.get("x", 0), p.get("y", 0)))
-        if target == "cursor":
-            return T("summary.click_cursor")
+            parts = [T("summary.click_target")]
+        elif target == "custom":
+            parts = [T("summary.format_click", point=_fmt_point(p.get("x", 0), p.get("y", 0)))]
+        else:
+            parts = [T("summary.click_cursor")]
+        if p.get("button", "left") != "left":
+            parts.append(T("combo.right"))
+        hm = p.get("hold_ms", 0) or 0
+        if hm > 0:
+            parts.append(T("summary.format_hold", ms=hm))
+        return " ".join(parts)
     if t == "key":
-        return T("summary.format_key_press", key=p.get("key", ""))
+        parts = [T("summary.format_key_press", key=p.get("key", ""))]
+        hm = p.get("hold_ms", 0) or 0
+        if hm > 0:
+            parts.append(T("summary.format_hold", ms=hm))
+        return " ".join(parts)
     if t == "wait":
         return T("summary.format_wait", ms=p.get("ms", 500))
     if t == "jump":
@@ -562,7 +574,6 @@ def _rule_tags(rule) -> str:
     if not steps:
         return " " + T("rule_summary.empty")
     has_fail = False
-    has_retry = False
     for s in steps:
         of = s.params.get("on_fail")
         if of is None:
@@ -574,8 +585,6 @@ def _rule_tags(rule) -> str:
             action = of.get("action", "stop")
             if action != "stop":
                 has_fail = True
-            if action == "retry":
-                has_retry = True
             elif action == "stop":
                 try:
                     dur = float(of.get("fail_duration_sec", 0) or 0)
@@ -586,8 +595,6 @@ def _rule_tags(rule) -> str:
     parts = [T("rule_summary.steps", count=len(steps))]
     if has_fail:
         parts.append(T("rule_summary.has_fail"))
-    if has_retry:
-        parts.append(T("rule_summary.has_retry"))
     return " " + " ".join(parts)
 
 
@@ -621,8 +628,6 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
             return f"{prefix}{T('summary.onfail_stop_group')}"
         if action == "advance":
             return f"{prefix}{T('summary.onfail_advance')}"
-        if action == "retry":
-            return f"{prefix}{T('summary.onfail_retry')}"
     return ""
 
 
