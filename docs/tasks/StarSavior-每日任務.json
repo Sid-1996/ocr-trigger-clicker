@@ -219,8 +219,10 @@
         "rule_298df4e4",
         "rule_452d686c",
         "rule_ee024608",
-        "rule_5fdede7a",
         "rule_dec0e9ed",
+        "rule_5fdede7a",
+        "rule_3b4adf6b",
+        "rule_e41e2118",
         "rule_26ed8f6d",
         "rule_99561389"
       ],
@@ -312,6 +314,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -335,12 +343,6 @@
             "key": "Escape",
             "hold_ms": 0
           }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
-          }
         }
       ],
       "background": false,
@@ -351,6 +353,26 @@
       "name": "緊急支援",
       "enabled": true,
       "steps": [
+        {
+          "type": "match_image",
+          "params": {
+            "template": "",
+            "template_data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAWCAIAAAB7WupNAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAByUlEQVQokX3STU8TQRgH8P+zM0t3UV7sUiJGEw8SQ4iReCDRg34JEE2MFxMTT/gpvPoNTNQDqB9A7UVPxINJa/CgSJvGQBDo9mV36ra78+KhsKyk8Jz+z+SXmWcyQ+VvJSVlHEUd35ftNotjY1kYGx/O553REcYsm9t8p1p1i0X+8YMDoCNABBjDOBzn77Xr4eJCYXqa1ji3HFsXxvgZl2wOAIDRWonINAME3WTpLn25fN72RrQhPjt38clyH4nKr/rzZ0RGh5Hc2uMsP6oNAPCJyYmbt/qot/sHgDFEZ4f5lUsWDku3W2lO6vtpJs4ySIRplo0GMnWETJKkuVernICCo+PizZ+DkW4306z8vcEIWkkRAJBC4P+ysk2v0QSQdIQ5BYnNDQA4RgCebfyVl8GnogoDOgV1N34kEnp3+8SdrMmpG+8/A9BKfX/0MF7/OmCmodm5gyXGCvcfDB5cbf02WgMwxnTWy1nEHk95/aQb+61ymc55O+/etlZepEIGgtY4z129oHPO8XsDiGO1Xddhlyf3lrD6Rg0R88YtN3fwfWOp/BZFib59x3m6TLVaxa9Ue6WSfv0KrcM3dl1aWOTz897MjOM6/wD5WMwfw+w58gAAAABJRU5ErkJggg==",
+            "roi": {
+              "x": 0.6259374999999999,
+              "y": 0.6807407407407408,
+              "w": 0.02625,
+              "h": 0.04037037037037037,
+              "roi_coord": "client"
+            },
+            "threshold": 0.8,
+            "match_color": false,
+            "color_tolerance": 100,
+            "on_fail": "stop",
+            "match_mode": "fuzzy",
+            "template_source": "foreground"
+          }
+        },
         {
           "type": "detect",
           "params": {
@@ -2199,7 +2221,7 @@
         {
           "type": "wait",
           "params": {
-            "ms": 250
+            "ms": 350
           }
         }
       ],
@@ -2227,6 +2249,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2519,24 +2547,22 @@
     },
     {
       "id": "4b2933370625",
-      "name": "商店中點擊驚嘆號",
+      "name": "商店中點擊普通禮包",
       "enabled": true,
       "steps": [
         {
-          "type": "match_image",
+          "type": "detect",
           "params": {
-            "template": "",
-            "template_data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAASCAIAAADgy6hbAAAACXBIWXMAAA7EAAAOxAGVKw4bAAABLklEQVQokYWPPUvDUBSGz7lJqq3WRhBKiyIIVbCb+i/EsT/AwamrOHd2c/AXuDs7uCqIH2NVVGigFGOjpknaNMm9uQ43Kclw8Z3e856H84E3mkYQYr2kVMrKYhFSsZFHbUdxAoZEJUvzWn2FaxoA1DunM2jQOVH0MvoB73+p6nqNp43a/gESAgBjozcAAABenNMaawQyipyRMNR1s3kOYr4vTGhZcigMhQnMTzk0GSeT7F8pRKdBcpznySd5yb1sOJRCYdqjlimF/I83YXhEs7mag57ueudnAEDfn7M53u9swn/KrWtcXO49vu4+vOiHbSlU2W4CACKutlpSaGomT00MI5srR9VlRBTFz/VVYavpdrvGcRviWIScMbxV1cJGlS+UIEVn4nGMthv1v/8Afz50V4nYQ/sAAAAASUVORK5CYII=",
+            "text": "普通禮包",
             "roi": {
-              "x": 0.04375,
-              "y": 0.11851851851851852,
-              "w": 0.022395833333333334,
-              "h": 0.22685185185185186,
+              "x": 0.06197916666666667,
+              "y": 0.1111111111111111,
+              "w": 0.09583333333333334,
+              "h": 0.25,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
-            "match_color": false,
-            "color_tolerance": 100,
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
             "on_fail": "stop"
           }
         },
@@ -3489,12 +3515,6 @@
             "random_offset": 3,
             "hold_ms": 0
           }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
         }
       ],
       "background": false,
@@ -3525,25 +3545,65 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Escape",
             "hold_ms": 0
           }
+        }
+      ],
+      "background": false,
+      "notes": "如果有防禦紀錄，就按esc，否則直接跳過"
+    },
+    {
+      "id": "rule_dec0e9ed",
+      "name": "識別0/6",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "0/6",
+            "roi": {
+              "x": 0.615625,
+              "y": 0.027777777777777776,
+              "w": 0.07760416666666667,
+              "h": 0.07222222222222222,
+              "roi_coord": "client"
+            },
+            "match_mode": "contains",
+            "fuzzy_threshold": 0.8,
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 0.1
+            }
+          }
         },
         {
-          "type": "wait",
+          "type": "notify",
           "params": {
-            "ms": 250
+            "message": "偵測到0/6，已無次數，跳轉至收尾步驟(Esc)。"
+          }
+        },
+        {
+          "type": "jump",
+          "params": {
+            "rule_id": "rule_99561389"
           }
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "如果不是0/6，則往下條規則走，執行[尋找挑戰]\n否則，條轉到[確認]"
     },
     {
       "id": "rule_5fdede7a",
-      "name": "挑戰",
+      "name": "尋找挑戰",
       "enabled": true,
       "steps": [
         {
@@ -3560,8 +3620,7 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": {
-              "action": "jump",
-              "rule_id": "rule_99561389",
+              "action": "advance",
               "fail_duration_sec": 0.1
             }
           }
@@ -3585,38 +3644,103 @@
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "如果有次數則點擊文字[挑戰]，如果找不到則執行下一條規則[刷新]"
     },
     {
-      "id": "rule_dec0e9ed",
-      "name": "0/6",
+      "id": "rule_3b4adf6b",
+      "name": "刷新",
       "enabled": true,
       "steps": [
         {
           "type": "detect",
           "params": {
-            "text": "0/6",
+            "text": "刷新",
             "roi": {
-              "x": 0.615625,
-              "y": 0.027777777777777776,
-              "w": 0.07760416666666667,
-              "h": 0.07222222222222222,
+              "x": 0.8656716417910447,
+              "y": 0.11013215859030837,
+              "w": 0.05472636815920398,
+              "h": 0.07268722466960352,
               "roi_coord": "client"
             },
-            "match_mode": "contains",
+            "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 0.1
+            }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "notes": "點擊刷新後，跳轉至[尋找挑戰]"
+    },
+    {
+      "id": "rule_e41e2118",
+      "name": "刷新-確認",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "確認",
+            "roi": {
+              "x": 0.5435323383084577,
+              "y": 0.6035242290748899,
+              "w": 0.05534825870646766,
+              "h": 0.07709251101321586,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 0.1
+            }
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
           "type": "jump",
           "params": {
-            "rule_id": "rule_99561389"
+            "rule_id": "rule_5fdede7a"
           }
         }
       ],
       "background": false,
-      "notes": "如果沒有次數，跳轉至同群組之[確認]"
+      "notes": ""
     },
     {
       "id": "rule_26ed8f6d",
@@ -3640,6 +3764,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3648,12 +3778,6 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3686,6 +3810,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3694,12 +3824,6 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3907,20 +4031,19 @@
     }
   ],
   "_collapsed_groups": [
-    "group_3c07d078",
-    "group_8db83f5b",
-    "group_39a1b80d",
-    "group_266e1f8c",
-    "group_36068123",
-    "group_2f0c668c",
-    "group_40b2992f",
-    "group_f1d46de3",
-    "group_53eec035",
-    "group_e8efb9ff",
     "group_fdab3a16",
+    "group_3c07d078",
+    "group_f1d46de3",
     "group_a1d5b815",
+    "group_36068123",
+    "group_40b2992f",
+    "group_261f6f66",
+    "group_e8efb9ff",
+    "group_53eec035",
+    "group_266e1f8c",
     "__default__",
-    "group_261f6f66"
+    "group_8db83f5b",
+    "group_39a1b80d"
   ],
   "capture_size": [
     1920,
