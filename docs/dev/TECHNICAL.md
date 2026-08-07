@@ -15,7 +15,7 @@
 - **Background (Daemon) Monitoring** — Rules marked as background run every frame independently of group flow; suitable for error interception and always-on alerts
 - **Foreground Protection & Safety** — Optional foreground-only execution, configurable rate limiting, emergency stop, and on_fail actions (stop rule / stop group / send notification)
 - **Multi-Task Management** — Independent task files with JSON import/export; quick switch between different scenarios
-- **On-Fail Step Handling** — Per-step failure actions: stop rule, press key, jump to step, jump to group, system notification; allows robust error recovery flows
+- **On-Fail Step Handling** — Per-step failure actions: stop rule, press key, skip to step, jump to rule in group, advance to next rule, system notification; allows robust error recovery flows
 
 ---
 
@@ -38,7 +38,7 @@
 - Onedir bundle via PyInstaller (`build.py`)
 - Windows 10/11 64-bit only
 - No Python runtime required for end users
-- Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python-headless, mss, pynput, dxcam
+- Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python, mss, pynput, dxcam, numpy, pygetwindow, pywin32
 - Optional GPU acceleration: DirectML via DirectX 12
 - Foreground input via pynput (SendInput); background mode via Win32 PostMessage + PrintWindow capture
 
@@ -103,8 +103,6 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 **現況判斷**：N=21 實測良好，不需命中率切換。等使用者擴充規則到 80+ 且命中密集期有感再評估。
 
 ---
-
-## Related Documents
 
 ## Related Documents
 
