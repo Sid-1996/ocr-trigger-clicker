@@ -1,6 +1,6 @@
 """Regression test: merged-OCR (_ocr_region superset/union reuse) is behaviorally
-equivalent to per-rect OCR on the real StarSavior task, across 3 real de-skill
-frames.
+equivalent to per-rect OCR on the StarSavior task snapshot (tests/data/fixture_task.json),
+across 3 real de-skill frames.
 
 Current (exact rect per detect step) vs merged (superset reuse / overlap union),
 mirroring core/05_main_loop.py::_ocr_region semantics (no roi_offset double-add;
@@ -25,8 +25,9 @@ if str(_ROOT) not in sys.path:
 from _loader import load_sibling  # noqa: E402
 
 ROOT = _ROOT
-JOB = ROOT / "docs/tasks/StarSavior-跑馬輔助.json"
 DATA = Path(__file__).resolve().parent / "data"
+# 快照自 docs/tasks/StarSavior-跑馬輔助.json — 固定基準，任務內容更新不影響回歸測試
+JOB = DATA / "fixture_task.json"
 FRAMES = ["test.png", "test2.png", "test3.png"]
 WIN = (1920.0, 1080.0)
 

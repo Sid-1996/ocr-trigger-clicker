@@ -1,9 +1,7 @@
 import logging
 import sys
 import tempfile
-import threading
 import time
-from collections import deque
 from pathlib import Path
 
 import cv2
@@ -13,71 +11,19 @@ _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
+from conftest import make_main_loop as _make_ml  # noqa: E402
+
 from _loader import load_sibling  # noqa: E402
 from core.rule_models import Rule, RuleGroup, Step  # noqa: E402
 
-_rule = load_sibling("rule_engine", "core/04_rule_engine.py")
-_input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
-_perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl.img_to_b64
 
 
 # Import the MainLoop module using _loader (module name starts with digit)
 _ml_mod = load_sibling("main_loop", "core/05_main_loop.py")
-MainLoop = _ml_mod.MainLoop
 StepContext = _ml_mod.StepContext
 StepResult = _ml_mod.StepResult
-
-
-def _make_ml():
-    """Create a MainLoop instance bypassing __init__, with all required attrs."""
-    ml = MainLoop.__new__(MainLoop)
-    ml._rules_path = ""
-    ml._window_title = "測試視窗"
-    ml._window_hwnd = None
-    ml._dpi_scale = 1.0
-    ml._interval = 0.5
-    ml._rule_pointer = 0
-    ml._rules = []
-    ml._groups = []
-    ml._active_group_ids = []
-    ml._group_queue_idx = 0
-    ml._rule_in_group_ptr = 0
-    ml._rule_map = {}
-    ml._group_rounds_completed = {}
-    ml._fail_since = {}
-    ml._rules_lock = threading.RLock()
-    ml._window_lock = threading.RLock()
-    ml._process_counter = 0
-    ml._rules_dirty = False
-    ml._tracking_hwnd = None
-    ml._tool_hwnd = None
-    ml._verbose = False
-    ml._prev_frame = None
-    ml._frame_diff_ratio = 0.0
-    ml._has_detect_rules = False
-    ml._frame_ocr_cache = {}
-    ml._ocr_cache_hits = 0
-    ml._logger = logging.getLogger("main_loop_test")
-    ml._stop_event = threading.Event()
-    ml._pause_event = threading.Event()
-    ml._emergency_event = threading.Event()
-    ml._perf = _perf.PerformanceMonitor(max_cps=5)
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "pynput"}
-    )()
-    ml._execution_log = deque(maxlen=10)
-    ml._last_exec_log = {}
-    ml._rule_completed = set()
-    ml._last_completed_log = {}
-    ml._action_log_ts = {}
-    ml.on_error = None
-    ml.on_warning = None
-    ml.on_info = None
-    ml.on_window_lost = None
-    ml.on_emergency = None
-    return ml
 
 
 # ── StepResult / StepContext ──
@@ -297,10 +243,10 @@ def test_handle_on_fail_stop_key():
     assert result.action == "stop"
 
     mock_called = []
-    _orig_k = _input_mod.send_key
-    _input_mod.send_key = lambda k: mock_called.append(k) or True
+    _orig_k = ml._send_key
+    ml._send_key = lambda k: mock_called.append(k) or True
     result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
-    _input_mod.send_key = _orig_k
+    ml._send_key = _orig_k
     assert result.action == "continue"
     assert mock_called == ["Escape"]
 

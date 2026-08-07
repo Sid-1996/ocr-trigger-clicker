@@ -1,6 +1,7 @@
 """Regression test: inline template decode cache (_decode_template LRU) is
-behaviorally equivalent to decoding fresh every call, across real StarSavior
-parallel-group templates and the real de-skill frames in tests/data.
+behaviorally equivalent to decoding fresh every call, across the StarSavior task
+snapshot's parallel-group templates (tests/data/fixture_task.json) and the real
+de-skill frames in tests/data.
 
 Also verifies the cache actually hits on repeated identical calls (the perf win),
 and that clear_template_cache() resets it.
@@ -21,8 +22,9 @@ if str(_ROOT) not in sys.path:
 from _loader import load_sibling  # noqa: E402
 
 ROOT = _ROOT
-JOB = ROOT / "docs/tasks/StarSavior-跑馬輔助.json"
 DATA = Path(__file__).resolve().parent / "data"
+# 快照自 docs/tasks/StarSavior-跑馬輔助.json — 固定基準，任務內容更新不影響回歸測試
+JOB = DATA / "fixture_task.json"
 FRAMES = ["test.png", "test2.png", "test3.png"]
 
 _tm = load_sibling("template_matching", "core/11_template_matching.py")
