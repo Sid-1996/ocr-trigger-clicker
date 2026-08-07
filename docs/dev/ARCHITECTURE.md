@@ -626,6 +626,40 @@ ctx.ocr_elapsed_ms = elapsed_ms  # 在 handler 中設定
 - 其他 result：同一 `rule_name:step_idx` + 同一 `result+detail` 組合只記一次
 - `maxlen=10`：只保留最近 10 筆
 
+## 自動化測試（tests/）
+
+`tests/` 以 pytest 涵蓋核心邏輯，`pyproject.toml` 設定 `addopts = "--cov"`。執行方式：
+
+```powershell
+python -m pytest --no-cov -q    # 冒煙（不產覆蓋報告）
+python -m pytest                # 含覆蓋報告
+```
+
+### 檔案地圖
+
+| 檔案 | 涵蓋範圍 |
+|------|----------|
+| `test_main_loop.py` | 主迴圈：步驟分派、群組兩層指標、on_fail 各動作、fail_duration_sec、ROI/座標解析、OCR 快取標記、動作日誌 rate-limit |
+| `test_rule_engine.py` | 舊格式遷移 V1→V2→V3、規則/群組序列化、on_fail 正規化 |
+| `test_rule_serialization.py` | 序列化 round-trip、corrupt 檔、預設值、舊欄位相容 |
+| `test_task_management.py` | 任務 CRUD、匯入匯出、UUID 重映射、無效輸入過濾 |
+| `test_template_matching.py` | match_template、NMS、多尺度、色彩容差、跨解析度 |
+| `test_i18n.py` | 程式碼用到的 `T("key")` 必須存在於所有語言檔 |
+| `test_ocr_merge.py` | OCR 合併快取 vs 逐 ROI 等價（需本機 RapidOCR model，無則 skip） |
+| `test_prematch_equiv.py` | 並行 prematch vs 循序等價 |
+| `test_template_cache.py` | 模板解碼 LRU 快取等價/命中/清除 |
+
+### 共用與 fixture 資料
+
+- `tests/conftest.py`：`tmp_tasks_dir` fixture（把任務目錄指向暫存），與 `make_main_loop()`——以 `__new__` 建立不觸發 `__init__` 的 MainLoop 測試實例，`test_main_loop` / `test_prematch_equiv` 共用；`MainLoop.__init__` 新增屬性時必須同步。
+- `tests/data/test*.png`：實境遊戲幀（1920×1080），作 OCR／模板比對的回歸基準。
+- `tests/data/fixture_task.json`：**快照**自 `docs/tasks/StarSavior-跑馬輔助.json`。整合測試吃這份固定快照、不讀活任務——任務內容更新不會弄紅測試；需同步新任務時重新複製覆寫即可。
+
+### 注意
+
+- 整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 `custom_models/chinese_cht_rec_mobile.onnx` 才真正執行，無 model 環境自動 skip。
+- 後台模式（`16_bg_input` / `15_print_window` / `17_capture_pipeline`）、`box_utils`、updater、GUI 層依賴 Win32 畫面，僅以 `__main__` self-check 涵蓋，無 pytest。
+
 ## 開發注意事項
 
 ### 新增規則欄位時需同步
