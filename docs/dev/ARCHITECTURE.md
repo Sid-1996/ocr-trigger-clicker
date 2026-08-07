@@ -80,6 +80,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/task_management.py` | 任務檔案 CRUD | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()` |
 | `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
+| `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
 | `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型 + 重疊 ROI OCR 合併） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
 | `core/16_bg_input.py` | 後台互動（PostMessage / pynput 切換） | `set_method()`, `click()`, `key()`, `drag()`, `scroll()` |
@@ -145,13 +146,13 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 
 | type | 用途 | params 關鍵欄位 |
 |------|------|----------------|
-| `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
-| `match_image` | 圖示模板比對，未命中則觸發 on_fail | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
+| `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
+| `match_image` | 圖示模板比對，未命中則觸發 on_fail | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
 | `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`/`cursor`）、`x`, `y`, `button`, `random_offset`, `hold_ms` |
 | `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（pynput 格式）、`hold_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
-| `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/notify + fail_duration_sec） |
+| `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
 | `notify` | 提示訊息彈窗（設 `ctx.triggered = True`） | `message` |
 | `scroll` | 滑鼠滾輪（設 `ctx.triggered = True`） | `direction`, `amount`, `delay_ms` |
 | `drag` | 滑鼠拖曳（設 `ctx.triggered = True`） | `target`, `dx`, `dy`, `button` |
@@ -213,7 +214,7 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
                     │  ┌─────────────┐  │
                      │  │ detect      │──│── OCR 比對（支援同幀快取）
                      │  │ match_image │  │    命中 → matched_text 傳遞給 click
-                     │  │ compare     │  │    未命中 → on_fail（stop/key/skip/jump/notify）
+                     │  │ compare     │  │    未命中 → on_fail（stop/key/skip/jump/advance/notify）
                     │  │ click/key   │  │    → ctx.triggered = True
                     │  │ notify      │  │    → ctx.triggered = True
                     │  │ scroll/drag │  │    → ctx.triggered = True
