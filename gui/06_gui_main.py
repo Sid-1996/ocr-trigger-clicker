@@ -161,6 +161,18 @@ class _NoWheelDoubleSpin(QDoubleSpinBox):
         e.ignore()
 
 
+def _rule_own_group_id(rule_id: str, groups_provider) -> Optional[str]:
+    """回傳包含該規則的群組 id（支援 dict 與 RuleGroup 物件）；找不到回 None。"""
+    if not rule_id or not groups_provider:
+        return None
+    for g in groups_provider() or []:
+        gid = g.get("id", "") if isinstance(g, dict) else g.id
+        rids = g.get("rule_ids", []) if isinstance(g, dict) else g.rule_ids
+        if rule_id in (rids or []):
+            return gid
+    return None
+
+
 class _StopGroupsPicker(QWidget):
     def __init__(self, groups_provider=None, selected=None):
         super().__init__()
@@ -1214,6 +1226,11 @@ class _MatchImageStepForm(QWidget):
                 default_notify_groups = raw_of.get("stop_groups", [])
         else:
             of_act = raw_of
+        # 智能預設：未存過 stop_groups 時，先勾選本規則所在的群組
+        if not default_notify_groups:
+            own = _rule_own_group_id(self._exclude_rule_id, self._groups_provider)
+            if own:
+                default_notify_groups = [own]
         idx_of = self._of_action.findData(of_act)
         if idx_of >= 0:
             self._of_action.setCurrentIndex(idx_of)
@@ -1732,6 +1749,11 @@ class _DetectStepForm(QWidget):
                 default_notify_groups = raw.get("stop_groups", [])
         else:
             act = raw
+        # 智能預設：未存過 stop_groups 時，先勾選本規則所在的群組
+        if not default_notify_groups:
+            own = _rule_own_group_id(self._exclude_rule_id, self._groups_provider)
+            if own:
+                default_notify_groups = [own]
         idx_of = self._of_action.findData(act)
         if idx_of >= 0:
             self._of_action.setCurrentIndex(idx_of)
@@ -2200,6 +2222,11 @@ class _CompareStepForm(QWidget):
         if isinstance(raw_of, dict) and raw_of.get("action") == "notify":
             default_notify_msg = raw_of.get("message", "")
             default_notify_groups = raw_of.get("stop_groups", [])
+        # 智能預設：未存過 stop_groups 時，先勾選本規則所在的群組
+        if not default_notify_groups:
+            own = _rule_own_group_id(self._exclude_rule_id, self._groups_provider)
+            if own:
+                default_notify_groups = [own]
         of_idx = self._of_action.findData(of_act)
         if of_idx >= 0:
             self._of_action.setCurrentIndex(of_idx)
