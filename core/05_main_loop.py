@@ -213,6 +213,7 @@ class MainLoop:
         self._process_counter: int = 0
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
+        self._slow_loop_warned: bool = False
         self._fail_since: dict[
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
@@ -1405,15 +1406,18 @@ class MainLoop:
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
 
                     if loop_elapsed > 2000:
-                        self._log(
-                            f"慢循環: {loop_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
-                        )
-                        if self.on_warning:
-                            self.on_warning(
-                                f"慢循環: {loop_elapsed:.0f}ms "
-                                f"(截圖={(t1 - t0) * 1000:.0f}ms "
-                                f"OCR={ocr_ms:.0f}ms)"
+                        if not self._slow_loop_warned:
+                            self._slow_loop_warned = True
+                            self._log(
+                                f"執行循環過慢: {loop_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
                             )
+                            if self.on_warning:
+                                self.on_warning(
+                                    f"偵測執行太慢：本次花費 {loop_elapsed:.0f} 毫秒（超過 2 秒），"
+                                    "點擊反應會明顯延遲，建議縮小偵測範圍或減少偵測規則"
+                                )
+                    else:
+                        self._slow_loop_warned = False
 
                 except Exception as e:
                     self._logger.exception("主循環異常: %s", e)
