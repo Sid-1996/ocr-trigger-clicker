@@ -206,6 +206,7 @@
   "summary.onfail_step": "On Fail: Step{idx}",
   "summary.onfail_rule": "On Fail: Rule \"{name}\"",
   "summary.onfail_stop_group": "On Fail: Stop Group",
+  "summary.onfail_advance": "On Fail: Skip Rule",
   "summary.onfail_retry": "On Fail: Retry",
   "summary.format_key": "Key {i}",
   "summary.format_click": "Click {point}",

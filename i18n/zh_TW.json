@@ -206,6 +206,7 @@
   "summary.onfail_step": "失敗跳步驟{idx}",
   "summary.onfail_rule": "失敗跳規則「{name}」",
   "summary.onfail_stop_group": "失敗停群組",
+  "summary.onfail_advance": "失敗跳過此規則",
   "summary.onfail_retry": "失敗重試",
   "summary.format_key": "數字鍵 {i}",
   "summary.format_click": "點擊 {point}",

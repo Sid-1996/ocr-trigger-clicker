@@ -619,6 +619,8 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
             return f"{prefix}{T('summary.onfail_rule', name=name)}"
         if action == "notify":
             return f"{prefix}{T('summary.onfail_stop_group')}"
+        if action == "advance":
+            return f"{prefix}{T('summary.onfail_advance')}"
         if action == "retry":
             return f"{prefix}{T('summary.onfail_retry')}"
     return ""
