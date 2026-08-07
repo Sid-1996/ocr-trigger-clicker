@@ -49,6 +49,12 @@
    ```
    把 `<改動的檔案路徑>` 換成實際修改的檔案（例如 `core/04_rule_engine.py`）。單行 trivial 變更、或該檔案本來就沒有 self-check，跳過。不要依賴任何寫死的檔名清單——用「這次改了什麼檔」來判斷，而不是查表。
 
+   同時跑 pytest 套件（`tests/` 對應的 `test_*.py`，或整個套件冒煙）：
+   ```powershell
+   python -m pytest --no-cov -q
+   ```
+   改 `core/` 邏輯後不跑 pytest 視為未完成。整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip。
+
 3. **add + commit + push**（一次完成）：
    ```powershell
    pwsh -Command "
