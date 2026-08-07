@@ -353,9 +353,9 @@ if __name__ == "__main__":
     set_method("postmessage")
     captured = {}
     _orig_pm = user32.PostMessageW
-    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: captured.update(
-        msg=msg, wparam=wparam
-    ) or True
+    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (
+        captured.update(msg=msg, wparam=wparam) or True
+    )
     try:
         _scroll_postmessage(1, 0, 0, -1)
         assert captured["msg"] == WM_MOUSEWHEEL and captured["wparam"] < 0
