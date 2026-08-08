@@ -7,9 +7,6 @@ activate_window_bg = getattr(_main_loop_mod, "activate_window_bg", lambda title:
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 capture = _main_loop_mod.capture
-get_window_hwnd = getattr(_main_loop_mod, "get_window_hwnd_orig", lambda title: None)
-_pipe_mod = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
-capture_frame = _pipe_mod.capture_frame
 
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl_mod.img_to_b64
@@ -107,52 +104,6 @@ class ScreenshotController:
         win = self._win
         title = win._window_combo.currentText()
         ts = "background" if self._is_bg_mode() else "foreground"
-        if self._is_bg_mode():
-            hwnd = get_window_hwnd(title) if title else None
-            img = capture_frame("postmessage", title, hwnd=hwnd)
-            if img is not None:
-                mod = load_sibling("bg_roi_selector", "gui/17_bg_roi_selector.py")
-                rect = mod.select_roi_bg(win, img, title or "")
-            else:
-                rect = None
-            if not rect:
-                return None
-            b64 = img_to_b64(
-                img[rect["y"] : rect["y"] + rect["h"], rect["x"] : rect["x"] + rect["w"]]
-            )
-            chrome = get_window_client_offset(title) or (0, 0) if title else (0, 0)
-            cx, cy = chrome
-            wr = get_window_rect(title) if title else None
-            if wr and wr["w"] > cx and wr["h"] > cy:
-                client_w = wr["w"] - cx
-                client_h = wr["h"] - cy
-                if client_w > 0 and client_h > 0:
-                    roi_ratio = {
-                        "x": max(0.0, (rect["x"] - cx) / client_w),
-                        "y": max(0.0, (rect["y"] - cy) / client_h),
-                        "w": min(1.0, rect["w"] / client_w),
-                        "h": min(1.0, rect["h"] / client_h),
-                        "roi_coord": "client",
-                    }
-                else:
-                    roi_ratio = {
-                        "x": rect["x"] / wr["w"] if wr["w"] > 0 else 0.0,
-                        "y": rect["y"] / wr["h"] if wr["h"] > 0 else 0.0,
-                        "w": rect["w"] / wr["w"] if wr["w"] > 0 else 0.0,
-                        "h": rect["h"] / wr["h"] if wr["h"] > 0 else 0.0,
-                        "roi_coord": "client",
-                    }
-            else:
-                roi_ratio = {
-                    "x": rect["x"] / img.shape[1] if img.shape[1] > 0 else 0.0,
-                    "y": rect["y"] / img.shape[0] if img.shape[0] > 0 else 0.0,
-                    "w": rect["w"] / img.shape[1] if img.shape[1] > 0 else 0.0,
-                    "h": rect["h"] / img.shape[0] if img.shape[0] > 0 else 0.0,
-                    "roi_coord": "client",
-                }
-            win._status_bar.showMessage(T("screenshot.template_captured"))
-            win._edit_stack.setCurrentIndex(1)
-            return {"b64": b64, "roi": roi_ratio, "template_source": ts}
         if title:
             activate_window(title)
         mod = load_sibling("capture_region", "gui/14_capture_region.py")
