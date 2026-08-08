@@ -6021,7 +6021,13 @@ if __name__ == "__main__":
     # 不再「app 無訊息直接關閉」。
     import faulthandler
 
-    faulthandler.enable()
+    if sys.stderr is not None:
+        faulthandler.enable()
+    else:
+        # windowed 打包（無 console）下 sys.stderr 為 None，faulthandler 須
+        # 明確指向檔案，否則 enable() 本身拋 RuntimeError 導致啟動失敗。
+        _faulthandler_fh = open(_log_cfg.get_log_dir() / "faulthandler.log", "a", encoding="utf-8")
+        faulthandler.enable(file=_faulthandler_fh, all_threads=True)
 
     def _excepthook(exc_type, exc_value, exc_tb):
         logging.getLogger("gui").error(

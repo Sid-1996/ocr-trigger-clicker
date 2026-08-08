@@ -54,8 +54,8 @@ def _ensure_root_handler():
         _handler.setFormatter(fmt)
         if _handler not in root.handlers:
             root.addHandler(_handler)
-        # 開發時 cmd 視窗可即時看到 logging 輸出
-        if _stream_handler is None:
+        # 開發時 cmd 視窗可即時看到 logging 輸出（windowed 打包 stdout 為 None，跳過）
+        if _stream_handler is None and sys.stdout is not None:
             _stream_handler = logging.StreamHandler(sys.stdout)
             _stream_handler.setFormatter(fmt)
             if _stream_handler not in root.handlers:
