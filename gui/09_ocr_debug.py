@@ -759,6 +759,10 @@ class OcrDebugPanel(QWidget):
         btn_pos = self._click_test_btn.mapToGlobal(QPoint(0, self._click_test_btn.height()))
         status_icon = "✓" if click_ok else "✗"
         status_text = T("ocr_debug.click_success") if click_ok else T("ocr_debug.click_failed")
+        if not click_ok and mode == "frida":
+            err_detail = _bg_input.last_error()
+            if err_detail:
+                status_text = f"{status_text} ({err_detail})"
         tooltip = T(
             "ocr_debug.click_test_tooltip",
             icon=status_icon,
