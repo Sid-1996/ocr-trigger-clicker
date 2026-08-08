@@ -5085,50 +5085,21 @@ class MainWindow(QMainWindow):
 
     # === Click coordinate picker ===
     def _on_pick_coord(self):
-        """Open click picker overlay, return window-relative (x, y) or None."""
+        """Open click picker overlay, return client-relative ratio (x, y) or None."""
         title = self._window_combo.currentText()
-        if self._is_bg_mode():
-            hwnd = get_window_hwnd(title) if title else None
-            img = capture_frame("postmessage", title, hwnd=hwnd)
-            if img is not None:
-                mod = load_sibling("bg_click_picker", "gui/18_bg_click_picker.py")
-                result = mod.pick_click_position_bg(self, img, title or "")
-            else:
-                result = None
-            if result is None:
-                return None
-            # result is (x, y) in client-area pixels
-            h, w = img.shape[:2]
-            self._edit_stack.setCurrentIndex(1)
-            self._status_bar.showMessage(T("notif.coordinate_selected", x=result[0], y=result[1]))
-            if w > 0 and h > 0:
-                chrome = get_window_client_offset(title) or (0, 0)
-                cx, cy = chrome
-                wr = get_window_rect(title) if title else None
-                if wr and wr["w"] > cx and wr["h"] > cy:
-                    client_w = wr["w"] - cx
-                    client_h = wr["h"] - cy
-                    if client_w > 0 and client_h > 0:
-                        return (
-                            max(0.0, (result[0] - cx) / client_w),
-                            max(0.0, (result[1] - cy) / client_h),
-                        )
-                return (result[0] / w, result[1] / h)
-            return (0.0, 0.0)
         if title:
             activate_window(title)
         mod = load_sibling("click_picker", "gui/13_gui_click_picker.py")
         result = mod.pick_click_position(parent_window=self)
         if result is None:
             return None
-        if title:
-            wr = get_window_rect(title)
-            if wr:
-                result = (result[0] - wr["x"], result[1] - wr["y"])
+        wr = get_window_rect(title) if title else None
+        if wr:
+            result = (result[0] - wr["x"], result[1] - wr["y"])
         self._edit_stack.setCurrentIndex(1)
         self._status_bar.showMessage(T("notif.coordinate_selected", x=result[0], y=result[1]))
         # Convert to ratio before storing
-        if title and wr and wr["w"] > 0 and wr["h"] > 0:
+        if wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
             cx, cy = chrome
             client_w = wr["w"] - cx
@@ -6052,6 +6023,33 @@ if __name__ == "__main__":
     if "--debug" in sys.argv:
         _log_cfg.enable_debug()
     _log_cfg.cleanup_stale_logs()
+
+    # 防禦：原生崩潰（access violation 等）與未捕獲例外都留下可讀痕跡，
+    # 不再「app 無訊息直接關閉」。
+    import faulthandler
+
+    faulthandler.enable()
+
+    def _excepthook(exc_type, exc_value, exc_tb):
+        logging.getLogger("gui").error(
+            "未捕獲例外，已記錄並提示使用者", exc_info=(exc_type, exc_value, exc_tb)
+        )
+        try:
+            app = QApplication.instance()
+            if app is not None:
+                from PyQt6.QtWidgets import QMessageBox
+
+                box = QMessageBox()
+                box.setWindowTitle("發生未預期的錯誤")
+                box.setText(str(exc_value) or exc_type.__name__)
+                box.setDetailedText(
+                    "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+                )
+                box.exec()
+        except Exception:
+            pass
+
+    sys.excepthook = _excepthook
 
     # Read language preference before creating any GUI
     from core._paths import _bundle_root, _is_frozen, get_data_path

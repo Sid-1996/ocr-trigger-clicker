@@ -43,19 +43,10 @@ class ScreenshotController:
     def open_roi_selector(self):
         win = self._win
         title = win._window_combo.currentText()
-        if self._is_bg_mode():
-            hwnd = get_window_hwnd(title) if title else None
-            img = capture_frame("postmessage", title, hwnd=hwnd)
-            if img is not None:
-                mod = load_sibling("bg_roi_selector", "gui/17_bg_roi_selector.py")
-                result = mod.select_roi_bg(win, img, title or "")
-            else:
-                result = None
-        else:
-            if title:
-                activate_window(title)
-            mod = load_sibling("roi", "gui/07_gui_roi.py")
-            result = mod.select_roi(parent_window=win)
+        if title:
+            activate_window(title)
+        mod = load_sibling("roi", "gui/07_gui_roi.py")
+        result = mod.select_roi(parent_window=win)
         if not result:
             return None
         win._edit_stack.setCurrentIndex(1)
@@ -64,38 +55,12 @@ class ScreenshotController:
         )
         if result.get("roi_coord") == "client":
             return result
-        # bg 模式：result 是 PrintWindow 圖片的像素座標（視窗相對）
-        # 直接轉為客戶區比例座標，不需減去 wr["x"] / wr["y"]
-        if self._is_bg_mode():
-            if title:
-                wr = get_window_rect(title)
-                if wr and wr["w"] > 0 and wr["h"] > 0:
-                    chrome = get_window_client_offset(title) or (0, 0)
-                    cx, cy = chrome
-                    client_w = wr["w"] - cx
-                    client_h = wr["h"] - cy
-                    if client_w > 0 and client_h > 0:
-                        result = {
-                            "x": max(0.0, (result["x"] - cx) / client_w),
-                            "y": max(0.0, (result["y"] - cy) / client_h),
-                            "w": min(1.0, result["w"] / client_w),
-                            "h": min(1.0, result["h"] / client_h),
-                            "roi_coord": "client",
-                        }
-                    else:
-                        result = {
-                            "x": result["x"] / wr["w"],
-                            "y": result["y"] / wr["h"],
-                            "w": result["w"] / wr["w"],
-                            "h": result["h"] / wr["h"],
-                        }
-            return result
-        if title:
-            wr = get_window_rect(title)
-            if wr:
-                result["x"] -= wr["x"]
-                result["y"] -= wr["y"]
-        if title and wr and wr["w"] > 0 and wr["h"] > 0:
+        # 前景 selector 回傳螢幕絕對座標，統一轉為客戶區比例座標
+        wr = get_window_rect(title) if title else None
+        if wr:
+            result["x"] -= wr["x"]
+            result["y"] -= wr["y"]
+        if wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
             cx, cy = chrome
             client_w = wr["w"] - cx

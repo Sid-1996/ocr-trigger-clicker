@@ -10,8 +10,10 @@ _log = logging.getLogger(__name__)
 
 PW_RENDERFULLCONTENT = 0x00000002
 
-_gdi32 = ctypes.windll.gdi32
-_user32 = ctypes.windll.user32
+# 獨立 DLL 實例，argtypes/restype 只作用於本模組，不污染 ctypes.windll 全域
+# （避免影響 pygetwindow 等其他未設 argtypes 的 ctypes.windll 呼叫端）
+_gdi32 = ctypes.WinDLL("gdi32")
+_user32 = ctypes.WinDLL("user32")
 
 
 def is_admin() -> bool:
@@ -43,6 +45,37 @@ class _BITMAPINFOHEADER(ctypes.Structure):
         ("biClrUsed", wintypes.DWORD),
         ("biClrImportant", wintypes.DWORD),
     ]
+
+
+_user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+_user32.GetWindowRect.restype = wintypes.BOOL
+_user32.GetDC.argtypes = [wintypes.HWND]
+_user32.GetDC.restype = wintypes.HDC
+_user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+_user32.ReleaseDC.restype = ctypes.c_int
+_user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
+_user32.PrintWindow.restype = wintypes.BOOL
+
+_gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+_gdi32.CreateCompatibleDC.restype = wintypes.HDC
+_gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+_gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+_gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+_gdi32.SelectObject.restype = wintypes.HGDIOBJ
+_gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+_gdi32.DeleteObject.restype = wintypes.BOOL
+_gdi32.DeleteDC.argtypes = [wintypes.HDC]
+_gdi32.DeleteDC.restype = wintypes.BOOL
+_gdi32.GetDIBits.argtypes = [
+    wintypes.HDC,
+    wintypes.HBITMAP,
+    wintypes.UINT,
+    wintypes.UINT,
+    ctypes.c_void_p,
+    ctypes.POINTER(_BITMAPINFOHEADER),
+    wintypes.UINT,
+]
+_gdi32.GetDIBits.restype = ctypes.c_int
 
 
 def capture_print_window_hwnd(hwnd: int) -> np.ndarray | None:

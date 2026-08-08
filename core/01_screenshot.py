@@ -35,6 +35,72 @@ class _BITMAPINFOHEADER(ctypes.Structure):
     ]
 
 
+# 獨立 DLL 實例，argtypes/restype 只作用於本模組，不污染 ctypes.windll 全域
+# （避免影響 pygetwindow 等其他未設 argtypes 的 ctypes.windll 呼叫端）
+_user32 = ctypes.WinDLL("user32")
+_gdi32 = ctypes.WinDLL("gdi32")
+_shcore = ctypes.WinDLL("shcore")
+
+_user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+_user32.GetClientRect.restype = wintypes.BOOL
+_user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+_user32.GetWindowRect.restype = wintypes.BOOL
+_user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+_user32.ClientToScreen.restype = wintypes.BOOL
+_user32.GetDC.argtypes = [wintypes.HWND]
+_user32.GetDC.restype = wintypes.HDC
+_user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+_user32.ReleaseDC.restype = ctypes.c_int
+_user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
+_user32.PrintWindow.restype = wintypes.BOOL
+_user32.GetDpiForWindow.argtypes = [wintypes.HWND]
+_user32.GetDpiForWindow.restype = wintypes.UINT
+_user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
+_user32.MonitorFromWindow.restype = wintypes.HMONITOR
+_user32.GetDesktopWindow.restype = wintypes.HWND
+
+_gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
+_gdi32.CreateCompatibleDC.restype = wintypes.HDC
+_gdi32.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+_gdi32.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+_gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+_gdi32.SelectObject.restype = wintypes.HGDIOBJ
+_gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+_gdi32.DeleteObject.restype = wintypes.BOOL
+_gdi32.DeleteDC.argtypes = [wintypes.HDC]
+_gdi32.DeleteDC.restype = wintypes.BOOL
+_gdi32.GetDIBits.argtypes = [
+    wintypes.HDC,
+    wintypes.HBITMAP,
+    wintypes.UINT,
+    wintypes.UINT,
+    ctypes.c_void_p,
+    ctypes.POINTER(_BITMAPINFOHEADER),
+    wintypes.UINT,
+]
+_gdi32.GetDIBits.restype = ctypes.c_int
+_gdi32.BitBlt.argtypes = [
+    wintypes.HDC,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.HDC,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.DWORD,
+]
+_gdi32.BitBlt.restype = wintypes.BOOL
+
+_shcore.GetDpiForMonitor.argtypes = [
+    wintypes.HMONITOR,
+    ctypes.c_int,
+    ctypes.POINTER(ctypes.c_int),
+    ctypes.POINTER(ctypes.c_int),
+]
+_shcore.GetDpiForMonitor.restype = ctypes.c_long
+
+
 def list_windows() -> list[str]:
     return [w.title for w in gw.getWindowsWithTitle("") if w.title and w.visible]
 
@@ -60,9 +126,9 @@ def get_window_client_offset(title: str) -> tuple[int, int] | None:
             return None
 
         pt = wintypes.POINT(0, 0)
-        ctypes.windll.user32.ClientToScreen(hwnd, ctypes.byref(pt))
+        _user32.ClientToScreen(hwnd, ctypes.byref(pt))
         window_rect = wintypes.RECT()
-        ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(window_rect))
+        _user32.GetWindowRect(hwnd, ctypes.byref(window_rect))
         return (pt.x - window_rect.left, pt.y - window_rect.top)
     except Exception:
         return None
@@ -85,7 +151,7 @@ def activate_window_bg(title: str) -> bool:
     if hwnd is None:
         return False
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32
         WM_ACTIVATE = 0x0006
         WA_ACTIVE = 0x01
         user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
@@ -109,7 +175,7 @@ def get_window_rect(title: str) -> dict | None:
 
 def _get_dxcam_output(window_rect: dict) -> int:
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32
         vw = user32.GetSystemMetrics(78)
         vh = user32.GetSystemMetrics(79)
 
@@ -141,7 +207,7 @@ def _capture_dxcam(title: str, rect: dict) -> np.ndarray | None:
     import dxcam
 
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32
         vx = user32.GetSystemMetrics(76)
         vy = user32.GetSystemMetrics(77)
         vw = user32.GetSystemMetrics(78)
@@ -215,17 +281,17 @@ def get_dpi_scaling_factor(hwnd: int | None) -> float:
     if not hwnd:
         return 1.0
     try:
-        from ctypes import byref, c_int, windll
+        from ctypes import byref, c_int
 
         dpi_x = c_int()
         dpi_y = c_int()
-        if hasattr(windll.user32, "GetDpiForWindow"):
-            dpi = windll.user32.GetDpiForWindow(hwnd)
+        if hasattr(_user32, "GetDpiForWindow"):
+            dpi = _user32.GetDpiForWindow(hwnd)
             if dpi:
                 return dpi / 96.0
-        monitor = windll.user32.MonitorFromWindow(hwnd, 2)
-        if monitor and hasattr(windll.shcore, "GetDpiForMonitor"):
-            windll.shcore.GetDpiForMonitor(monitor, 0, byref(dpi_x), byref(dpi_y))
+        monitor = _user32.MonitorFromWindow(hwnd, 2)
+        if monitor and hasattr(_shcore, "GetDpiForMonitor"):
+            _shcore.GetDpiForMonitor(monitor, 0, byref(dpi_x), byref(dpi_y))
             if dpi_x.value:
                 return dpi_x.value / 96.0
     except Exception:
@@ -240,16 +306,16 @@ def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
     hbitmap = None
     try:
         rect = wintypes.RECT()
-        ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect))
+        _user32.GetClientRect(hwnd, ctypes.byref(rect))
         w = rect.right
         h = rect.bottom
         if w <= 0 or h <= 0:
             return None
 
-        hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
-        mem_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
-        hbitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
-        ctypes.windll.gdi32.SelectObject(mem_dc, hbitmap)
+        hwnd_dc = _user32.GetDC(hwnd)
+        mem_dc = _gdi32.CreateCompatibleDC(hwnd_dc)
+        hbitmap = _gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
+        _gdi32.SelectObject(mem_dc, hbitmap)
 
         if not render_fn(hwnd, mem_dc, w, h):
             return None
@@ -263,7 +329,7 @@ def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
         bmp_info.biCompression = 0
 
         buf = ctypes.create_string_buffer(w * h * 4)
-        ok = ctypes.windll.gdi32.GetDIBits(mem_dc, hbitmap, 0, h, buf, ctypes.byref(bmp_info), 0)
+        ok = _gdi32.GetDIBits(mem_dc, hbitmap, 0, h, buf, ctypes.byref(bmp_info), 0)
         if not ok:
             return None
 
@@ -274,27 +340,25 @@ def _gdi_capture(hwnd: int, render_fn) -> np.ndarray | None:
         return None
     finally:
         if hbitmap:
-            ctypes.windll.gdi32.DeleteObject(hbitmap)
+            _gdi32.DeleteObject(hbitmap)
         if mem_dc:
-            ctypes.windll.gdi32.DeleteDC(mem_dc)
+            _gdi32.DeleteDC(mem_dc)
         if hwnd_dc:
-            ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
+            _user32.ReleaseDC(hwnd, hwnd_dc)
 
 
 def _pw_render(hwnd: int, mem_dc: int, w: int, h: int) -> bool:
-    return bool(ctypes.windll.user32.PrintWindow(hwnd, mem_dc, 3))
+    return bool(_user32.PrintWindow(hwnd, mem_dc, 3))
 
 
 def _bitblt_render(hwnd: int, mem_dc: int, w: int, h: int) -> bool:
-    hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
+    hwnd_dc = _user32.GetDC(hwnd)
     try:
         CAPTUREBLT = 0x40000000
         SRCCOPY = 0x00CC0020
-        return bool(
-            ctypes.windll.gdi32.BitBlt(mem_dc, 0, 0, w, h, hwnd_dc, 0, 0, SRCCOPY | CAPTUREBLT)
-        )
+        return bool(_gdi32.BitBlt(mem_dc, 0, 0, w, h, hwnd_dc, 0, 0, SRCCOPY | CAPTUREBLT))
     finally:
-        ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
+        _user32.ReleaseDC(hwnd, hwnd_dc)
 
 
 def capture_window_content(title: str) -> np.ndarray | None:
@@ -335,7 +399,7 @@ if __name__ == "__main__":
         assert get_dpi_scaling_factor(None) == 1.0
         print("  [OK] get_dpi_scaling_factor(default)")
 
-        hwnd = ctypes.windll.user32.GetDesktopWindow()
+        hwnd = _user32.GetDesktopWindow()
         dpi = get_dpi_scaling_factor(hwnd)
         assert 1.0 <= dpi <= 4.0
         print(f"  [OK] get_dpi_scaling_factor(desktop): {dpi:.2f}")
