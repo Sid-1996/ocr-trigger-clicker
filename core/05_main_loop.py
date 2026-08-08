@@ -795,6 +795,13 @@ class MainLoop:
                 f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」",
                 dedup_key=f"{rule.id}:click",
             )
+        elif (
+            self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida"
+            and self.on_error
+        ):
+            err = _bg_input.last_error()
+            if err:
+                self.on_error(f"Frida 點擊失敗: {err}")
 
         return StepResult("continue")
 
@@ -1442,6 +1449,7 @@ class MainLoop:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
         self._perf.stop()
+        _bg_input.detach()
 
     def pause(self) -> None:
         log_main("循環暫停")

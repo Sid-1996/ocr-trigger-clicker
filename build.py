@@ -102,6 +102,8 @@ def main():
         "pynput",
         "dxcam",
         "comtypes",
+        # frida: 後台注入模式，lazy-imported，DLL 需 collect-all 收集
+        "frida",
     ]
 
     exclude = [
@@ -204,6 +206,8 @@ def main():
     args.append("--collect-all=dxcam")
     # pynput: 平台特定子模組（_win32）靜態分析可能遺漏
     args.append("--collect-all=pynput")
+    # frida: _frida.pyd + frida-core.dll + frida-gum.dll 需全數收集，避免 LoadLibrary 找不到
+    args.append("--collect-all=frida")
     for e in exclude:
         args.append(f"--exclude-module={e}")
     for src, dst in datas:

@@ -230,6 +230,32 @@ def test_handle_click_cursor_bg():
     assert ctx.triggered
 
 
+# ── _send_click frida 模式派發 ──
+
+
+def test_send_click_frida_dispatch(monkeypatch):
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
+    )()
+    _bg = load_sibling("bg_input", "core/16_bg_input.py")
+    captured = {}
+    monkeypatch.setattr(
+        _bg,
+        "click",
+        lambda hwnd, x, y, button="left", hold_ms=0: (
+            captured.update(hwnd=hwnd, x=x, y=y, button=button, hold_ms=hold_ms) or True
+        ),
+    )
+    try:
+        ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
+    finally:
+        _bg.set_method("pynput")
+    assert ok
+    assert captured == {"hwnd": 12345, "x": 150, "y": 250, "button": "left", "hold_ms": 0}
+
+
 # ── _handle_on_fail (stop/key) ──
 
 

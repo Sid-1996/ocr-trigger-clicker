@@ -3,6 +3,8 @@
 Methods:
 - postmessage: Pure PostMessage (no cursor movement, works for some apps)
 - pynput: Physical input via pynput (requires foreground, works for all apps)
+- frida: Frida 行程注入 + PostMessage（零閃爍 Unity 後台點擊，見 18_frida_bg.py）
+  click 委派給 frida 模組；key/scroll/drag 回退 postmessage（v1 限制）
 
 Usage:
     from core.bg_input import click, send_key, set_method
@@ -46,9 +48,9 @@ _method = "pynput"  # default: foreground mode (safe)
 
 
 def set_method(method: str) -> None:
-    """Set the interaction method: 'postmessage' or 'pynput'."""
+    """Set the interaction method: 'postmessage', 'pynput', or 'frida'."""
     global _method
-    if method not in ("postmessage", "pynput"):
+    if method not in ("postmessage", "pynput", "frida"):
         raise ValueError(f"Unknown method: {method}")
     _method = method
 
@@ -56,6 +58,12 @@ def set_method(method: str) -> None:
 def get_method() -> str:
     """Get the current interaction method."""
     return _method
+
+
+def _frida():
+    from _loader import load_sibling
+
+    return load_sibling("frida_bg", "core/18_frida_bg.py")
 
 
 # ── Coordinate helpers ──
@@ -197,9 +205,27 @@ def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> 
     with _lock:
         if _method == "postmessage":
             return _click_postmessage(hwnd, x, y, button, hold_ms)
+        elif _method == "frida":
+            return _frida().click(hwnd, x, y, button, hold_ms)
         elif _method == "pynput":
             return _click_pynput(hwnd, x, y, button, hold_ms)
         return False
+
+
+def detach() -> None:
+    """Detach any active Frida injection (safe to call in all modes)."""
+    try:
+        _frida().detach()
+    except Exception:
+        pass
+
+
+def last_error() -> str:
+    """Last Frida error message (empty if none)."""
+    try:
+        return _frida().last_error()
+    except Exception:
+        return ""
 
 
 def send_key(hwnd: int, key: str) -> bool:
@@ -227,7 +253,7 @@ def send_key(hwnd: int, key: str) -> bool:
         return False
 
     with _lock:
-        if _method == "postmessage":
+        if _method in ("postmessage", "frida"):
             ok = _key_postmessage(hwnd, vk, True)
             time.sleep(0.02)
             ok = _key_postmessage(hwnd, vk, False) and ok
@@ -243,7 +269,7 @@ def send_key(hwnd: int, key: str) -> bool:
 def scroll(hwnd: int, x: int, y: int, amount: int = 1, horizontal: bool = False) -> bool:
     """Scroll at (x, y). Positive = up/right, negative = down/left."""
     with _lock:
-        if _method == "postmessage":
+        if _method in ("postmessage", "frida"):
             return _scroll_postmessage(hwnd, x, y, amount, horizontal)
         elif _method == "pynput":
             return _scroll_pynput(hwnd, x, y, amount, horizontal)
@@ -285,7 +311,7 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
         return False
 
     with _lock:
-        if _method == "postmessage":
+        if _method in ("postmessage", "frida"):
             ok = _key_postmessage(hwnd, vk, True)
             time.sleep(hold_ms / 1000.0)
             ok = _key_postmessage(hwnd, vk, False) and ok
@@ -300,7 +326,7 @@ def drag(
 ) -> bool:
     """Perform a drag operation in background mode."""
     with _lock:
-        if _method == "postmessage":
+        if _method in ("postmessage", "frida"):
             ok = click(hwnd, start_x, start_y, button)
             if not ok:
                 return False
@@ -336,6 +362,10 @@ if __name__ == "__main__":
     set_method("pynput")
     assert get_method() == "pynput"
     print("  [OK] set_method('pynput')")
+
+    set_method("frida")
+    assert get_method() == "frida"
+    print("  [OK] set_method('frida')")
 
     try:
         set_method("sendinput")
