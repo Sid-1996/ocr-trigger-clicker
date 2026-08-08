@@ -4,7 +4,8 @@
 
 ### 修復
 - **修復後台模式框選偵測區域/選取點擊座標時 app 無訊息直接關閉**：64 位元 ctypes handle 截斷導致 `GetDIBits` 對無效 handle 寫入記憶體（access violation）。`core/15_print_window.py`、`core/01_screenshot.py` 改用隔離的 `ctypes.WinDLL` 實例並設定 `argtypes`/`restype`。
-- **後台模式 ROI/點擊座標選取統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`），刪除 `gui/18_bg_click_picker.py`（PrintWindow 截圖選取 UI）。後台模板擷取仍用 PrintWindow 影像框選（`17_bg_roi_selector`），確保模板與執行時截圖同源。
+- **修復後台模板擷取時 app 無訊息直接關閉**：`gui/17_bg_roi_selector.py` 混用 PyQt6 舊式 enum `Qt.SmoothTransformation`（應為 `Qt.TransformationMode.SmoothTransformation`），`paintEvent` 執行期 `AttributeError`，PyQt6 對事件處理器的未捕獲例外預設 `qFatal` 直接終止程序。該模組已因下方「模板擷取統一前景」改動而刪除。
+- **後台模式 ROI/點擊/模板選取統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`），刪除 `gui/18_bg_click_picker.py` 與 `gui/17_bg_roi_selector.py`（後台 PrintWindow 選取 UI）。後台模板擷取改為前景全螢幕框選（`14_capture_region`），並自動寫入 `capture_size`（先前後台模板擷取漏寫，導致後台比對尺度可能失準）。已實測前景(mss)模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 前景→後台比對信心全數 1.0），故後台模板不再需要 PrintWindow 框選。
 - **新增防禦**：進入點啟用 `faulthandler` + 自訂 `sys.excepthook`，原生崩潰與未捕獲例外不再無痕跡，會寫入 log 並提示使用者。
 
 ## [v0.2.1] - 2026-08-07
