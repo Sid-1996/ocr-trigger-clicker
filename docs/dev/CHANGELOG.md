@@ -4,6 +4,11 @@
 
 ### 變更
 - **移除後台 PostMessage 互動模式**：保留前景（pynput）與後台 Frida 注入兩種模式。PostMessage 不移動游標，多數 Unity 遊戲（如 BrownDust II）讀取 OS 游標位置而非 `WM_LBUTTONDOWN` 的 lParam，點擊必然錯位，且無法像 Frida 一樣注入偽造游標，故淘汰。既有設定 `interaction_mode: "postmessage"` 自動遷移為 `pynput`；底層 PostMessage primitive 保留作為 Frida 的傳送層。
+- **Frida 後台模式支援鍵盤按鍵**：與點擊同架構，hook `GetKeyState` / `GetAsyncKeyState` / `GetKeyboardState` 假造按鍵狀態（僅覆寫注入中的 vk，其餘 pass-through），再 PostMessage 送 `WM_KEYDOWN/UP`，讓遊戲無論走訊息佇列或 state-polling 都收得到。補強：按下持窗 120ms（確保 60Hz 輪詢的遊戲至少涵蓋多個 tick）、可列印字元補送 `WM_CHAR`、`WM_SYSKEY` 相關、hold 重覆觸發 re-arm 0.5s 防重複按。
+- **後台鍵盤維持基礎實作**：曾嘗試改走 `GetRawInputBuffer` 注入合成 RAWKEYBOARD 以支援 Unity raw input 路徑，實測後撤銷（遊戲不響應按鍵屬遊戲限制，部分遊戲需視窗焦點才能接收鍵盤輸入），維持 hook 鍵盤狀態 + PostMessage 方案，並於後台模式 tooltip 中提示此限制。
+- **後台模式 tooltip 強化並分行**：互動方法設定說明補上「若遊戲不響應按鍵，屬遊戲限制（部分遊戲需視窗焦點才能接收鍵盤輸入），非工具問題」，並以換行分行避免過長單行。
+- **移除 `SettingsDialog` 的 `interaction_mode` 遷移覆寫**：不再將過時值（`sendinput`/`postmessage`）自動覆寫為 pynput，保留 `core/16_bg_input.py` 的 `set_method` 兜底防護（手動 config 錯值時安全降級，不崩潰）。
+- **移除診斷工具 `tools/diag_frida_keyboard.py`**：為單一遊戲後台鍵盤調試而建，已完成使命，回歸通用定位（`tools/` 不再含遊戲特定除錯工具）。
 
 ### 修復
 - **修復後台模式框選偵測區域/選取點擊座標時 app 無訊息直接關閉**：64 位元 ctypes handle 截斷導致 `GetDIBits` 對無效 handle 寫入記憶體（access violation）。`core/15_print_window.py`、`core/01_screenshot.py` 改用隔離的 `ctypes.WinDLL` 實例並設定 `argtypes`/`restype`。
