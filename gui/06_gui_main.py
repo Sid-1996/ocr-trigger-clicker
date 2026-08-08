@@ -107,7 +107,7 @@ def _current_template_type() -> str:
 
 
 def _type_display(tt: str) -> str:
-    return T("combo.interaction_bg_pm") if tt == "background" else T("combo.interaction_fg")
+    return T("combo.interaction_bg_frida") if tt == "background" else T("combo.interaction_fg")
 
 
 class _NoWheelCombo(QComboBox):
@@ -2765,9 +2765,9 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(T("settings.title"))
         self.setMinimumWidth(420)
 
-        # Migrate deprecated "sendinput" to "pynput"
+        # Migrate deprecated interaction modes to "pynput"
         mode = self._ctrl.get_setting(win, "interaction_mode")
-        if mode == "sendinput":
+        if mode in ("sendinput", "postmessage"):
             self._ctrl.set_setting(win, "interaction_mode", "pynput")
 
         layout = QVBoxLayout(self)
@@ -2850,7 +2850,6 @@ class SettingsDialog(QDialog):
 
         self._interaction_mode = QComboBox()
         self._interaction_mode.addItem(T("combo.interaction_fg"), "pynput")
-        self._interaction_mode.addItem(T("combo.interaction_bg_pm"), "postmessage")
         self._interaction_mode.addItem(T("combo.interaction_bg_frida"), "frida")
         idx = self._interaction_mode.findData(self._ctrl.get_setting(win, "interaction_mode"))
         self._interaction_mode.setCurrentIndex(max(0, idx))
@@ -3764,7 +3763,6 @@ class MainWindow(QMainWindow):
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         mode_map = {
             "pynput": f"🟢 {T('combo.interaction_fg')}",
-            "postmessage": f"🔵 {T('combo.interaction_bg_pm')}",
             "frida": f"🟣 {T('combo.interaction_bg_frida')}",
         }
         text = mode_map.get(mode, f"🟢 {T('combo.interaction_fg')}")
@@ -5534,7 +5532,7 @@ class MainWindow(QMainWindow):
         # 後台模式：啟動前先截一張測試幀，全黑 + 非系統管理員 → 彈窗（關鍵防線）
         if self._is_bg_mode():
             _hwnd = get_window_hwnd(title)
-            _test_img = capture_frame("postmessage", title, hwnd=_hwnd)
+            _test_img = capture_frame("frida", title, hwnd=_hwnd)
             if _test_img is not None and is_black_capture(_test_img) and not is_admin():
                 resp2 = QMessageBox.warning(
                     self,

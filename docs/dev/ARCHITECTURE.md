@@ -13,9 +13,7 @@
 | OCR | rapidocr-onnxruntime (DirectML + CPU) | 文字辨識 |
 | 影像處理 | OpenCV (cv2), numpy | 截圖、縮放、二值化、差異偵測 |
 | 輸入模擬（前景） | pynput | 滑鼠點擊／移動、鍵盤按鍵（SendInput） |
-| 輸入模擬（後台） | Win32 PostMessage | 後台模式不搶焦點模擬輸入 |
-| 輸入模擬（後台 Unity） | Frida 注入 | hook GetCursorPos/ScreenToClient 假造座標，零閃爍 Unity 後台點擊 |
-| 截圖 | mss / dxcam / GDI PrintWindow | 前景 mss → dxcam → GDI 備援；後台 PrintWindow |
+| 輸入模擬（後台） | Frida 注入 | hook GetCursorPos/ScreenToClient 假造座標，零閃爍 Unity 後台點擊 |
 | 作業系統 | Windows (GDI / win32 API) | 視窗列舉、DPI 縮放、前景判斷 |
 
 ## 模組地圖與依賴關係
@@ -84,7 +82,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
 | `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型 + 重疊 ROI OCR 合併） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
-| `core/16_bg_input.py` | 後台互動（PostMessage / pynput / frida 切換） | `set_method()`, `click()`, `key()`, `drag()`, `scroll()`, `detach()` |
+| `core/16_bg_input.py` | 後台互動（pynput / frida 切換，底層 PostMessage primitive 供 frida） | `set_method()`, `click()`, `key()`, `drag()`, `scroll()`, `detach()` |
 | `core/18_frida_bg.py` | Frida 行程注入（Unity 後台點擊） | `ensure_attached()`, `click()`, `detach()`, `last_error()` |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
 | `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
@@ -324,7 +322,7 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 選取點擊座標 (click_picker)  螢幕絕對          (螢幕 - win_rect) ÷ win_size → 比例      視窗比例
 後台框選/座標 (bg selectors) 影像像素          (像素 - chrome) ÷ client_size → 比例     客戶區比例
 主循環 _resolve_roi()        視窗比例          × 當前 capture 圖寬高 → 像素              影像像素
-主循環 _resolve_point()      視窗比例          × 當前視窗寬高 → 像素 → +win_rect        螢幕絕對（送 pynput / PostMessage）
+主循環 _resolve_point()      視窗比例          × 當前視窗寬高 → 像素 → +win_rect        螢幕絕對（送 pynput / Frida）
 ```
 
 ### 比例轉換實作
@@ -334,9 +332,9 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 - `_resolve_roi(roi_dict, img_width, img_height)` → `(x, y, w, h)` 像素整數，用於影像裁切
 - `_resolve_point(point_dict, win_width, win_height)` → `(x, y)` 像素整數，加上視窗偏移後送 `send_click()`
 
-## 輸入模擬（前景 pynput / 後台 PostMessage / 後台 Unity Frida）
+## 輸入模擬（前景 pynput / 後台 Unity Frida）
 
-互動方法由 `interaction_mode` 決定（`pynput` / `postmessage` / `frida`），`MainLoop._send_click` / `_send_key` / `_send_drag` / `_send_scroll` 依模式分派到對應輸入模組（後台一律走 `core/16_bg_input.py`，由該模組再委派到 frida）。
+互動方法由 `interaction_mode` 決定（`pynput` / `frida`），`MainLoop._send_click` / `_send_key` / `_send_drag` / `_send_scroll` 依模式分派到對應輸入模組（後台一律走 `core/16_bg_input.py`，由該模組再委派到 frida）。後台 PostMessage 模式已移除。
 
 ### 前景：pynput（SendInput）
 
@@ -351,18 +349,9 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 | `send_scroll(amount, direction)` | 滾輪 | `mouse.scroll(dx, dy)` |
 | `send_emergency_stop()` | 緊急停止（in-process noop） | 僅 log + return True，`MainLoop._stop_event` 為實際中斷來源 |
 
-### 後台：PostMessage
-
-`core/16_bg_input.py` 以 Win32 `PostMessage` 直接對目標視窗送出 `WM_LBUTTONDOWN`/`WM_KEYDOWN` 等訊息，**不搶焦點、不需視窗在前景**（適合後台掛機）。使用前 `ScreenToClient` 將螢幕絕對座標轉為客戶區座標。
-
-- `set_method(method)`：切換 PostMessage / pynput / frida（pynput 作為後台模式的 fallback）
-- `click(hwnd, x, y, button, hold_ms)` / `key(hwnd, vk, hold_ms)` / `drag(hwnd, x1,y1,x2,y2, button)` / `scroll(hwnd, ...)`
-
-> 限制：Unity 遊戲不支援 PostMessage，需使用前景模式，或後台 Frida 注入模式（見下）。
-
 ### 後台 Unity：Frida 注入
 
-`core/18_frida_bg.py` 以 Frida 注入遊戲行程，hook `GetCursorPos` / `ScreenToClient` 假造游標座標，讓 Unity 的輸入驗證通過後再 `PostMessage` 點擊——**游標不動、焦點不搶、零閃爍**。`core/16_bg_input.py` 的 `set_method("frida")` 後，`click` 委派到此模組；鍵盤/滾輪/拖曳 v1 回退 PostMessage（Unity 下可能無效）。
+`core/18_frida_bg.py` 以 Frida 注入遊戲行程，hook `GetCursorPos` / `ScreenToClient` 假造游標座標，讓 Unity 的輸入驗證通過後再 `PostMessage` 點擊——**游標不動、焦點不搶、零閃爍**。`core/16_bg_input.py` 的 `set_method("frida")` 後，`click` 委派到此模組；鍵盤/滾輪/拖曳 v1 回退 PostMessage primitive（Unity 下可能無效）。
 
 - `ensure_attached(hwnd)`：懶載入，依 pid 自動重 attach（遊戲重開可自癒）；session 死亡（`is_detached`）會自動重注入
 - `click(hwnd, x, y, button, hold_ms)`：rpc.exports.update 假座標 → PostMessage DOWN/UP；呼叫失敗自動 detach + re-attach 重試一次
@@ -420,7 +409,7 @@ MainLoop.emergency_stop()
 
 | Key | 預設值 | 用途 |
 |-----|--------|------|
-| `interaction_mode` | `"pynput"` | 互動方法：`"pynput"`（前景 SendInput）／`"postmessage"`（後台 PostMessage）／`"frida"`（後台 Frida 注入，Unity） |
+| `interaction_mode` | `"pynput"` | 互動方法：`"pynput"`（前景 SendInput）／`"frida"`（後台 Frida 注入，Unity） |
 | `close_behavior` | `"tray"` | 關閉按鈕行為：`"tray"`（縮小至托盤）／`"quit"`（直接關閉） |
 | `max_cps` | `5` | 全域速率限制（每秒點擊上限） |
 | `scan_interval_ms` | `500` | 主循環掃描間隔 |

@@ -69,7 +69,7 @@ if __name__ == "__main__":
             break
 
     if test_title:
-        for mode in ("pynput", "postmessage"):
+        for mode in ("pynput", "frida"):
             img = capture_frame(mode, test_title)
             if img is not None:
                 print(f"  [{mode}] OK {img.shape[1]}x{img.shape[0]}")

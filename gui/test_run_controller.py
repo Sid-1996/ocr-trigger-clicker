@@ -88,7 +88,7 @@ class TestRunController:
         warn = ""
         cur_tt = "background" if mode != "pynput" else "foreground"
         cur_txt = (
-            T("combo.interaction_bg_pm") if cur_tt == "background" else T("combo.interaction_fg")
+            T("combo.interaction_bg_frida") if cur_tt == "background" else T("combo.interaction_fg")
         )
         mismatched = []
         for idx, step in enumerate(rule.steps, 1):
@@ -100,7 +100,7 @@ class TestRunController:
             tt = _template_type(str(p.get("template_source", "")))
             if tt != cur_tt:
                 td = (
-                    T("combo.interaction_bg_pm")
+                    T("combo.interaction_bg_frida")
                     if tt == "background"
                     else T("combo.interaction_fg")
                 )

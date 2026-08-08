@@ -1,14 +1,16 @@
 """Background input module — supports multiple interaction methods.
 
 Methods:
-- postmessage: Pure PostMessage (no cursor movement, works for some apps)
 - pynput: Physical input via pynput (requires foreground, works for all apps)
 - frida: Frida 行程注入 + PostMessage（零閃爍 Unity 後台點擊，見 18_frida_bg.py）
-  click 委派給 frida 模組；key/scroll/drag 回退 postmessage（v1 限制）
+  click 委派給 frida 模組；key/scroll/drag 回退 PostMessage primitive（v1 限制）
+
+後台 PostMessage 模式已移除（Unity 讀取 OS 游標位置而非 lParam，無注入下無法精準點擊）。
+底層 `_*_postmessage` 函式保留，作為 frida 的傳送層。
 
 Usage:
     from core.bg_input import click, send_key, set_method
-    set_method("postmessage")
+    set_method("frida")
     click(hwnd, x, y)
 """
 
@@ -48,9 +50,15 @@ _method = "pynput"  # default: foreground mode (safe)
 
 
 def set_method(method: str) -> None:
-    """Set the interaction method: 'postmessage', 'pynput', or 'frida'."""
+    """Set the interaction method: 'pynput' or 'frida'.
+
+    舊 config 的 'postmessage' 已淘汰，收到時警告並視為 'pynput'，避免主循環崩潰。
+    """
     global _method
-    if method not in ("postmessage", "pynput", "frida"):
+    if method == "postmessage":
+        _log.warning("interaction_mode 'postmessage' 已移除，改用 'pynput'")
+        method = "pynput"
+    if method not in ("pynput", "frida"):
         raise ValueError(f"Unknown method: {method}")
     _method = method
 
@@ -203,9 +211,7 @@ def _scroll_pynput(hwnd: int, x: int, y: int, amount: int, horizontal: bool = Fa
 def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     """Click at (x, y) in client coordinates using the current method."""
     with _lock:
-        if _method == "postmessage":
-            return _click_postmessage(hwnd, x, y, button, hold_ms)
-        elif _method == "frida":
+        if _method == "frida":
             return _frida().click(hwnd, x, y, button, hold_ms)
         elif _method == "pynput":
             return _click_pynput(hwnd, x, y, button, hold_ms)
@@ -253,7 +259,7 @@ def send_key(hwnd: int, key: str) -> bool:
         return False
 
     with _lock:
-        if _method in ("postmessage", "frida"):
+        if _method == "frida":
             ok = _key_postmessage(hwnd, vk, True)
             time.sleep(0.02)
             ok = _key_postmessage(hwnd, vk, False) and ok
@@ -269,7 +275,7 @@ def send_key(hwnd: int, key: str) -> bool:
 def scroll(hwnd: int, x: int, y: int, amount: int = 1, horizontal: bool = False) -> bool:
     """Scroll at (x, y). Positive = up/right, negative = down/left."""
     with _lock:
-        if _method in ("postmessage", "frida"):
+        if _method == "frida":
             return _scroll_postmessage(hwnd, x, y, amount, horizontal)
         elif _method == "pynput":
             return _scroll_pynput(hwnd, x, y, amount, horizontal)
@@ -311,7 +317,7 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
         return False
 
     with _lock:
-        if _method in ("postmessage", "frida"):
+        if _method == "frida":
             ok = _key_postmessage(hwnd, vk, True)
             time.sleep(hold_ms / 1000.0)
             ok = _key_postmessage(hwnd, vk, False) and ok
@@ -326,7 +332,7 @@ def drag(
 ) -> bool:
     """Perform a drag operation in background mode."""
     with _lock:
-        if _method in ("postmessage", "frida"):
+        if _method == "frida":
             ok = click(hwnd, start_x, start_y, button)
             if not ok:
                 return False
@@ -355,9 +361,9 @@ if __name__ == "__main__":
     assert get_method() == "pynput"
     print("  [OK] Default method is pynput")
 
-    set_method("postmessage")
-    assert get_method() == "postmessage"
-    print("  [OK] set_method('postmessage')")
+    set_method("postmessage")  # 舊 config 值 → 警告並視為 pynput
+    assert get_method() == "pynput"
+    print("  [OK] 舊 set_method('postmessage') 遷移為 pynput")
 
     set_method("pynput")
     assert get_method() == "pynput"
@@ -380,7 +386,6 @@ if __name__ == "__main__":
         print("  [OK] set_method('invalid') raises ValueError")
 
     # 滾輪語意：正值 = 上/右、負值 = 下/左；水平方向送 WM_MOUSEHWHEEL
-    set_method("postmessage")
     captured = {}
     _orig_pm = user32.PostMessageW
     user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (

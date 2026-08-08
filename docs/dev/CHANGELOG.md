@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### 變更
+- **移除後台 PostMessage 互動模式**：保留前景（pynput）與後台 Frida 注入兩種模式。PostMessage 不移動游標，多數 Unity 遊戲（如 BrownDust II）讀取 OS 游標位置而非 `WM_LBUTTONDOWN` 的 lParam，點擊必然錯位，且無法像 Frida 一樣注入偽造游標，故淘汰。既有設定 `interaction_mode: "postmessage"` 自動遷移為 `pynput`；底層 PostMessage primitive 保留作為 Frida 的傳送層。
+
 ### 修復
 - **修復後台模式框選偵測區域/選取點擊座標時 app 無訊息直接關閉**：64 位元 ctypes handle 截斷導致 `GetDIBits` 對無效 handle 寫入記憶體（access violation）。`core/15_print_window.py`、`core/01_screenshot.py` 改用隔離的 `ctypes.WinDLL` 實例並設定 `argtypes`/`restype`。
 - **修復後台模板擷取時 app 無訊息直接關閉**：`gui/17_bg_roi_selector.py` 混用 PyQt6 舊式 enum `Qt.SmoothTransformation`（應為 `Qt.TransformationMode.SmoothTransformation`），`paintEvent` 執行期 `AttributeError`，PyQt6 對事件處理器的未捕獲例外預設 `qFatal` 直接終止程序。該模組已因下方「模板擷取統一前景」改動而刪除。
