@@ -2765,11 +2765,6 @@ class SettingsDialog(QDialog):
         self.setWindowTitle(T("settings.title"))
         self.setMinimumWidth(420)
 
-        # Migrate deprecated interaction modes to "pynput"
-        mode = self._ctrl.get_setting(win, "interaction_mode")
-        if mode in ("sendinput", "postmessage"):
-            self._ctrl.set_setting(win, "interaction_mode", "pynput")
-
         layout = QVBoxLayout(self)
 
         # ── 一般分頁 ──
