@@ -1,6 +1,15 @@
 @echo off
 chcp 65001 > nul
 cd /d "%~dp0"
+
+REM 檢查系統管理員權限；不足則以管理員身分重新啟動
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo 需要系統管理員權限，正在以管理員身分重新啟動...
+    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
 python gui/06_gui_main.py --debug
 if errorlevel 1 (
     echo 啟動過程發生錯誤。
