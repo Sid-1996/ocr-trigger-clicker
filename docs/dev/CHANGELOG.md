@@ -1,6 +1,6 @@
-﻿
 
-## [v0.2.2]
+
+## [v0.2.2] - 2026-08-09
 
 ### 變更
 - **移除後台 PostMessage 互動模式**：保留前景（pynput）與後台 Frida 注入兩種模式。PostMessage 不移動游標，多數 Unity 遊戲（如 BrownDust II）讀取 OS 游標位置而非 `WM_LBUTTONDOWN` 的 lParam，點擊必然錯位，且無法像 Frida 一樣注入偽造游標，故淘汰。既有設定 `interaction_mode: "postmessage"` 自動遷移為 `pynput`；底層 PostMessage primitive 保留作為 Frida 的傳送層。

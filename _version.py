@@ -1,3 +1,3 @@
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __author__ = "Sid"
 __github__ = "https://github.com/Sid-1996/ocr-trigger-clicker"
