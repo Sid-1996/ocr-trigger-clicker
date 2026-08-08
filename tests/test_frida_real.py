@@ -57,6 +57,50 @@ def test_handshake_ready_and_rpc_repeatable(child_pid):
     sess.detach()
 
 
+def test_spoof_auto_restores(child_pid):
+    # 回歸：spoof 是暫時性，_SPOOF_GRACE_MS 後自動還原 pass-through 真實游標，
+    # 不會把使用者滑鼠永久卡在 spoof 座標
+    import ctypes
+    from ctypes import wintypes
+
+    sess = frida.attach(child_pid)
+    prod = sess.create_script(_fb.build_hook_script())
+    prod.load()
+
+    # 輔助 script：呼叫被 hook 的 GetCursorPos（會經過生產腳本的 interceptor）
+    helper_js = r"""
+'use strict';
+var user32 = Process.findModuleByName('user32.dll');
+var GetCursorPos = new NativeFunction(user32.findExportByName('GetCursorPos'), 'int', ['pointer']);
+rpc.exports = {
+  readCursor: function () {
+    var buf = Memory.alloc(8);
+    GetCursorPos(buf);
+    return [buf.readS32(), buf.add(4).readS32()];
+  }
+};
+"""
+    helper = sess.create_script(helper_js)
+    helper.load()
+
+    assert prod.exports.update(777, 888, 100, 100) == 1
+    assert prod.exports.getSpoofing() is True
+    assert tuple(helper.exports.readCursor()) == (777, 888), "spoof 啟用時應回傳假座標"
+
+    time.sleep(_fb._SPOOF_GRACE_MS / 1000 + 0.5)
+    assert prod.exports.getSpoofing() is False, "寬限期後應自動還原"
+
+    restored = tuple(helper.exports.readCursor())
+    assert restored != (777, 888), "還原後不應再回傳 spoof 座標"
+    pt = wintypes.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+    assert restored == (pt.x, pt.y), f"還原後應回傳真實游標 {pt.x},{pt.y}，得 {restored}"
+
+    prod.unload()
+    helper.unload()
+    sess.detach()
+
+
 def test_cursor_spoof_works(child_pid):
     js = r"""
 'use strict';

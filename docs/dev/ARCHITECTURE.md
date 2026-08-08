@@ -366,8 +366,9 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 
 `core/18_frida_bg.py` 以 Frida 注入遊戲行程，hook `GetCursorPos` / `ScreenToClient` 假造游標座標，讓 Unity 的輸入驗證通過後再 `PostMessage` 點擊——**游標不動、焦點不搶、零閃爍**。`core/16_bg_input.py` 的 `set_method("frida")` 後，`click` 委派到此模組；鍵盤/滾輪/拖曳 v1 回退 PostMessage（Unity 下可能無效）。
 
-- `ensure_attached(hwnd)`：懶載入，依 pid 自動重 attach（遊戲重開可自癒）
-- `click(hwnd, x, y, button, hold_ms)`：update 假座標 → 等 ack → PostMessage DOWN/UP
+- `ensure_attached(hwnd)`：懶載入，依 pid 自動重 attach（遊戲重開可自癒）；session 死亡（`is_detached`）會自動重注入
+- `click(hwnd, x, y, button, hold_ms)`：rpc.exports.update 假座標 → PostMessage DOWN/UP；呼叫失敗自動 detach + re-attach 重試一次
+- spoof 為暫時性：update 後約 400ms 自動還原（pass-through 真實游標），避免 frida 點完後卡死使用者滑鼠
 - `detach()`：`MainLoop.stop()` 時釋放，還原遊戲
 - v1 限制：遊戲若要求視窗聚焦（`Application.isFocused`）仍無效；EAC/BattlEye 等防作弊會封鎖 Frida（有防作弊偵測風險）
 

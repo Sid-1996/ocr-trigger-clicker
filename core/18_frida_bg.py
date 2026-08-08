@@ -13,6 +13,10 @@ v1 限制：
 「下一個」訊息（one-shot），頂層註冊一次只讓第一次點擊成功，之後全 ack 逾時；
 rpc.exports 可重複呼叫。對 ack 逾時/呼叫失敗會自動 detach + re-attach 重試一次，
 避免注入死亡後需重開 app 才恢復。
+
+spoof 是暫時性的：update 設定假座標後經 _SPOOF_GRACE_MS 自動還原（pass-through，
+hook 不再覆寫，遊戲回傳真實游標），避免 frida 點完後把使用者真實滑鼠操作永遠
+卡在最後一次 spoof 座標。
 """
 
 import ctypes
@@ -31,6 +35,7 @@ _script_error = ""
 _last_error = ""
 
 _ATTACH_READY_TIMEOUT = 3.0  # load() 在 frida 17 對頂層 JS 錯誤不拋例外，靠 ready 心跳偵測
+_SPOOF_GRACE_MS = 400  # spoof 有效期間；太短點擊可能漏註冊，太長卡使用者滑鼠
 
 
 def build_hook_script() -> str:
@@ -42,12 +47,23 @@ def build_hook_script() -> str:
     用 Process.findModuleByName().findExportByName()，不用 Module.getExportByName
     —— 後者在 frida 17.x (QJS) 會直接拋 TypeError: not a function，頂層 JS 掛掉
     導致握手永不回應。
+
+    spoof 自動還原：onLeave 只在 spoofing 開啟時覆寫游標輸出，update 設定後
+    經 __SPOOF_MS__ ms 自動關閉（pass-through 回傳真實游標），讓使用者後續
+    手動滑鼠操作回到真實位置。
     """
     return r"""
 'use strict';
 
 var pos = { sx: 0, sy: 0, cx: 0, cy: 0 };
+var spoofing = false;
+var spoofTimer = null;
+var SPOOF_MS = __SPOOF_MS__;
 var user32 = Process.findModuleByName('user32.dll');
+
+function disableSpoof() {
+  spoofing = false;
+}
 
 function hookSpoof(name, ptIndex, writePos) {
   var addr = user32.findExportByName(name);
@@ -56,6 +72,7 @@ function hookSpoof(name, ptIndex, writePos) {
     onEnter: function (args) { this.pt = args[ptIndex]; },
     onLeave: function (retval) {
       if (!this.pt || this.pt.isNull()) return;
+      if (!spoofing) return; // 還原：pass-through，回傳真實游標位置
       this.pt.writeS32(writePos.sx());
       this.pt.add(4).writeS32(writePos.sy());
     }
@@ -70,12 +87,18 @@ if (user32 === null) {
   rpc.exports = {
     update: function (sx, sy, cx, cy) {
       pos = { sx: sx, sy: sy, cx: cx, cy: cy };
+      spoofing = true;
+      if (spoofTimer !== null) clearTimeout(spoofTimer);
+      spoofTimer = setTimeout(disableSpoof, SPOOF_MS);
       return 1;
+    },
+    getSpoofing: function () {
+      return spoofing;
     }
   };
   send('ready');
 }
-""".strip()
+""".replace("__SPOOF_MS__", str(_SPOOF_GRACE_MS)).strip()
 
 
 def _bg():
@@ -242,10 +265,15 @@ if __name__ == "__main__":
         "send('ready')",
         "rpc.exports",
         "update: function",
+        "getSpoofing",
+        "spoofing",
+        "setTimeout(disableSpoof",
     ):
         assert needle in js, f"hook 腳本缺少: {needle}"
     assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
     assert "recv('update'" not in js, "不應使用 one-shot 的 recv 握手（只會成功一次）"
+    assert "__SPOOF_MS__" not in js, "spoof 寬限期應注入實際數值"
+    assert f"SPOOF_MS = {_SPOOF_GRACE_MS}" in js, "spoof 寬限期應等於 _SPOOF_GRACE_MS"
     print("  [OK] hook 腳本內容")
 
     desktop = ctypes.windll.user32.GetDesktopWindow()

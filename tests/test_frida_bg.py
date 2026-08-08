@@ -64,10 +64,15 @@ def test_hook_script_content():
         "send('ready')",
         "rpc.exports",
         "update: function",
+        "getSpoofing",
+        "spoofing",
+        "setTimeout(disableSpoof",
     ):
         assert needle in js
     assert "Module.getExportByName" not in js
     assert "recv('update'" not in js, "one-shot recv 只會成功一次，不得回歸"
+    assert "__SPOOF_MS__" not in js, "spoof 寬限期應注入實際數值"
+    assert f"SPOOF_MS = {_fb._SPOOF_GRACE_MS}" in js, "spoof 寬限期應等於 _SPOOF_GRACE_MS"
 
 
 def test_hwnd_to_pid_invalid():
