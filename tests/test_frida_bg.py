@@ -199,6 +199,7 @@ def test_key_flow(monkeypatch):
     assert fake.script.exports.key_calls == [(0x41, 1), (0x41, 0)]
     msgs = [m for m, _, _ in captured]
     assert 0x0100 in msgs and 0x0101 in msgs, f"應送 WM_KEYDOWN/UP: {msgs}"
+    assert 0x0102 in msgs, f"字母按下應補送 WM_CHAR: {msgs}"
 
     _fb.detach()
     assert fake.script.unloaded

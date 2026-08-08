@@ -38,12 +38,16 @@ WM_MOUSEHWHEEL = 0x020E
 WM_MOUSEMOVE = 0x0200
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
+WM_CHAR = 0x0102
+WM_SYSKEYDOWN = 0x0104
+WM_SYSKEYUP = 0x0105
 WM_ACTIVATE = 0x0006
 MK_LBUTTON = 0x0001
 MK_RBUTTON = 0x0002
 MK_MBUTTON = 0x0010
 WA_ACTIVE = 0x01
 WHEEL_DELTA = 120
+VK_MENU = 0x12
 
 # ── VK codes（與前景 03_pynput_input._parse_key 的按鍵名一致）──
 _VK_MAP: dict[str, int] = {
@@ -134,6 +138,25 @@ def _resolve_vk(key: str) -> int | None:
     return None
 
 
+def _is_alt_down() -> bool:
+    """True if the physical Alt key is currently held (for WM_SYSKEY selection)."""
+    try:
+        return bool(user32.GetAsyncKeyState(VK_MENU) & 0x8000)
+    except Exception:
+        return False
+
+
+def _vk_to_char(vk_code: int) -> int | None:
+    """Map a VK code to a WM_CHAR character code.
+
+    只涵蓋無歧義的文字鍵：A-Z、0-9、空白。導航/功能鍵（0x21-0x28 等）的 VK 碼值
+    與可列印 ASCII 重疊，若含入會誤送 WM_CHAR（例如 VK_LEFT 0x25 與 '%' 衝突）。
+    """
+    if 0x30 <= vk_code <= 0x39 or 0x41 <= vk_code <= 0x5A or vk_code == 0x20:
+        return vk_code
+    return None
+
+
 # ── Current method ──
 _method = "pynput"  # default: foreground mode (safe)
 
@@ -211,11 +234,22 @@ def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
         scan_code = user32.MapVirtualKeyW(vk_code, 0)
         lparam = (scan_code << 16) | 1
         if vk_code in _EXTENDED_VK:
-            lparam |= 1 << 24  # extended-key（方向鍵/Home/End/...）需此位元
+            lparam |= 1 << 24  # extended-key（方向鍵/Home/End/... 需此位元）
         if not down:
             lparam |= (1 << 30) | (1 << 31)
-        msg = WM_KEYDOWN if down else WM_KEYUP
+        # Alt 按下時用 WM_SYSKEYDOWN/UP（某些遊戲只處理系統鍵）；其餘用 WM_KEYDOWN/UP
+        alt_down = _is_alt_down()
+        msg = (
+            (WM_SYSKEYDOWN if down else WM_SYSKEYUP)
+            if alt_down
+            else (WM_KEYDOWN if down else WM_KEYUP)
+        )
         user32.PostMessageW(hwnd, msg, vk_code, lparam)
+        # 可列印字元在按下時補送 WM_CHAR，cover 走 TranslateMessage/字元輸入的遊戲
+        if down and not alt_down:
+            char = _vk_to_char(vk_code)
+            if char is not None:
+                user32.PostMessageW(hwnd, WM_CHAR, char, lparam)
         return True
     except Exception as e:
         _log.error("PostMessage key failed: %s", e)
@@ -338,7 +372,9 @@ def send_key(hwnd: int, key: str) -> bool:
             if not f.key(hwnd, vk, True):
                 return False
             try:
-                time.sleep(0.02)
+                # 持窗 120ms：確保遊戲以 60Hz（16.7ms/tick）輪詢鍵盤狀態時至少
+                # 涵蓋多個 tick，避免 down/up 落在同一個 tick 內被當成沒按下
+                time.sleep(0.12)
                 return True
             finally:
                 f.key(hwnd, vk, False)
@@ -383,13 +419,14 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
             if not f.key(hwnd, vk, True):
                 return False
             try:
-                # 週期 re-arm spoof 寬限期，支援任意長度的按住
+                # 週期 re-arm spoof 寬限期，支援任意長度的按住；500ms 重送確保
+                # 遊戲輪詢永遠能看到 down 狀態（1s 間隔在低頻輪詢下可能跳過）
                 deadline = time.monotonic() + hold_ms / 1000.0
                 while True:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         break
-                    time.sleep(min(remaining, 1.0))
+                    time.sleep(min(remaining, 0.5))
                     f.key(hwnd, vk, True)
                 return True
             finally:
@@ -488,20 +525,39 @@ if __name__ == "__main__":
     print("  [OK] _resolve_vk 按鍵名/單字元解析")
 
     # extended-key lParam bit 24：方向鍵等需設，普通鍵不需
-    captured = {}
+    captured = []
     _orig_pm = user32.PostMessageW
     user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (
-        captured.update(msg=msg, wparam=wparam, lparam=lparam) or True
+        captured.append((msg, wparam, lparam)) or True
     )
     try:
         _key_postmessage(1, 0x25, True)  # VK_LEFT
-        assert captured["lparam"] & (1 << 24), "方向鍵應設 extended-key 位元"
+        assert captured[-1][2] & (1 << 24), "方向鍵應設 extended-key 位元"
         _key_postmessage(1, 0x41, True)  # 'A'
-        assert not (captured["lparam"] & (1 << 24)), "普通鍵不應設 extended-key 位元"
+        assert not (captured[-1][2] & (1 << 24)), "普通鍵不應設 extended-key 位元"
         _key_postmessage(1, 0x25, False)  # VK_LEFT up
-        assert captured["lparam"] & (1 << 30), "keyup 應設 transition 位元"
+        assert captured[-1][2] & (1 << 30), "keyup 應設 transition 位元"
     finally:
         user32.PostMessageW = _orig_pm
     print("  [OK] _key_postmessage extended-key lParam")
+
+    # WM_CHAR：可列印字元按下時補送；導航鍵不送（VK 碼值與 ASCII 重疊）
+    captured = []
+    _orig_pm = user32.PostMessageW
+    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (
+        captured.append((msg, wparam, lparam)) or True
+    )
+    try:
+        _key_postmessage(1, 0x41, True)  # 'A'
+        assert (WM_KEYDOWN, 0x41) in [(m, w) for m, w, _ in captured], captured
+        assert (WM_CHAR, 0x41) in [(m, w) for m, w, _ in captured], "字母按下應補送 WM_CHAR"
+        _key_postmessage(1, 0x41, False)  # 'A' up
+        assert (WM_CHAR, 0x41) not in [(m, w) for m, w, _ in captured[-1:]], "keyup 不應送 WM_CHAR"
+        captured.clear()
+        _key_postmessage(1, 0x25, True)  # VK_LEFT（0x25 與 '%' 衝突）
+        assert (WM_CHAR, 0x25) not in [(m, w) for m, w, _ in captured], "導航鍵不應送 WM_CHAR"
+    finally:
+        user32.PostMessageW = _orig_pm
+    print("  [OK] _key_postmessage WM_CHAR（字母送、keyup 不送、導航鍵不送）")
 
     print("\n=== All checks passed ===")
