@@ -1,7 +1,7 @@
 """Background input module — supports multiple interaction methods.
 
 Methods:
-- postmessage: Pure PostMessage (no cursor movement, works for some apps)
+- postmessage: PostMessage（點擊前暫移游標到目標、結束後還原，兼容讀取 OS 游標的遊戲）
 - pynput: Physical input via pynput (requires foreground, works for all apps)
 - frida: Frida 行程注入 + PostMessage（零閃爍 Unity 後台點擊，見 18_frida_bg.py）
   click 委派給 frida 模組；key/scroll/drag 回退 postmessage（v1 限制）
@@ -81,7 +81,11 @@ def _make_lparam(x: int, y: int) -> int:
 
 # ── PostMessage method ──
 def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
-    """Click using PostMessage (pure message, no cursor movement)."""
+    """Click using PostMessage.
+
+    Unity 等遊戲讀取 OS 游標位置而非 lParam，故點擊前暫移游標到目標、
+    送完訊息後還原原位置（結束後必還原，含例外路徑）。
+    """
     try:
         lparam = _make_lparam(x, y)
         if button == "left":
@@ -96,12 +100,21 @@ def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms:
         else:
             return False
 
-        user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
-        time.sleep(0.02)
-        user32.PostMessageW(hwnd, down_msg, mk, lparam)
-        if hold_ms > 0:
-            time.sleep(hold_ms / 1000.0)
-        user32.PostMessageW(hwnd, up_msg, 0, lparam)
+        orig = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(orig))
+        sx, sy = _client_to_screen(hwnd, x, y)
+        user32.SetCursorPos(sx, sy)
+        try:
+            user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
+            time.sleep(0.02)
+            user32.PostMessageW(hwnd, down_msg, mk, lparam)
+            if hold_ms > 0:
+                time.sleep(hold_ms / 1000.0)
+            else:
+                time.sleep(0.05)  # 留時間讓遊戲讀到游標位置（Unity 讀 OS 游標）
+            user32.PostMessageW(hwnd, up_msg, 0, lparam)
+        finally:
+            user32.SetCursorPos(orig.x, orig.y)
         return True
     except Exception as e:
         _log.error("PostMessage click failed: %s", e)
@@ -399,4 +412,24 @@ if __name__ == "__main__":
         user32.PostMessageW = _orig_pm
     print("  [OK] scroll sign/axis: 下左負值、上右正值、水平送 WM_MOUSEHWHEEL")
 
-    print("\n=== All 5 tests passed ===")
+    # 點擊前暫移游標到目標、結束後還原（Unity 讀 OS 游標，lParam 不可靠）
+    set_method("postmessage")
+    cursor_events = []
+    start = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(start))
+    _orig_ss = user32.SetCursorPos
+
+    def _fake_ss(x, y):
+        cursor_events.append((int(x), int(y)))
+        return True
+
+    user32.SetCursorPos = _fake_ss
+    try:
+        _click_postmessage(1, 5, 6, "left")
+    finally:
+        user32.SetCursorPos = _orig_ss
+    assert cursor_events[0] == (5, 6), f"點擊前應移到目標: {cursor_events}"
+    assert cursor_events[-1] == (start.x, start.y), f"點擊後應還原游標: {cursor_events}"
+    print("  [OK] postmessage 點擊：暫移游標到目標、結束後還原")
+
+    print("\n=== All 6 tests passed ===")
