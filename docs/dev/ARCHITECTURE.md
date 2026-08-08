@@ -82,8 +82,8 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
 | `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型 + 重疊 ROI OCR 合併） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
-| `core/16_bg_input.py` | 後台互動（pynput / frida 切換，底層 PostMessage primitive 供 frida） | `set_method()`, `click()`, `key()`, `drag()`, `scroll()`, `detach()` |
-| `core/18_frida_bg.py` | Frida 行程注入（Unity 後台點擊） | `ensure_attached()`, `click()`, `detach()`, `last_error()` |
+| `core/16_bg_input.py` | 後台互動（pynput / frida 切換，底層 PostMessage primitive 供 frida） | `set_method()`, `click()`, `send_key()`, `send_hold_key()`, `drag()`, `scroll()`, `detach()` |
+| `core/18_frida_bg.py` | Frida 行程注入（Unity 後台點擊＋鍵盤） | `ensure_attached()`, `click()`, `key()`, `detach()`, `last_error()` |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
 | `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
 | `core/11_template_matching.py` | 圖示模板比對 + inline 模板 LRU 解碼快取 | `match_template()`, `nms_suppress()`, `MatchResult`, `clear_template_cache()` |
@@ -351,13 +351,14 @@ debug panel 建立規則         視窗相對          ÷ win_size → 比例座
 
 ### 後台 Unity：Frida 注入
 
-`core/18_frida_bg.py` 以 Frida 注入遊戲行程，hook `GetCursorPos` / `ScreenToClient` 假造游標座標，讓 Unity 的輸入驗證通過後再 `PostMessage` 點擊——**游標不動、焦點不搶、零閃爍**。`core/16_bg_input.py` 的 `set_method("frida")` 後，`click` 委派到此模組；鍵盤/滾輪/拖曳 v1 回退 PostMessage primitive（Unity 下可能無效）。
+`core/18_frida_bg.py` 以 Frida 注入遊戲行程，hook `GetCursorPos` / `ScreenToClient` 假造游標座標，讓 Unity 的輸入驗證通過後再 `PostMessage` 點擊——**游標不動、焦點不搶、零閃爍**。鍵盤採同架構：hook `GetKeyState` / `GetAsyncKeyState` / `GetKeyboardState` 假造按鍵狀態（僅覆寫注入中的 vk，其餘 pass-through），再 `PostMessage` 送 `WM_KEYDOWN/UP`，讓 Unity 無論走訊息佇列或 state-polling 都收得到。`core/16_bg_input.py` 的 `set_method("frida")` 後，`click`/`send_key`/`send_hold_key` 委派到此模組；滾輪/拖曳 v1 回退 PostMessage primitive（Unity 下可能無效）。
 
 - `ensure_attached(hwnd)`：懶載入，依 pid 自動重 attach（遊戲重開可自癒）；session 死亡（`is_detached`）會自動重注入
 - `click(hwnd, x, y, button, hold_ms)`：rpc.exports.update 假座標 → PostMessage DOWN/UP；呼叫失敗自動 detach + re-attach 重試一次
-- spoof 為暫時性：update 後約 400ms 自動還原（pass-through 真實游標），避免 frida 點完後卡死使用者滑鼠
+- `key(hwnd, vk, down)`：rpc.exports.key 假按鍵狀態 → PostMessage WM_KEYDOWN/UP；同樣帶 re-attach 重試
+- spoof 為暫時性：游標 update 後約 400ms 自動還原（pass-through 真實游標）；按鍵 down 後約 10s 寬限自動清除（up 未送達的保險），up 送達即時還原
 - `detach()`：`MainLoop.stop()` 時釋放，還原遊戲
-- v1 限制：遊戲若要求視窗聚焦（`Application.isFocused`）仍無效；EAC/BattlEye 等防作弊會封鎖 Frida（有防作弊偵測風險）
+- v1 限制：滾輪/拖曳僅 PostMessage（Unity 下可能無效）；遊戲若要求視窗聚焦（`Application.isFocused`）仍無效；EAC/BattlEye 等防作弊會封鎖 Frida（有防作弊偵測風險）
 
 ### 按鍵對應
 

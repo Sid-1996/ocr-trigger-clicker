@@ -9,9 +9,14 @@ def _make_fake_frida():
     class FakeExports:
         def __init__(self, updates):
             self._updates = updates
+            self.key_calls = []
 
         def update(self, sx, sy, cx, cy):
             self._updates.append((sx, sy, cx, cy))
+            return 1
+
+        def key(self, vk, down):
+            self.key_calls.append((vk, down))
             return 1
 
     class FakeScript:
@@ -60,19 +65,27 @@ def test_hook_script_content():
     for needle in (
         "GetCursorPos",
         "ScreenToClient",
+        "GetKeyState",
+        "GetAsyncKeyState",
+        "GetKeyboardState",
+        "hookKeyState",
         "findExportByName",
         "send('ready')",
         "rpc.exports",
         "update: function",
+        "key: function",
         "getSpoofing",
         "spoofing",
         "setTimeout(disableSpoof",
+        "setTimeout(clearKeys",
     ):
         assert needle in js
     assert "Module.getExportByName" not in js
     assert "recv('update'" not in js, "one-shot recv 只會成功一次，不得回歸"
     assert "__SPOOF_MS__" not in js, "spoof 寬限期應注入實際數值"
+    assert "__KEY_MS__" not in js, "key 寬限期應注入實際數值"
     assert f"SPOOF_MS = {_fb._SPOOF_GRACE_MS}" in js, "spoof 寬限期應等於 _SPOOF_GRACE_MS"
+    assert f"KEY_MS = {_fb._KEY_GRACE_MS}" in js, "key 寬限期應等於 _KEY_GRACE_MS"
 
 
 def test_hwnd_to_pid_invalid():
@@ -162,6 +175,68 @@ def test_click_recovers_after_sync_failure(monkeypatch):
     assert _fb.click(12345, 30, 40) is True
     assert calls["n"] == 2, "第一次失敗後應 re-attach 重試成功"
     assert 0x0201 in captured_msgs and 0x0202 in captured_msgs
+
+    _fb.detach()
+
+
+def test_key_flow(monkeypatch):
+    fake = _make_fake_frida()
+    monkeypatch.setitem(sys.modules, "frida", fake)
+    monkeypatch.setattr(_fb, "_hwnd_to_pid", lambda hwnd: 4242)
+    _fb.detach()
+    assert _fb.ensure_attached(12345) is True
+
+    _bg = _fb._bg()
+    captured = []
+    monkeypatch.setattr(
+        _bg.user32,
+        "PostMessageW",
+        lambda hwnd, msg, wparam, lparam: captured.append((msg, wparam, lparam)) or True,
+    )
+
+    assert _fb.key(12345, 0x41, True) is True
+    assert _fb.key(12345, 0x41, False) is True
+    assert fake.script.exports.key_calls == [(0x41, 1), (0x41, 0)]
+    msgs = [m for m, _, _ in captured]
+    assert 0x0100 in msgs and 0x0101 in msgs, f"應送 WM_KEYDOWN/UP: {msgs}"
+
+    _fb.detach()
+    assert fake.script.unloaded
+
+
+def test_key_recovers_after_sync_failure(monkeypatch):
+    # 注入死亡時自動 detach + re-attach + 重試一次（與 click 同模式）
+    fake = _make_fake_frida()
+    monkeypatch.setitem(sys.modules, "frida", fake)
+    monkeypatch.setattr(_fb, "_hwnd_to_pid", lambda hwnd: 4242)
+    _fb.detach()
+    assert _fb.ensure_attached(12345) is True
+
+    calls = {"n": 0}
+
+    class FailOnceExports:
+        def update(self, sx, sy, cx, cy):
+            return 1
+
+        def key(self, vk, down):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("injection dead")
+            return 1
+
+    fake.script.exports = FailOnceExports()
+
+    _bg = _fb._bg()
+    captured = []
+    monkeypatch.setattr(
+        _bg.user32,
+        "PostMessageW",
+        lambda hwnd, msg, wparam, lparam: captured.append(msg) or True,
+    )
+
+    assert _fb.key(12345, 0x41, True) is True
+    assert calls["n"] == 2, "第一次失敗後應 re-attach 重試成功"
+    assert 0x0100 in captured
 
     _fb.detach()
 

@@ -2,8 +2,9 @@
 
 Methods:
 - pynput: Physical input via pynput (requires foreground, works for all apps)
-- frida: Frida 行程注入 + PostMessage（零閃爍 Unity 後台點擊，見 18_frida_bg.py）
-  click 委派給 frida 模組；key/scroll/drag 回退 PostMessage primitive（v1 限制）
+- frida: Frida 行程注入（零閃爍 Unity 後台操控，見 18_frida_bg.py）
+  click/key 委派給 frida 模組（hook 假造游標/鍵盤狀態 + PostMessage）；scroll/drag
+  仍回退 PostMessage primitive（v1 限制，Unity 下可能無效）
 
 後台 PostMessage 模式已移除（Unity 讀取 OS 游標位置而非 lParam，無注入下無法精準點擊）。
 底層 `_*_postmessage` 函式保留，作為 frida 的傳送層。
@@ -43,6 +44,94 @@ MK_RBUTTON = 0x0002
 MK_MBUTTON = 0x0010
 WA_ACTIVE = 0x01
 WHEEL_DELTA = 120
+
+# ── VK codes（與前景 03_pynput_input._parse_key 的按鍵名一致）──
+_VK_MAP: dict[str, int] = {
+    "enter": 0x0D,
+    "escape": 0x1B,
+    "space": 0x20,
+    "tab": 0x09,
+    "backspace": 0x08,
+    "delete": 0x2E,
+    "insert": 0x2D,
+    "home": 0x24,
+    "end": 0x23,
+    "pgup": 0x21,
+    "pgdn": 0x22,
+    "up": 0x26,
+    "down": 0x28,
+    "left": 0x25,
+    "right": 0x27,
+    "f1": 0x70,
+    "f2": 0x71,
+    "f3": 0x72,
+    "f4": 0x73,
+    "f5": 0x74,
+    "f6": 0x75,
+    "f7": 0x76,
+    "f8": 0x77,
+    "f9": 0x78,
+    "f10": 0x79,
+    "f11": 0x7A,
+    "f12": 0x7B,
+    "capslock": 0x14,
+    "numlock": 0x90,
+    "scrolllock": 0x91,
+    "printscreen": 0x2C,
+    "pause": 0x13,
+    "menu": 0x5D,
+    "shift": 0x10,
+    "ctrl": 0x11,
+    "alt": 0x12,
+    "numpad0": 0x60,
+    "numpad1": 0x61,
+    "numpad2": 0x62,
+    "numpad3": 0x63,
+    "numpad4": 0x64,
+    "numpad5": 0x65,
+    "numpad6": 0x66,
+    "numpad7": 0x67,
+    "numpad8": 0x68,
+    "numpad9": 0x69,
+    "numpadadd": 0x6B,
+    "numpadsub": 0x6D,
+    "numpadmult": 0x6A,
+    "numpaddiv": 0x6F,
+    "numpadenter": 0x0D,
+    "numpaddel": 0x2E,
+}
+
+# 需要 extended-key 標記（lParam bit 24）的按鍵：方向鍵/Home/End/PgUp/PgDn/Ins/Del/
+# NumpadDiv/NumLock。MapVirtualKeyW 不會回填此位元，漏設會讓部分遊戲誤判。
+_EXTENDED_VK = frozenset(
+    {
+        0x21,  # PgUp
+        0x22,  # PgDn
+        0x23,  # End
+        0x24,  # Home
+        0x25,  # Left
+        0x26,  # Up
+        0x27,  # Right
+        0x28,  # Down
+        0x2C,  # PrintScreen
+        0x2D,  # Insert
+        0x2E,  # Delete
+        0x6F,  # NumpadDiv
+        0x90,  # NumLock
+    }
+)
+
+
+def _resolve_vk(key: str) -> int | None:
+    """Map a key name / single char to a Windows virtual-key code."""
+    stripped = key.strip()
+    key_lower = stripped.lower()
+    vk = _VK_MAP.get(key_lower)
+    if vk is not None:
+        return vk
+    if len(stripped) == 1:
+        return ord(stripped.upper())
+    return None
 
 
 # ── Current method ──
@@ -121,6 +210,8 @@ def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
     try:
         scan_code = user32.MapVirtualKeyW(vk_code, 0)
         lparam = (scan_code << 16) | 1
+        if vk_code in _EXTENDED_VK:
+            lparam |= 1 << 24  # extended-key（方向鍵/Home/End/...）需此位元
         if not down:
             lparam |= (1 << 30) | (1 << 31)
         msg = WM_KEYDOWN if down else WM_KEYUP
@@ -236,34 +327,21 @@ def last_error() -> str:
 
 def send_key(hwnd: int, key: str) -> bool:
     """Send a key press and release."""
-    vk_map = {
-        "enter": 0x0D,
-        "escape": 0x1B,
-        "space": 0x20,
-        "tab": 0x09,
-        "backspace": 0x08,
-        "delete": 0x2E,
-        "up": 0x26,
-        "down": 0x28,
-        "left": 0x25,
-        "right": 0x27,
-        "f1": 0x70,
-        "f5": 0x74,
-    }
-    key_lower = key.strip().lower()
-    vk = vk_map.get(key_lower)
-    if vk is None and len(key) == 1:
-        vk = ord(key.upper())
+    vk = _resolve_vk(key)
     if vk is None:
         _log.warning("Cannot parse key: %s", key)
         return False
 
     with _lock:
         if _method == "frida":
-            ok = _key_postmessage(hwnd, vk, True)
-            time.sleep(0.02)
-            ok = _key_postmessage(hwnd, vk, False) and ok
-            return ok
+            f = _frida()
+            if not f.key(hwnd, vk, True):
+                return False
+            try:
+                time.sleep(0.02)
+                return True
+            finally:
+                f.key(hwnd, vk, False)
         elif _method == "pynput":
             ok = _key_pynput(hwnd, vk, True)
             time.sleep(0.02)
@@ -294,34 +372,28 @@ def activate_window_bg(hwnd: int) -> bool:
 
 def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
     """Hold a key for hold_ms milliseconds in background mode."""
-    vk_map = {
-        "enter": 0x0D,
-        "escape": 0x1B,
-        "space": 0x20,
-        "tab": 0x09,
-        "backspace": 0x08,
-        "delete": 0x2E,
-        "up": 0x26,
-        "down": 0x28,
-        "left": 0x25,
-        "right": 0x27,
-        "f1": 0x70,
-        "f5": 0x74,
-    }
-    key_lower = key.strip().lower()
-    vk = vk_map.get(key_lower)
-    if vk is None and len(key) == 1:
-        vk = ord(key.upper())
+    vk = _resolve_vk(key)
     if vk is None:
         _log.warning("Cannot parse key for hold: %s", key)
         return False
 
     with _lock:
         if _method == "frida":
-            ok = _key_postmessage(hwnd, vk, True)
-            time.sleep(hold_ms / 1000.0)
-            ok = _key_postmessage(hwnd, vk, False) and ok
-            return ok
+            f = _frida()
+            if not f.key(hwnd, vk, True):
+                return False
+            try:
+                # 週期 re-arm spoof 寬限期，支援任意長度的按住
+                deadline = time.monotonic() + hold_ms / 1000.0
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(remaining, 1.0))
+                    f.key(hwnd, vk, True)
+                return True
+            finally:
+                f.key(hwnd, vk, False)
         elif _method == "pynput":
             return False
     return False
@@ -404,4 +476,32 @@ if __name__ == "__main__":
         user32.PostMessageW = _orig_pm
     print("  [OK] scroll sign/axis: 下左負值、上右正值、水平送 WM_MOUSEHWHEEL")
 
-    print("\n=== All 5 tests passed ===")
+    # 按鍵 vk 解析：與前景按鍵名一致（f1-f12 / numpad / pgup 等）
+    assert _resolve_vk("F5") == 0x74
+    assert _resolve_vk("f12") == 0x7B
+    assert _resolve_vk("pgdn") == 0x22
+    assert _resolve_vk("numpad3") == 0x63
+    assert _resolve_vk("a") == 0x41
+    assert _resolve_vk("Z") == 0x5A
+    assert _resolve_vk("") is None
+    assert _resolve_vk("foobar") is None
+    print("  [OK] _resolve_vk 按鍵名/單字元解析")
+
+    # extended-key lParam bit 24：方向鍵等需設，普通鍵不需
+    captured = {}
+    _orig_pm = user32.PostMessageW
+    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (
+        captured.update(msg=msg, wparam=wparam, lparam=lparam) or True
+    )
+    try:
+        _key_postmessage(1, 0x25, True)  # VK_LEFT
+        assert captured["lparam"] & (1 << 24), "方向鍵應設 extended-key 位元"
+        _key_postmessage(1, 0x41, True)  # 'A'
+        assert not (captured["lparam"] & (1 << 24)), "普通鍵不應設 extended-key 位元"
+        _key_postmessage(1, 0x25, False)  # VK_LEFT up
+        assert captured["lparam"] & (1 << 30), "keyup 應設 transition 位元"
+    finally:
+        user32.PostMessageW = _orig_pm
+    print("  [OK] _key_postmessage extended-key lParam")
+
+    print("\n=== All checks passed ===")

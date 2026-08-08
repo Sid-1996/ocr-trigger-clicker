@@ -4,8 +4,12 @@ Unity 驗證 WM_LBUTTON 事件時會用 GetCursorPos/ScreenToClient 對照實體
 純 PostMessage 因實體游標不在目標點而被丟棄。本模組注入目標行程 hook 這兩個 API，
 在收到 update 訊息時回傳假座標，讓 Unity 通過驗證 —— 全程游標不動、焦點不搶。
 
+鍵盤（key）已同步支援：與點擊同架構——hook GetKeyState / GetAsyncKeyState /
+GetKeyboardState 假造按鍵狀態（僅覆寫注入中的 vk，其餘 pass-through），再
+PostMessage 送 WM_KEYDOWN/UP，讓 Unity 無論走訊息佇列或 state-polling 都收得到。
+
 v1 限制：
-- 僅保證點擊（click）；鍵盤/滾輪/拖曳仍走 PostMessage（Unity 下可能無效）
+- 僅保證點擊（click）與鍵盤（key）；滾輪/拖曳仍走 PostMessage（Unity 下可能無效）
 - 遊戲若要求視窗聚焦（Application.isFocused）仍無效
 - EAC/BattlEye 等防作弊會封鎖 Frida（行程注入可被偵測）
 
@@ -36,6 +40,7 @@ _last_error = ""
 
 _ATTACH_READY_TIMEOUT = 3.0  # load() 在 frida 17 對頂層 JS 錯誤不拋例外，靠 ready 心跳偵測
 _SPOOF_GRACE_MS = 400  # spoof 有效期間；太短點擊可能漏註冊，太長卡使用者滑鼠
+_KEY_GRACE_MS = 10000  # key spoof 保險寬限期；up 未送達時自動清除，避免遊戲內按鍵卡住
 
 
 def build_hook_script() -> str:
@@ -51,18 +56,32 @@ def build_hook_script() -> str:
     spoof 自動還原：onLeave 只在 spoofing 開啟時覆寫游標輸出，update 設定後
     經 __SPOOF_MS__ ms 自動關閉（pass-through 回傳真實游標），讓使用者後續
     手動滑鼠操作回到真實位置。
+
+    鍵盤（key）：hookKeyState 覆寫 GetKeyState / GetAsyncKeyState（scalar，高 bit
+    0x8000 = 按下）與 GetKeyboardState（256-byte 陣列，bit 0x80 = 按下），只在
+    keys[vk] 為 down 時覆寫該按鍵，其餘 pass-through——不影響使用者物理鍵盤。
+    rpc.exports.key(vk, down) 設定/清除，down 時 arm __KEY_MS__ 保險 timer。
     """
-    return r"""
+    return (
+        r"""
 'use strict';
 
 var pos = { sx: 0, sy: 0, cx: 0, cy: 0 };
 var spoofing = false;
 var spoofTimer = null;
 var SPOOF_MS = __SPOOF_MS__;
+var keys = {};
+var keyTimer = null;
+var KEY_MS = __KEY_MS__;
 var user32 = Process.findModuleByName('user32.dll');
 
 function disableSpoof() {
   spoofing = false;
+}
+
+function clearKeys() {
+  keys = {};
+  keyTimer = null;
 }
 
 function hookSpoof(name, ptIndex, writePos) {
@@ -79,11 +98,38 @@ function hookSpoof(name, ptIndex, writePos) {
   });
 }
 
+function hookKeyState(name, isArray) {
+  var addr = user32.findExportByName(name);
+  if (addr === null) return;
+  Interceptor.attach(addr, {
+    onEnter: function (args) {
+      this.vk = args[0].toInt32() & 0xFF;
+      this.buf = args[0];
+    },
+    onLeave: function (retval) {
+      if (isArray) {
+        // GetKeyboardState: 256-byte 陣列，只覆寫正在注入且為 down 的按鍵
+        if (!this.buf || this.buf.isNull()) return;
+        for (var vk in keys) {
+          if (!keys[vk]) continue;
+          var b = this.buf.add(parseInt(vk, 10));
+          b.writeU8(b.readU8() | 0x80);
+        }
+        return;
+      }
+      if (keys[this.vk]) retval.replace(0x8000);
+    }
+  });
+}
+
 if (user32 === null) {
   send(['fatal', 'user32.dll 未載入']);
 } else {
   hookSpoof('GetCursorPos', 0, { sx: function () { return pos.sx; }, sy: function () { return pos.sy; } });
   hookSpoof('ScreenToClient', 1, { sx: function () { return pos.cx; }, sy: function () { return pos.cy; } });
+  hookKeyState('GetKeyState', false);
+  hookKeyState('GetAsyncKeyState', false);
+  hookKeyState('GetKeyboardState', true);
   rpc.exports = {
     update: function (sx, sy, cx, cy) {
       pos = { sx: sx, sy: sy, cx: cx, cy: cy };
@@ -92,13 +138,27 @@ if (user32 === null) {
       spoofTimer = setTimeout(disableSpoof, SPOOF_MS);
       return 1;
     },
+    key: function (vk, down) {
+      vk = vk & 0xFF;
+      if (down) {
+        keys[vk] = true;
+        if (keyTimer !== null) clearTimeout(keyTimer);
+        keyTimer = setTimeout(clearKeys, KEY_MS);
+      } else {
+        delete keys[vk];
+      }
+      return 1;
+    },
     getSpoofing: function () {
       return spoofing;
     }
   };
   send('ready');
 }
-""".replace("__SPOOF_MS__", str(_SPOOF_GRACE_MS)).strip()
+""".replace("__SPOOF_MS__", str(_SPOOF_GRACE_MS))
+        .replace("__KEY_MS__", str(_KEY_GRACE_MS))
+        .strip()
+    )
 
 
 def _bg():
@@ -233,6 +293,37 @@ def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> 
     return _bg()._click_postmessage(hwnd, x, y, button, hold_ms)
 
 
+def _sync_key(vk: int, down: bool) -> tuple[bool, str]:
+    """Synchronously push a key down/up spoof to the injected script via rpc.exports."""
+    try:
+        ret = _script.exports.key(int(vk), 1 if down else 0)
+        if ret != 1:
+            return False, f"script 回傳異常: {ret!r}"
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+
+def key(hwnd: int, vk: int, down: bool) -> bool:
+    """Press (down=True) or release (down=False) a key via spoofed key-state + PostMessage."""
+    if not ensure_attached(hwnd):
+        return False
+    with _lock:
+        if _script is None:
+            return False
+        ok, err = _sync_key(vk, down)
+        if not ok:
+            # 注入可能已死亡 → 重新 attach 重試一次，避免需重開 app 才恢復
+            _log.warning("Frida 鍵盤狀態同步失敗 (%s)，重新 attach 重試", err)
+            detach()
+            if ensure_attached(hwnd) and _script is not None:
+                ok, err = _sync_key(vk, down)
+        if not ok:
+            _set_error(f"Frida 鍵盤狀態同步失敗: {err}")
+            return False
+    return _bg()._key_postmessage(hwnd, int(vk), down)
+
+
 def detach() -> None:
     """Detach the injected session and restore the game (idempotent)."""
     global _script, _session, _pid, _script_error
@@ -261,19 +352,27 @@ if __name__ == "__main__":
     for needle in (
         "GetCursorPos",
         "ScreenToClient",
+        "GetKeyState",
+        "GetAsyncKeyState",
+        "GetKeyboardState",
+        "hookKeyState",
         "findExportByName",
         "send('ready')",
         "rpc.exports",
         "update: function",
+        "key: function",
         "getSpoofing",
         "spoofing",
         "setTimeout(disableSpoof",
+        "setTimeout(clearKeys",
     ):
         assert needle in js, f"hook 腳本缺少: {needle}"
     assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
     assert "recv('update'" not in js, "不應使用 one-shot 的 recv 握手（只會成功一次）"
     assert "__SPOOF_MS__" not in js, "spoof 寬限期應注入實際數值"
+    assert "__KEY_MS__" not in js, "key 寬限期應注入實際數值"
     assert f"SPOOF_MS = {_SPOOF_GRACE_MS}" in js, "spoof 寬限期應等於 _SPOOF_GRACE_MS"
+    assert f"KEY_MS = {_KEY_GRACE_MS}" in js, "key 寬限期應等於 _KEY_GRACE_MS"
     print("  [OK] hook 腳本內容")
 
     desktop = ctypes.windll.user32.GetDesktopWindow()
@@ -290,9 +389,14 @@ if __name__ == "__main__":
     class _FakeExports:
         def __init__(self):
             self.updates = []
+            self.key_calls = []
 
         def update(self, sx, sy, cx, cy):
             self.updates.append((sx, sy, cx, cy))
+            return 1
+
+        def key(self, vk, down):
+            self.key_calls.append((vk, down))
             return 1
 
     class _FakeScript:
@@ -358,9 +462,26 @@ if __name__ == "__main__":
         ctypes.windll.user32.PostMessageW = _orig_pm
     print("  [OK] click: rpc.exports.update ×2 → PostMessage")
 
+    captured = {}
+    _orig_pm = ctypes.windll.user32.PostMessageW
+    ctypes.windll.user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (
+        captured.update(msg=msg, wparam=wparam) or True
+    )
+    try:
+        # key down/up：rpc.exports.key 同步 → PostMessage WM_KEYDOWN/UP
+        assert key(desktop, 0x41, True), "key down 應成功"
+        assert key(desktop, 0x41, False), "key up 應成功"
+        kc = fake_script.exports.key_calls
+        assert len(kc) == 2, f"應收到兩次 key rpc: {kc}"
+        assert kc == [(0x41, 1), (0x41, 0)], f"key rpc 參數錯誤: {kc}"
+        assert captured["msg"] == 0x0101, "應送 WM_KEYUP"
+    finally:
+        ctypes.windll.user32.PostMessageW = _orig_pm
+    print("  [OK] key: rpc.exports.key(down/up) → PostMessage WM_KEYDOWN/UP")
+
     detach()
     assert fake_script.unloaded
     print("  [OK] detach 冪等釋放")
 
     del sys.modules["frida"]
-    print("\n=== All 5 checks passed ===")
+    print("\n=== All 7 checks passed ===")

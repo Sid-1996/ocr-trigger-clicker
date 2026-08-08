@@ -101,6 +101,56 @@ rpc.exports = {
     sess.detach()
 
 
+def test_key_spoof_works(child_pid):
+    # 鍵盤 spoof：key(vk, down) 時 GetKeyState/GetAsyncKeyState 高 bit 與
+    # GetKeyboardState bit 0x80 被覆寫，只影響目標 vk；up 後還原
+    sess = frida.attach(child_pid)
+    prod = sess.create_script(_fb.build_hook_script())
+    prod.load()
+
+    helper_js = r"""
+'use strict';
+var user32 = Process.findModuleByName('user32.dll');
+// return type 用 'int'（frida NativeFunction 不支援 'short'）；低 16 位元即 SHORT 值
+var getAsync = new NativeFunction(user32.findExportByName('GetAsyncKeyState'), 'int', ['int']);
+var getState = new NativeFunction(user32.findExportByName('GetKeyState'), 'int', ['int']);
+var getKeyboard = new NativeFunction(user32.findExportByName('GetKeyboardState'), 'int', ['pointer']);
+rpc.exports = {
+  readKey: function (vk) { return getAsync(vk); },
+  readGetKeyState: function (vk) { return getState(vk); },
+  readKeyboard: function () {
+    var buf = Memory.alloc(256);
+    getKeyboard(buf);
+    var out = [];
+    for (var i = 0; i < 256; i++) out.push(buf.add(i).readU8());
+    return out;
+  }
+};
+"""
+    helper = sess.create_script(helper_js)
+    helper.load()
+
+    VK_A, VK_B = 0x41, 0x42
+    assert helper.exports.readKey(VK_A) & 0x8000 == 0
+    assert helper.exports.readGetKeyState(VK_A) & 0x8000 == 0
+
+    assert prod.exports.key(VK_A, 1) == 1
+    assert helper.exports.readKey(VK_A) & 0x8000, "down: GetAsyncKeyState 高 bit 應設"
+    assert helper.exports.readGetKeyState(VK_A) & 0x8000, "down: GetKeyState 高 bit 應設"
+    assert helper.exports.readKeyboard()[VK_A] & 0x80, "down: GetKeyboardState bit 0x80 應設"
+    # 無關按鍵不受影響
+    assert helper.exports.readKey(VK_B) & 0x8000 == 0
+    assert helper.exports.readKeyboard()[VK_B] & 0x80 == 0
+
+    assert prod.exports.key(VK_A, 0) == 1
+    assert helper.exports.readKey(VK_A) & 0x8000 == 0, "up: GetAsyncKeyState 應還原"
+    assert helper.exports.readKeyboard()[VK_A] & 0x80 == 0, "up: GetKeyboardState 應還原"
+
+    prod.unload()
+    helper.unload()
+    sess.detach()
+
+
 def test_cursor_spoof_works(child_pid):
     js = r"""
 'use strict';

@@ -28,7 +28,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `11_template_matching.py` | 模板比對 | OpenCV matchTemplate + NMS |
 | `12_updater.py` | 自動更新 | GitHub Releases 版本比對 |
 | `15_print_window.py` | PrintWindow 截圖（後台） | `capture_print_window` / `is_admin` / `is_black_capture` |
-| `16_bg_input.py` | 後台輸入 | pynput / frida 雙模點擊、按鍵、拖曳、滾輪（底層 PostMessage primitive 供 frida 使用） |
+| `16_bg_input.py` | 後台輸入 | pynput / frida 雙模。frida 支援點擊＋鍵盤（`18_frida_bg.py` 假造游標/鍵盤狀態 + PostMessage）；滾輪/拖曳回退 PostMessage primitive（Unity 下可能無效） |
 | `17_capture_pipeline.py` | 統一截圖管線 | `capture_frame()` 前景 mss / 後台 PrintWindow 單一入口 |
 | `box_utils.py` | 座標工具集 | 10 純函式 + 17 self-check（見 box_utils 小節） |
 | `rule_models.py` | 資料模型 | `Rule`、`Step`、`RuleGroup`、`ImportPreview` |
@@ -175,7 +175,7 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 ### 輸入
 
-`16_bg_input.py` — 雙模切換：前景用 pynput SendInput，後台用 frida 注入（`18_frida_bg.py`）。`click`/`send_key`/`scroll`/`drag`/`send_hold_key` 等 5 個入口自動依 `get_method()` 選路。後台 PostMessage 模式已移除（Unity 讀 OS 游標、無法精準點擊），底層 `_*_postmessage` 保留作為 frida 的傳送層。
+`16_bg_input.py` — 雙模切換：前景用 pynput SendInput，後台用 frida 注入（`18_frida_bg.py`）。`click`/`send_key`/`scroll`/`drag`/`send_hold_key` 等 5 個入口自動依 `get_method()` 選路。後台 PostMessage 模式已移除（Unity 讀 OS 游標、無法精準點擊），底層 `_*_postmessage` 保留作為 frida 的傳送層。frida 鍵盤：hook `GetKeyState`/`GetAsyncKeyState`/`GetKeyboardState` 假造按鍵狀態（只覆寫注入中的 vk）+ `WM_KEYDOWN/UP`；`_key_postmessage` 對方向鍵等設 extended-key lParam（bit 24）。
 
 後台輸入需視窗 hwnd，座標為**客戶區像素**（非螢幕絕對值），`_client_to_screen()` 轉換後形成 `lparam`。
 
