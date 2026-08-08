@@ -49,8 +49,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `12_log_viewer.py` | LogViewer 日誌檢視器 | `LogViewer(QDialog)` 獨立視窗顯示 `app.log` |
 | `13_gui_click_picker.py` | 點擊座標選取 | 前景螢幕絕對 → 比例座標 |
 | `14_capture_region.py` | 模板擷取 | base64 編碼、capture_size |
-| `17_bg_roi_selector.py` | 後台 ROI 框選 | 後台影像像素 → 客戶區比例座標 |
-| `18_bg_click_picker.py` | 後台點擊座標選取 | 後台影像像素 → 客戶區比例座標 |
+| `17_bg_roi_selector.py` | 後台模板擷取框選 | 後台影像像素 → 客戶區比例座標（僅 `open_capture_region` 用） |
 | `group_settings_controller.py` | 群組設定 | 對話框邏輯 |
 | `rule_config_controller.py` | 規則設定 | 對話框邏輯 |
 | `screenshot_controller.py` | 截圖設定 | 對話框邏輯 |
@@ -75,7 +74,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 **`roi_coord: "client"` 機制。** ROI 比例預設以全視窗尺寸為基準儲存。若 `roi` 字典含 `"roi_coord": "client"`，代表比例是相對於客戶區（不含標題列/邊框）。還原時（`_resolve_roi()`）需呼叫 `get_window_client_offset()` 取得邊框偏移量，再轉換為含邊框的全視窗像素座標 —— 因為 `capture()` 截圖本身含邊框。忽略此標記會導致裁切區域系統性偏移。舊任務（無此標記）視為以全視窗比例儲存，向下相容。此機制在基準版本前已修補了多處遺漏（`_CompareStepForm`、OCR 診斷面板、舊檔載入路徑），commits：`2cc7db6`、`db094f4`、`2502b52`、`ff2ffb0`。
 
-**後台座標**：後台模式下的 ROI/點擊比例是相對於客戶區影像像素。`_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）讀取 `roi_coord` 標記，若為 `"client"` 即用 `client_offset` 轉換。後台選取器（GUI `17_bg_roi_selector`、`18_bg_click_picker`）輸出的座標已是含 `roi_coord:"client"` 的客戶區比例座標，由 `_resolve_*` 自動處理轉換。
+**後台座標**：後台模式下的 ROI/點擊比例是相對於客戶區影像像素。`_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）讀取 `roi_coord` 標記，若為 `"client"` 即用 `client_offset` 轉換。**ROI/點擊選取統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`，螢幕絕對 → 客戶區比例，`screenshot_controller.open_roi_selector` 與 `06_gui_main._on_pick_coord` 統一收斂），不再用後台 PrintWindow 選取 UI（`18_bg_click_picker.py` 已刪）。僅後台模板擷取（`open_capture_region`）保留 `17_bg_roi_selector` 在 PrintWindow 影像上框選，確保模板與執行時截圖同源。
 
 ## 截圖備援鏈
 
@@ -183,13 +182,11 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 ### 座標
 
-後台模式下的 ROI/點擊比例是相對於客戶區影像像素（無邊框）。`roi_coord: "client"` 標記指示 `_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）需加 `client_offset` 校正。後台選取器（GUI `17_bg_roi_selector`、`18_bg_click_picker`）輸出已含此標記。
+後台模式下的 ROI/點擊比例是相對於客戶區影像像素（無邊框）。`roi_coord: "client"` 標記指示 `_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）需加 `client_offset` 校正。選取流程：前景 selector（`07_gui_roi`/`13_gui_click_picker`）回傳螢幕絕對座標 → `screenshot_controller`/`06_gui_main` 用 `get_window_rect` + `get_window_client_offset` 收斂為含 `roi_coord:"client"` 的客戶區比例座標。
 
-### 座標選取器（後台）
+### 座標選取器（模板擷取，後台）
 
-**`17_bg_roi_selector.py`** — 先 `activate_window(title)` 使視窗前景化、主視窗 minimize、PrintWindow 擷取靜態客戶區截圖、在截圖上拖曳選取 ROI（同樣比例介面），結果為含 `roi_coord:"client"` 的客戶區比例座標。
-
-**`18_bg_click_picker.py`** — 同樣 PrintWindow 截圖 + 單擊選取點，輸出含 `roi_coord:"client"` 的比例座標，使用 `ScreenToClient` 轉換（commit `e852d38`）。
+**`17_bg_roi_selector.py`** — 僅用於後台模板擷取（`open_capture_region`）：`activate_window(title)` 使視窗前景化、主視窗 minimize、PrintWindow 擷取靜態客戶區截圖、在截圖上拖曳框選，結果為含 `roi_coord:"client"` 的客戶區比例座標，模板像素與執行時截圖同源。
 
 ### 全黑偵測
 
@@ -411,7 +408,7 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 - `_toggle_all_groups` — `gui/06_gui_main.py:4496`，切換所有群組啟用狀態。
 - `_img_compare_match` 行號 — `gui/06_gui_main.py:1311`。
 - `_do_debounced_save` 行號 — `gui/06_gui_main.py:4954`。
-- 後台模式 — `_get_interaction_mode()` 於 `gui/06_gui_main.py:85-95`，後台輸入 `core/16_bg_input.py:192` `click()`，後台 roi 選取 `gui/17_bg_roi_selector.py`、點擊選取 `gui/18_bg_click_picker.py`。
+- 後台模式 — `_get_interaction_mode()` 於 `gui/06_gui_main.py:85-95`，後台輸入 `core/16_bg_input.py:192` `click()`，後台模板擷取框選 `gui/17_bg_roi_selector.py`（ROI/點擊選取統一走前景 selector）。
 - LogViewer — `gui/12_log_viewer.py:30` `LogViewer(QDialog)`，開啟於 `gui/06_gui_main.py:5644` `_open_log_viewer()`。
 - 停止統計 — `core/05_main_loop.py:1308-1321` `start()`/`stop()`，`_started_at` + `_total_clicks`（`core/10_performance_monitor.py` `get_total_clicks()`）。
 

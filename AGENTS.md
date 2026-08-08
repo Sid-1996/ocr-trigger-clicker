@@ -120,7 +120,9 @@ pwsh -Command "
 | debug panel「建立為新規則」 | 視窗相對（同上） | ÷ win_size → 比例座標 |
 | 框選偵測區域 (ROI selector) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
 | 選取點擊座標 (click picker) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
-| 後台框選/座標 (bg selectors) | 影像像素 | (像素 - chrome) ÷ client_size → 客戶區比例 |
+| 後台模板框選 (bg template, `17_bg_roi_selector`) | 影像像素 | (像素 - chrome) ÷ client_size → 客戶區比例 |
+
+> ROI/點擊座標選取**統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`），後台模式也相同（設定時將目標視窗前景化），收斂為客戶區比例。僅後台模板擷取用 PrintWindow 影像框選，確保模板與執行時截圖同源。
 
 ### 主循環處理
 
