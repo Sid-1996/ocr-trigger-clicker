@@ -22,35 +22,54 @@ _script = None
 _session = None
 _pid: int | None = None
 _ack = threading.Event()
+_ready = threading.Event()
+_script_error = ""
 _last_error = ""
+
+_ATTACH_READY_TIMEOUT = 3.0  # load() 在 frida 17 對頂層 JS 錯誤不拋例外，靠 ready 心跳偵測
 
 
 def build_hook_script() -> str:
-    """Return the Frida JS hook script (GetCursorPos + ScreenToClient spoof)."""
+    """Return the Frida JS hook script (GetCursorPos + ScreenToClient spoof).
+
+    ponytail: 用 Process.findModuleByName().findExportByName()，不用
+    Module.getExportByName —— 後者在 frida 17.x (QJS) 會直接拋
+    TypeError: not a function，頂層 JS 掛掉導致 recv 永不註冊（ack 逾時）。
+    """
     return r"""
 'use strict';
 
 var pos = { sx: 0, sy: 0, cx: 0, cy: 0 };
+var user32 = Process.findModuleByName('user32.dll');
 
-function hookSpoof(name, writePos) {
-  var addr = Module.getExportByName('user32.dll', name);
-  if (addr.isNull()) return;
+function hookSpoof(name, ptIndex, writePos) {
+  var addr = user32.findExportByName(name);
+  if (addr === null) return;
   Interceptor.attach(addr, {
-    onEnter: function (args) { this.pt = args[args.length - 1]; },
+    onEnter: function (args) { this.pt = args[ptIndex]; },
     onLeave: function (retval) {
-      if (this.pt.isNull()) return;
+      if (!this.pt || this.pt.isNull()) return;
       this.pt.writeS32(writePos.sx());
       this.pt.add(4).writeS32(writePos.sy());
     }
   });
 }
 
-hookSpoof('GetCursorPos', { sx: function () { return pos.sx; }, sy: function () { return pos.sy; } });
-hookSpoof('ScreenToClient', { sx: function () { return pos.cx; }, sy: function () { return pos.cy; } });
+if (user32 === null) {
+  send(['fatal', 'user32.dll 未載入']);
+} else {
+  hookSpoof('GetCursorPos', 0, { sx: function () { return pos.sx; }, sy: function () { return pos.sy; } });
+  hookSpoof('ScreenToClient', 1, { sx: function () { return pos.cx; }, sy: function () { return pos.cy; } });
+  send('ready');
+}
 
 recv('update', function (msg) {
-  pos = { sx: msg.sx, sy: msg.sy, cx: msg.cx, cy: msg.cy };
-  send('ack');
+  try {
+    pos = { sx: msg.sx, sy: msg.sy, cx: msg.cx, cy: msg.cy };
+    send('ack');
+  } catch (e) {
+    send(['script-error', String(e)]);
+  }
 });
 """.strip()
 
@@ -80,17 +99,29 @@ def last_error() -> str:
 
 
 def _on_message(message, data):
-    if (
-        isinstance(message, dict)
-        and message.get("type") == "send"
-        and message.get("payload") == "ack"
-    ):
-        _ack.set()
+    global _script_error
+    if not isinstance(message, dict):
+        return
+    mtype = message.get("type")
+    if mtype == "send":
+        payload = message.get("payload")
+        if payload == "ack":
+            _ack.set()
+        elif payload == "ready":
+            _ready.set()
+        elif isinstance(payload, list) and payload and payload[0] in ("fatal", "script-error"):
+            _script_error = str(payload[1]) if len(payload) > 1 else str(payload[0])
+            _log.error("Frida script %s: %s", payload[0], _script_error)
+            if payload[0] == "fatal":
+                _ready.set()  # 立即解除 attach 等待，回報致命錯誤
+    elif mtype == "error":
+        _script_error = message.get("description", "")
+        _log.error("Frida script 錯誤: %s", _script_error)
 
 
 def ensure_attached(hwnd: int) -> bool:
     """Attach Frida to the process owning hwnd; re-attach if pid changed."""
-    global _script, _session, _pid
+    global _script, _session, _pid, _script_error
     if not hwnd:
         _set_error("Frida: 無效 hwnd")
         return False
@@ -104,11 +135,19 @@ def ensure_attached(hwnd: int) -> bool:
         except ImportError as e:
             _set_error(f"Frida 未安裝: {e}")
             return False
+        _ack.clear()
+        _ready.clear()
+        _script_error = ""
         try:
             _session = frida.attach(cur_pid)
             _script = _session.create_script(build_hook_script())
             _script.on("message", _on_message)
             _script.load()
+            if not _ready.wait(_ATTACH_READY_TIMEOUT):
+                detail = _script_error or "script 未回應 ready（可能被遊戲或防作弊阻擋）"
+                raise RuntimeError(detail)
+            if _script_error:
+                raise RuntimeError(_script_error)
             _pid = cur_pid
             _last_error = ""
             _log.info("Frida 已注入 pid=%d (hwnd=%d)", cur_pid, hwnd)
@@ -133,7 +172,7 @@ def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> 
         except Exception as e:
             _set_error(f"Frida 傳遞座標失敗: {e}")
             return False
-        if not _ack.wait(1.0):
+        if not _ack.wait(2.0):
             _set_error("Frida 座標同步逾時 (ack)")
             return False
     return _bg()._click_postmessage(hwnd, x, y, button, hold_ms)
@@ -141,7 +180,7 @@ def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> 
 
 def detach() -> None:
     """Detach the injected session and restore the game (idempotent)."""
-    global _script, _session, _pid
+    global _script, _session, _pid, _script_error
     with _lock:
         if _script is not None:
             try:
@@ -156,14 +195,25 @@ def detach() -> None:
                 pass
             _session = None
         _pid = None
+        _ack.clear()
+        _ready.clear()
+        _script_error = ""
 
 
 if __name__ == "__main__":
     print("=== Frida BG Self-Check ===\n")
 
     js = build_hook_script()
-    for needle in ("GetCursorPos", "ScreenToClient", "recv('update'", "send('ack')"):
+    for needle in (
+        "GetCursorPos",
+        "ScreenToClient",
+        "findExportByName",
+        "send('ready')",
+        "recv('update'",
+        "send('ack')",
+    ):
         assert needle in js, f"hook 腳本缺少: {needle}"
+    assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
     print("  [OK] hook 腳本內容")
 
     desktop = ctypes.windll.user32.GetDesktopWindow()
@@ -189,6 +239,7 @@ if __name__ == "__main__":
 
         def load(self):
             self.loaded = True
+            self._handler({"type": "send", "payload": "ready"}, None)
 
         def post(self, msg):
             self.posted.append(msg)

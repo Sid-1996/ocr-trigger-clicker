@@ -18,6 +18,7 @@ def _make_fake_frida():
 
         def load(self):
             self.loaded = True
+            self._handler({"type": "send", "payload": "ready"}, None)
 
         def post(self, msg):
             self.posted.append(msg)
@@ -51,8 +52,16 @@ def _make_fake_frida():
 
 def test_hook_script_content():
     js = _fb.build_hook_script()
-    for needle in ("GetCursorPos", "ScreenToClient", "recv('update'", "send('ack')"):
+    for needle in (
+        "GetCursorPos",
+        "ScreenToClient",
+        "findExportByName",
+        "send('ready')",
+        "recv('update'",
+        "send('ack')",
+    ):
         assert needle in js
+    assert "Module.getExportByName" not in js
 
 
 def test_hwnd_to_pid_invalid():
@@ -71,6 +80,17 @@ def test_frida_missing_graceful(monkeypatch):
     _fb.detach()
     assert _fb.ensure_attached(1) is False
     assert _fb.last_error()
+
+
+def test_ensure_attached_ready_timeout(monkeypatch):
+    # frida 17 的 load() 對頂層 JS 錯誤不拋例外 → 靠 ready 心跳偵測注入失敗
+    fake = _make_fake_frida()
+    monkeypatch.setitem(sys.modules, "frida", fake)
+    monkeypatch.setattr(_fb, "_hwnd_to_pid", lambda hwnd: 4242)
+    monkeypatch.setattr(_fb._ready, "wait", lambda timeout: False)
+    _fb.detach()
+    assert _fb.ensure_attached(12345) is False
+    assert "ready" in _fb.last_error()
 
 
 def test_ensure_attached_and_click_flow(monkeypatch):
