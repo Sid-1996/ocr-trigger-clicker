@@ -263,7 +263,7 @@
 <!-- ════════════ Hero ════════════ -->
 <section class="hero">
   <div class="container">
-    <div class="subtitle">Windows 10/11 · 綠色免安裝 · 開源 AGPLv3 · <span id="hero-version">v0.2.1</span></div>
+    <div class="subtitle">Windows 10/11 · 綠色免安裝 · 開源 AGPLv3 · <span id="hero-version">v0.2.2</span></div>
     <h1>OCR Trigger Clicker</h1>
     <p>免寫程式的 Windows 自動化工具 — 偵測螢幕文字後自動點擊與按鍵。支援繁中 / English UI、ROI 區域設定、圖像比對、多步驟流程。</p>
     <div class="actions">
@@ -691,7 +691,7 @@
 
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">可以後台掛機嗎？</button>
-      <div class="faq-answer">可以。偏好設定中選擇「後台模式」（Frida 注入）後，工具改用 PrintWindow 截圖 + Frida 注入點擊，目標視窗可最小化或遮蓋，零游標干擾、不搶焦點。<br><br>
+      <div class="faq-answer">可以。偏好設定中選擇「後台模式」（Frida 注入）後，工具改用 PrintWindow 截圖 + Frida 注入點擊與按鍵，目標視窗可最小化或遮蓋，零游標干擾、不搶焦點。<br><br>
         ⚠️ 若遊戲不給後台，尤其是多數 <strong>Unity</strong> 開發的遊戲，這是遊戲本身的<strong>底層設計限制</strong>、不是工具的問題——Unity 用 GPU 直接繪製畫面（不經 PrintWindow 這條 Windows 相容繪圖路徑），輸入也走自己的低階輸入系統（不接收 PostMessage 這類舊式視窗訊息），所以後台看不到畫面、也點不進去。遇到這種情況改回<strong>前景模式</strong>即可。</div>
     </div>
 
@@ -737,7 +737,7 @@
     <h2>下載</h2>
     <p class="section-desc">最新穩定版本，歡迎下載使用或貢獻原始碼。</p>
     <div class="download-box">
-      <div class="version" id="dl-version">v0.2.1</div>
+      <div class="version" id="dl-version">v0.2.2</div>
       <div class="meta">Windows 10/11 64-bit · 綠色免安裝 · 單執行檔</div>
       <div class="actions">
         <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" target="_blank" class="btn btn-primary">下載最新版本</a>
