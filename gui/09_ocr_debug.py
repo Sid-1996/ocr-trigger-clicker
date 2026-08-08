@@ -57,6 +57,14 @@ def _get_interaction_mode() -> str:
         return "pynput"
 
 
+def _find_text_after_click(block_results: list, target: str) -> bool:
+    """True if the same target text is still detected (case-insensitive, fuzzy)."""
+    try:
+        return bool(_ocr.find_text(block_results, target, "fuzzy", 0.8))
+    except Exception:
+        return False
+
+
 class _ImageLabel(QLabel):
     clicked = pyqtSignal(int, int)
 
@@ -76,6 +84,7 @@ class _ImageLabel(QLabel):
 class _OcrSignals(QObject):
     ocr_done = pyqtSignal(list, float, int)
     ocr_status = pyqtSignal(str)
+    click_verify_done = pyqtSignal(dict)
 
 
 class OcrDebugPanel(QWidget):
@@ -101,9 +110,11 @@ class OcrDebugPanel(QWidget):
         self._selected_index = -1
         self._request_id = 0
         self._has_active_rule = False
+        self._verif_in_progress = False
         self._signals = _OcrSignals()
         self._signals.ocr_done.connect(self._on_ocr_done)
         self._signals.ocr_status.connect(self._on_ocr_status)
+        self._signals.click_verify_done.connect(self._on_click_verify_done)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -775,8 +786,14 @@ class OcrDebugPanel(QWidget):
             err_detail = _bg_input.last_error()
             if err_detail:
                 status_text = f"{status_text} ({err_detail})"
-                self._click_error_label.setText(f"{T('ocr_debug.click_failed')}: {err_detail}")
-                self._click_error_label.show()
+            self._show_click_verify(
+                "inject_fail",
+                text=r.text,
+                api_ok=False,
+                sx=cx,
+                sy=cy,
+                last_error=err_detail,
+            )
         tooltip = T(
             "ocr_debug.click_test_tooltip",
             icon=status_icon,
@@ -808,6 +825,129 @@ class OcrDebugPanel(QWidget):
                 sy=cy,
             )
         )
+
+        if click_ok and mode == "frida":
+            self._start_click_verify(r, cx, cy)
+
+    def _start_click_verify(self, r, sx: int, sy: int):
+        if self._verif_in_progress:
+            return
+        self._verif_in_progress = True
+        self._click_test_btn.setEnabled(False)
+        self._click_test_btn.setText(T("ocr_debug.verifying"))
+        frame_size = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
+        threading.Thread(
+            target=self._click_verify_worker,
+            args=(r, sx, sy, frame_size[1], frame_size[0]),
+            daemon=True,
+        ).start()
+
+    def _click_verify_worker(self, r, sx: int, sy: int, frame_w: int, frame_h: int):
+        def emit(state: str, still: str, ms: float, err: str = ""):
+            self._signals.click_verify_done.emit(
+                {
+                    "state": state,
+                    "text": r.text,
+                    "sx": sx,
+                    "sy": sy,
+                    "ms": ms,
+                    "still": still,
+                    "last_error": err,
+                }
+            )
+
+        try:
+            # 等 ~0.6s 過場，再重拍目標區塊確認點擊是否有實際反應
+            time.sleep(0.6)
+            mode = _get_interaction_mode()
+            hwnd = _screenshot.get_window_hwnd(self._window_title)
+            t0 = time.monotonic()
+            if mode != "frida" or not hwnd:
+                return
+            img = capture_frame(mode, self._window_title, hwnd=hwnd)
+            if img is None or is_black_capture(img):
+                emit("black", "?", (time.monotonic() - t0) * 1000)
+                return
+            img = img[:, :, ::-1].copy()
+            h, w = img.shape[:2]
+            if (w, h) != (frame_w, frame_h):
+                emit("window_changed", "?", (time.monotonic() - t0) * 1000)
+                return
+            crop = self._roi_patch(img, r)
+            results = recognize(crop, **self._ocr_options())
+            matched = _find_text_after_click(results, r.text)
+            emit(
+                "no_response" if matched else "success",
+                "yes" if matched else "no",
+                (time.monotonic() - t0) * 1000,
+            )
+        except Exception as e:
+            logging.exception("click verify failed")
+            emit("black", "?", 0.0, str(e))
+
+    def _roi_patch(self, img: np.ndarray, r) -> np.ndarray:
+        h, w = img.shape[:2]
+        pad = max(4, int(max(r.w, r.h) * 0.25))
+        x0 = max(0, r.x - pad)
+        y0 = max(0, r.y - pad)
+        x1 = min(w, r.x + r.w + pad)
+        y1 = min(h, r.y + r.h + pad)
+        return img[y0:y1, x0:x1]
+
+    def _on_click_verify_done(self, out: dict):
+        self._verif_in_progress = False
+        self._click_test_btn.setEnabled(True)
+        self._click_test_btn.setText(T("ocr_debug.click_test"))
+        self._show_click_verify(
+            out["state"],
+            text=out["text"],
+            api_ok=True,
+            sx=out["sx"],
+            sy=out["sy"],
+            last_error=out.get("last_error", ""),
+            ms=out.get("ms", 0.0),
+            still=out.get("still", "?"),
+        )
+
+    def _show_click_verify(
+        self,
+        state: str,
+        *,
+        text: str = "",
+        api_ok: bool,
+        sx: int,
+        sy: int,
+        last_error: str = "",
+        ms: float = 0.0,
+        still: str = "?",
+    ):
+        colors = {
+            "success": "#1e8e3e",
+            "no_response": "#b45309",
+            "inject_fail": "#c62828",
+            "black": "#b45309",
+            "window_changed": "#666",
+        }
+        key = state if state in colors else "black"
+        guidance = T(f"ocr_debug.click_verify.{key}", text=text)
+        dev = T(
+            "ocr_debug.click_verify.dev_info",
+            mode="frida",
+            source=self._capture_source or "?",
+            text=text,
+            sx=sx,
+            sy=sy,
+            hwnd=_screenshot.get_window_hwnd(self._window_title) or "?",
+            api=T("ocr_debug.click_success") if api_ok else T("ocr_debug.click_failed"),
+            last_error=last_error or "無",
+            ms=round(ms),
+            still_visible=still,
+        )
+        self._click_error_label.setStyleSheet(f"color: {colors.get(key, '#666')};")
+        self._click_error_label.setText(f"{guidance}\n\n{dev}")
+        self._click_error_label.show()
+        if key in ("no_response", "inject_fail", "black"):
+            logging.warning("ocr_dbg click verify=%s text=%s last_error=%s", key, text, last_error)
 
     def _rebuild_annotated(self):
         try:

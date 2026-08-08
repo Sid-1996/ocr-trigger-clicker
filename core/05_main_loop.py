@@ -187,6 +187,8 @@ class MainLoop:
         self._rule_completed: set[str] = set()
         self._last_completed_log: dict[str, float] = {}
         self._action_log_ts: dict[str, float] = {}
+        self._last_frida_err_ts: float = 0.0
+        self._FRIDA_ERR_THROTTLE_SEC: float = 30.0
 
         self._tracking_hwnd: Optional[int] = self._window_hwnd
         self._tool_hwnd: Optional[int] = None
@@ -801,7 +803,14 @@ class MainLoop:
         ):
             err = _bg_input.last_error()
             if err:
-                self.on_error(f"Frida 點擊失敗: {err}")
+                # 30s 節流：後台持續失敗時不讓彈窗洗版
+                now = time.monotonic()
+                if now - self._last_frida_err_ts > self._FRIDA_ERR_THROTTLE_SEC:
+                    self._last_frida_err_ts = now
+                    self.on_error(
+                        f"後台點擊失敗。請用「OCR 診斷」頁的點擊測試確認後台操控是否正常，"
+                        f"或先切到前景模式使用。除錯詳細：{err}"
+                    )
 
         return StepResult("continue")
 
