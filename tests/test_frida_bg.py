@@ -78,6 +78,17 @@ def test_hook_script_content():
         "spoofing",
         "setTimeout(disableSpoof",
         "setTimeout(clearKeys",
+        "hookRawInputBuffer",
+        "GetRawInputBuffer",
+        "RIM_TYPEKEYBOARD",
+        "RAWKEYBOARD",
+        "pendingRaw",
+        "rawDevice",
+        "captureDevice",
+        "fetchKeyboardDevice",
+        "MapVirtualKeyW",
+        "EXTENDED_VK",
+        "memmove",
     ):
         assert needle in js
     assert "Module.getExportByName" not in js
