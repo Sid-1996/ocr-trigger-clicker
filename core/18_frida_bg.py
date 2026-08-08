@@ -61,17 +61,6 @@ def build_hook_script() -> str:
     0x8000 = 按下）與 GetKeyboardState（256-byte 陣列，bit 0x80 = 按下），只在
     keys[vk] 為 down 時覆寫該按鍵，其餘 pass-through——不影響使用者物理鍵盤。
     rpc.exports.key(vk, down) 設定/清除，down 時 arm __KEY_MS__ 保險 timer。
-
-    診斷證實（diag_frida_keyboard）：BrownDust II（Unity 新 Input System）讀鍵盤
-    走 GetRawInputBuffer（buffered raw input）——診斷 10s 內 101 次呼叫、WM_INPUT
-    68 次，且 GetKeyState 只查 6 個修飾鍵。PostMessage 的 WM_KEYDOWN 不會產生
-    WM_INPUT，進不了 raw input 佇列，故被遊戲忽略（Phase 1 實測無效的根因）。
-
-    因此 Phase 3：hook GetRawInputBuffer，在遊戲每次 buffered read 時把合成的
-    RAWKEYBOARD 事件插入 buffer 開頭（合成事件先於真實事件，Unity 以 dwSize 遍歷
-    所有結構）。rawDevice 取真實 keyboard hDevice：優先複製真實事件 header 的
-    hDevice，其次用 GetRawInputDeviceList 列舉 keyboard。rpc.exports.key 同時 push
-    到 pendingRaw 佇列（與 keys 共用 KEY_MS 保險 timer）。
     """
     return (
         r"""
@@ -82,23 +71,9 @@ var spoofing = false;
 var spoofTimer = null;
 var SPOOF_MS = __SPOOF_MS__;
 var keys = {};
-var pendingRaw = [];
 var keyTimer = null;
 var KEY_MS = __KEY_MS__;
 var user32 = Process.findModuleByName('user32.dll');
-
-var RIM_TYPEKEYBOARD = 1;
-var RI_KEY_MAKE = 0;
-var RI_KEY_BREAK = 1;
-var RI_KEY_E0 = 2;
-var WM_KEYDOWN = 0x0100;
-var WM_KEYUP = 0x0101;
-var PS = Process.pointerSize;
-// 需 extended-key（scan code 有 0xE0 前綴）的按鍵，與 16_bg_input._EXTENDED_VK 一致
-var EXTENDED_VK = [0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2C, 0x2D, 0x2E, 0x6F, 0x90];
-
-// 真實 keyboard hDevice（緩存）。Unity 以 hDevice 對應輸入設備，0 可能被忽略。
-var rawDevice = ptr(0);
 
 function disableSpoof() {
   spoofing = false;
@@ -106,7 +81,6 @@ function disableSpoof() {
 
 function clearKeys() {
   keys = {};
-  pendingRaw = [];
   keyTimer = null;
 }
 
@@ -148,102 +122,6 @@ function hookKeyState(name, isArray) {
   });
 }
 
-// 用 GetRawInputDeviceList 列舉 keyboard 設備 handle（rawDevice 尚無值時兜底）
-function fetchKeyboardDevice() {
-  var fn = user32.findExportByName('GetRawInputDeviceList');
-  if (fn === null) return ptr(0);
-  var gridl = new NativeFunction(fn, 'uint', ['pointer', 'pointer', 'uint']);
-  var stride = PS + 4; // RAWINPUTDEVICELIST { HANDLE hDevice; DWORD dwType; }，frida 會對齊
-  if (PS === 8) stride = 16;
-  var n1 = ptr(0);
-  gridl(ptr(0), n1, stride);
-  var count = n1.toInt32();
-  if (count <= 0) return ptr(0);
-  var buf = Memory.alloc(count * stride);
-  var n2 = ptr(count);
-  gridl(buf, n2, stride);
-  for (var i = 0; i < count; i++) {
-    var entry = buf.add(i * stride);
-    if (entry.add(PS).readU32() === RIM_TYPEKEYBOARD) {
-      return entry.readPointer();
-    }
-  }
-  return ptr(0);
-}
-
-// 掃描 GetRawInputBuffer 回傳的真實事件，快取 keyboard hDevice
-function captureDevice(pData, count) {
-  if (!rawDevice.isNull()) return;
-  var cursor = pData;
-  for (var i = 0; i < count; i++) {
-    var type = cursor.readU32();
-    var sz = cursor.add(4).readU32();
-    if (type === RIM_TYPEKEYBOARD) {
-      rawDevice = cursor.add(8).readPointer();
-      if (!rawDevice.isNull()) return;
-    }
-    cursor = cursor.add(sz);
-  }
-}
-
-function hookRawInputBuffer() {
-  var addr = user32.findExportByName('GetRawInputBuffer');
-  if (addr === null) return;
-  Interceptor.attach(addr, {
-    onEnter: function (args) {
-      this.pData = args[0];
-      this.pcbSize = args[1];
-      this.cap = args[1].isNull() ? 0 : args[1].readU32();
-    },
-    onLeave: function (retval) {
-      if (pendingRaw.length === 0) return;
-      if (this.pData.isNull() || this.pcbSize.isNull()) return; // 查大小模式，無法注入
-      var realCount = retval.toInt32();
-      if (realCount < 0) return; // buffer 太小
-      captureDevice(this.pData, realCount);
-      // RAWINPUT(keyboard) = header(8 + 2*PS) + RAWKEYBOARD(16)
-      var hdr = 8 + 2 * PS;
-      var one = hdr + 16;
-      var synthBytes = pendingRaw.length * one;
-      var realBytes = 0;
-      var cursor = this.pData;
-      for (var i = 0; i < realCount; i++) {
-        var sz = cursor.add(4).readU32();
-        realBytes += sz;
-        cursor = cursor.add(sz);
-      }
-      if (realBytes + synthBytes > this.cap) return; // 空間不足，等下批
-      if (rawDevice.isNull()) rawDevice = fetchKeyboardDevice();
-      if (rawDevice.isNull()) return; // 無 keyboard 設備，Unity 會忽略 hDevice=0
-      // 真實資料往後搬，合成事件放開頭
-      if (realBytes > 0) {
-        var memmove = new NativeFunction(Module.findExportByName(null, 'memmove'),
-                                         'void', ['pointer', 'pointer', 'pointer']);
-        memmove(this.pData.add(synthBytes), this.pData, ptr(realBytes));
-      }
-      var dst = this.pData;
-      for (var j = 0; j < pendingRaw.length; j++) {
-        var ev = pendingRaw[j];
-        dst.writeU32(RIM_TYPEKEYBOARD);
-        dst.add(4).writeU32(one); // dwSize
-        dst.add(8).writePointer(rawDevice);
-        dst.add(8 + PS).writePointer(ptr(0)); // wParam = RIM_INPUT
-        var kb = dst.add(hdr);
-        kb.writeU16(ev.scan);
-        kb.add(2).writeU16(ev.flags);
-        kb.add(2).writeU16(0); // reserved
-        kb.add(2).writeU16(ev.vk);
-        kb.add(2).writeU32(ev.msg);
-        kb.add(4).writeU32(0); // extra
-        dst = dst.add(one);
-      }
-      retval.replace(realCount + pendingRaw.length);
-      this.pcbSize.writeU32(realBytes + synthBytes);
-      pendingRaw = [];
-    }
-  });
-}
-
 if (user32 === null) {
   send(['fatal', 'user32.dll 未載入']);
 } else {
@@ -252,7 +130,6 @@ if (user32 === null) {
   hookKeyState('GetKeyState', false);
   hookKeyState('GetAsyncKeyState', false);
   hookKeyState('GetKeyboardState', true);
-  hookRawInputBuffer();
   rpc.exports = {
     update: function (sx, sy, cx, cy) {
       pos = { sx: sx, sy: sy, cx: cx, cy: cy };
@@ -270,21 +147,6 @@ if (user32 === null) {
       } else {
         delete keys[vk];
       }
-      var scan = ptr(0);
-      try {
-        var mvk = new NativeFunction(user32.findExportByName('MapVirtualKeyW'), 'uint', ['uint', 'uint']);
-        scan = mvk(vk, 0);
-      } catch (e) {
-        scan = 0;
-      }
-      var flags = down ? RI_KEY_MAKE : RI_KEY_BREAK;
-      if (EXTENDED_VK.indexOf(vk) !== -1) flags |= RI_KEY_E0;
-      pendingRaw.push({
-        vk: vk,
-        scan: scan,
-        flags: flags,
-        msg: down ? WM_KEYDOWN : WM_KEYUP
-      });
       return 1;
     },
     getSpoofing: function () {
@@ -503,17 +365,6 @@ if __name__ == "__main__":
         "spoofing",
         "setTimeout(disableSpoof",
         "setTimeout(clearKeys",
-        "hookRawInputBuffer",
-        "GetRawInputBuffer",
-        "RIM_TYPEKEYBOARD",
-        "RAWKEYBOARD",
-        "pendingRaw",
-        "rawDevice",
-        "captureDevice",
-        "fetchKeyboardDevice",
-        "MapVirtualKeyW",
-        "EXTENDED_VK",
-        "memmove",
     ):
         assert needle in js, f"hook 腳本缺少: {needle}"
     assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
