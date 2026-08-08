@@ -489,6 +489,7 @@
   "ocr_debug.window_coords_failed": "Cannot get window coordinates for \"{title}\"",
   "ocr_debug.click_success": "Success",
   "ocr_debug.click_failed": "Failed",
+  "ocr_debug.click_error.copy_hint": "Detailed click error (selectable to copy) — full log in the main window's 'log' viewer",
   "ocr_debug.crop_gen_failed": "Failed to generate crop preview",
   "ocr_debug.detail_text": "Selection: #{n}\nText: {text}\nCoordinates: x={x}, y={y}, w={w}, h={h}\nConfidence: {conf}%",
   "ocr_debug.switch_window": "Window switched — please capture again",

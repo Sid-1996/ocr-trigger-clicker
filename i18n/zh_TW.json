@@ -489,6 +489,7 @@
   "ocr_debug.window_coords_failed": "無法取得視窗「{title}」的座標",
   "ocr_debug.click_success": "成功",
   "ocr_debug.click_failed": "失敗",
+  "ocr_debug.click_error.copy_hint": "失敗詳細錯誤（可選取複製）— 完整記錄請看主視窗「log」按鈕開啟的執行日誌",
   "ocr_debug.crop_gen_failed": "無法產生裁切預覽",
   "ocr_debug.detail_text": "選取區塊：#{n}\n文字：{text}\n座標：x={x}, y={y}, w={w}, h={h}\n信心度：{conf}%",
   "ocr_debug.switch_window": "切換視窗 — 請重新拍一張",

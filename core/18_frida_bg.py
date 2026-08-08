@@ -8,6 +8,11 @@ v1 限制：
 - 僅保證點擊（click）；鍵盤/滾輪/拖曳仍走 PostMessage（Unity 下可能無效）
 - 遊戲若要求視窗聚焦（Application.isFocused）仍無效
 - EAC/BattlEye 等防作弊會封鎖 Frida（行程注入可被偵測）
+
+握手：rpc.exports（同步、無 ack round-trip）。frida 的 recv() 每次註冊只接收
+「下一個」訊息（one-shot），頂層註冊一次只讓第一次點擊成功，之後全 ack 逾時；
+rpc.exports 可重複呼叫。對 ack 逾時/呼叫失敗會自動 detach + re-attach 重試一次，
+避免注入死亡後需重開 app 才恢復。
 """
 
 import ctypes
@@ -21,7 +26,6 @@ _lock = threading.RLock()  # ensure_attached 內會呼叫 detach()，需可重�
 _script = None
 _session = None
 _pid: int | None = None
-_ack = threading.Event()
 _ready = threading.Event()
 _script_error = ""
 _last_error = ""
@@ -32,9 +36,12 @@ _ATTACH_READY_TIMEOUT = 3.0  # load() 在 frida 17 對頂層 JS 錯誤不拋例�
 def build_hook_script() -> str:
     """Return the Frida JS hook script (GetCursorPos + ScreenToClient spoof).
 
-    ponytail: 用 Process.findModuleByName().findExportByName()，不用
-    Module.getExportByName —— 後者在 frida 17.x (QJS) 會直接拋
-    TypeError: not a function，頂層 JS 掛掉導致 recv 永不註冊（ack 逾時）。
+    ponytail: 握手用 rpc.exports.update（同步、可重複呼叫）取代 recv/send('ack')
+    —— frida 的 recv() 是 one-shot，頂層註冊一次只會收到第一次 update，之後每次
+    點擊都 ack 逾時（「成功幾次後永久失敗」的根因）。
+    用 Process.findModuleByName().findExportByName()，不用 Module.getExportByName
+    —— 後者在 frida 17.x (QJS) 會直接拋 TypeError: not a function，頂層 JS 掛掉
+    導致握手永不回應。
     """
     return r"""
 'use strict';
@@ -60,17 +67,14 @@ if (user32 === null) {
 } else {
   hookSpoof('GetCursorPos', 0, { sx: function () { return pos.sx; }, sy: function () { return pos.sy; } });
   hookSpoof('ScreenToClient', 1, { sx: function () { return pos.cx; }, sy: function () { return pos.cy; } });
+  rpc.exports = {
+    update: function (sx, sy, cx, cy) {
+      pos = { sx: sx, sy: sy, cx: cx, cy: cy };
+      return 1;
+    }
+  };
   send('ready');
 }
-
-recv('update', function (msg) {
-  try {
-    pos = { sx: msg.sx, sy: msg.sy, cx: msg.cx, cy: msg.cy };
-    send('ack');
-  } catch (e) {
-    send(['script-error', String(e)]);
-  }
-});
 """.strip()
 
 
@@ -105,9 +109,7 @@ def _on_message(message, data):
     mtype = message.get("type")
     if mtype == "send":
         payload = message.get("payload")
-        if payload == "ack":
-            _ack.set()
-        elif payload == "ready":
+        if payload == "ready":
             _ready.set()
         elif isinstance(payload, list) and payload and payload[0] in ("fatal", "script-error"):
             _script_error = str(payload[1]) if len(payload) > 1 else str(payload[0])
@@ -119,23 +121,41 @@ def _on_message(message, data):
         _log.error("Frida script 錯誤: %s", _script_error)
 
 
+def _session_alive(session) -> bool:
+    """True if the frida session is still attached.
+
+    frida 17 的 Session.is_detached 是 property（bool），舊版是方法——
+    兩種都相容處理；無法判斷時視為存活，交由 _sync_update 失敗後的 re-attach 兜底。
+    """
+    if session is None:
+        return False
+    try:
+        v = getattr(session, "is_detached", False)
+        if callable(v):
+            v = v()
+        return not bool(v)
+    except Exception:
+        return True
+
+
 def ensure_attached(hwnd: int) -> bool:
-    """Attach Frida to the process owning hwnd; re-attach if pid changed."""
+    """Attach Frida to the process owning hwnd; re-attach if pid changed or session died."""
     global _script, _session, _pid, _script_error
     if not hwnd:
         _set_error("Frida: 無效 hwnd")
         return False
     cur_pid = _hwnd_to_pid(hwnd)
     with _lock:
-        if _script is not None and _pid == cur_pid:
+        if _script is not None and _pid == cur_pid and _session_alive(_session):
             return True
-        detach()
+        if _script is not None:
+            _log.warning("Frida 重新 attach（pid 改變或 session 已死亡）")
+            detach()
         try:
             import frida
         except ImportError as e:
             _set_error(f"Frida 未安裝: {e}")
             return False
-        _ack.clear()
         _ready.clear()
         _script_error = ""
         try:
@@ -158,6 +178,18 @@ def ensure_attached(hwnd: int) -> bool:
             return False
 
 
+def _sync_update(hwnd: int, x: int, y: int) -> tuple[bool, str]:
+    """Synchronously push spoofed coords to the injected script via rpc.exports."""
+    try:
+        sx, sy = _bg()._client_to_screen(hwnd, x, y)
+        ret = _script.exports.update(sx, sy, x, y)
+        if ret != 1:
+            return False, f"script 回傳異常: {ret!r}"
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+
 def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     """Click at (x, y) client coords via spoofed cursor + PostMessage."""
     if not ensure_attached(hwnd):
@@ -165,15 +197,15 @@ def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> 
     with _lock:
         if _script is None:
             return False
-        try:
-            sx, sy = _bg()._client_to_screen(hwnd, x, y)
-            _ack.clear()
-            _script.post({"type": "update", "sx": sx, "sy": sy, "cx": x, "cy": y})
-        except Exception as e:
-            _set_error(f"Frida 傳遞座標失敗: {e}")
-            return False
-        if not _ack.wait(2.0):
-            _set_error("Frida 座標同步逾時 (ack)")
+        ok, err = _sync_update(hwnd, x, y)
+        if not ok:
+            # 注入可能已死亡 → 重新 attach 重試一次，避免需重開 app 才恢復
+            _log.warning("Frida 座標同步失敗 (%s)，重新 attach 重試", err)
+            detach()
+            if ensure_attached(hwnd) and _script is not None:
+                ok, err = _sync_update(hwnd, x, y)
+        if not ok:
+            _set_error(f"Frida 座標同步失敗: {err}")
             return False
     return _bg()._click_postmessage(hwnd, x, y, button, hold_ms)
 
@@ -195,7 +227,6 @@ def detach() -> None:
                 pass
             _session = None
         _pid = None
-        _ack.clear()
         _ready.clear()
         _script_error = ""
 
@@ -209,11 +240,12 @@ if __name__ == "__main__":
         "ScreenToClient",
         "findExportByName",
         "send('ready')",
-        "recv('update'",
-        "send('ack')",
+        "rpc.exports",
+        "update: function",
     ):
         assert needle in js, f"hook 腳本缺少: {needle}"
     assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
+    assert "recv('update'" not in js, "不應使用 one-shot 的 recv 握手（只會成功一次）"
     print("  [OK] hook 腳本內容")
 
     desktop = ctypes.windll.user32.GetDesktopWindow()
@@ -224,15 +256,23 @@ if __name__ == "__main__":
     assert ensure_attached(0) is False and last_error()
     print("  [OK] 無效 hwnd 拒絕 attach")
 
-    # 假 frida 流程：驗證 update → ack → PostMessage 順序
+    # 假 frida 流程：驗證 rpc.exports.update（同步）→ PostMessage 順序
     import sys
+
+    class _FakeExports:
+        def __init__(self):
+            self.updates = []
+
+        def update(self, sx, sy, cx, cy):
+            self.updates.append((sx, sy, cx, cy))
+            return 1
 
     class _FakeScript:
         def __init__(self):
             self.loaded = False
-            self.posted = []
             self.unloaded = False
             self._handler = None
+            self.exports = _FakeExports()
 
         def on(self, name, cb):
             self._handler = cb
@@ -241,23 +281,18 @@ if __name__ == "__main__":
             self.loaded = True
             self._handler({"type": "send", "payload": "ready"}, None)
 
-        def post(self, msg):
-            self.posted.append(msg)
-            self._handler({"type": "send", "payload": "ack"}, None)
-
         def unload(self):
             self.unloaded = True
 
     class _FakeSession:
         def __init__(self, script):
             self.script = script
-            self.detached = False
 
         def create_script(self, js):
             return self.script
 
         def detach(self):
-            self.detached = True
+            pass
 
     class _FakeFrida:
         def __init__(self, script):
@@ -283,16 +318,17 @@ if __name__ == "__main__":
         captured.update(msg=msg, wparam=wparam) or True
     )
     try:
-        ok = click(desktop, 10, 20, "left", 0)
-        assert ok, "click 應成功"
-        assert fake_script.posted, "應送出 update"
-        up = fake_script.posted[0]
-        assert up["cx"] == 10 and up["cy"] == 20, f"client 座標錯誤: {up}"
-        assert "sx" in up and "sy" in up
+        # 連續兩次 click：驗證 rpc.exports 可重複（one-shot recv 的根因回歸）
+        assert click(desktop, 10, 20, "left", 0), "click 應成功"
+        assert click(desktop, 30, 40, "left", 0), "第二次 click 也應成功（rpc 非 one-shot）"
+        up = fake_script.exports.updates
+        assert len(up) == 2, f"應收到兩次 update: {up}"
+        assert up[0][2] == 10 and up[0][3] == 20, f"client 座標錯誤: {up[0]}"
+        assert up[1][2] == 30 and up[1][3] == 40, f"client 座標錯誤: {up[1]}"
         assert captured["msg"] == 0x0202, "應送 WM_LBUTTONUP"
     finally:
         ctypes.windll.user32.PostMessageW = _orig_pm
-    print("  [OK] click: update(client=10,20) → ack → PostMessage")
+    print("  [OK] click: rpc.exports.update ×2 → PostMessage")
 
     detach()
     assert fake_script.unloaded

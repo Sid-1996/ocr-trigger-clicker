@@ -1,8 +1,8 @@
 """真實 frida 整合測試（無 frida 環境自動 skip）。
 
-防止 frida 版本回歸（例：17.x 的 Module.getExportByName 直接拋
-TypeError: not a function，導致 recv 永不註冊而 ack 逾時）。以無害的子
-python 行程為注入目標，驗證 ready/ack 握手與游標 spoof 皆正常。
+防止 frida 版本回歸。以無害的子 python 行程為注入目標，驗證
+ready 握手、rpc.exports 可重複同步呼叫（one-shot recv 的回歸守門員），
+以及游標 spoof 皆正常。
 """
 
 import subprocess
@@ -38,7 +38,7 @@ def _wait_for(predicate, msgs, timeout=3.0):
     return False
 
 
-def test_handshake_ready_and_ack(child_pid):
+def test_handshake_ready_and_rpc_repeatable(child_pid):
     sess = frida.attach(child_pid)
     sc = sess.create_script(_fb.build_hook_script())
     got = []
@@ -47,10 +47,10 @@ def test_handshake_ready_and_ack(child_pid):
     assert _wait_for(lambda msgs: any(m.get("payload") == "ready" for m in msgs), got), (
         f"ready 未收到: {got}"
     )
-    sc.post({"type": "update", "sx": 1, "sy": 2, "cx": 3, "cy": 4})
-    assert _wait_for(lambda msgs: any(m.get("payload") == "ack" for m in msgs), got), (
-        f"ack 未收到: {got}"
-    )
+    # one-shot recv 的根因回歸：recv 只會成功一次，rpc.exports 必須可重複呼叫
+    for i in range(1, 11):
+        ret = sc.exports.update(1, 2, 3, 4)
+        assert ret == 1, f"第 {i} 次 update 回傳 {ret!r}"
     errors = [m for m in got if m.get("type") == "error"]
     assert not errors, f"script 錯誤: {errors}"
     sc.unload()

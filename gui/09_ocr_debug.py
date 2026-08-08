@@ -125,6 +125,17 @@ class OcrDebugPanel(QWidget):
         toolbar.addWidget(self._info_label)
         layout.addLayout(toolbar)
 
+        self._click_error_label = QLabel("")
+        self._click_error_label.setObjectName("clickErrorLabel")
+        self._click_error_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._click_error_label.setStyleSheet("color: #c62828;")
+        self._click_error_label.setWordWrap(True)
+        self._click_error_label.setToolTip(T("ocr_debug.click_error.copy_hint"))
+        self._click_error_label.hide()
+        layout.addWidget(self._click_error_label)
+
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self._image_label = _ImageLabel()
@@ -678,6 +689,7 @@ class OcrDebugPanel(QWidget):
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
             return
         r = self._ocr_results[self._selected_index]
+        self._click_error_label.hide()
 
         from _loader import load_sibling
 
@@ -763,6 +775,8 @@ class OcrDebugPanel(QWidget):
             err_detail = _bg_input.last_error()
             if err_detail:
                 status_text = f"{status_text} ({err_detail})"
+                self._click_error_label.setText(f"{T('ocr_debug.click_failed')}: {err_detail}")
+                self._click_error_label.show()
         tooltip = T(
             "ocr_debug.click_test_tooltip",
             icon=status_icon,
