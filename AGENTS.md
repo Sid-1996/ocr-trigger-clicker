@@ -112,7 +112,7 @@ pwsh -Command "
 
 ## 座標系統
 
-所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。後台模式（`roi_coord:"client"`）以客戶區為基準。
+所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。後台模式（`roi_coord:"client"`）以客戶區為基準。互動方法三種：`pynput`（前景）、`postmessage`（後台）、`frida`（後台 Frida 注入，解 Unity 無法後台點擊；零游標/焦點干擾，有防作弊風險）。
 
 | 來源 | 原始座標系 | 轉換方式 |
 |---|---|---|
@@ -127,7 +127,7 @@ pwsh -Command "
 1. `capture_frame()` 依互動模式選唯一截圖來源（前景 mss 三層備援 / 後台 PrintWindow），回傳影像 = 全視窗大小
 2. 若 mss 失敗，fallback `capture_window_content()` 只取得 client area
    - 自動填補黑邊到全視窗大小（使用 `get_window_client_offset` 計算 chrome offset）
-3. `_process_rules` 對每個規則：`_resolve_roi()` 將比例座標 × 當前尺寸 → 像素 → 裁切 ROI → OCR → 比對 → `_resolve_point()` → pynput / PostMessage 點擊
+3. `_process_rules` 對每個規則：`_resolve_roi()` 將比例座標 × 當前尺寸 → 像素 → 裁切 ROI → OCR → 比對 → `_resolve_point()` → pynput / PostMessage / Frida 點擊
 
 ### 通用 UI 流程（兩者一致）
 
