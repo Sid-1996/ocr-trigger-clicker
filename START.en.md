@@ -72,6 +72,16 @@ For detailed tutorials, see the [documentation site](https://sid-1996.github.io/
 
 ---
 
+## Share your tasks
+
+Once you've built and tested a task, share it with others:
+
+Click **Export Task** in the toolbar → save as JSON → post it in the [Task file sharing category](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB). Others download it, click **Import Task**, and it loads instantly — coordinates auto-adapt to any resolution.
+
+> The exported JSON is a plain-text file and contains no personal settings or data.
+
+---
+
 ## FAQ
 
 ### Nothing happens when I start?
