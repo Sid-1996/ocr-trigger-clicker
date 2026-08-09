@@ -10,6 +10,11 @@
 - **移除 `SettingsDialog` 的 `interaction_mode` 遷移覆寫**：不再將過時值（`sendinput`/`postmessage`）自動覆寫為 pynput，保留 `core/16_bg_input.py` 的 `set_method` 兜底防護（手動 config 錯值時安全降級，不崩潰）。
 - **移除診斷工具 `tools/diag_frida_keyboard.py`**：為單一遊戲後台鍵盤調試而建，已完成使命，回歸通用定位（`tools/` 不再含遊戲特定除錯工具）。
 
+### 新增
+- **後台點擊後自動驗證**：診斷頁「點擊測試」送出後自動再拍目標區塊並以 OCR 確認文字是否消失，結果按「遊戲有反應 / 沒反應 / 後台注入失敗」分流解說；執行期 Frida 點擊失敗也改為白話提示並節流（30 秒內只提示一次），讓使用者分辨「工具問題」與「遊戲限制」。
+- **鍵盤測試**：診斷頁新增「鍵盤測試」按鈕（送出 Esc）。前景模式會先將目標帶到前景再送出；後台模式直接後台送出並自動比對送出前後畫面——相似度 ≥90%（畫面幾乎沒動）時提醒「後台鍵盤可能被阻擋或該遊戲不支援後台鍵盤」，建議改前景模式測試。tooltip 提醒在「靜態畫面」測試，避免動態畫面誤判。
+- **驗證結果單行速覽**：點擊 / 鍵盤驗證的結論用 30px 單行速覽列，點開才有完整說明與可複製的除錯資訊，不再壓縮截圖空間；15 秒後自動隱藏。
+
 ### 修復
 - **修復後台模式框選偵測區域/選取點擊座標時 app 無訊息直接關閉**：64 位元 ctypes handle 截斷導致 `GetDIBits` 對無效 handle 寫入記憶體（access violation）。`core/15_print_window.py`、`core/01_screenshot.py` 改用隔離的 `ctypes.WinDLL` 實例並設定 `argtypes`/`restype`。
 - **修復後台模板擷取時 app 無訊息直接關閉**：`gui/17_bg_roi_selector.py` 混用 PyQt6 舊式 enum `Qt.SmoothTransformation`（應為 `Qt.TransformationMode.SmoothTransformation`），`paintEvent` 執行期 `AttributeError`，PyQt6 對事件處理器的未捕獲例外預設 `qFatal` 直接終止程序。該模組已因下方「模板擷取統一前景」改動而刪除。
