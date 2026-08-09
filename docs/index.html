@@ -254,6 +254,7 @@
       <li><a href="#tools">工具</a></li>
       <li><a href="#patterns">模式</a></li>
       <li><a href="#faq">FAQ</a></li>
+      <li><a href="#gametasks">遊戲任務</a></li>
       <li><a href="#download">下載</a></li>
       <li><a href="https://github.com/Sid-1996/ocr-trigger-clicker" target="_blank">GitHub</a></li>
     </ul>
@@ -299,6 +300,11 @@
         <span class="tag">看範例</span>
         <strong>我想看完整的腳本</strong>
         <span>4 個完整範例：循環任務、錯誤攔截、數值監控、圖示比對。</span>
+      </button>
+      <button class="path-card" type="button" data-target="gametasks">
+        <span class="tag">現成任務</span>
+        <strong>我要下載現成的遊戲任務</strong>
+        <span>匯入即用的 StarSavior 每日任務與跑馬輔助 JSON。</span>
       </button>
       <button class="path-card" type="button" data-target="faq">
         <span class="tag">卡住了</span>
@@ -810,7 +816,8 @@ var sections = {
   tools: document.getElementById('tools'),
   patterns: document.getElementById('patterns'),
   examples: document.getElementById('examples'),
-  faq: document.getElementById('faq')
+  faq: document.getElementById('faq'),
+  gametasks: document.getElementById('gametasks')
 };
 document.querySelectorAll('.path-card').forEach(function(card) {
   card.onclick = function() {
