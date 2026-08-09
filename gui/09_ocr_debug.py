@@ -70,7 +70,7 @@ def _find_text_after_click(block_results: list, target: str) -> bool:
 _KEY_TEST_KEY = "escape"  # 16_bg_input / 03_pynput_input 兩邊都叫 escape
 _KEY_TEST_WAIT_SEC = 0.6
 _KEY_PIXEL_TOLERANCE = 12
-_KEY_SIMILAR_THRESHOLD = 0.95
+_KEY_SIMILAR_THRESHOLD = 0.90
 
 
 def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
