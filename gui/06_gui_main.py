@@ -5493,22 +5493,42 @@ class MainWindow(QMainWindow):
                     continue
                 tt = _template_type(str(p.get("template_source", "")))
                 if tt != cur_tt:
-                    mismatched.append((r.name, idx, _type_display(tt)))
+                    mismatched.append((r.name, idx, tt))
         if mismatched:
-            items = "\n".join(f"  • {name}（步驟 {idx}，{tt}）" for name, idx, tt in mismatched)
-            resp = QMessageBox.warning(
-                self,
-                T("start.mode_mismatch_title"),
+            items = "\n".join(
+                f"  • {name}（步驟 {idx}，{_type_display(tt)}）" for name, idx, tt in mismatched
+            )
+            # 不符模板必然全是同一來源型別 → 提供一鍵切換；混合來源才退回純 Yes/No
+            target_types = {tt for _, _, tt in mismatched}
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle(T("start.mode_mismatch_title"))
+            box.setText(
                 T(
                     "start.mode_mismatch_msg",
                     cur=_type_display(cur_tt),
                     items=items,
-                ),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
+                )
             )
-            if resp != QMessageBox.StandardButton.Yes:
+            cancel_btn = box.addButton(T("ui.cancel"), QMessageBox.ButtonRole.RejectRole)
+            box.addButton(T("start.mode_mismatch_yes"), QMessageBox.ButtonRole.YesRole)
+            switch_tt = target_types.pop() if len(target_types) == 1 else None
+            switch_btn = None
+            if switch_tt is not None:
+                switch_btn = box.addButton(
+                    T("start.mode_mismatch_switch", target=_type_display(switch_tt)),
+                    QMessageBox.ButtonRole.AcceptRole,
+                )
+            box.setDefaultButton(cancel_btn)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is None or clicked == cancel_btn:
                 return
+            if clicked == switch_btn:
+                new_mode = "frida" if switch_tt == "background" else "pynput"
+                self._rule_config_ctrl.set_setting(self, "interaction_mode", new_mode)
+                self._update_interaction_mode_label()
+                _main_loop_mod.log_main(f"互動模式已切換為 {_type_display(switch_tt)}")
         # 防呆：檢查所選群組內的 detect 空文字 / 自訂點擊 (0,0)，執行前硬性攔截
         hard_problems = []
         for rid in allowed_ids:
