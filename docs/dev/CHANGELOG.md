@@ -2,24 +2,31 @@
 
 ## [v0.2.2] - 2026-08-09
 
-### 變更
-- **移除後台 PostMessage 互動模式**：保留前景（pynput）與後台 Frida 注入兩種模式。PostMessage 不移動游標，多數 Unity 遊戲（如 BrownDust II）讀取 OS 游標位置而非 `WM_LBUTTONDOWN` 的 lParam，點擊必然錯位，且無法像 Frida 一樣注入偽造游標，故淘汰。既有設定 `interaction_mode: "postmessage"` 自動遷移為 `pynput`；底層 PostMessage primitive 保留作為 Frida 的傳送層。
-- **Frida 後台模式支援鍵盤按鍵**：與點擊同架構，hook `GetKeyState` / `GetAsyncKeyState` / `GetKeyboardState` 假造按鍵狀態（僅覆寫注入中的 vk，其餘 pass-through），再 PostMessage 送 `WM_KEYDOWN/UP`，讓遊戲無論走訊息佇列或 state-polling 都收得到。補強：按下持窗 120ms（確保 60Hz 輪詢的遊戲至少涵蓋多個 tick）、可列印字元補送 `WM_CHAR`、`WM_SYSKEY` 相關、hold 重覆觸發 re-arm 0.5s 防重複按。
-- **後台鍵盤維持基礎實作**：曾嘗試改走 `GetRawInputBuffer` 注入合成 RAWKEYBOARD 以支援 Unity raw input 路徑，實測後撤銷（遊戲不響應按鍵屬遊戲限制，部分遊戲需視窗焦點才能接收鍵盤輸入），維持 hook 鍵盤狀態 + PostMessage 方案，並於後台模式 tooltip 中提示此限制。
+### 給使用者
+
+#### 新增
+- **Frida 後台模式支援鍵盤按鍵**：後台（Frida）模式現在除了點擊，也能送出鍵盤按鍵（例如 Enter）。按下會刻意持窗 120ms，讓以 60Hz 輪詢鍵盤狀態的遊戲也能偵測到；可列印字元會補送 `WM_CHAR`。
+- **後台點擊後自動驗證**：診斷頁「點擊測試」送出後會自動再拍目標區塊並以 OCR 確認文字是否消失，結果按「遊戲有反應 / 沒反應 / 後台注入失敗」分流解說；執行期後台點擊失敗也改為白話提示並節流（30 秒內只提示一次），讓使用者分辨「工具問題」與「遊戲限制」。
+- **鍵盤測試**：診斷頁新增「鍵盤測試」按鈕（送出 Esc）。後台模式直接後台送出並自動比對送出前後畫面——相似度 ≥90%（畫面幾乎沒動）時提醒「後台鍵盤可能被阻擋或該遊戲不支援後台鍵盤」，建議切回前景模式測試；前景模式則會先將目標帶到前景再送出。tooltip 會提醒在「靜態畫面」下測試，避免動態畫面誤判。
+- **驗證結果單行速覽**：點擊 / 鍵盤驗證的結論改用單行速覽列顯示，點開才有完整說明與可複製的除錯資訊，不再壓縮截圖空間；15 秒後自動隱藏。
+
+#### 變更
+- **移除後台 PostMessage 互動模式**：後台模式保留「前景」與「後台 Frida 注入」兩種模式。PostMessage 不移動游標，多數 Unity 遊戲（如 BrownDust II）讀取 OS 游標位置而非 `WM_LBUTTONDOWN` 的 lParam、點擊必然錯位，故淘汰；既有設定 `interaction_mode: "postmessage"` 會自動遷移為 pynput。
 - **後台模式 tooltip 強化並分行**：互動方法設定說明補上「若遊戲不響應按鍵，屬遊戲限制（部分遊戲需視窗焦點才能接收鍵盤輸入），非工具問題」，並以換行分行避免過長單行。
+
+#### 修復
+- **修復後台模式框選偵測區域/選取點擊座標時 app 無訊息直接關閉**：64 位元 ctypes handle 截斷導致 `GetDIBits` 對無效 handle 寫入記憶體（access violation）。
+- **修復後台模板擷取時 app 無訊息直接關閉**：PyQt6 舊式 enum 在 `paintEvent` 執行期觸發 `AttributeError`，未捕捉例外會直接終止程序。
+- **後台模板擷取修正比對尺度**：改為前景全螢幕框選並自動寫入 `capture_size`，後台比對尺度不再失準。
+- **新增防護**：程式原生崩潰或未捕捉例外不再無聲無息，會寫入 log 並提示使用者。
+
+### 給開發者
+
+- **後台鍵盤維持基礎實作**：曾嘗試改走 `GetRawInputBuffer` 注入合成 RAWKEYBOARD 以支援 Unity raw input 路徑，實測後撤銷（遊戲不響應按鍵屬遊戲限制，部分遊戲需視窗焦點才能接收鍵盤輸入），維持 hook 鍵盤狀態（`GetKeyState`/`GetAsyncKeyState`/`GetKeyboardState`，僅覆寫注入中的 vk，其餘 pass-through）+ PostMessage 方案；補強含 120ms 持窗、`WM_CHAR`、`WM_SYSKEY`、hold re-arm 0.5s 防重複按。
 - **移除 `SettingsDialog` 的 `interaction_mode` 遷移覆寫**：不再將過時值（`sendinput`/`postmessage`）自動覆寫為 pynput，保留 `core/16_bg_input.py` 的 `set_method` 兜底防護（手動 config 錯值時安全降級，不崩潰）。
-- **移除診斷工具 `tools/diag_frida_keyboard.py`**：為單一遊戲後台鍵盤調試而建，已完成使命，回歸通用定位（`tools/` 不再含遊戲特定除錯工具）。
-
-### 新增
-- **後台點擊後自動驗證**：診斷頁「點擊測試」送出後自動再拍目標區塊並以 OCR 確認文字是否消失，結果按「遊戲有反應 / 沒反應 / 後台注入失敗」分流解說；執行期 Frida 點擊失敗也改為白話提示並節流（30 秒內只提示一次），讓使用者分辨「工具問題」與「遊戲限制」。
-- **鍵盤測試**：診斷頁新增「鍵盤測試」按鈕（送出 Esc）。前景模式會先將目標帶到前景再送出；後台模式直接後台送出並自動比對送出前後畫面——相似度 ≥90%（畫面幾乎沒動）時提醒「後台鍵盤可能被阻擋或該遊戲不支援後台鍵盤」，建議改前景模式測試。tooltip 提醒在「靜態畫面」測試，避免動態畫面誤判。
-- **驗證結果單行速覽**：點擊 / 鍵盤驗證的結論用 30px 單行速覽列，點開才有完整說明與可複製的除錯資訊，不再壓縮截圖空間；15 秒後自動隱藏。
-
-### 修復
-- **修復後台模式框選偵測區域/選取點擊座標時 app 無訊息直接關閉**：64 位元 ctypes handle 截斷導致 `GetDIBits` 對無效 handle 寫入記憶體（access violation）。`core/15_print_window.py`、`core/01_screenshot.py` 改用隔離的 `ctypes.WinDLL` 實例並設定 `argtypes`/`restype`。
-- **修復後台模板擷取時 app 無訊息直接關閉**：`gui/17_bg_roi_selector.py` 混用 PyQt6 舊式 enum `Qt.SmoothTransformation`（應為 `Qt.TransformationMode.SmoothTransformation`），`paintEvent` 執行期 `AttributeError`，PyQt6 對事件處理器的未捕獲例外預設 `qFatal` 直接終止程序。該模組已因下方「模板擷取統一前景」改動而刪除。
-- **後台模式 ROI/點擊/模板選取統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`），刪除 `gui/18_bg_click_picker.py` 與 `gui/17_bg_roi_selector.py`（後台 PrintWindow 選取 UI）。後台模板擷取改為前景全螢幕框選（`14_capture_region`），並自動寫入 `capture_size`（先前後台模板擷取漏寫，導致後台比對尺度可能失準）。已實測前景(mss)模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 前景→後台比對信心全數 1.0），故後台模板不再需要 PrintWindow 框選。
-- **新增防禦**：進入點啟用 `faulthandler` + 自訂 `sys.excepthook`，原生崩潰與未捕獲例外不再無痕跡，會寫入 log 並提示使用者。
+- **後台 ROI / 點擊 / 模板選取統一走前景 selector**：`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`，刪除 `gui/18_bg_click_picker.py` 與 `gui/17_bg_roi_selector.py`。已實測前景（mss）模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 前對比對信心全數 1.0）。
+- 移除診斷工具 `tools/diag_frida_keyboard.py`：為單一遊戲後台鍵盤調試而建，已完成使命，回歸通用定位。
+- 新增防禦：進入點啟用 `faulthandler` + 自訂 `sys.excepthook`；`core/15_print_window.py`、`core/01_screenshot.py` 改用隔離的 `ctypes.WinDLL` 並設定 `argtypes`/`restype`。
 
 ## [v0.2.1] - 2026-08-07
 
