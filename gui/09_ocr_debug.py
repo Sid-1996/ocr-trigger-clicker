@@ -67,6 +67,21 @@ def _find_text_after_click(block_results: list, target: str) -> bool:
         return False
 
 
+_KEY_TEST_KEY = "escape"  # 16_bg_input / 03_pynput_input 兩邊都叫 escape
+_KEY_TEST_WAIT_SEC = 0.6
+_KEY_PIXEL_TOLERANCE = 12
+_KEY_SIMILAR_THRESHOLD = 0.95
+
+
+def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """回傳 0~1 的相似度：像素差 > 12 的像素比例反算。"""
+    if a.shape != b.shape:
+        return 0.0
+    diff = np.abs(a.astype(np.int16) - b.astype(np.int16))
+    changed = (diff > _KEY_PIXEL_TOLERANCE).any(axis=2)
+    return float(1.0 - changed.mean())
+
+
 class _ClickBanner(QLabel):
     """單行結論列：點擊開啟完整結果對話框。"""
 
@@ -106,6 +121,7 @@ class _OcrSignals(QObject):
     ocr_done = pyqtSignal(list, float, int)
     ocr_status = pyqtSignal(str)
     click_verify_done = pyqtSignal(dict)
+    key_verify_done = pyqtSignal(dict)
 
 
 class OcrDebugPanel(QWidget):
@@ -132,10 +148,12 @@ class OcrDebugPanel(QWidget):
         self._request_id = 0
         self._has_active_rule = False
         self._verif_in_progress = False
+        self._key_verif_in_progress = False
         self._signals = _OcrSignals()
         self._signals.ocr_done.connect(self._on_ocr_done)
         self._signals.ocr_status.connect(self._on_ocr_status)
         self._signals.click_verify_done.connect(self._on_click_verify_done)
+        self._signals.key_verify_done.connect(self._on_key_verify_done)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -152,6 +170,11 @@ class OcrDebugPanel(QWidget):
         self._click_test_btn.setEnabled(False)
         self._click_test_btn.clicked.connect(self._on_click_test)
         toolbar.addWidget(self._click_test_btn)
+        self._key_test_btn = QPushButton(T("ocr_debug.key_test"))
+        self._key_test_btn.setMinimumWidth(80)
+        self._key_test_btn.setToolTip(T("ocr_debug.key_test.tooltip"))
+        self._key_test_btn.clicked.connect(self._on_key_test)
+        toolbar.addWidget(self._key_test_btn)
         toolbar.addStretch()
         self._info_label = QLabel("")
         toolbar.addWidget(self._info_label)
@@ -969,13 +992,142 @@ class OcrDebugPanel(QWidget):
         if key in ("no_response", "inject_fail", "black"):
             logging.warning("ocr_dbg click verify=%s text=%s last_error=%s", key, text, last_error)
 
+    def _on_key_test(self):
+        self._click_error_label.hide()
+        mode = _get_interaction_mode()
+        if mode != "pynput":
+            hwnd = _screenshot.get_window_hwnd(self._window_title)
+            if not hwnd:
+                self._status_bar.showMessage(
+                    T("ocr_debug.window_coords_failed", title=self._window_title)
+                )
+                return
+            self._start_key_verify(hwnd)
+            return
+        from _loader import load_sibling
+
+        _input = load_sibling("pynput_input", "core/03_pynput_input.py")
+        _screenshot.activate_window(self._window_title)
+        QApplication.processEvents()
+        time.sleep(0.15)
+        ok = _input.send_key(_KEY_TEST_KEY)
+        if ok:
+            self._status_bar.showMessage(T("ocr_debug.key_test_sent"))
+        else:
+            self._status_bar.showMessage(
+                T("ocr_debug.key_test_failed", err=getattr(_input, "last_error", lambda: "")())
+            )
+
+    def _start_key_verify(self, hwnd: int):
+        if self._key_verif_in_progress:
+            return
+        self._key_verif_in_progress = True
+        self._key_test_btn.setEnabled(False)
+        self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
+        threading.Thread(target=self._key_verify_worker, args=(hwnd,), daemon=True).start()
+
+    def _key_verify_worker(self, hwnd: int):
+        def emit(state: str, **kw):
+            self._signals.key_verify_done.emit(
+                {"state": state, "similar": "?", "err": "", "ms": 0.0, **kw}
+            )
+
+        try:
+            mode = _get_interaction_mode()
+            if mode == "pynput":
+                emit("fail", err="mode changed to pynput")
+                return
+            t0 = time.monotonic()
+            before = capture_frame(mode, self._window_title, hwnd=hwnd)
+            if before is None or is_black_capture(before):
+                emit("black")
+                return
+            _bg_input.set_method(mode)
+            sent = _bg_input.send_key(hwnd, _KEY_TEST_KEY)
+            ms = (time.monotonic() - t0) * 1000
+            if not sent:
+                emit("fail", err=_bg_input.last_error() or "", ms=ms)
+                return
+            time.sleep(_KEY_TEST_WAIT_SEC)
+            after = capture_frame(mode, self._window_title, hwnd=hwnd)
+            if after is None or is_black_capture(after):
+                emit("black", ms=(time.monotonic() - t0) * 1000)
+                return
+            ms = (time.monotonic() - t0) * 1000
+            if before.shape != after.shape:
+                emit("window_changed", ms=ms)
+                return
+            sim = _frame_similarity(before, after)
+            emit(
+                "success" if sim < _KEY_SIMILAR_THRESHOLD else "no_change",
+                similar=round(sim * 100, 1),
+                ms=ms,
+            )
+        except Exception as e:
+            logging.exception("key verify failed")
+            emit("fail", err=str(e))
+
+    def _on_key_verify_done(self, out: dict):
+        self._key_verif_in_progress = False
+        self._key_test_btn.setEnabled(True)
+        self._key_test_btn.setText(T("ocr_debug.key_test"))
+        self._show_key_verify(out)
+
+    def _show_key_verify(self, out: dict):
+        state = out.get("state", "black")
+        colors = {
+            "success": "#1e8e3e",
+            "no_change": "#b45309",
+            "fail": "#c62828",
+            "black": "#b45309",
+            "window_changed": "#666",
+        }
+        key = state if state in colors else "black"
+        sim = out.get("similar", "?")
+        guidance = (
+            T("ocr_debug.click_verify.inject_fail", text="")
+            if key == "fail"
+            else T(f"ocr_debug.key_test.{key}", sim=sim)
+        )
+        dev = T(
+            "ocr_debug.key_test.dev_info",
+            mode="frida",
+            source=self._capture_source or "?",
+            key=_KEY_TEST_KEY,
+            sim=sim,
+            hwnd=_screenshot.get_window_hwnd(self._window_title) or "?",
+            api="send_key",
+            err=out.get("err", "") or "無",
+            ms=round(out.get("ms", 0.0)),
+        )
+        self._last_verify_guidance = guidance
+        self._last_verify_dev = dev
+        self._last_verify_title = T("ocr_debug.key_test.dialog_title")
+        short_for = {
+            "success": ("key_test", "ok"),
+            "no_change": ("key_test", "no_change"),
+            "fail": ("click_verify", "inject_fail"),
+            "black": ("click_verify", "black"),
+            "window_changed": ("click_verify", "window_changed"),
+        }
+        ns, sk = short_for.get(key, ("key_test", key))
+        self._click_error_label.setStyleSheet(f"color: {colors.get(key, '#666')};")
+        self._click_error_label.setText(T(f"ocr_debug.{ns}.short.{sk}"))
+        self._click_error_label.show()
+        QTimer.singleShot(15000, self._click_error_label.hide)
+        if key in ("no_change", "fail", "black"):
+            logging.warning(
+                "ocr_dbg key verify=%s key=%s err=%s", key, _KEY_TEST_KEY, out.get("err", "")
+            )
+
     def _open_click_detail(self):
         guidance = getattr(self, "_last_verify_guidance", "")
         dev = getattr(self, "_last_verify_dev", "")
         if not guidance and not dev:
             return
+        title = getattr(self, "_last_verify_title", "") or T("ocr_debug.verify.dialog_title")
         dlg = QDialog(self)
-        dlg.setWindowTitle(T("ocr_debug.verify.dialog_title"))
+        dlg.setWindowTitle(title)
         v = QVBoxLayout(dlg)
         guide_label = QLabel(guidance)
         guide_label.setWordWrap(True)
