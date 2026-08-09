@@ -3161,6 +3161,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"OCR Trigger Clicker v{__version__}")
         self.resize(900, 650)
+        self._centered_once = False
 
         from core._paths import _bundle_root, _is_frozen, get_data_path
 
@@ -5961,6 +5962,22 @@ class MainWindow(QMainWindow):
         else:
             self.showNormal()
         self.activateWindow()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._centered_once:
+            self._centered_once = True
+            self._center_on_screen()
+
+    def _center_on_screen(self):
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        ag = screen.availableGeometry()
+        self.move(
+            ag.x() + (ag.width() - self.width()) // 2,
+            ag.y() + (ag.height() - self.height()) // 2,
+        )
 
     def _quit_app(self):
         _hk_unregister(int(self.winId()))
