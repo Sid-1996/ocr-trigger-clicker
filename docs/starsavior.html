@@ -183,7 +183,8 @@
   <p>使用 parallel 模式每幀掃描全部規則，偵測到對應事件圖示或文字後，自動按下對應選項按鍵。因為事件順序是隨機的，parallel 模式會在第一個符合條件的事件觸發後結束該幀處理。</p>
 
   <h3>可以後台掛機嗎？</h3>
-  <p>不行。工具直接讀取螢幕畫面進行辨識，執行時目標視窗必須保持在前景，不能被其他視窗遮蓋或最小化。</p>
+  <p><strong>可以</strong>。在偏好設定中選擇「後台模式」（Frida 注入）後，工具改用 PrintWindow 截圖 + Frida 注入點擊與按鍵，目標視窗可最小化或遮蓋，零游標干擾、不搶焦點。</p>
+  <p>⚠️ 若遊戲不給後台——尤其是多數 <strong>Unity</strong> 開發的遊戲——這是遊戲本身的<strong>底層設計限制</strong>（Unity 用 GPU 直接繪製畫面、輸入走自家低階系統），不是工具的問題。遇到這種情況，先到「OCR 診斷」頁做點擊／鍵盤測試確認後台是否正常，無效就改回<strong>前景模式</strong>即可。</p>
 
   <h3>回報問題</h3>
   <p>請到 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/issues">GitHub Issues</a> 回報，標題註明「StarSavior」以便區分。</p>
