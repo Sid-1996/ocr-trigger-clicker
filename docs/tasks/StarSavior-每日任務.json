@@ -150,8 +150,7 @@
         "37cf951c07ac",
         "c0aefd01c029",
         "87630b3e369d",
-        "5de071422245",
-        "rule_d2dcd467"
+        "5de071422245"
       ],
       "order": "sequential"
     },
@@ -225,6 +224,21 @@
         "rule_e41e2118",
         "rule_26ed8f6d",
         "rule_99561389"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_c7a80073",
+      "name": "領取任務獎勵",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "rule_a093ec7d",
+        "rule_7881dea9",
+        "rule_949c47f7",
+        "rule_86645ba4"
       ],
       "order": "sequential"
     },
@@ -2254,7 +2268,7 @@
         {
           "type": "wait",
           "params": {
-            "ms": 250
+            "ms": 300
           }
         },
         {
@@ -2267,12 +2281,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
           }
         }
       ],
@@ -2306,6 +2314,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 300
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2315,12 +2329,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
           }
         }
       ],
@@ -2352,6 +2360,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 300
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2361,12 +2375,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
           }
         }
       ],
@@ -2398,6 +2406,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 300
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2412,7 +2426,7 @@
         {
           "type": "wait",
           "params": {
-            "ms": 500
+            "ms": 300
           }
         },
         {
@@ -2425,39 +2439,7 @@
         {
           "type": "wait",
           "params": {
-            "ms": 500
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "rule_d2dcd467",
-      "name": "0/5",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "0/5",
-            "roi": {
-              "x": 0.3572916666666667,
-              "y": 0.8768518518518519,
-              "w": 0.04791666666666667,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": {
-              "action": "notify",
-              "message": "沒找到0/5",
-              "stop_groups": [
-                "group_40b2992f"
-              ],
-              "fail_duration_sec": 1.0
-            }
+            "ms": 300
           }
         },
         {
@@ -2465,12 +2447,6 @@
           "params": {
             "key": "Escape",
             "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
           }
         }
       ],
@@ -2600,7 +2576,14 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
+            "on_fail": {
+              "action": "notify",
+              "message": "沒有找到免費禮包，停止並跳過目前所在群組規則",
+              "stop_groups": [
+                "group_8db83f5b"
+              ],
+              "fail_duration_sec": 0.1
+            }
           }
         },
         {
@@ -2623,7 +2606,7 @@
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "沒找到就跳過、兼容未來改版可能變動位置"
     },
     {
       "id": "60d551239410",
@@ -3000,7 +2983,14 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
+            "on_fail": {
+              "action": "notify",
+              "message": "沒有找到 SALE 50% 商品，停止並跳過此群組規則!",
+              "stop_groups": [
+                "group_53eec035"
+              ],
+              "fail_duration_sec": 0.1
+            }
           }
         },
         {
@@ -3023,7 +3013,7 @@
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "如果沒找到 SALE 50% 就跳過，避免未來遊戲商品內容更新誤觸。"
     },
     {
       "id": "562cc3b393d5",
@@ -3129,7 +3119,14 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
+            "on_fail": {
+              "action": "notify",
+              "message": "沒有找到 SALE 50% 商品，停止並跳過此群組規則!",
+              "stop_groups": [
+                "group_53eec035"
+              ],
+              "fail_duration_sec": 0.1
+            }
           }
         },
         {
@@ -3152,7 +3149,7 @@
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "如果沒找到 SALE 50% 就跳過，避免未來遊戲商品內容更新誤觸。"
     },
     {
       "id": "8a4413951823",
@@ -3536,7 +3533,7 @@
               "h": 0.07929515418502203,
               "roi_coord": "client"
             },
-            "match_mode": "fuzzy",
+            "match_mode": "contains",
             "fuzzy_threshold": 0.8,
             "on_fail": {
               "action": "advance",
@@ -3545,15 +3542,29 @@
           }
         },
         {
-          "type": "wait",
+          "type": "detect",
           "params": {
-            "ms": 250
+            "text": "確認",
+            "roi": {
+              "x": 0.4689054726368159,
+              "y": 0.6486784140969163,
+              "w": 0.05721393034825871,
+              "h": 0.08039647577092511,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop"
           }
         },
         {
-          "type": "key",
+          "type": "click",
           "params": {
-            "key": "Escape",
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
             "hold_ms": 0
           }
         }
@@ -3825,6 +3836,13 @@
             "random_offset": 3,
             "hold_ms": 0
           }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Escape",
+            "hold_ms": 0
+          }
         }
       ],
       "background": false,
@@ -4028,27 +4046,223 @@
       ],
       "background": true,
       "notes": ""
+    },
+    {
+      "id": "rule_a093ec7d",
+      "name": "點擊方塊列表 (2)",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "match_image",
+          "params": {
+            "template": "",
+            "template_data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAVCAIAAAD9zpjjAAAACXBIWXMAAA7EAAAOxAGVKw4bAAABdUlEQVQokX2Oy0rDUBCGZ3Jp0mJjEbWKYvFCF0WQVrf6EK58EF9DBUVdCLp0qz6EWKogiAupF6q2RW1JbwknJ8k5LpLWFnr8V//MfPz/YGp5IwawQslWrTRmfUNXRdU4MaY+IzroMdyeX9n8ePTRR03FqIaqAgCMutwmQD0ZlL35HF4rijwex8kxVGR5JtVL8sslRhxeqbGOg/lMStK14LB29xQYz7bv17Mh3WhLPQIAfIcEhnxVe0s5EZegTz4JIbv43L8fgLyO1TVtIcQ8NzBuqymEOKVh3euLuM5xwucsSwiR8kcY+c9Pbr0eRjZMIUQr5W5Sq3+PhVz6b1JVKTYCAKzZAODDk6KL6cz55dLOoWSMCuvSx2d6MmlkVxd2j4SQEjcCoyWTQsi8LTDPY5SWDvcHHr9ZmJZHRwARhooxt/qjcJP4XybMTkh6BGW5d+Wezzo2e//hAPiQzzdPT/nVBQBAy5Qk5AhAKOMcAN4ScwcTc7+lNJ5cg4GPmwAAAABJRU5ErkJggg==",
+            "roi": {
+              "x": 0.9509375,
+              "y": 0.020555555555555556,
+              "w": 0.02625,
+              "h": 0.03944444444444445,
+              "roi_coord": "client"
+            },
+            "threshold": 0.8,
+            "match_color": false,
+            "color_tolerance": 100,
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 1.0
+            }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 500
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "text": ""
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
+    },
+    {
+      "id": "rule_7881dea9",
+      "name": "任務",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "任務",
+            "roi": {
+              "x": 0.5583333333333333,
+              "y": 0.6046296296296296,
+              "w": 0.04791666666666667,
+              "h": 0.06481481481481481,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
+    },
+    {
+      "id": "rule_949c47f7",
+      "name": "一鍵領取",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "一鍵領取",
+            "roi": {
+              "x": 0.7947916666666667,
+              "y": 0.8592592592592593,
+              "w": 0.0984375,
+              "h": 0.0712962962962963,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 0.1
+            }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
+    },
+    {
+      "id": "rule_86645ba4",
+      "name": "一鍵領取 (2)",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "一鍵領取",
+            "roi": {
+              "x": 0.7947916666666667,
+              "y": 0.8592592592592593,
+              "w": 0.0984375,
+              "h": 0.0712962962962963,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": {
+              "action": "key",
+              "key": "Escape",
+              "fail_duration_sec": 0.1
+            }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Escape",
+            "hold_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
     }
   ],
   "_collapsed_groups": [
     "group_fdab3a16",
-    "group_3c07d078",
-    "group_f1d46de3",
-    "group_a1d5b815",
-    "group_36068123",
-    "group_40b2992f",
-    "group_261f6f66",
-    "group_e8efb9ff",
-    "group_53eec035",
-    "group_266e1f8c",
     "__default__",
     "group_8db83f5b",
-    "group_39a1b80d"
+    "group_39a1b80d",
+    "group_261f6f66",
+    "group_f1d46de3",
+    "group_266e1f8c",
+    "group_40b2992f",
+    "group_c7a80073",
+    "group_a1d5b815",
+    "group_36068123",
+    "group_53eec035",
+    "group_3c07d078",
+    "group_2f0c668c",
+    "group_e8efb9ff"
   ],
   "capture_size": [
     1920,
     1080
   ],
   "ratio_coords": true,
-  "window_title": "StarSavior"
+  "window_title": "hololive-Dreams"
 }
