@@ -55,6 +55,9 @@
 | 📐 | **Resolution-proof** | Coordinates auto-scale — plug in a monitor or resize, no reconfiguring |
 | 👁️ | **Set up rules visually** | OCR diagnostic panel lists every text on screen — double-click to create a rule |
 | 🎮 | **Background (daemon) mode** | PrintWindow capture + Frida-injected clicks & keys — run with the window minimized or covered, zero cursor disturbance, without stealing focus (most Unity games don't support background mode — that's a game-engine limitation, not a tool issue) |
+| ⌨️ | **F8 global hotkey** | Start / pause / stop any time with F8 — no need to switch back to the tool |
+| 🔄 | **Auto-update** | Checks for new versions on launch, one-click upgrade via the built-in updater |
+| 🌐 | **Bilingual UI** | Traditional Chinese / English, switch anytime |
 
 ---
 
@@ -66,6 +69,18 @@
 </p>
 
 > 📖 For step-by-step guidance, see the [Quick Start Guide](./START.en.md).
+
+---
+
+## Share your tasks
+
+Your saved tasks aren't just for you — share them:
+
+<kbd>1</kbd> Click "Export Task" in the toolbar → save as a JSON file<br><br>
+<kbd>2</kbd> Post it in the [Task file sharing category](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB) with the JSON attached<br><br>
+<kbd>3</kbd> Others download it, click "Import Task", and it loads instantly — coordinates auto-adapt to any resolution
+
+> Task JSON is a plain-text file; exporting never includes any personal settings or data.
 
 ---
 
