@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -19,6 +20,7 @@ from PyQt6.QtWidgets import (
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -63,6 +65,25 @@ def _find_text_after_click(block_results: list, target: str) -> bool:
         return bool(_ocr.find_text(block_results, target, "fuzzy", 0.8))
     except Exception:
         return False
+
+
+class _ClickBanner(QLabel):
+    """單行結論列：點擊開啟完整結果對話框。"""
+
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(30)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(T("ocr_debug.verify.detail_hint"))
+        self.hide()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class _ImageLabel(QLabel):
@@ -136,15 +157,10 @@ class OcrDebugPanel(QWidget):
         toolbar.addWidget(self._info_label)
         layout.addLayout(toolbar)
 
-        self._click_error_label = QLabel("")
+        self._click_error_label = _ClickBanner()
         self._click_error_label.setObjectName("clickErrorLabel")
-        self._click_error_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
         self._click_error_label.setStyleSheet("color: #c62828;")
-        self._click_error_label.setWordWrap(True)
-        self._click_error_label.setToolTip(T("ocr_debug.click_error.copy_hint"))
-        self._click_error_label.hide()
+        self._click_error_label.clicked.connect(self._open_click_detail)
         layout.addWidget(self._click_error_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -357,6 +373,7 @@ class OcrDebugPanel(QWidget):
         self._capture_btn.setEnabled(False)
         self._capture_btn.setText(T("ocr_debug.recognizing"))
         self._info_label.setText("")
+        self._click_error_label.hide()
         self._black_warn_text = ""
         self._selected_index = -1
         self._add_rule_btn.setEnabled(False)
@@ -943,11 +960,42 @@ class OcrDebugPanel(QWidget):
             ms=round(ms),
             still_visible=still,
         )
+        self._last_verify_guidance = guidance
+        self._last_verify_dev = dev
         self._click_error_label.setStyleSheet(f"color: {colors.get(key, '#666')};")
-        self._click_error_label.setText(f"{guidance}\n\n{dev}")
+        self._click_error_label.setText(T(f"ocr_debug.click_verify.short.{key}", text=text))
         self._click_error_label.show()
+        QTimer.singleShot(15000, self._click_error_label.hide)
         if key in ("no_response", "inject_fail", "black"):
             logging.warning("ocr_dbg click verify=%s text=%s last_error=%s", key, text, last_error)
+
+    def _open_click_detail(self):
+        guidance = getattr(self, "_last_verify_guidance", "")
+        dev = getattr(self, "_last_verify_dev", "")
+        if not guidance and not dev:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(T("ocr_debug.verify.dialog_title"))
+        v = QVBoxLayout(dlg)
+        guide_label = QLabel(guidance)
+        guide_label.setWordWrap(True)
+        v.addWidget(guide_label)
+        dev_view = QTextEdit(dev)
+        dev_view.setReadOnly(True)
+        dev_view.setFont(QFont("Consolas", 9))
+        dev_view.setFixedHeight(150)
+        v.addWidget(dev_view)
+        row = QHBoxLayout()
+        copy_btn = QPushButton(T("ocr_debug.verify.copy"))
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(dev))
+        row.addWidget(copy_btn)
+        row.addStretch()
+        close_btn = QPushButton(T("ocr_debug.verify.close"))
+        close_btn.clicked.connect(dlg.accept)
+        row.addWidget(close_btn)
+        v.addLayout(row)
+        dlg.resize(560, 420)
+        dlg.exec()
 
     def _rebuild_annotated(self):
         try:
