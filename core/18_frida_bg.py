@@ -8,9 +8,18 @@ Unity 驗證 WM_LBUTTON 事件時會用 GetCursorPos/ScreenToClient 對照實體
 GetKeyboardState 假造按鍵狀態（僅覆寫注入中的 vk，其餘 pass-through），再
 PostMessage 送 WM_KEYDOWN/UP，讓 Unity 無論走訊息佇列或 state-polling 都收得到。
 
+焦點假造：hook GetForegroundWindow / GetActiveWindow / GetFocus，在點擊/按鍵
+瞬間回傳遊戲自己的視窗 hwnd（arm(hwnd) 注入），讓查焦點的遊戲（Application.isFocused）
+誤以為自己正聚焦；寬限期到期即還原，不影響使用者日常操作。
+
+攔截 SetCursorPos：鼠標 capture 型遊戲每幀把實體游標抓回畫面中央，會在我們
+PostMessage 前把真實游標移走、破壞 GetCursorPos spoof；攔截後在 spoof 期間
+把該呼叫「吃掉」（寫入假座標並假裝成功），實體游標不動。
+
 v1 限制：
 - 僅保證點擊（click）與鍵盤（key）；滾輪/拖曳仍走 PostMessage（Unity 下可能無效）
-- 遊戲若要求視窗聚焦（Application.isFocused）仍無效
+- 焦點假造只騙 GetForegroundWindow/GetActiveWindow/GetFocus；以其他方式檢查
+  焦點、或走純 raw input（新 Input System）的遊戲仍無效
 - EAC/BattlEye 等防作弊會封鎖 Frida（行程注入可被偵測）
 
 握手：rpc.exports（同步、無 ack round-trip）。frida 的 recv() 每次註冊只接收
@@ -73,15 +82,19 @@ var SPOOF_MS = __SPOOF_MS__;
 var keys = {};
 var keyTimer = null;
 var KEY_MS = __KEY_MS__;
+var focusHwndPtr = null;
+var focusOn = false;
 var user32 = Process.findModuleByName('user32.dll');
 
 function disableSpoof() {
   spoofing = false;
+  focusOn = false;
 }
 
 function clearKeys() {
   keys = {};
   keyTimer = null;
+  focusOn = false;
 }
 
 function hookSpoof(name, ptIndex, writePos) {
@@ -122,6 +135,33 @@ function hookKeyState(name, isArray) {
   });
 }
 
+function hookFocus(name) {
+  // 假造焦點：只在點擊/按鍵 spoof 期間回傳遊戲視窗 hwnd，其餘 pass-through
+  var addr = user32.findExportByName(name);
+  if (addr === null) return;
+  Interceptor.attach(addr, {
+    onLeave: function (retval) {
+      if (!focusOn || focusHwndPtr === null) return;
+      retval.replace(focusHwndPtr);
+    }
+  });
+}
+
+function hookSetCursorPos() {
+  // 吃掉鼠標 capture 型遊戲的 SetCursorPos：spoof 期間攔截該呼叫（寫入假座標並
+  // 假裝成功），實體游標不動，避免遊戲把真實游標抓走破壞 GetCursorPos spoof。
+  // 用 Interceptor.replace（內建 this.original 可呼叫原函式）才能真正擋下物理游標
+  // 移動——attach 只能改回傳值，攔不住 set 本身的副作用。
+  var addr = user32.findExportByName('SetCursorPos');
+  if (addr === null) return;
+  Interceptor.replace(addr, new NativeCallback(function (x, y) {
+    if (!spoofing) return this.original(x, y); // pass-through：真實移動游標
+    pos.sx = x;
+    pos.sy = y;
+    return 1; // 假裝 SetCursorPos 成功
+  }, 'int', ['int', 'int']));
+}
+
 if (user32 === null) {
   send(['fatal', 'user32.dll 未載入']);
 } else {
@@ -130,10 +170,15 @@ if (user32 === null) {
   hookKeyState('GetKeyState', false);
   hookKeyState('GetAsyncKeyState', false);
   hookKeyState('GetKeyboardState', true);
+  hookFocus('GetForegroundWindow');
+  hookFocus('GetActiveWindow');
+  hookFocus('GetFocus');
+  hookSetCursorPos();
   rpc.exports = {
     update: function (sx, sy, cx, cy) {
       pos = { sx: sx, sy: sy, cx: cx, cy: cy };
       spoofing = true;
+      focusOn = true;
       if (spoofTimer !== null) clearTimeout(spoofTimer);
       spoofTimer = setTimeout(disableSpoof, SPOOF_MS);
       return 1;
@@ -142,6 +187,7 @@ if (user32 === null) {
       vk = vk & 0xFF;
       if (down) {
         keys[vk] = true;
+        focusOn = true;
         if (keyTimer !== null) clearTimeout(keyTimer);
         keyTimer = setTimeout(clearKeys, KEY_MS);
       } else {
@@ -151,6 +197,10 @@ if (user32 === null) {
     },
     getSpoofing: function () {
       return spoofing;
+    },
+    arm: function (hwnd) {
+      focusHwndPtr = ptr(hwnd);
+      return 1;
     }
   };
   send('ready');
@@ -254,11 +304,23 @@ def ensure_attached(hwnd: int) -> bool:
             _pid = cur_pid
             _last_error = ""
             _log.info("Frida 已注入 pid=%d (hwnd=%d)", cur_pid, hwnd)
+            _arm_focus(hwnd)
             return True
         except Exception as e:
             detach()
             _set_error(f"Frida 注入失敗 pid={cur_pid}: {e}")
             return False
+
+
+def _arm_focus(hwnd: int) -> None:
+    """Push the game window hwnd into the injected script for focus spoof (best-effort).
+
+    失敗不致命——只會失去焦點假造/SetCursorPos 攔截能力，點擊/鍵盤 spoof 仍可用。
+    """
+    try:
+        _script.exports.arm(int(hwnd))
+    except Exception as e:
+        _log.warning("Frida arm(hwnd=%d) 失敗 (%s)，焦點假造/SetCursorPos 攔截不可用", hwnd, e)
 
 
 def _sync_update(hwnd: int, x: int, y: int) -> tuple[bool, str]:
@@ -365,6 +427,14 @@ if __name__ == "__main__":
         "spoofing",
         "setTimeout(disableSpoof",
         "setTimeout(clearKeys",
+        "GetForegroundWindow",
+        "GetActiveWindow",
+        "GetFocus",
+        "SetCursorPos",
+        "hookFocus",
+        "hookSetCursorPos",
+        "focusOn",
+        "arm: function",
     ):
         assert needle in js, f"hook 腳本缺少: {needle}"
     assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
@@ -390,6 +460,7 @@ if __name__ == "__main__":
         def __init__(self):
             self.updates = []
             self.key_calls = []
+            self.arm_calls = []
 
         def update(self, sx, sy, cx, cy):
             self.updates.append((sx, sy, cx, cy))
@@ -397,6 +468,10 @@ if __name__ == "__main__":
 
         def key(self, vk, down):
             self.key_calls.append((vk, down))
+            return 1
+
+        def arm(self, hwnd):
+            self.arm_calls.append(hwnd)
             return 1
 
     class _FakeScript:
@@ -442,6 +517,9 @@ if __name__ == "__main__":
     detach()
     assert ensure_attached(desktop) is True
     assert fake_script.loaded and fake_frida.pids == [_hwnd_to_pid(desktop)]
+    assert fake_script.exports.arm_calls == [desktop], (
+        "attach 後應把視窗 hwnd 送進 script 供焦點假造"
+    )
     print("  [OK] 假 frida attach")
 
     captured = {}

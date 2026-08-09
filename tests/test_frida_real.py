@@ -151,6 +151,91 @@ rpc.exports = {
     sess.detach()
 
 
+def test_focus_spoof_works(child_pid):
+    # 焦點假造：update()/key(down) 觸發 spoof 後，GetForegroundWindow/GetActiveWindow/
+    # GetFocus 回傳 arm(hwnd) 指定的遊戲視窗；寬限期到期自動還原，不再回傳假 hwnd
+    sess = frida.attach(child_pid)
+    prod = sess.create_script(_fb.build_hook_script())
+    prod.load()
+
+    helper_js = r"""
+'use strict';
+var user32 = Process.findModuleByName('user32.dll');
+var getFg = new NativeFunction(user32.findExportByName('GetForegroundWindow'), 'pointer', []);
+var getActive = new NativeFunction(user32.findExportByName('GetActiveWindow'), 'pointer', []);
+var getFocus = new NativeFunction(user32.findExportByName('GetFocus'), 'pointer', []);
+rpc.exports = {
+  readFg: function () { return getFg(); },
+  readActive: function () { return getActive(); },
+  readFocus: function () { return getFocus(); }
+};
+"""
+    helper = sess.create_script(helper_js)
+    helper.load()
+
+    assert prod.exports.arm(0x12345) == 1
+    assert prod.exports.update(100, 100, 100, 100) == 1
+    assert helper.exports.readFg() == hex(0x12345), "spoof 時 GetForegroundWindow 應回傳遊戲 hwnd"
+    assert helper.exports.readActive() == hex(0x12345), "spoof 時 GetActiveWindow 應回傳遊戲 hwnd"
+    assert helper.exports.readFocus() == hex(0x12345), "spoof 時 GetFocus 應回傳遊戲 hwnd"
+
+    time.sleep(_fb._SPOOF_GRACE_MS / 1000 + 0.5)
+    after = (helper.exports.readFg(), helper.exports.readActive(), helper.exports.readFocus())
+    assert all(v != hex(0x12345) for v in after), f"寬限期後不應再回傳 spoof hwnd: {after}"
+
+    prod.unload()
+    helper.unload()
+    sess.detach()
+
+
+def test_set_cursor_pos_blocked_while_spoofing(child_pid):
+    # 鼠標 capture：spoof 期間遊戲的 SetCursorPos 被『吃掉』——假裝成功回傳 TRUE、
+    # 實體游標不動（host 端讀取驗證），且假座標追上遊戲想設定的位置
+    import ctypes
+    from ctypes import wintypes
+
+    sess = frida.attach(child_pid)
+    prod = sess.create_script(_fb.build_hook_script())
+    prod.load()
+
+    helper_js = r"""
+'use strict';
+var user32 = Process.findModuleByName('user32.dll');
+var setCursor = new NativeFunction(user32.findExportByName('SetCursorPos'), 'int', ['int', 'int']);
+var getCursor = new NativeFunction(user32.findExportByName('GetCursorPos'), 'int', ['pointer']);
+rpc.exports = {
+  set: function (x, y) { return setCursor(x, y); },
+  read: function () {
+    var b = Memory.alloc(8);
+    getCursor(b);
+    return [b.readS32(), b.add(4).readS32()];
+  }
+};
+"""
+    helper = sess.create_script(helper_js)
+    helper.load()
+
+    pt = wintypes.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+    before = (pt.x, pt.y)
+
+    assert prod.exports.arm(0x12345) == 1
+    assert prod.exports.update(777, 888, 777, 888) == 1
+    assert helper.exports.set(10, 10) == 1, "spoof 時 SetCursorPos 應假裝成功"
+    pt2 = wintypes.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt2))
+    # 物理游標不經 hook（host 端讀取）。replace 攔截下真不得移動；留 5px 容差
+    # 吸收少數環境的硬體 jitter，仍能抓到「被移到 (10,10) 附近」式的真實失敗。
+    assert abs(pt2.x - pt.x) < 5 and abs(pt2.y - pt.y) < 5, (
+        f"spoof 時 SetCursorPos 不得移動實體游標: {before} → {pt2.x},{pt2.y}"
+    )
+    assert helper.exports.read() == [10, 10], "假座標應追上遊戲想設定的位置"
+
+    prod.unload()
+    helper.unload()
+    sess.detach()
+
+
 def test_cursor_spoof_works(child_pid):
     js = r"""
 'use strict';

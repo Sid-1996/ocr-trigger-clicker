@@ -10,6 +10,7 @@ def _make_fake_frida():
         def __init__(self, updates):
             self._updates = updates
             self.key_calls = []
+            self.arm_calls = []
 
         def update(self, sx, sy, cx, cy):
             self._updates.append((sx, sy, cx, cy))
@@ -17,6 +18,10 @@ def _make_fake_frida():
 
         def key(self, vk, down):
             self.key_calls.append((vk, down))
+            return 1
+
+        def arm(self, hwnd):
+            self.arm_calls.append(hwnd)
             return 1
 
     class FakeScript:
@@ -78,6 +83,14 @@ def test_hook_script_content():
         "spoofing",
         "setTimeout(disableSpoof",
         "setTimeout(clearKeys",
+        "GetForegroundWindow",
+        "GetActiveWindow",
+        "GetFocus",
+        "SetCursorPos",
+        "hookFocus",
+        "hookSetCursorPos",
+        "focusOn",
+        "arm: function",
     ):
         assert needle in js
     assert "Module.getExportByName" not in js
@@ -86,6 +99,18 @@ def test_hook_script_content():
     assert "__KEY_MS__" not in js, "key 寬限期應注入實際數值"
     assert f"SPOOF_MS = {_fb._SPOOF_GRACE_MS}" in js, "spoof 寬限期應等於 _SPOOF_GRACE_MS"
     assert f"KEY_MS = {_fb._KEY_GRACE_MS}" in js, "key 寬限期應等於 _KEY_GRACE_MS"
+
+
+def test_ensure_attached_arms_focus_hwnd(monkeypatch):
+    fake = _make_fake_frida()
+    monkeypatch.setitem(sys.modules, "frida", fake)
+    monkeypatch.setattr(_fb, "_hwnd_to_pid", lambda hwnd: 4242)
+    _fb.detach()
+    assert _fb.ensure_attached(12345) is True
+    assert fake.script.exports.arm_calls == [12345], (
+        "attach 成功後應把視窗 hwnd 送進 script 供焦點假造"
+    )
+    _fb.detach()
 
 
 def test_hwnd_to_pid_invalid():
