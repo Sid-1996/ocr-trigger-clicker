@@ -47,13 +47,13 @@
    ```powershell
    python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<改動的檔案路徑>', run_name='__main__')"
    ```
-   把 `<改動的檔案路徑>` 換成實際修改的檔案（例如 `core/04_rule_engine.py`）。單行 trivial 變更、或該檔案本來就沒有 self-check，跳過。不要依賴任何寫死的檔名清單——用「這次改了什麼檔」來判斷，而不是查表。
+   把 `<改動的檔案路徑>` 換成實際修改的檔案（例如 `core/04_rule_engine.py`）。單行 trivial 變更、或該檔案本來就沒有 self-check，跳過。不要依賴任何寫死的檔名清單——用「這次改了什麼檔」來判斷，而不是查表。self-check 以可斷言、非互動的 `__main__` 為限（Qt overlay／主視窗啟動器、無 `__main__` 的檔跳過，例如 `core/10_performance_monitor.py`）。
 
    同時跑 pytest 套件（`tests/` 對應的 `test_*.py`，或整個套件冒煙）：
    ```powershell
    python -m pytest --no-cov -q
    ```
-   改 `core/` 邏輯後不跑 pytest 視為未完成。整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip。
+   改 `core/` 邏輯後不跑 pytest 視為未完成。對應範圍除了實體 import，也含 `tests/conftest.py` 的 fixture／factory（`make_main_loop` / `tmp_tasks_dir`）落點；改含 `T()` 的 `.py` 或 `i18n/*.json` 時加跑 `tests/test_i18n.py`。整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip；對應測試因環境 skip 時改用該模組 self-check 補位並在回覆明說，不當作綠燈。
 
 3. **add + commit + push**（一次完成）：
    ```powershell
