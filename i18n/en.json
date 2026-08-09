@@ -506,7 +506,7 @@
   "ocr_debug.verify.copy": "Copy debug info",
   "ocr_debug.verify.close": "Close",
   "ocr_debug.key_test": "Keyboard Test (&K)",
-  "ocr_debug.key_test.tooltip": "Sends the test key \"Esc\".\nForeground mode: activates the target window first, then sends. Background mode: sends in background, then compares before/after screens to check for a response.",
+  "ocr_debug.key_test.tooltip": "Sends the test key \"Esc\".\nForeground mode: activates the target window first, then sends. Background mode: sends directly, then compares before/after screens.\nTest on a static screen (a paused menu / non-animated spot): an animated screen changes on its own, so the comparison can't tell whether the key worked.",
   "ocr_debug.key_test_sent": "✓ Key test: Esc sent (foreground)",
   "ocr_debug.key_test_failed": "Key test failed: {err}",
   "ocr_debug.key_test.verifying": "Verifying keyboard…",

@@ -506,7 +506,7 @@
   "ocr_debug.verify.copy": "複製除錯資訊",
   "ocr_debug.verify.close": "關閉",
   "ocr_debug.key_test": "鍵盤測試(&K)",
-  "ocr_debug.key_test.tooltip": "送出測試按鍵「Esc」。\n前景模式：先啟動目標視窗再於前景送出；後台模式：直接後台送入，並比對送出前後畫面判斷是否有反應。",
+  "ocr_debug.key_test.tooltip": "送出測試鍵「Esc」。\n前景模式：先啟動目標視窗再送出；後台模式：後台送出後比對前後畫面。\n請在「靜態畫面」下測試（停在主選單或無動畫處）：動態畫面本身會一直變，無法判斷鍵盤是否有效。",
   "ocr_debug.key_test_sent": "✓ 鍵盤測試：已送出 Esc（前景）",
   "ocr_debug.key_test_failed": "鍵盤測試送出失敗：{err}",
   "ocr_debug.key_test.verifying": "鍵盤驗證中…",
