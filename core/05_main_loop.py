@@ -635,6 +635,37 @@ class MainLoop:
         }
         return StepResult("continue")
 
+    def _build_notify_text(self, message: str, rule: Rule, stopped_groups: list[str]) -> str:
+        """組 on_fail notify 的通知文字。
+
+        自訂訊息支援 {rule}/{group} 佔位符（單次代換，避免互相污染）；
+        空白訊息用 i18n 預設模板，帶入實際停止的群組名稱。
+        """
+        names = self._group_names_text(stopped_groups)
+        if message and message.strip():
+            placeholders = {"{rule}": rule.name, "{group}": names}
+            pattern = "|".join(re.escape(k) for k in placeholders)
+            if pattern:
+                message = re.sub(pattern, lambda m: placeholders[m.group(0)], message)
+            return message
+        if names:
+            return T("notify.fail_default", rule=rule.name, group=names)
+        return T("notify.fail_default_nostop", rule=rule.name)
+
+    def _group_names_text(self, group_ids: list[str]) -> str:
+        """群組 id 列表 → 名稱文字（支援 dict 或 RuleGroup 物件），多個用 i18n 分隔符。"""
+        names = []
+        for gid in group_ids:
+            for g in self._groups:
+                g_id = g.get("id", "") if isinstance(g, dict) else g.id
+                if g_id == gid:
+                    g_name = g.get("name", gid) if isinstance(g, dict) else g.name
+                    names.append(g_name)
+                    break
+            else:
+                names.append(gid)
+        return T("notify.group_sep").join(names)
+
     def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         raw = params.get("on_fail", "stop")
 
@@ -700,12 +731,17 @@ class MainLoop:
         if action == "notify":
             message = raw.get("message", "") if isinstance(raw, dict) else ""
             stop_groups = raw.get("stop_groups", []) if isinstance(raw, dict) else []
-            if self.on_warning:
-                self.on_warning(f"[通知] {message}" if message else "[通知] 流程已停止")
             group = self._current_group()
+            # 先算出實際會停止的群組，供預設通知文字使用，再移除
+            stopped_groups = (
+                [gid for gid in stop_groups if gid in self._active_group_ids]
+                if stop_groups
+                else ([group.id] if group else [])
+            )
+            if self.on_warning:
+                self.on_warning(f"[通知] {self._build_notify_text(message, rule, stopped_groups)}")
             stopped = False
             if stop_groups:
-                stopped_groups = [gid for gid in stop_groups if gid in self._active_group_ids]
                 for gid in stopped_groups:
                     self._active_group_ids.remove(gid)
                 if group and group.id not in self._active_group_ids:

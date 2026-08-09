@@ -367,6 +367,151 @@ def test_handle_on_fail_notify_not_current_group():
     assert not ml._stop_event.is_set()
 
 
+def test_handle_on_fail_notify_default_message_with_group():
+    ml = _make_ml()
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    warned = []
+    ml.on_warning = warned.append
+    ml._active_group_ids = ["group_A", "group_B"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [
+        RuleGroup(id="group_A", name="A", rule_ids=[]),
+        RuleGroup(id="group_B", name="B", rule_ids=[]),
+    ]
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "stop_groups": ["group_B"]}}, ctx, test_rule
+    )
+    assert notify_result.action == "stop"
+    assert ctx.triggered
+    assert warned, "預設訊息應觸發 on_warning"
+    assert "分派測試" in warned[0]
+    assert "B" in warned[0]
+    assert "group_B" not in ml._active_group_ids
+    assert "group_A" in ml._active_group_ids
+
+
+def test_handle_on_fail_notify_default_message_current_group():
+    ml = _make_ml()
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    warned = []
+    ml.on_warning = warned.append
+    ml._active_group_ids = ["group_X", "group_Y"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [
+        RuleGroup(id="group_X", name="X", rule_ids=[]),
+        RuleGroup(id="group_Y", name="Y", rule_ids=[]),
+    ]
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "message": ""}}, ctx, test_rule
+    )
+    assert notify_result.action == "stop"
+    assert not ctx.triggered
+    assert warned
+    assert "分派測試" in warned[0]
+    assert "X" in warned[0]
+    assert "group_X" not in ml._active_group_ids
+
+
+def test_handle_on_fail_notify_default_no_groups_stopped():
+    ml = _make_ml()
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    warned = []
+    ml.on_warning = warned.append
+    ml._active_group_ids = []
+    ml._groups = []
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "message": "   "}}, ctx, test_rule
+    )
+    assert notify_result.action == "stop"
+    assert warned
+    assert "分派測試" in warned[0]
+    assert "未停止任何群組" in warned[0]
+
+
+def test_handle_on_fail_notify_placeholder_replacement():
+    ml = _make_ml()
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    warned = []
+    ml.on_warning = warned.append
+    ml._active_group_ids = ["group_A", "group_B"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [
+        RuleGroup(id="group_A", name="A", rule_ids=[]),
+        RuleGroup(id="group_B", name="B", rule_ids=[]),
+    ]
+    notify_result = ml._handle_on_fail(
+        {
+            "on_fail": {
+                "action": "notify",
+                "stop_groups": ["group_A", "group_B"],
+                "message": "警告：{rule} 失敗，已停 {group}",
+            }
+        },
+        ctx,
+        test_rule,
+    )
+    assert notify_result.action == "stop"
+    assert warned
+    assert "警告：分派測試 失敗，已停 A、B" in warned[0]
+    assert "group_A" not in ml._active_group_ids
+    assert "group_B" not in ml._active_group_ids
+
+
+def test_handle_on_fail_notify_plain_custom_message():
+    ml = _make_ml()
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    warned = []
+    ml.on_warning = warned.append
+    ml._active_group_ids = ["group_A"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [RuleGroup(id="group_A", name="A", rule_ids=[])]
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "message": "直接自訂文字"}}, ctx, test_rule
+    )
+    assert notify_result.action == "stop"
+    assert warned
+    assert warned[0] == "[通知] 直接自訂文字"
+
+
+def test_handle_on_fail_notify_brace_in_message_no_crash():
+    ml = _make_ml()
+    test_rule = Rule(id="rule_dispatch", name="分派測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    warned = []
+    ml.on_warning = warned.append
+    ml._active_group_ids = ["group_A"]
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._groups = [RuleGroup(id="group_A", name="A", rule_ids=[])]
+    notify_result = ml._handle_on_fail(
+        {"on_fail": {"action": "notify", "message": "含 {foo} 大括號"}}, ctx, test_rule
+    )
+    assert notify_result.action == "stop"
+    assert warned
+    assert warned[0] == "[通知] 含 {foo} 大括號"
+
+
 # ── _process_rules wait-only does not advance ──
 
 

@@ -173,6 +173,38 @@ def _rule_own_group_id(rule_id: str, groups_provider) -> Optional[str]:
     return None
 
 
+def _group_name_for_id(gid: str, groups_provider) -> str:
+    """群組 id → 名稱（支援 dict 或 RuleGroup 物件）；找不到回原 id。"""
+    if not gid or not groups_provider:
+        return gid or ""
+    for g in groups_provider() or []:
+        g_id = g.get("id", "") if isinstance(g, dict) else g.id
+        if g_id == gid:
+            return g.get("name", gid) if isinstance(g, dict) else g.name
+    return gid
+
+
+def _default_notify_preview(
+    rule_id: str, rules_provider, groups_provider, other_stop_groups: list[str]
+) -> str:
+    """on_fail notify 空訊息的灰字預覽（規則名 + 停止群組名；無群組用 fallback 模板）。
+
+    僅供參考：實際執行時以使用者另選的 stop_groups 與執行端解讀為準。
+    """
+    rule_name = _resolve_rule_name(rule_id, rules_provider)
+    stop_ids = list(other_stop_groups or [])
+    if not stop_ids:
+        own = _rule_own_group_id(rule_id, groups_provider)
+        if own:
+            stop_ids = [own]
+    if stop_ids:
+        names = T("notify.group_sep").join(
+            _group_name_for_id(gid, groups_provider) for gid in stop_ids
+        )
+        return T("notify.fail_default", rule=rule_name, group=names)
+    return T("notify.fail_default_nostop", rule=rule_name)
+
+
 class _StopGroupsPicker(QWidget):
     def __init__(self, groups_provider=None, selected=None):
         super().__init__()
@@ -1303,7 +1335,14 @@ class _MatchImageStepForm(QWidget):
 
         # notify widgets
         self._of_notify_msg = QLineEdit()
-        self._of_notify_msg.setPlaceholderText(T("step_form.enter_text"))
+        self._of_notify_msg.setPlaceholderText(
+            _default_notify_preview(
+                self._exclude_rule_id,
+                self._rules_provider,
+                self._groups_provider,
+                default_notify_groups,
+            )
+        )
         of_form.addRow(T("step_form.notify_message"), self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = _StopGroupsPicker(
@@ -1814,7 +1853,14 @@ class _DetectStepForm(QWidget):
 
         # notify widgets
         self._of_notify_msg = QLineEdit()
-        self._of_notify_msg.setPlaceholderText(T("step_form.enter_text"))
+        self._of_notify_msg.setPlaceholderText(
+            _default_notify_preview(
+                self._exclude_rule_id,
+                self._rules_provider,
+                self._groups_provider,
+                default_notify_groups,
+            )
+        )
         of_form.addRow(T("step_form.notify_message"), self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = _StopGroupsPicker(
@@ -2298,7 +2344,14 @@ class _CompareStepForm(QWidget):
 
         # notify widgets
         self._of_notify_msg = QLineEdit()
-        self._of_notify_msg.setPlaceholderText(T("step_form.enter_text"))
+        self._of_notify_msg.setPlaceholderText(
+            _default_notify_preview(
+                self._exclude_rule_id,
+                self._rules_provider,
+                self._groups_provider,
+                default_notify_groups,
+            )
+        )
         adv.addRow(T("step_form.notify_message"), self._of_notify_msg)
         self._of_notify_msg.setText(default_notify_msg)
         self._of_notify_groups = _StopGroupsPicker(
