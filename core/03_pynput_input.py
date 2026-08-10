@@ -149,40 +149,7 @@ def _validate_coords(x: int, y: int) -> bool:
     return True
 
 
-def _should_restore(current: tuple, target: tuple, tol: int = 2) -> bool:
-    return abs(current[0] - target[0]) <= tol and abs(current[1] - target[1]) <= tol
-
-
-def _inside_rect(pos: tuple, rect: dict | None) -> bool:
-    if rect is None:
-        return False
-    x, y = pos
-    return rect["x"] <= x < rect["x"] + rect["w"] and rect["y"] <= y < rect["y"] + rect["h"]
-
-
-def _try_restore(mouse, orig, target, restore_rect=None) -> None:
-    """動作完成後把游標移回原本位置。讀寫失敗、使用者已移開、
-    或復原位置落在 restore_rect（目標視窗）內時忽略。"""
-    if orig is None:
-        return
-    try:
-        if _inside_rect(orig, restore_rect):
-            return
-        if _should_restore(mouse.position, target):
-            mouse.position = orig
-    except Exception:
-        pass
-
-
-def send_click(
-    x: int,
-    y: int,
-    button: str = "left",
-    hold_ms: int = 0,
-    restore_cursor: bool = True,
-    restore_rect: dict | None = None,
-    restore_grace_ms: int = 0,
-) -> bool:
+def send_click(x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     if not _validate_coords(x, y):
         return False
     btn = {"left": _Button.left, "right": _Button.right, "middle": _Button.middle}.get(
@@ -190,23 +157,12 @@ def send_click(
     )
     mouse = pynput.mouse.Controller()
     with _lock:
-        orig = None
-        if restore_cursor:
-            try:
-                orig = mouse.position
-            except Exception:
-                orig = None
         mouse.position = (x, y)
         time.sleep(0.01)
         mouse.press(btn)
         if hold_ms > 0:
             time.sleep(hold_ms / 1000.0)
         mouse.release(btn)
-        if restore_cursor:
-            # ponytail: grace 延遲讓目標視窗多個 tick 先處理點擊，再移回游標
-            if restore_grace_ms > 0:
-                time.sleep(restore_grace_ms / 1000.0)
-            _try_restore(mouse, orig, (x, y), restore_rect)
     return True
 
 
@@ -220,16 +176,7 @@ def send_key(key: str) -> bool:
         return _send_simple_key(key)
 
 
-def send_drag(
-    x1: int,
-    y1: int,
-    x2: int,
-    y2: int,
-    button: str = "left",
-    restore_cursor: bool = True,
-    restore_rect: dict | None = None,
-    restore_grace_ms: int = 0,
-) -> bool:
+def send_drag(x1: int, y1: int, x2: int, y2: int, button: str = "left") -> bool:
     if not _validate_coords(x1, y1) or not _validate_coords(x2, y2):
         return False
     btn = {"left": _Button.left, "right": _Button.right, "middle": _Button.middle}.get(
@@ -237,12 +184,6 @@ def send_drag(
     )
     mouse = pynput.mouse.Controller()
     with _lock:
-        orig = None
-        if restore_cursor:
-            try:
-                orig = mouse.position
-            except Exception:
-                orig = None
         mouse.position = (x1, y1)
         time.sleep(0.02)
         mouse.press(btn)
@@ -250,10 +191,6 @@ def send_drag(
         mouse.position = (x2, y2)
         time.sleep(0.02)
         mouse.release(btn)
-        if restore_cursor:
-            if restore_grace_ms > 0:
-                time.sleep(restore_grace_ms / 1000.0)
-            _try_restore(mouse, orig, (x2, y2), restore_rect)
     return True
 
 
@@ -339,21 +276,7 @@ if __name__ == "__main__":
     assert send_click(0, -9999, "left") is False
     print("  [OK] send_click rejects out-of-bounds")
 
-    assert _should_restore((10, 10), (10, 10)) is True
-    assert _should_restore((15, 10), (10, 10)) is False
-    assert _should_restore((10, 13), (10, 10)) is False
-    assert _should_restore((11, 9), (10, 10)) is True  # 容差 2px 內
-    print("  [OK] _should_restore tolerance guard")
-
-    rect = {"x": 100, "y": 100, "w": 200, "h": 150}
-    assert _inside_rect((100, 100), rect) is True
-    assert _inside_rect((299, 249), rect) is True
-    assert _inside_rect((300, 249), rect) is False  # 右/下邊界互斥
-    assert _inside_rect((150, 250), rect) is False
-    assert _inside_rect((50, 50), None) is False
-    print("  [OK] _inside_rect window bound check")
-
     assert send_emergency_stop() is True
     print("  [OK] send_emergency_stop noop")
 
-    print("\n=== All 9 tests passed ===")
+    print("\n=== All 8 tests passed ===")

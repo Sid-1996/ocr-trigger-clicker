@@ -24,7 +24,6 @@ class RuleConfigController:
         "default_random_offset": 3,
         "default_wait_ms": 500,
         "default_after_delay_ms": 0,
-        "auto_restore_cursor": True,
         "language": "zh_TW",
         "notify_resource_warn": True,
     }
