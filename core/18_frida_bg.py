@@ -46,6 +46,7 @@ _pid: int | None = None
 _ready = threading.Event()
 _script_error = ""
 _last_error = ""
+_keep_active = False
 
 _ATTACH_READY_TIMEOUT = 3.0  # load() 在 frida 17 對頂層 JS 錯誤不拋例外，靠 ready 心跳偵測
 _SPOOF_GRACE_MS = 400  # spoof 有效期間；太短點擊可能漏註冊，太長卡使用者滑鼠
@@ -70,6 +71,16 @@ def build_hook_script() -> str:
     0x8000 = 按下）與 GetKeyboardState（256-byte 陣列，bit 0x80 = 按下），只在
     keys[vk] 為 down 時覆寫該按鍵，其餘 pass-through——不影響使用者物理鍵盤。
     rpc.exports.key(vk, down) 設定/清除，down 時 arm __KEY_MS__ 保險 timer。
+
+    keep-active（rpc.exports.setKeepActive(on, hwnd)）：on 時
+    a) 焦點 API（GetForegroundWindow/GetActiveWindow/GetFocus）永久回傳遊戲 hwnd——
+       hookFocus 條件由「focusOn」放寬為「focusOn || keepActive」，不再只有 400ms grace。
+    b) 對目標視窗做 WndProc subclass（GetWindowLongPtrW/SetWindowLongPtrW）過濾失焦
+       訊息：丟棄 WM_KILLFOCUS(0x0008) 與 WM_ACTIVATE(wParam==0)（WA_INACTIVE），
+       遊戲的 WndProc 永遠收不到 → 音樂不停、可被覆蓋。
+       用 subclass 而非 hook GetMessage/PeekMessage：user32 的訊息函式是小型 stub，
+       Interceptor.replace 後 this.original 不可靠（實測回傳異常）。
+       off 或 detach 時還原原 WndProc，恢復「失焦即暫停」原行為。
     """
     return (
         r"""
@@ -84,17 +95,22 @@ var keyTimer = null;
 var KEY_MS = __KEY_MS__;
 var focusHwndPtr = null;
 var focusOn = false;
+var keepActive = false;
+var filterHwnd = null;
+var filterCallback = null;
+var filterOldAddr = null;
+var filterOldFn = null;
 var user32 = Process.findModuleByName('user32.dll');
 
 function disableSpoof() {
   spoofing = false;
-  focusOn = false;
+  if (!keepActive) focusOn = false;
 }
 
 function clearKeys() {
   keys = {};
   keyTimer = null;
-  focusOn = false;
+  if (!keepActive) focusOn = false;
 }
 
 function hookSpoof(name, ptIndex, writePos) {
@@ -136,15 +152,67 @@ function hookKeyState(name, isArray) {
 }
 
 function hookFocus(name) {
-  // 假造焦點：只在點擊/按鍵 spoof 期間回傳遊戲視窗 hwnd，其餘 pass-through
+  // 假造焦點：只在點擊/按鍵 spoof 期間或 keep-active 常駐期間回傳遊戲視窗 hwnd，
+  // 其餘 pass-through
   var addr = user32.findExportByName(name);
   if (addr === null) return;
   Interceptor.attach(addr, {
     onLeave: function (retval) {
-      if (!focusOn || focusHwndPtr === null) return;
+      if ((!focusOn && !keepActive) || focusHwndPtr === null) return;
       retval.replace(focusHwndPtr);
     }
   });
+}
+
+function subclassFilter(hwnd) {
+  // keep-active 的訊息層過濾：對目標視窗做 WndProc subclass。keepActive 期間
+  // 丟棄 WM_KILLFOCUS(0x0008) 與 WM_ACTIVATE(WA_INACTIVE, wParam==0)，其餘訊息
+  // 轉交原 WndProc。用 GetWindowLongPtrW/SetWindowLongPtrW 取代 WndProc，不依賴
+  // Interceptor 的 this.original（user32 的 GetMessage/PeekMessage 是小型 stub，
+  // replace 後的 this.original 不可靠——實測回傳值異常）。
+  // GetWindowLongPtrW 回傳型別用 'pointer'（'int64' 會給 number，無 isNull()）。
+  var GWLP_WNDPROC = -4;
+  var getLong = new NativeFunction(
+    user32.findExportByName('GetWindowLongPtrW'), 'pointer', ['pointer', 'int']
+  );
+  var setLong = new NativeFunction(
+    user32.findExportByName('SetWindowLongPtrW'), 'pointer', ['pointer', 'int', 'pointer']
+  );
+  var oldAddr = getLong(ptr(hwnd), GWLP_WNDPROC);
+  if (oldAddr.isNull()) {
+    send(['warn', 'GetWindowLongPtrW 取不到原 WndProc']);
+    return;
+  }
+  filterOldAddr = oldAddr;
+  filterOldFn = new NativeFunction(oldAddr, 'int64', ['pointer', 'uint', 'uint', 'uint']);
+  filterCallback = new NativeCallback(function (h, m, w, l) {
+    if (keepActive) {
+      // QJS 的 NativeCallback scalar 參數是 JS number（實測 typeof === 'number'，
+      // 無 toInt32/equals），所以直接以數值比較
+      if (m === 0x0008) return 0;                       // WM_KILLFOCUS
+      if (m === 0x0006 && w === 0) return 0;            // WM_ACTIVATE(WA_INACTIVE)
+    }
+    return filterOldFn(h, m, w, l);
+  }, 'int64', ['pointer', 'uint', 'uint', 'uint']);
+  setLong(ptr(hwnd), GWLP_WNDPROC, ptr(filterCallback));
+  filterHwnd = ptr(hwnd);
+}
+
+function restoreFilter() {
+  // 還原原 WndProc；若 filterCallback 已 freed 仍掛在視窗會崩潰，off/detach 都先呼叫
+  if (filterHwnd === null || filterOldAddr === null) return;
+  var setLong = new NativeFunction(
+    user32.findExportByName('SetWindowLongPtrW'), 'pointer', ['pointer', 'int', 'pointer']
+  );
+  try {
+    setLong(filterHwnd, -4, filterOldAddr);
+  } catch (e) {
+    send(['warn', 'restoreFilter 失敗: ' + e]);
+  }
+  filterHwnd = null;
+  filterCallback = null;
+  filterOldAddr = null;
+  filterOldFn = null;
 }
 
 function hookSetCursorPos() {
@@ -201,6 +269,23 @@ if (user32 === null) {
     arm: function (hwnd) {
       focusHwndPtr = ptr(hwnd);
       return 1;
+    },
+    setKeepActive: function (on, hwnd) {
+      keepActive = on ? true : false;
+      if (keepActive) {
+        focusHwndPtr = ptr(hwnd);
+        focusOn = true; // 焦點假造常駐；下列 timer 觸發也不會再關掉
+        if (spoofTimer !== null) clearTimeout(spoofTimer);
+        if (keyTimer !== null) clearTimeout(keyTimer);
+        if (filterHwnd === null || !filterHwnd.equals(ptr(hwnd))) {
+          restoreFilter();
+          subclassFilter(hwnd);
+        }
+      } else {
+        focusOn = false; // 恢復 400ms grace 的短暫焦點假造行為
+        restoreFilter();
+      }
+      return keepActive ? 1 : 0;
     }
   };
   send('ready');
@@ -388,9 +473,16 @@ def key(hwnd: int, vk: int, down: bool) -> bool:
 
 def detach() -> None:
     """Detach the injected session and restore the game (idempotent)."""
-    global _script, _session, _pid, _script_error
+    global _script, _session, _pid, _script_error, _keep_active
     with _lock:
         if _script is not None:
+            if _keep_active:
+                # 先關 keep-active 還原 WndProc，避免 frida callback 遺留在遊戲視窗
+                try:
+                    _script.exports.setKeepActive(0, 0)
+                except Exception:
+                    pass
+                _keep_active = False
             try:
                 _script.unload()
             except Exception:
@@ -405,6 +497,43 @@ def detach() -> None:
         _pid = None
         _ready.clear()
         _script_error = ""
+
+
+def keep_active(hwnd: int, on: bool) -> bool:
+    """Enable/disable 後台 keep-active（持續假造焦點，遊戲不知道失焦）。
+
+    on=True 期間 GetForegroundWindow/GetActiveWindow/GetFocus 永久回傳遊戲視窗，
+    並以 WndProc subclass 丟棄 WM_KILLFOCUS 與 WM_ACTIVATE(WA_INACTIVE) → 遊戲視窗
+    可被其他視窗覆蓋、音樂不暫停、鍵盤輸入不需前置點擊。不需要先 update()。
+    on=False（或 detach）還原原 WndProc 並恢復「失焦即暫停」原行為。
+    """
+    global _keep_active
+    if on:
+        if not ensure_attached(hwnd):
+            return False
+        with _lock:
+            if _script is None:
+                return False
+            try:
+                if _script.exports.setKeepActive(1, int(hwnd)) != 1:
+                    _set_error("Frida setKeepActive(1) 回傳異常")
+                    return False
+                _keep_active = True
+                return True
+            except Exception as e:
+                _set_error(f"Frida setKeepActive(1) 失敗: {e}")
+                return False
+    with _lock:
+        if _script is None:
+            _keep_active = False
+            return True  # 未注入即已 pass-through
+        try:
+            _script.exports.setKeepActive(0, 0)
+            _keep_active = False
+            return True
+        except Exception as e:
+            _log.warning("Frida setKeepActive(0) 失敗: %s", e)
+            return False
 
 
 if __name__ == "__main__":
@@ -434,7 +563,18 @@ if __name__ == "__main__":
         "hookFocus",
         "hookSetCursorPos",
         "focusOn",
+        "keepActive",
         "arm: function",
+        "setKeepActive: function",
+        "subclassFilter",
+        "restoreFilter",
+        "GetWindowLongPtrW",
+        "SetWindowLongPtrW",
+        "GWLP_WNDPROC",
+        "filterCallback",
+        "filterOldAddr",
+        "WM_KILLFOCUS",
+        "WA_INACTIVE",
     ):
         assert needle in js, f"hook 腳本缺少: {needle}"
     assert "Module.getExportByName" not in js, "不應使用 frida 17 會拋錯的舊 API"
@@ -453,6 +593,9 @@ if __name__ == "__main__":
     assert ensure_attached(0) is False and last_error()
     print("  [OK] 無效 hwnd 拒絕 attach")
 
+    assert keep_active(12345, False) is True, "未 attach 時 keep_active(off) 應為 no-op 成功"
+    print("  [OK] keep_active(off) 未 attach 時 no-op")
+
     # 假 frida 流程：驗證 rpc.exports.update（同步）→ PostMessage 順序
     import sys
 
@@ -461,6 +604,7 @@ if __name__ == "__main__":
             self.updates = []
             self.key_calls = []
             self.arm_calls = []
+            self.keep_active_calls = []
 
         def update(self, sx, sy, cx, cy):
             self.updates.append((sx, sy, cx, cy))
@@ -473,6 +617,10 @@ if __name__ == "__main__":
         def arm(self, hwnd):
             self.arm_calls.append(hwnd)
             return 1
+
+        def setKeepActive(self, on, hwnd):
+            self.keep_active_calls.append((on, hwnd))
+            return 1 if on else 0
 
     class _FakeScript:
         def __init__(self):
@@ -557,9 +705,23 @@ if __name__ == "__main__":
         ctypes.windll.user32.PostMessageW = _orig_pm
     print("  [OK] key: rpc.exports.key(down/up) → PostMessage WM_KEYDOWN/UP")
 
+    # keep-active：on → setKeepActive(1, hwnd)；off → setKeepActive(0)
+    keep_active(desktop, False)
+    assert fake_script.exports.keep_active_calls == [(0, 0)], (
+        f"已 attach 時 keep_active(False) 應推送 setKeepActive(0): {fake_script.exports.keep_active_calls}"
+    )
+    assert keep_active(desktop, True) is True
+    assert fake_script.exports.keep_active_calls[-1] == (1, desktop), (
+        f"keep-active 開啟應推送 setKeepActive(1, hwnd): {fake_script.exports.keep_active_calls}"
+    )
+    assert keep_active(0, True) is False, "無效 hwnd 的 keep_active(True) 應失敗"
+    assert keep_active(desktop, False) is True
+    assert fake_script.exports.keep_active_calls[-1] == (0, 0), "關閉應推送 setKeepActive(0, 0)"
+    print("  [OK] keep_active: setKeepActive(1)/setKeepActive(0) → rpc")
+
     detach()
     assert fake_script.unloaded
     print("  [OK] detach 冪等釋放")
 
     del sys.modules["frida"]
-    print("\n=== All 7 checks passed ===")
+    print("\n=== All 8 checks passed ===")
