@@ -5260,6 +5260,10 @@ class MainWindow(QMainWindow):
                     },
                 ),
                 Step(
+                    type="wait",
+                    params={"ms": cfg.get("default_wait_ms", 500)},
+                ),
+                Step(
                     type="click",
                     params={
                         "target": "text_center",
@@ -5268,10 +5272,6 @@ class MainWindow(QMainWindow):
                         "x": 0,
                         "y": 0,
                     },
-                ),
-                Step(
-                    type="wait",
-                    params={"ms": cfg.get("default_wait_ms", 500)},
                 ),
             ],
         )
@@ -5361,6 +5361,10 @@ class MainWindow(QMainWindow):
                     },
                 ),
                 Step(
+                    type="wait",
+                    params={"ms": cfg.get("default_wait_ms", 500)},
+                ),
+                Step(
                     type="click",
                     params={
                         "target": "text_center",
@@ -5369,10 +5373,6 @@ class MainWindow(QMainWindow):
                         "x": 0,
                         "y": 0,
                     },
-                ),
-                Step(
-                    type="wait",
-                    params={"ms": cfg.get("default_wait_ms", 500)},
                 ),
             ],
         )
