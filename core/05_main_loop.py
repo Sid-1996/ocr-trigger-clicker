@@ -1036,6 +1036,16 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
+            ms = step.params.get("after_delay_ms", 0) or 0
+            if (
+                step.type in ("click", "key", "drag", "scroll")
+                and result.action == "continue"
+                and ms > 0
+            ):
+                # 動作成功後固定延遲（社群「動作後 sleep」慣例）：與 _handle_wait 同款之中斷式等待，
+                # 讓下一幀/下一規則以新畫面續接；中斷（暫停/停止）即止。
+                if self._stop_event.wait(timeout=ms / 1000.0):
+                    return StepResult("stop", detail=T("exec_log.detail.interrupted"))
             if step.type == "wait" and result.action == "continue":
                 if not background:
                     self._log_exec(rule.name, i, "wait", "ok")
@@ -2532,5 +2542,47 @@ if __name__ == "__main__":
 
     recognize = _orig_rec
     print("  [OK] Test 31 complete")
+
+    # ── Test 32: 動作後延遲 after_delay_ms ──
+    Step = _rule.Step
+    ml._send_click = lambda *a, **k: True
+    ml._activate_window = lambda *a, **k: True
+    _ad_timeout = {}
+    ml._stop_event.wait = lambda timeout=None: _ad_timeout.__setitem__("t", timeout) or False
+    _ad_ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    _ad_rule = Rule(
+        id="ad_selfcheck",
+        name="ad_selfcheck",
+        enabled=True,
+        steps=[
+            Step(
+                type="click",
+                params={"target": "custom", "x": 10, "y": 10, "after_delay_ms": 750},
+            )
+        ],
+    )
+    ml._run_rule(_ad_rule, _ad_ctx.img, _ad_ctx.rect, _ad_ctx)
+    assert abs((_ad_timeout.get("t") or 0) - 0.75) < 1e-9, "動作後延遲應以秒等待"
+    print("  [OK] after_delay_ms: click 後等待 750ms")
+
+    ml._stop_event.wait = lambda timeout=None: True  # 中斷
+    ml._last_exec_log.clear()
+    _ad_rule2 = Rule(
+        id="ad_selfcheck2",
+        name="ad_selfcheck2",
+        enabled=True,
+        steps=[
+            Step(
+                type="click",
+                params={"target": "custom", "x": 10, "y": 10, "after_delay_ms": 500},
+            ),
+            Step(type="wait", params={"ms": 10}),
+        ],
+    )
+    ml._run_rule(_ad_rule2, _ad_ctx.img, _ad_ctx.rect, _ad_ctx)
+    assert "ad_selfcheck2:1" not in ml._last_exec_log, "中斷後尾隨步驟不應執行"
+    print("  [OK] after_delay_ms: 中斷時跳過後續步驟")
 
     print("\n=== All 30 tests passed ===")

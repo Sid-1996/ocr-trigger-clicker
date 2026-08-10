@@ -159,3 +159,54 @@ def test_group_defaults():
     assert g.between_rounds_sec == 0
     assert g.rule_ids == []
     assert g.order == "sequential"
+
+
+def test_after_delay_ms_round_trip():
+    rule = Rule(
+        id="ad1",
+        name="After Delay",
+        enabled=True,
+        steps=[
+            Step(
+                type="click",
+                params={"target": "text_center", "x": 0, "y": 0, "after_delay_ms": 800},
+            ),
+        ],
+    )
+    restored = _dict_to_rule(_rule_to_dict(rule))
+    assert restored.steps[0].params["after_delay_ms"] == 800
+
+
+def test_after_delay_ms_defaults_zero_for_all_actions():
+    for t in ("click", "key", "drag", "scroll"):
+        rule = _dict_to_rule({"id": f"r-{t}", "name": "R", "steps": [{"type": t, "params": {}}]})
+        assert rule.steps[0].params.get("after_delay_ms") == 0, t
+
+
+def test_after_delay_ms_coerces_bad_input():
+    rule = _dict_to_rule(
+        {
+            "id": "ad-bad",
+            "name": "B",
+            "steps": [{"type": "click", "params": {"after_delay_ms": "not-a-number"}}],
+        }
+    )
+    assert rule.steps[0].params["after_delay_ms"] == 0
+    rule_neg = _dict_to_rule(
+        {"id": "ad-neg", "name": "N", "steps": [{"type": "key", "params": {"after_delay_ms": -50}}]}
+    )
+    assert rule_neg.steps[0].params["after_delay_ms"] == 0
+
+
+def test_scroll_delay_ms_kept_distinct():
+    rule = _dict_to_rule(
+        {
+            "id": "ad-sc",
+            "name": "S",
+            "steps": [
+                {"type": "scroll", "params": {"delay_ms": 40, "after_delay_ms": 500}},
+            ],
+        }
+    )
+    assert rule.steps[0].params["delay_ms"] == 40
+    assert rule.steps[0].params["after_delay_ms"] == 500

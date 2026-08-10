@@ -16,8 +16,9 @@ _STEP_DEFAULTS = {
         "button": "left",
         "random_offset": 3,
         "hold_ms": 0,
+        "after_delay_ms": 0,
     },
-    "key": {"key": "", "hold_ms": 0},
+    "key": {"key": "", "hold_ms": 0, "after_delay_ms": 0},
     "drag": {
         "target": "text_center",
         "x": 0,
@@ -25,8 +26,9 @@ _STEP_DEFAULTS = {
         "dx": 0,
         "dy": 0,
         "button": "left",
+        "after_delay_ms": 0,
     },
-    "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30},
+    "scroll": {"direction": "WheelDown", "amount": 1, "delay_ms": 30, "after_delay_ms": 0},
     "wait": {"ms": 500},
     "jump": {"rule_id": ""},
     "compare": {
@@ -141,6 +143,7 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         base["y"] = _as_float(base.get("y", 0), 0)
         base["button"] = str(base.get("button", "left"))
         base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
+        base["after_delay_ms"] = max(0, _as_int(base.get("after_delay_ms", 0), 0))
         if step_type == "click":
             base["random_offset"] = max(0, _as_int(base.get("random_offset", 3), 3))
         else:
@@ -149,10 +152,12 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
     elif step_type == "key":
         base["key"] = str(base.get("key", ""))
         base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))
+        base["after_delay_ms"] = max(0, _as_int(base.get("after_delay_ms", 0), 0))
     elif step_type == "scroll":
         base["direction"] = str(base.get("direction", "WheelDown"))
         base["amount"] = max(1, _as_int(base.get("amount", 1), 1))
         base["delay_ms"] = max(0, _as_int(base.get("delay_ms", 30), 30))
+        base["after_delay_ms"] = max(0, _as_int(base.get("after_delay_ms", 0), 0))
     elif step_type == "wait":
         base["ms"] = max(0, _as_int(base.get("ms", 500), 500))
     elif step_type == "jump":

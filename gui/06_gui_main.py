@@ -576,12 +576,18 @@ def _step_summary(step, rules_provider=None) -> str:
         hm = p.get("hold_ms", 0) or 0
         if hm > 0:
             parts.append(T("summary.format_hold", ms=hm))
+        ad = p.get("after_delay_ms", 0) or 0
+        if ad > 0:
+            parts.append(T("summary.format_after_delay", ms=ad))
         return " ".join(parts)
     if t == "key":
         parts = [T("summary.format_key_press", key=p.get("key", ""))]
         hm = p.get("hold_ms", 0) or 0
         if hm > 0:
             parts.append(T("summary.format_hold", ms=hm))
+        ad = p.get("after_delay_ms", 0) or 0
+        if ad > 0:
+            parts.append(T("summary.format_after_delay", ms=ad))
         return " ".join(parts)
     if t == "wait":
         return T("summary.format_wait", ms=p.get("ms", 500))
@@ -595,7 +601,11 @@ def _step_summary(step, rules_provider=None) -> str:
             "text_center": T("summary.click_target"),
             "custom": T("step_form.text_coord"),
         }.get(target, "?")
-        return T("summary.format_drag", base=base, dx=dx, dy=dy)
+        parts = [T("summary.format_drag", base=base, dx=dx, dy=dy)]
+        ad = p.get("after_delay_ms", 0) or 0
+        if ad > 0:
+            parts.append(T("summary.format_after_delay", ms=ad))
+        return " ".join(parts)
     if t == "scroll":
         d = p.get("direction", "WheelDown")
         a = p.get("amount", 1)
@@ -605,7 +615,11 @@ def _step_summary(step, rules_provider=None) -> str:
             "WheelLeft": T("summary.left"),
             "WheelRight": T("summary.right"),
         }.get(d, d)
-        return T("summary.format_scroll", direction=dir_label, times=a)
+        parts = [T("summary.format_scroll", direction=dir_label, times=a)]
+        ad = p.get("after_delay_ms", 0) or 0
+        if ad > 0:
+            parts.append(T("summary.format_after_delay", ms=ad))
+        return " ".join(parts)
     if t == "notify":
         msg = p.get("message", "")
         return T("summary.format_notify", msg=msg) if msg else T("summary.format_notify_empty")
@@ -2020,6 +2034,13 @@ class _ClickStepForm(QWidget):
         self._hold_ms.setToolTip(T("tooltip.hold_ms"))
         adv_form.addRow(T("step_form.hold_label"), self._hold_ms)
 
+        self._after_delay = _NoWheelSpin()
+        self._after_delay.setRange(0, 60000)
+        self._after_delay.setSuffix(" ms")
+        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        self._after_delay.setToolTip(T("tooltip.after_delay"))
+        adv_form.addRow(T("step_form.after_delay_label"), self._after_delay)
+
         form.addRow(self._adv_container)
 
     def _on_target_changed(self, idx):
@@ -2043,6 +2064,7 @@ class _ClickStepForm(QWidget):
         self._step.params["button"] = self._button.currentData()
         self._step.params["random_offset"] = self._offset.value()
         self._step.params["hold_ms"] = self._hold_ms.value()
+        self._step.params["after_delay_ms"] = self._after_delay.value()
 
 
 class _DragStepForm(QWidget):
@@ -2100,6 +2122,13 @@ class _DragStepForm(QWidget):
             self._button.setCurrentIndex(b_idx)
         form.addRow(T("format.mouse_button"), self._button)
 
+        self._after_delay = _NoWheelSpin()
+        self._after_delay.setRange(0, 60000)
+        self._after_delay.setSuffix(" ms")
+        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        self._after_delay.setToolTip(T("tooltip.after_delay"))
+        form.addRow(T("step_form.after_delay_label"), self._after_delay)
+
     def _on_target_changed(self, idx):
         t = self._target.currentData()
         self._coord_row.setVisible(t == "custom")
@@ -2120,6 +2149,7 @@ class _DragStepForm(QWidget):
         self._step.params["dx"] = self._dx.value()
         self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
+        self._step.params["after_delay_ms"] = self._after_delay.value()
 
 
 class _ScrollStepForm(QWidget):
@@ -2150,12 +2180,21 @@ class _ScrollStepForm(QWidget):
         self._delay.setRange(0, 1000)
         self._delay.setSuffix(" ms")
         self._delay.setValue(p.get("delay_ms", 30))
+        self._delay.setToolTip(T("tooltip.scroll_interval"))
         form.addRow(T("step_form.interval"), self._delay)
+
+        self._after_delay = _NoWheelSpin()
+        self._after_delay.setRange(0, 60000)
+        self._after_delay.setSuffix(" ms")
+        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        self._after_delay.setToolTip(T("tooltip.after_delay"))
+        form.addRow(T("step_form.after_delay_label"), self._after_delay)
 
     def save(self):
         self._step.params["direction"] = self._direction.currentData()
         self._step.params["amount"] = self._amount.value()
         self._step.params["delay_ms"] = self._delay.value()
+        self._step.params["after_delay_ms"] = self._after_delay.value()
 
 
 class _CompareStepForm(QWidget):
@@ -2494,9 +2533,17 @@ class _KeyStepForm(QWidget):
         self._hold_ms.setToolTip(T("tooltip.hold_ms"))
         form.addRow(T("step_form.hold_label"), self._hold_ms)
 
+        self._after_delay = _NoWheelSpin()
+        self._after_delay.setRange(0, 60000)
+        self._after_delay.setSuffix(" ms")
+        self._after_delay.setValue(step.params.get("after_delay_ms", 0))
+        self._after_delay.setToolTip(T("tooltip.after_delay"))
+        form.addRow(T("step_form.after_delay_label"), self._after_delay)
+
     def save(self):
         self._step.params["key"] = self._key.currentData() or self._key.currentText()
         self._step.params["hold_ms"] = self._hold_ms.value()
+        self._step.params["after_delay_ms"] = self._after_delay.value()
 
 
 class _WaitStepForm(QWidget):

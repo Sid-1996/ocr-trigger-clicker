@@ -230,6 +230,53 @@ def test_handle_click_cursor_bg():
     assert ctx.triggered
 
 
+# ── 動作後延遲 after_delay_ms（_run_rule 單一 choke point）──
+
+
+def test_after_delay_waits_timeout_after_click():
+    ml = _make_ml()
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    captured = {}
+    ml._stop_event.wait = lambda timeout: captured.update(timeout=timeout) or False
+    step = Step(type="click", params={"target": "custom", "x": 10, "y": 10, "after_delay_ms": 750})
+    rule = Rule(id="ad-wait", name="ad-wait", enabled=True, steps=[step])
+    ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    assert captured == {"timeout": 0.75}
+
+
+def test_after_delay_interrupt_skips_rest():
+    ml = _make_ml()
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    ml._stop_event.wait = lambda timeout: True  # 模擬暫停/停止中斷
+    step = Step(type="click", params={"target": "custom", "x": 10, "y": 10, "after_delay_ms": 500})
+    rule = Rule(
+        id="ad-int",
+        name="ad-int",
+        enabled=True,
+        steps=[step, Step(type="wait", params={"ms": 10})],
+    )
+    ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    # 中斷 → 動作後延遲回 stop，尾隨的 wait 步驟不應執行（不打「ok」log）
+    assert f"{rule.name}:1" not in ml._last_exec_log
+
+
+def test_after_delay_zero_skips_wait():
+    ml = _make_ml()
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    captured = {}
+    ml._stop_event.wait = lambda timeout: captured.update(timeout=timeout) or False
+    step = Step(type="click", params={"target": "custom", "x": 10, "y": 10, "after_delay_ms": 0})
+    rule = Rule(id="ad-zero", name="ad-zero", enabled=True, steps=[step])
+    ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    assert captured == {}  # 0 → 不等待
+
+
 # ── _send_click frida 模式派發 ──
 
 
