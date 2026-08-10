@@ -43,7 +43,7 @@
     {
       "id": "group_65292e04",
       "name": "體力型跑馬",
-      "enabled": false,
+      "enabled": true,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -59,7 +59,7 @@
     {
       "id": "group_ab1510a9",
       "name": "力量型跑馬",
-      "enabled": true,
+      "enabled": false,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -236,6 +236,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -329,6 +335,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -360,6 +372,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -410,6 +428,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -455,6 +479,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -486,6 +516,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -544,6 +580,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -671,6 +713,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -702,6 +750,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -741,6 +795,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -791,6 +851,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "notify",
           "params": {
             "message": "【選項1】: 心情+ 1，失敗: 無\n【選項2】: 體力+10，失敗: 無"
@@ -825,6 +891,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -870,6 +942,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -920,6 +998,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -957,6 +1041,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1000,6 +1090,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -1037,6 +1133,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1140,6 +1242,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -1194,6 +1302,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -1241,6 +1355,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -1272,6 +1392,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1322,6 +1448,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -1359,6 +1491,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1408,6 +1546,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -1442,6 +1586,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -1473,6 +1623,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1516,6 +1672,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -1550,6 +1712,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -1581,6 +1749,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1631,6 +1805,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Tab",
@@ -1660,6 +1840,12 @@
             "match_mode": "contains",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1695,6 +1881,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Space",
@@ -1726,6 +1918,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1783,6 +1981,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -1817,6 +2021,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "4",
@@ -1848,6 +2058,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1888,6 +2104,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1973,6 +2195,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2010,6 +2238,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2053,6 +2287,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2090,6 +2330,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2133,6 +2379,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2164,6 +2416,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2261,6 +2519,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2305,6 +2569,12 @@
             "match_color": false,
             "color_tolerance": 10,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2355,6 +2625,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2402,6 +2678,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2442,6 +2724,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2471,6 +2759,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2521,6 +2815,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "notify",
           "params": {
             "message": "心情BEST時選1，否則選2"
@@ -2544,6 +2844,12 @@
               "key": "2",
               "fail_duration_sec": 0.1
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2581,6 +2887,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -2612,6 +2924,12 @@
             "match_color": false,
             "color_tolerance": 10,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2647,6 +2965,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "4",
@@ -2676,6 +3000,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2714,6 +3044,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2762,6 +3098,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "2",
@@ -2791,6 +3133,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2826,6 +3174,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "1",
@@ -2838,11 +3192,10 @@
     }
   ],
   "_collapsed_groups": [
-    "group_ab1510a9",
-    "group_65292e04",
-    "group_c12c5d3c",
     "group_aaf9e64a",
-    "group_b96d8712"
+    "group_b96d8712",
+    "group_ab1510a9",
+    "group_65292e04"
   ],
   "window_title": "StarSavior",
   "capture_size": [

@@ -276,12 +276,18 @@
             "color_tolerance": 100,
             "on_fail": {
               "action": "notify",
-              "message": "沒有找到[掛機獎勵]，跳過此群組",
+              "message": "",
               "stop_groups": [
                 "__default__"
               ],
-              "fail_duration_sec": 1.0
+              "fail_duration_sec": 0.5
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -294,12 +300,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -404,6 +404,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -413,12 +419,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -447,9 +447,9 @@
           }
         },
         {
-          "type": "notify",
+          "type": "wait",
           "params": {
-            "message": "今日剩餘次數尚有12次，通過並點擊!"
+            "ms": 250
           }
         },
         {
@@ -509,9 +509,9 @@
           }
         },
         {
-          "type": "notify",
+          "type": "wait",
           "params": {
-            "message": "剩餘次數11，已無免費次數，兩次Esc關閉面板。"
+            "ms": 250
           }
         },
         {
@@ -550,6 +550,33 @@
       "enabled": true,
       "steps": [
         {
+          "type": "match_image",
+          "params": {
+            "template": "",
+            "template_data": "iVBORw0KGgoAAAANSUhEUgAAABIAAAANCAIAAAArLKlOAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAzklEQVQokWP8//8/Axr4i8RmRpeEACYsYv8YOjo6GP4xMGAYiAD/McHf/wIiPKrqKkuXLf358+evX78wlWDT9v8/vxA3rwAXDx+HhaX5y5cvidUG0cPNx8HNxyEowpeSmvL9+3fC2rj5OHgFOJGRnKLM2nVr4QqwBQkmYGSwt3X08vSCC7BgD18mxn//oOHIz81/7vRFcQlxlMjAHiQi3LyCXMJigguWLMCqALs2QRG+8LCwHz9+YJXFqe3t27e4NEAA43/MxEUEIC4kMQAAjsdGs5Ct+GkAAAAASUVORK5CYII=",
+            "roi": {
+              "x": 0.18527363184079604,
+              "y": 0.06048458149779736,
+              "w": 0.03119402985074627,
+              "h": 0.034317180616740085,
+              "roi_coord": "client"
+            },
+            "threshold": 0.8,
+            "match_color": false,
+            "color_tolerance": 100,
+            "on_fail": {
+              "action": "notify",
+              "message": "沒找到大廳特徵",
+              "stop_groups": [
+                "group_266e1f8c"
+              ],
+              "fail_duration_sec": 0.5
+            },
+            "match_mode": "fuzzy",
+            "template_source": "foreground"
+          }
+        },
+        {
           "type": "detect",
           "params": {
             "text": "派遣完成",
@@ -564,12 +591,18 @@
             "fuzzy_threshold": 0.8,
             "on_fail": {
               "action": "notify",
-              "message": "沒有找到[派遣完成]，跳過此群組",
+              "message": "",
               "stop_groups": [
                 "group_266e1f8c"
               ],
-              "fail_duration_sec": 1.5
+              "fail_duration_sec": 0.5
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -607,6 +640,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -653,6 +692,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -696,6 +741,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -736,6 +787,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -784,6 +841,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -793,12 +856,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -811,10 +868,9 @@
       "enabled": true,
       "steps": [
         {
-          "type": "match_image",
+          "type": "detect",
           "params": {
-            "template": "",
-            "template_data": "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",
+            "text": "燭光廣場",
             "roi": {
               "x": 0.6442708333333333,
               "y": 0.37037037037037035,
@@ -822,10 +878,15 @@
               "h": 0.06574074074074074,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
-            "match_color": false,
-            "color_tolerance": 100,
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -869,6 +930,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -922,6 +989,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -962,6 +1035,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1008,6 +1087,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1048,6 +1133,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1107,6 +1198,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "custom",
@@ -1147,6 +1244,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1193,6 +1296,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1233,6 +1342,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1292,6 +1407,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "custom",
@@ -1332,6 +1453,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1378,6 +1505,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1418,6 +1551,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1481,6 +1620,12 @@
               ],
               "fail_duration_sec": 1.5
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1548,6 +1693,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1593,6 +1744,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1633,6 +1790,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1683,6 +1846,12 @@
               ],
               "fail_duration_sec": 2.5
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1754,6 +1923,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1852,6 +2027,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1892,6 +2073,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -1938,6 +2125,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -1978,6 +2171,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2037,6 +2236,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "custom",
@@ -2090,6 +2295,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "custom",
@@ -2136,6 +2347,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2167,6 +2384,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2210,6 +2433,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2500,6 +2729,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2540,6 +2775,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2584,6 +2825,12 @@
               ],
               "fail_duration_sec": 0.1
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2646,6 +2893,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2691,6 +2944,12 @@
               "action": "advance",
               "fail_duration_sec": 0.5
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2756,6 +3015,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2796,6 +3061,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2858,6 +3129,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2901,6 +3178,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -2941,6 +3224,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -2994,6 +3283,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3037,6 +3332,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3077,6 +3378,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3130,6 +3437,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3170,6 +3483,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3216,6 +3535,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3255,6 +3580,12 @@
               "action": "advance",
               "fail_duration_sec": 1.0
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3310,6 +3641,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3350,6 +3687,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3408,6 +3751,12 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3558,6 +3907,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3594,6 +3949,12 @@
               "action": "advance",
               "fail_duration_sec": 0.1
             }
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3727,6 +4088,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "click",
           "params": {
             "target": "text_center",
@@ -3838,6 +4205,25 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Escape",
+            "hold_ms": 0
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Escape",
@@ -3870,6 +4256,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Escape",
@@ -3899,6 +4291,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3936,6 +4334,12 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop"
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
           }
         },
         {
@@ -3992,6 +4396,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Escape",
@@ -4037,6 +4447,12 @@
           }
         },
         {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
           "type": "key",
           "params": {
             "key": "Space",
@@ -4056,21 +4472,22 @@
           "type": "match_image",
           "params": {
             "template": "",
-            "template_data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAVCAIAAAD9zpjjAAAACXBIWXMAAA7EAAAOxAGVKw4bAAABdUlEQVQokX2Oy0rDUBCGZ3Jp0mJjEbWKYvFCF0WQVrf6EK58EF9DBUVdCLp0qz6EWKogiAupF6q2RW1JbwknJ8k5LpLWFnr8V//MfPz/YGp5IwawQslWrTRmfUNXRdU4MaY+IzroMdyeX9n8ePTRR03FqIaqAgCMutwmQD0ZlL35HF4rijwex8kxVGR5JtVL8sslRhxeqbGOg/lMStK14LB29xQYz7bv17Mh3WhLPQIAfIcEhnxVe0s5EZegTz4JIbv43L8fgLyO1TVtIcQ8NzBuqymEOKVh3euLuM5xwucsSwiR8kcY+c9Pbr0eRjZMIUQr5W5Sq3+PhVz6b1JVKTYCAKzZAODDk6KL6cz55dLOoWSMCuvSx2d6MmlkVxd2j4SQEjcCoyWTQsi8LTDPY5SWDvcHHr9ZmJZHRwARhooxt/qjcJP4XybMTkh6BGW5d+Wezzo2e//hAPiQzzdPT/nVBQBAy5Qk5AhAKOMcAN4ScwcTc7+lNJ5cg4GPmwAAAABJRU5ErkJggg==",
+            "template_data": "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",
             "roi": {
-              "x": 0.9509375,
-              "y": 0.020555555555555556,
-              "w": 0.02625,
-              "h": 0.03944444444444445,
+              "x": 0.9358333333333333,
+              "y": 0.02981481481481482,
+              "w": 0.04604166666666667,
+              "h": 0.060740740740740734,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
+            "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 1.0
-            }
+              "fail_duration_sec": 2.0
+            },
+            "template_source": "foreground"
           }
         },
         {
@@ -4243,26 +4660,26 @@
     }
   ],
   "_collapsed_groups": [
-    "group_fdab3a16",
-    "__default__",
-    "group_8db83f5b",
     "group_39a1b80d",
-    "group_261f6f66",
-    "group_f1d46de3",
-    "group_266e1f8c",
-    "group_40b2992f",
-    "group_c7a80073",
-    "group_a1d5b815",
     "group_36068123",
-    "group_53eec035",
+    "group_261f6f66",
     "group_3c07d078",
+    "__default__",
+    "group_e8efb9ff",
+    "group_fdab3a16",
+    "group_40b2992f",
+    "group_a1d5b815",
+    "group_8db83f5b",
+    "group_266e1f8c",
     "group_2f0c668c",
-    "group_e8efb9ff"
+    "group_c7a80073",
+    "group_53eec035",
+    "group_f1d46de3"
   ],
   "capture_size": [
     1920,
     1080
   ],
   "ratio_coords": true,
-  "window_title": "hololive-Dreams"
+  "window_title": "StarSavior"
 }
