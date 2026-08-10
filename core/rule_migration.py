@@ -109,7 +109,7 @@ def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
         elif action == "key":
             result = {"action": "key", "key": str(raw.get("key", ""))}
         elif action == "skip" and allow_skip:
-            result = {"action": "skip", "skip_to": max(0, int(raw.get("skip_to", 0)))}
+            result = {"action": "skip", "skip_to": max(0, _as_int(raw.get("skip_to", 0), 0))}
         elif action == "jump":
             result = {"action": "jump", "rule_id": str(raw.get("rule_id", ""))}
         elif action == "advance":

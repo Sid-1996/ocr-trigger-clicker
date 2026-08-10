@@ -702,6 +702,11 @@ class MainLoop:
 
         if action == "key":
             if fail_key:
+                # 與 _handle_key 步驟一致的保護：CPS 上限、工具本體在前景時不送出按鍵
+                if not self._can_perform_action():
+                    return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
+                if self._is_tool_foreground():
+                    return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
                 self._activate_window()
                 self._send_key(fail_key)
                 ctx.triggered = True
