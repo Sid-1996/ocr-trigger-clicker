@@ -346,18 +346,26 @@ class TestRunController:
                         hm = p.get("hold_ms", 0)
                         if hm:
                             s += " " + T("test.key_hold", ms=hm)
+                        ad = p.get("after_delay_ms", 0) or 0
+                        if ad:
+                            s += " " + T("summary.format_after_delay", ms=ad)
                         log.append(s)
                         continue
                     if cx is not None:
-                        log.append(
-                            T(
-                                "test.click_action",
-                                idx=idx + 1,
-                                button=p.get("button", "left"),
-                                x=cx,
-                                y=cy,
-                            )
+                        s = T(
+                            "test.click_action",
+                            idx=idx + 1,
+                            button=p.get("button", "left"),
+                            x=cx,
+                            y=cy,
                         )
+                        hm = p.get("hold_ms", 0) or 0
+                        if hm:
+                            s += " " + T("test.key_hold", ms=hm)
+                        ad = p.get("after_delay_ms", 0) or 0
+                        if ad:
+                            s += " " + T("summary.format_after_delay", ms=ad)
+                        log.append(s)
                         markers.append(
                             {
                                 "step": idx + 1,
@@ -385,17 +393,19 @@ class TestRunController:
                         dy = p.get("dy", 0)
                         ex = sx + dx
                         ey = sy + dy
-                        log.append(
-                            T(
-                                "test.drag_action",
-                                idx=idx + 1,
-                                button=p.get("button", "left"),
-                                sx=sx,
-                                sy=sy,
-                                ex=ex,
-                                ey=ey,
-                            )
+                        s = T(
+                            "test.drag_action",
+                            idx=idx + 1,
+                            button=p.get("button", "left"),
+                            sx=sx,
+                            sy=sy,
+                            ex=ex,
+                            ey=ey,
                         )
+                        ad = p.get("after_delay_ms", 0) or 0
+                        if ad:
+                            s += " " + T("summary.format_after_delay", ms=ad)
+                        log.append(s)
                         markers.append(
                             {
                                 "step": idx + 1,
@@ -417,9 +427,11 @@ class TestRunController:
                         "WheelRight": T("test.scroll_right"),
                     }
                     d = dirs.get(p.get("direction", "WheelDown"), p.get("direction", ""))
-                    log.append(
-                        T("test.scroll", idx=idx + 1, direction=d, amount=p.get("amount", 1))
-                    )
+                    s = T("test.scroll", idx=idx + 1, direction=d, amount=p.get("amount", 1))
+                    ad = p.get("after_delay_ms", 0) or 0
+                    if ad:
+                        s += " " + T("summary.format_after_delay", ms=ad)
+                    log.append(s)
 
                 elif step.type == "notify":
                     msg = step.params.get("message", "")
@@ -545,6 +557,9 @@ class TestRunController:
                     k = p.get("key", "")
                     hm = p.get("hold_ms", 0)
                     s = T("test.key_hold", ms=hm) if hm else T("test.key_press")
+                    ad = p.get("after_delay_ms", 0) or 0
+                    if ad:
+                        s += " " + T("summary.format_after_delay", ms=ad)
                     log.append(T("test.key_action", idx=idx + 1, action=s, key=k))
 
                 elif step.type == "wait":
