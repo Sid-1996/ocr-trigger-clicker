@@ -303,6 +303,53 @@ def test_send_click_frida_dispatch(monkeypatch):
     assert captured == {"hwnd": 12345, "x": 150, "y": 250, "button": "left", "hold_ms": 0}
 
 
+# ── _send_click pynput 分支傳遞 auto_restore_cursor ──
+
+
+def _fake_cfg(**kw):
+    return type(
+        "FakeRuleConfig",
+        (),
+        {
+            "get_setting": lambda self, win, key="interaction_mode", default=None: kw.get(
+                key, default
+            )
+        },
+    )()
+
+
+def test_send_click_forwards_restore_cursor_enabled(monkeypatch):
+    ml = _make_ml()
+    ml._rule_config_ctrl = _fake_cfg(interaction_mode="pynput", auto_restore_cursor=True)
+    captured = {}
+    monkeypatch.setattr(
+        _ml_mod._input_mod,
+        "send_click",
+        lambda x, y, button="left", hold_ms=0, restore_cursor=True: (
+            captured.update(x=x, y=y, button=button, hold_ms=hold_ms, restore_cursor=restore_cursor)
+            or True
+        ),
+    )
+    ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
+    assert ok
+    assert captured == {"x": 150, "y": 250, "button": "left", "hold_ms": 0, "restore_cursor": True}
+
+
+def test_send_click_forwards_restore_cursor_disabled(monkeypatch):
+    ml = _make_ml()
+    ml._rule_config_ctrl = _fake_cfg(interaction_mode="pynput", auto_restore_cursor=False)
+    captured = {}
+    monkeypatch.setattr(
+        _ml_mod._input_mod,
+        "send_click",
+        lambda x, y, button="left", hold_ms=0, restore_cursor=True: (
+            captured.update(restore_cursor=restore_cursor) or True
+        ),
+    )
+    ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
+    assert ok and captured["restore_cursor"] is False
+
+
 # ── _handle_on_fail (stop/key) ──
 
 

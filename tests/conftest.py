@@ -54,7 +54,9 @@ def make_main_loop():
     ml._emergency_event = threading.Event()
     ml._perf = _perf.PerformanceMonitor(max_cps=5)
     ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "pynput"}
+        "FakeRuleConfig",
+        (),
+        {"get_setting": lambda self, win, key="interaction_mode", default=None: "pynput"},
     )()
     ml._execution_log = deque(maxlen=10)
     ml._last_exec_log = {}

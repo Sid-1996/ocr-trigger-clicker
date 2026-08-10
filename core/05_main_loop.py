@@ -317,7 +317,8 @@ class MainLoop:
             pt = wintypes.POINT(x, y)
             user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt))
             return _bg_input.click(self._window_hwnd, pt.x, pt.y, button, hold_ms)
-        return _input_mod.send_click(x, y, button, hold_ms)
+        restore = bool(self._rule_config_ctrl.get_setting(self, "auto_restore_cursor", True))
+        return _input_mod.send_click(x, y, button, hold_ms, restore_cursor=restore)
 
     def _send_key(self, key: str) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
@@ -926,7 +927,8 @@ class MainLoop:
             user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt2))
             ok = _bg_input.drag(self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button)
         else:
-            ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
+            restore = bool(self._rule_config_ctrl.get_setting(self, "auto_restore_cursor", True))
+            ok = _input_mod.send_drag(ssx, ssy, sex, sey, button, restore_cursor=restore)
         if not ok:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
@@ -1709,7 +1711,7 @@ if __name__ == "__main__":
     ml._rule_config_ctrl = type(
         "FakeRuleConfig",
         (),
-        {"get_setting": lambda self, win, key="interaction_mode": "pynput"},
+        {"get_setting": lambda self, win, key="interaction_mode", default=None: "pynput"},
     )()
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
