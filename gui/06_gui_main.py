@@ -2975,6 +2975,14 @@ class SettingsDialog(QDialog):
         self._default_wait_ms.setToolTip(T("settings.default_wait_ms.tooltip"))
         aform.addRow(T("settings.default_wait_ms"), self._default_wait_ms)
 
+        self._default_after_delay = QSpinBox()
+        self._default_after_delay.setRange(0, 60000)
+        self._default_after_delay.setSingleStep(100)
+        self._default_after_delay.setSuffix(" ms")
+        self._default_after_delay.setValue(self._ctrl.get_setting(win, "default_after_delay_ms"))
+        self._default_after_delay.setToolTip(T("settings.default_after_delay.tooltip"))
+        aform.addRow(T("settings.default_after_delay"), self._default_after_delay)
+
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
         self._fuzzy_th.setSingleStep(0.05)
@@ -3029,6 +3037,9 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
         self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
         self._ctrl.set_setting(self._win, "default_wait_ms", self._default_wait_ms.value())
+        self._ctrl.set_setting(
+            self._win, "default_after_delay_ms", self._default_after_delay.value()
+        )
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
         self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
@@ -4836,6 +4847,10 @@ class MainWindow(QMainWindow):
             )
         if step_type == "wait":
             default_params["ms"] = self._rule_config_ctrl.get_setting(self, "default_wait_ms", 500)
+        if step_type in ("click", "key", "drag", "scroll"):
+            default_params["after_delay_ms"] = self._rule_config_ctrl.get_setting(
+                self, "default_after_delay_ms", 0
+            )
         step = Step(type=step_type, params=default_params)
         rule = self._get_current_rule()
         if rule is None:

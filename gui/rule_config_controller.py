@@ -23,6 +23,7 @@ class RuleConfigController:
         "default_mouse_button": "left",
         "default_random_offset": 3,
         "default_wait_ms": 500,
+        "default_after_delay_ms": 0,
         "language": "zh_TW",
         "notify_resource_warn": True,
     }
