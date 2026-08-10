@@ -164,6 +164,41 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 - 用途：避免短暫的畫面閃爍或遮擋導致誤判，可用於「等待文字持續消失 N 秒後再執行」的情境
 - 支援：`detect`、`match_image`、`compare` 的 on_fail
 
+**實測語意補充（依 StarSavior 任務驗證）：**
+
+- **微值（0.1~0.5s）**＝「本幀先 return stop、下一個掃描週期才執行動作」——把動作延後一幀，避免畫面轉場/閃爍的同幀誤觸。實際解析度受 `scan_interval` 限制：`fd < interval` 時效果等於「延後一幀」，並非精確計時。
+- **fd ≥ interval** 才是真正的多幀寬容窗：期間若條件恢復，`_handle_detect`/`_handle_match_image`/`_handle_compare` 命中時會 `pop` 該 key **取消容忍**；期滿才執行真正動作。
+- 容忍期計時以 `(rule_id, step_idx)` 為 key（`_fail_since`），各步驟獨立；`reload_rules()` 與動作成功會清除。
+- **「stop 動作配 fd」這個組合沒有任何真實任務使用**：容忍期滿後 pop key→下幀重新進新容忍期→每 fd 秒重複 stop、永不推進。任務一律用 `advance`/`notify`/`key` 搭配 fd（三者觸發後都會移轉狀態，不重複）。
+
+### on_fail 動作語意——真實任務設計意圖
+
+on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動作步驟（click/key…）失敗不回傳 on_fail，直接中止本幀。各動作語意與真實使用分布（StarSavior 每日任務/跑馬輔助驗證）：
+
+| 動作 | 語意 | 真實使用情境 | 使用量 |
+|---|---|---|---|
+| `stop`（預設） | 本幀中止、指標不動、下幀從步驟 0 重試 = **無限輪詢等待** | 偵測閘：所有「等待畫面出現再動作」的規則；跑馬每個事件規則的 step0 | 每日 ×63、跑馬 ×65 |
+| `advance` | 容忍期滿後設 `force_advance`，由 `_process_rules` 推進到下一規則 = **有界輪詢、跳過本規則** | once 群組的「可選 UI 前置步驟」：好友/禮包/PVP/信件群組的導航檢查、可選段落 | 每日 ×12（fd 0.1~2.0s），跑馬 0 |
+| `notify` | 容忍期滿後顯示訊息，並把 `stop_groups` 移出 active = **有界輪詢、硬踢整條群組鏈** | 「沒有找到[帕萊斯立方]任務特徵」「沒有信件可領取」；`stop_groups` 一次帶 2~3 個相關群組；`message` 空白走 i18n 預設模板 | 每日 ×16，跑馬 0 |
+| `key` | 容忍期滿後按 fallback 鍵、設 `triggered=True` 視同觸發 = **次要條件失敗的回退動作** | 跑馬邏輯判定規則（BEST/工坊/排球/兔子/救命恩人）、每日「確認/一鍵領取(2)」按 Escape | 每日 ×2、跑馬 ×7 |
+| `skip`（跳至步驟） | `jump_step` 跳至本規則內指定步驟（0-based、僅限向前） | **目前無任何真實任務使用**，刻意保留 | 0 |
+| `jump`（跳至規則） | 改 `_rule_in_group_ptr` 跳至同群組規則 | **目前無任何真實任務使用**，刻意保留（背景規則的 `on_fail.jump` 不受 `jump` 步驟限制） | 0 |
+
+**三階分工是核心設計**：stop＝無界等待；advance＝有界放棄本規則；notify＝有界放棄整條群組鏈。UI 文案「跳過本次 / 跳過此規則 / 通知並停止群組」與此對應。
+
+**群組模式適用性：**
+
+| on_fail 動作 | once/sequential | loop/sequential | loop/parallel | 背景規則 |
+|---|---|---|---|---|
+| `stop` | ✅ | ✅ | ✅ | ✅ |
+| `advance` | ✅ 推進指標 | ✅ 每輪一次嘗試 | ⚠️ **無效**（parallel 只檢查 `triggered`） | ⚠️ 無效（結果捨棄） |
+| `notify` | ✅ 移除群組 | ✅ 移除群組 | ⚠️ **永久移除該群組**，可能連帶整場停止 | ✅ 僅發訊息，無群組可停 |
+| `key` | ✅ | ✅ | ✅ | ✅ |
+
+**實務原則**：跑馬（loop/parallel）刻意只用 `stop`+`key`，不碰 `advance`/`notify`；每日（once/sequential）才用 `advance`/`notify`。設定新任務時沿用此分工，避免在 parallel 群組用 advance/notify。
+
+### on_fail notify 流程
+
 ### 舊格式自動遷移
 
 - `_migrate_v1_to_v2()` 偵測 JSON 中無 `"steps"` 欄位時自動將舊格式轉換為新步驟結構，保障 v0.0.1 任務不遺失
