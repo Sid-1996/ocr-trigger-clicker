@@ -11,7 +11,6 @@ def _make_fake_frida():
             self._updates = updates
             self.key_calls = []
             self.arm_calls = []
-            self.keep_active_calls = []
 
         def update(self, sx, sy, cx, cy):
             self._updates.append((sx, sy, cx, cy))
@@ -24,10 +23,6 @@ def _make_fake_frida():
         def arm(self, hwnd):
             self.arm_calls.append(hwnd)
             return 1
-
-        def setKeepActive(self, on, hwnd):
-            self.keep_active_calls.append((on, hwnd))
-            return 1 if on else 0
 
     class FakeScript:
         def __init__(self):
@@ -96,15 +91,6 @@ def test_hook_script_content():
         "hookSetCursorPos",
         "focusOn",
         "arm: function",
-        "keepActive",
-        "setKeepActive: function",
-        "subclassFilter",
-        "restoreFilter",
-        "GetWindowLongPtrW",
-        "SetWindowLongPtrW",
-        "filterOldAddr",
-        "WM_KILLFOCUS",
-        "WA_INACTIVE",
     ):
         assert needle in js
     assert "Module.getExportByName" not in js
@@ -293,29 +279,3 @@ def test_ensure_attached_reattaches_dead_session(monkeypatch):
     monkeypatch.setattr(_fb, "_session_alive", lambda session: False)
     assert _fb.ensure_attached(12345) is True
     assert len(fake.pids) == 2, "session 死亡時應重新 attach"
-
-
-def test_keep_active_wrapper(monkeypatch):
-    # keep_active：開 → attach + setKeepActive(1, hwnd)；關 → setKeepActive(0)；
-    # 未 attach 時 off 為 no-op（不需注入也保證『關閉』語意）
-    fake = _make_fake_frida()
-    monkeypatch.setitem(sys.modules, "frida", fake)
-    monkeypatch.setattr(_fb, "_hwnd_to_pid", lambda hwnd: 4242)
-    _fb.detach()
-
-    assert _fb.keep_active(12345, False) is True
-    assert not fake.pids, "off 且未注入時不應 attach"
-    assert fake.script.exports.keep_active_calls == []
-
-    assert _fb.keep_active(12345, True) is True
-    assert fake.pids == [4242], "on 應先 attach 再推送 rpc"
-    assert fake.script.exports.keep_active_calls == [(1, 12345)]
-
-    assert _fb.keep_active(0, True) is False, "無效 hwnd 的 keep_active(True) 應失敗"
-    assert fake.script.exports.keep_active_calls == [(1, 12345)], "失敗不應送 rpc"
-
-    assert _fb.keep_active(12345, False) is True
-    assert fake.script.exports.keep_active_calls[-1] == (0, 0), "關閉應推送 setKeepActive(0, 0)"
-
-    _fb.detach()
-    assert fake.script.unloaded

@@ -47,8 +47,6 @@
   "combo.interaction_bg_frida": "Background (Frida inject)",
   "settings.interaction_mode": "Interaction method:",
   "settings.interaction_mode.tooltip": "How to send clicks and keyboard input.\nForeground is most stable and requires the window to be in front. Background (Frida inject) controls Unity-style games while you work on another window (no flicker), but carries an anti-cheat detection risk.\nIf the game does not respond to keys, it is a game limitation (some games only accept keyboard input while focused), not a tool issue.",
-  "settings.bg_keep_active": "Keep the game window active in background (don't pause music)",
-  "settings.bg_keep_active.tooltip": "When enabled, the game is continuously reported as foreground/active/focused and WM_KILLFOCUS focus-loss messages are filtered:\n- The game window can be covered by other windows (not minimized) without pausing its music\n- Keyboard input works without clicking first\nOnly active in Background (Frida inject) mode. Uncheck to restore the original pause-on-focus-loss behavior.",
   "template_helper.insert": "Insert:",
   "template_helper.digit": "Digit",
   "template_helper.letter": "Letter",

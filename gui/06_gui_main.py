@@ -2904,15 +2904,6 @@ class SettingsDialog(QDialog):
         self._interaction_mode.setToolTip(T("settings.interaction_mode.tooltip"))
         aform.addRow(T("settings.interaction_mode"), self._interaction_mode)
 
-        self._bg_keep_active = QCheckBox(T("settings.bg_keep_active"))
-        self._bg_keep_active.setChecked(self._ctrl.get_setting(win, "bg_keep_active", True))
-        self._bg_keep_active.setToolTip(T("settings.bg_keep_active.tooltip"))
-        self._bg_keep_active.setEnabled(self._interaction_mode.currentData() == "frida")
-        self._interaction_mode.currentIndexChanged.connect(
-            lambda: self._bg_keep_active.setEnabled(self._interaction_mode.currentData() == "frida")
-        )
-        aform.addRow("", self._bg_keep_active)
-
         self._mouse_btn = QComboBox()
         self._mouse_btn.addItem(T("combo.left"), "left")
         self._mouse_btn.addItem(T("combo.right"), "right")
@@ -2988,7 +2979,6 @@ class SettingsDialog(QDialog):
         )
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
-        self._ctrl.set_setting(self._win, "bg_keep_active", self._bg_keep_active.isChecked())
         self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
         self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
         self._ctrl.set_setting(self._win, "default_wait_ms", self._default_wait_ms.value())

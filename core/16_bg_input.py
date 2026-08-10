@@ -42,7 +42,6 @@ WM_CHAR = 0x0102
 WM_SYSKEYDOWN = 0x0104
 WM_SYSKEYUP = 0x0105
 WM_ACTIVATE = 0x0006
-WM_SETFOCUS = 0x0007
 MK_LBUTTON = 0x0001
 MK_RBUTTON = 0x0002
 MK_MBUTTON = 0x0010
@@ -200,19 +199,6 @@ def _make_lparam(x: int, y: int) -> int:
     return (y << 16) | (x & 0xFFFF)
 
 
-def _activate_focus(hwnd: int) -> None:
-    """Tell the window it is active & focused without stealing real focus.
-
-    背景輸入在每個動作前送 WM_ACTIVATE(WA_ACTIVE)+WM_SETFOCUS：遊戲只有在收到啟用
-    訊息後才視為可接收輸入（鍵盤不需先點擊一次；搭配 frida keep-active 時更有意義）。
-    """
-    try:
-        user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
-        user32.PostMessageW(hwnd, WM_SETFOCUS, 0, 0)
-    except Exception as e:
-        _log.error("activate_focus failed: %s", e)
-
-
 # ── PostMessage method ──
 def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
     """Click using PostMessage (pure message, no cursor movement)."""
@@ -230,9 +216,8 @@ def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms:
         else:
             return False
 
-        _activate_focus(hwnd)
+        user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
         time.sleep(0.02)
-        user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)  # 先導：遊戲記錄 last-mouse-pos
         user32.PostMessageW(hwnd, down_msg, mk, lparam)
         if hold_ms > 0:
             time.sleep(hold_ms / 1000.0)
@@ -246,7 +231,6 @@ def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms:
 def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
     """Send key using PostMessage."""
     try:
-        _activate_focus(hwnd)
         scan_code = user32.MapVirtualKeyW(vk_code, 0)
         lparam = (scan_code << 16) | 1
         if vk_code in _EXTENDED_VK:
@@ -275,7 +259,6 @@ def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
 def _scroll_postmessage(hwnd: int, x: int, y: int, amount: int, horizontal: bool = False) -> bool:
     """Scroll using PostMessage."""
     try:
-        _activate_focus(hwnd)
         lparam = _make_lparam(x, y)
         wParam = (WHEEL_DELTA * amount) << 16
         msg = WM_MOUSEHWHEEL if horizontal else WM_MOUSEWHEEL
@@ -366,21 +349,6 @@ def detach() -> None:
         _frida().detach()
     except Exception:
         pass
-
-
-def keep_active(hwnd: int, on: bool) -> bool:
-    """Enable/disable 後台 keep-active（僅 frida 模式有意義）。
-
-    on=True：遊戲視窗持續假造為前景/啟用/焦點，並過濾失焦訊息 → 可被覆蓋、音樂不停。
-    on=False：恢復「失焦即暫停」原行為。pynput（前景）模式永遠 no-op 回 True。
-    """
-    if _method != "frida":
-        return True
-    try:
-        return bool(_frida().keep_active(hwnd, on))
-    except Exception as e:
-        _log.error("keep_active failed: %s", e)
-        return False
 
 
 def last_error() -> str:
@@ -591,29 +559,5 @@ if __name__ == "__main__":
     finally:
         user32.PostMessageW = _orig_pm
     print("  [OK] _key_postmessage WM_CHAR（字母送、keyup 不送、導航鍵不送）")
-
-    # 動作前啟用：click 依序送 WM_ACTIVATE → WM_SETFOCUS → WM_MOUSEMOVE(先導) → DOWN/UP
-    captured = []
-    _orig_pm = user32.PostMessageW
-    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: (
-        captured.append((msg, wparam, lparam)) or True
-    )
-    try:
-        _click_postmessage(1, 5, 6)
-        msgs = [m for m, _, _ in captured]
-        assert msgs[0:2] == [WM_ACTIVATE, WM_SETFOCUS], f"click 應先送啟用訊息: {msgs}"
-        assert msgs[2] == WM_MOUSEMOVE, f"click 應先導 WM_MOUSEMOVE: {msgs}"
-        assert WM_LBUTTONDOWN in msgs and WM_LBUTTONUP in msgs, msgs
-    finally:
-        user32.PostMessageW = _orig_pm
-    print("  [OK] _click_postmessage 動作前啟用 + 先導 WM_MOUSEMOVE")
-
-    # keep_active 公開 API：pynput no-op；frida 委派到底層（此處僅測不可用路徑）
-    set_method("pynput")
-    assert keep_active(1, True) is True, "pynput 模式 keep_active 應 no-op"
-    set_method("frida")
-    assert keep_active(0, True) is False, "frida 模式無效 hwnd 應失敗"
-    assert keep_active(0, False) is True, "frida 模式關閉 keep-active 應成功"
-    print("  [OK] keep_active 公開 API")
 
     print("\n=== All checks passed ===")

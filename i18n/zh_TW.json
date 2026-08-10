@@ -47,8 +47,6 @@
   "combo.interaction_bg_frida": "後台模式（Frida 注入）",
   "settings.interaction_mode": "互動方法:",
   "settings.interaction_mode.tooltip": "選擇點擊和鍵盤操作的方式。\n前景模式最穩定，需視窗在前景；後台（Frida 注入）可在其他視窗操作時控制 Unity 等遊戲（零閃爍），但有防作弊偵測風險。\n若遊戲不響應按鍵，屬遊戲限制（部分遊戲需視窗焦點才能接收鍵盤輸入），非工具問題。",
-  "settings.bg_keep_active": "後台保持遊戲視窗活耀（不暫停音樂）",
-  "settings.bg_keep_active.tooltip": "勾選後，遊戲執行期間持續假造為前景/啟用/焦點視窗，並過濾 WM_KILLFOCUS 失焦訊息：\n· 遊戲視窗可被其他視窗覆蓋（不最小化），且音樂不會因失去焦點而暫停\n· 鍵盤輸入不需先點擊一次即可生效\n僅在「後台模式（Frida 注入）」下啟用。取消勾選則恢復「失焦即暫停」原行為。",
   "template_helper.insert": "快速插入：",
   "template_helper.digit": "數字",
   "template_helper.letter": "英文",

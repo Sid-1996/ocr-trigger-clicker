@@ -1481,14 +1481,6 @@ class MainLoop:
         self._last_completed_log.clear()
         self._stop_event.clear()
         self._pause_event.clear()
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        if (
-            self._window_hwnd
-            and mode == "frida"
-            and self._rule_config_ctrl.get_setting(self, "bg_keep_active", True)
-        ):
-            _bg_input.set_method("frida")
-            _bg_input.keep_active(self._window_hwnd, True)
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
@@ -1502,7 +1494,6 @@ class MainLoop:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
         self._perf.stop()
-        _bg_input.keep_active(0, False)
         _bg_input.detach()
 
     def pause(self) -> None:
