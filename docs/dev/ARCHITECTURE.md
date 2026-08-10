@@ -146,14 +146,16 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 |------|------|----------------|
 | `detect` | OCR 偵測文字，未命中則觸發 on_fail | `text`, `roi`, `match_mode`, `fuzzy_threshold`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
 | `match_image` | 圖示模板比對，未命中則觸發 on_fail | `template`, `roi`, `threshold`, `match_color`, `color_tolerance`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
-| `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`/`cursor`）、`x`, `y`, `button`, `random_offset`, `hold_ms` |
-| `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（pynput 格式）、`hold_ms` |
+| `click` | 滑鼠點擊（設 `ctx.triggered = True`） | `target`（`text_center`/`custom`/`cursor`）、`x`, `y`, `button`, `random_offset`, `hold_ms`, `after_delay_ms` |
+| `key` | 鍵盤按鍵（設 `ctx.triggered = True`） | `key`（pynput 格式）、`hold_ms`, `after_delay_ms` |
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
 | `notify` | 提示訊息彈窗（設 `ctx.triggered = True`） | `message` |
-| `scroll` | 滑鼠滾輪（設 `ctx.triggered = True`） | `direction`, `amount`, `delay_ms` |
-| `drag` | 滑鼠拖曳（設 `ctx.triggered = True`） | `target`, `dx`, `dy`, `button` |
+| `scroll` | 滑鼠滾輪（設 `ctx.triggered = True） | `direction`, `amount`, `delay_ms`, `after_delay_ms` |
+| `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`, `dx`, `dy`, `button`, `after_delay_ms` |
+
+**動作後延遲 `after_delay_ms`（毫秒，預設 0）**：動作步驟（click/key/drag/scroll）成功送出後，固定等待指定毫秒才執行下一步驟。實作於 `_run_rule`（core/05_main_loop.py 單一 choke point）——動作步驟回 `continue` 且 `ms>0` 時用 `_stop_event.wait(ms/1000)` 中斷式等待（暫停/停止立即中止、回 stop interrupted），尾隨步驟不執行。等價社群慣用「動作後 sleep」，可取代 `[動作, wait]` 成對步驟；0 = 不等待。語意與 scroll 的 `delay_ms` 不同（後者是滾輪格間延遲）。不影響 `fail_duration_sec` 容忍邏輯。
 
 ### on_fail fail_duration_sec
 

@@ -213,6 +213,8 @@ self._fail_since: dict[str, float] = {}  # key=f"{rule_id}:{step_idx}" -> first-
 ```
 邏輯：首次失敗時記錄 `time.monotonic()` 時間戳並回傳 `stop`（不觸發失敗動作，本幀提前結束、不設 triggered、下幀從步驟 0 重試）；後續每幀檢查 `now - first_fail < fail_duration`，未到時長持續回傳 `stop`。修復於 commit `4cb403c`：原本回傳 `continue` 會讓 `_run_rule` 誤判「等待中」為「本步驟已通過」，導致後續步驟（如 click）在容忍期內被誤觸發。成功偵測時（`_handle_detect`/`_handle_match_image`/`_handle_compare` 命中時）會主動 `pop` 該 key 清除失敗計時。`stop` 動作在 0 秒時維持向下相容寫法（純字串 `"stop"`），其餘動作一律帶 `fail_duration_sec` 欄位。
 
+**動作後延遲 `after_delay_ms`（毫秒、預設 0，動作步驟 click/key/drag/scroll 通用）**：動作成功送出後固定等待，等價社群「動作後 sleep」、可取代 `[動作, wait]` 成對步驟。實作在 `_run_rule` 步驟迴圈單一 choke point（`core/05_main_loop.py`：動作類型 step 且 `result.action=="continue"` 且 `ms>0` → `_stop_event.wait(ms/1000)`，中斷回 stop interrupted、尾隨步驟不執行）；不經四個 handler、與 scroll 既有 `delay_ms`（格間延遲）語意不同。GUI 四個表單各提供「動作後延遲」spin，摘要 `>0` 才顯示；序列化在 `rule_migration._normalize_step_params` 對應分支收斂（字串/負數→0），舊規則缺欄位→0 向後相容。
+
 **on_fail 動作語意速查（StarSavior 任務實測驗證）**：
 - `stop`（預設）＝無限輪詢等待：本幀 stop、指標不動、下幀從步驟 0 重試。偵測閘（每日 ×63、跑馬 ×65）與跑馬每個事件規則 step0 全用它。
 - `advance`＝有界放棄本規則：fd 期滿設 `force_advance`，`_process_rules` 推進到下一規則。once/sequential 的「可選 UI 前置」用（每日 ×12）；**loop/parallel 與背景規則下是靜默 no-op**（parallel 只查 `triggered`、背景結果捨棄）。
