@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -67,7 +68,19 @@ def _find_text_after_click(block_results: list, target: str) -> bool:
         return False
 
 
-_KEY_TEST_KEY = "escape"  # 16_bg_input / 03_pynput_input 兩邊都叫 escape
+_KEY_TEST_DEFAULT = "space"  # 16_bg_input / 03_pynput_input 兩邊都相容的按鍵名
+_KEY_TEST_OPTIONS = (
+    "space",
+    "enter",
+    "escape",
+    "tab",
+    "1",
+    "2",
+    "3",
+    "up",
+    "down",
+    "f5",
+)
 _KEY_TEST_WAIT_SEC = 0.6
 _KEY_PIXEL_TOLERANCE = 12
 _KEY_SIMILAR_THRESHOLD = 0.90
@@ -170,6 +183,12 @@ class OcrDebugPanel(QWidget):
         self._click_test_btn.setEnabled(False)
         self._click_test_btn.clicked.connect(self._on_click_test)
         toolbar.addWidget(self._click_test_btn)
+        self._key_test_combo = QComboBox()
+        for name in _KEY_TEST_OPTIONS:
+            self._key_test_combo.addItem(name.capitalize(), name)
+        self._key_test_combo.setCurrentIndex(_KEY_TEST_OPTIONS.index(_KEY_TEST_DEFAULT))
+        self._key_test_combo.setToolTip(T("ocr_debug.key_test.key_choose.tooltip"))
+        toolbar.addWidget(self._key_test_combo)
         self._key_test_btn = QPushButton(T("ocr_debug.key_test"))
         self._key_test_btn.setMinimumWidth(80)
         self._key_test_btn.setToolTip(T("ocr_debug.key_test.tooltip"))
@@ -994,6 +1013,7 @@ class OcrDebugPanel(QWidget):
 
     def _on_key_test(self):
         self._click_error_label.hide()
+        key = self._key_test_combo.currentData() or _KEY_TEST_DEFAULT
         mode = _get_interaction_mode()
         if mode != "pynput":
             hwnd = _screenshot.get_window_hwnd(self._window_title)
@@ -1002,7 +1022,7 @@ class OcrDebugPanel(QWidget):
                     T("ocr_debug.window_coords_failed", title=self._window_title)
                 )
                 return
-            self._start_key_verify(hwnd)
+            self._start_key_verify(hwnd, key)
             return
         from _loader import load_sibling
 
@@ -1010,26 +1030,26 @@ class OcrDebugPanel(QWidget):
         _screenshot.activate_window(self._window_title)
         QApplication.processEvents()
         time.sleep(0.15)
-        ok = _input.send_key(_KEY_TEST_KEY)
+        ok = _input.send_key(key)
         if ok:
-            self._status_bar.showMessage(T("ocr_debug.key_test_sent"))
+            self._status_bar.showMessage(T("ocr_debug.key_test_sent", key=key))
         else:
             self._status_bar.showMessage(
                 T("ocr_debug.key_test_failed", err=getattr(_input, "last_error", lambda: "")())
             )
 
-    def _start_key_verify(self, hwnd: int):
+    def _start_key_verify(self, hwnd: int, key: str):
         if self._key_verif_in_progress:
             return
         self._key_verif_in_progress = True
         self._key_test_btn.setEnabled(False)
         self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
-        threading.Thread(target=self._key_verify_worker, args=(hwnd,), daemon=True).start()
+        threading.Thread(target=self._key_verify_worker, args=(hwnd, key), daemon=True).start()
 
-    def _key_verify_worker(self, hwnd: int):
+    def _key_verify_worker(self, hwnd: int, key: str):
         def emit(state: str, **kw):
             self._signals.key_verify_done.emit(
-                {"state": state, "similar": "?", "err": "", "ms": 0.0, **kw}
+                {"state": state, "similar": "?", "err": "", "ms": 0.0, "key": key, **kw}
             )
 
         try:
@@ -1043,7 +1063,7 @@ class OcrDebugPanel(QWidget):
                 emit("black")
                 return
             _bg_input.set_method(mode)
-            sent = _bg_input.send_key(hwnd, _KEY_TEST_KEY)
+            sent = _bg_input.send_key(hwnd, key)
             ms = (time.monotonic() - t0) * 1000
             if not sent:
                 emit("fail", err=_bg_input.last_error() or "", ms=ms)
@@ -1083,17 +1103,18 @@ class OcrDebugPanel(QWidget):
             "window_changed": "#666",
         }
         key = state if state in colors else "black"
+        test_key = out.get("key", _KEY_TEST_DEFAULT)
         sim = out.get("similar", "?")
         guidance = (
             T("ocr_debug.click_verify.inject_fail", text="")
             if key == "fail"
-            else T(f"ocr_debug.key_test.{key}", sim=sim)
+            else T(f"ocr_debug.key_test.{key}", sim=sim, key=test_key)
         )
         dev = T(
             "ocr_debug.key_test.dev_info",
             mode="frida",
             source=self._capture_source or "?",
-            key=_KEY_TEST_KEY,
+            key=test_key,
             sim=sim,
             hwnd=_screenshot.get_window_hwnd(self._window_title) or "?",
             api="send_key",
@@ -1117,7 +1138,7 @@ class OcrDebugPanel(QWidget):
         QTimer.singleShot(15000, self._click_error_label.hide)
         if key in ("no_change", "fail", "black"):
             logging.warning(
-                "ocr_dbg key verify=%s key=%s err=%s", key, _KEY_TEST_KEY, out.get("err", "")
+                "ocr_dbg key verify=%s key=%s err=%s", key, test_key, out.get("err", "")
             )
 
     def _open_click_detail(self):
