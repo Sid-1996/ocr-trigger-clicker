@@ -69,7 +69,7 @@ def test_run_step_dispatcher():
     ctx = StepContext(
         img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
     )
-    ml._send_click = lambda x, y, button="left", hold_ms=0: True  # 防止測試送出真實輸入
+    ml._send_click = lambda x, y, button="left", hold_ms=0, rule=None: True  # 防止測試送出真實輸入
     ml._send_key = lambda key: True
     ml._send_scroll = lambda direction: True
     for hn in [
@@ -210,7 +210,7 @@ def test_handle_click_cursor_bg():
         "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "dxcam"}
     )()
     captured = {}
-    ml._send_click = lambda x, y, button="left", hold_ms=0: (
+    ml._send_click = lambda x, y, button="left", hold_ms=0, rule=None: (
         captured.update(x=x, y=y, button=button, hold_ms=hold_ms) or True
     )
     ml._activate_window = lambda: True
@@ -325,14 +325,26 @@ def test_send_click_forwards_restore_cursor_enabled(monkeypatch):
     monkeypatch.setattr(
         _ml_mod._input_mod,
         "send_click",
-        lambda x, y, button="left", hold_ms=0, restore_cursor=True: (
-            captured.update(x=x, y=y, button=button, hold_ms=hold_ms, restore_cursor=restore_cursor)
+        lambda x, y, button="left", hold_ms=0, restore_cursor=True, restore_rect=None, restore_grace_ms=0: (
+            captured.update(
+                x=x,
+                y=y,
+                button=button,
+                hold_ms=hold_ms,
+                restore_cursor=restore_cursor,
+                restore_rect=restore_rect,
+                restore_grace_ms=restore_grace_ms,
+            )
             or True
         ),
     )
     ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
     assert ok
-    assert captured == {"x": 150, "y": 250, "button": "left", "hold_ms": 0, "restore_cursor": True}
+    assert captured["x"] == 150 and captured["y"] == 250
+    assert captured["button"] == "left" and captured["hold_ms"] == 0
+    assert captured["restore_cursor"] is True
+    assert captured["restore_rect"] is None
+    assert captured["restore_grace_ms"] == _ml_mod._RESTORE_GRACE_MS
 
 
 def test_send_click_forwards_restore_cursor_disabled(monkeypatch):
@@ -342,12 +354,72 @@ def test_send_click_forwards_restore_cursor_disabled(monkeypatch):
     monkeypatch.setattr(
         _ml_mod._input_mod,
         "send_click",
-        lambda x, y, button="left", hold_ms=0, restore_cursor=True: (
-            captured.update(restore_cursor=restore_cursor) or True
+        lambda x, y, button="left", hold_ms=0, restore_cursor=True, restore_rect=None, restore_grace_ms=0: (
+            captured.update(
+                restore_cursor=restore_cursor,
+                restore_rect=restore_rect,
+                restore_grace_ms=restore_grace_ms,
+            )
+            or True
         ),
     )
     ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
     assert ok and captured["restore_cursor"] is False
+    assert captured["restore_rect"] is None
+    assert captured["restore_grace_ms"] == 0
+
+
+# ── _send_click 依執行脈絡決定復原（script 不復原 / watch 復原）──
+
+
+def _capture_send_click(monkeypatch, rule=None, cfg=None):
+    ml = _make_ml()
+    ml._rule_config_ctrl = cfg or _fake_cfg(interaction_mode="pynput", auto_restore_cursor=True)
+    captured = {}
+
+    def _fake(
+        x, y, button="left", hold_ms=0, restore_cursor=True, restore_rect=None, restore_grace_ms=0
+    ):
+        captured.update(
+            restore_cursor=restore_cursor,
+            restore_rect=restore_rect,
+            restore_grace_ms=restore_grace_ms,
+        )
+        return True
+
+    monkeypatch.setattr(_ml_mod._input_mod, "send_click", _fake)
+    return ml, captured
+
+
+def test_send_click_script_context_no_restore(monkeypatch):
+    """依序（script）規則即使開啟復原設定，也一律不復原。"""
+    ml, captured = _capture_send_click(monkeypatch)
+    rule = Rule(id="r_script", name="script", enabled=True, steps=[])
+    ml._groups = [RuleGroup(id="g_seq", name="依序", order="sequential", rule_ids=[rule.id])]
+    ml._active_group_ids = ["g_seq"]
+    _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0, rule=rule)
+    assert captured["restore_cursor"] is False
+    assert captured["restore_grace_ms"] == 0
+
+
+def test_send_click_watch_context_parallel_restores(monkeypatch):
+    """並行群組內的規則：開啟復原設定會復原，且帶 grace + window rect。"""
+    ml, captured = _capture_send_click(monkeypatch)
+    rule = Rule(id="r_watch", name="watch", enabled=True, steps=[])
+    ml._groups = [RuleGroup(id="g_par", name="並行", order="parallel", rule_ids=[rule.id])]
+    ml._active_group_ids = ["g_par"]
+    _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0, rule=rule)
+    assert captured["restore_cursor"] is True
+    assert captured["restore_grace_ms"] == _ml_mod._RESTORE_GRACE_MS
+
+
+def test_send_click_watch_context_background_restores(monkeypatch):
+    """常駐（background）規則視為 watch 脈絡，復原。"""
+    ml, captured = _capture_send_click(monkeypatch)
+    rule = Rule(id="r_bg", name="bg", enabled=True, steps=[], background=True)
+    ml._groups = []
+    _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0, rule=rule)
+    assert captured["restore_cursor"] is True
 
 
 # ── _handle_on_fail (stop/key) ──

@@ -2983,6 +2983,11 @@ class SettingsDialog(QDialog):
         self._default_after_delay.setToolTip(T("settings.default_after_delay.tooltip"))
         aform.addRow(T("settings.default_after_delay"), self._default_after_delay)
 
+        self._restore_cursor = QCheckBox(T("settings.restore_cursor"))
+        self._restore_cursor.setChecked(self._ctrl.get_setting(win, "auto_restore_cursor", True))
+        self._restore_cursor.setToolTip(T("settings.restore_cursor.tooltip"))
+        aform.addRow("", self._restore_cursor)
+
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
         self._fuzzy_th.setSingleStep(0.05)
@@ -3040,6 +3045,7 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(
             self._win, "default_after_delay_ms", self._default_after_delay.value()
         )
+        self._ctrl.set_setting(self._win, "auto_restore_cursor", self._restore_cursor.isChecked())
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
         self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())

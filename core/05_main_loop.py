@@ -34,6 +34,8 @@ get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: Non
 _MIN_INTERVAL_SEC = 0.1
 _MAX_CPS = 5
 _CPS_WINDOW_SEC = 1.0
+# ponytail: 前景 watch 規則復原游標前的等待，讓 capture 型遊戲 tick 先處理點擊
+_RESTORE_GRACE_MS = 120
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -307,7 +309,40 @@ class MainLoop:
             idx += 1
         return None
 
-    def _send_click(self, x: int, y: int, button: str, hold_ms: int = 0) -> bool:
+    def _in_watch_context(self, rule: Rule | None) -> bool:
+        """Rule 是否屬於 watch 脈絡（常駐 / 並行群組）。依序 script 規則回傳 False。"""
+        if rule is None:
+            return False
+        if rule.background:
+            return True
+        with self._rules_lock:
+            for g in self._groups:
+                if (
+                    g.enabled
+                    and g.id in self._active_group_ids
+                    and rule.id in g.rule_ids
+                    and g.order == "parallel"
+                ):
+                    return True
+        return False
+
+    def _restore_cursor_for(self, rule: Rule | None) -> bool:
+        """依執行脈絡決定前景點擊後是否復原游標。
+
+        - 設定關閉 → 不復原
+        - rule None（外部直接呼叫，相容舊路徑）→ 照設定
+        - 依序 script 脈絡 → 不復原（游標留在點擊處，社群連點器慣例）
+        - watch 脈絡（常駐/並行）→ 復原
+        """
+        if not bool(self._rule_config_ctrl.get_setting(self, "auto_restore_cursor", True)):
+            return False
+        if rule is None:
+            return True
+        return self._in_watch_context(rule)
+
+    def _send_click(
+        self, x: int, y: int, button: str, hold_ms: int = 0, rule: Rule | None = None
+    ) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         if mode and mode != "pynput" and self._window_hwnd:
             _bg_input.set_method(mode)
@@ -317,8 +352,17 @@ class MainLoop:
             pt = wintypes.POINT(x, y)
             user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt))
             return _bg_input.click(self._window_hwnd, pt.x, pt.y, button, hold_ms)
-        restore = bool(self._rule_config_ctrl.get_setting(self, "auto_restore_cursor", True))
-        return _input_mod.send_click(x, y, button, hold_ms, restore_cursor=restore)
+        restore = self._restore_cursor_for(rule)
+        rect = get_window_rect(self._window_title) if restore else None
+        return _input_mod.send_click(
+            x,
+            y,
+            button,
+            hold_ms,
+            restore_cursor=restore,
+            restore_rect=rect,
+            restore_grace_ms=_RESTORE_GRACE_MS if restore else 0,
+        )
 
     def _send_key(self, key: str) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
@@ -831,7 +875,7 @@ class MainLoop:
 
         self._activate_window()
 
-        ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
+        ok = self._send_click(sx, sy, button, params.get("hold_ms", 0), rule=rule)
         if ok:
             self._perf.record_click()
             ctx.triggered = True
@@ -927,8 +971,18 @@ class MainLoop:
             user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt2))
             ok = _bg_input.drag(self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button)
         else:
-            restore = bool(self._rule_config_ctrl.get_setting(self, "auto_restore_cursor", True))
-            ok = _input_mod.send_drag(ssx, ssy, sex, sey, button, restore_cursor=restore)
+            restore = self._restore_cursor_for(rule)
+            rect = get_window_rect(self._window_title) if restore else None
+            ok = _input_mod.send_drag(
+                ssx,
+                ssy,
+                sex,
+                sey,
+                button,
+                restore_cursor=restore,
+                restore_rect=rect,
+                restore_grace_ms=_RESTORE_GRACE_MS if restore else 0,
+            )
         if not ok:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
