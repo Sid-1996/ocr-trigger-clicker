@@ -4659,6 +4659,7 @@ class MainWindow(QMainWindow):
         if group is None or group.id == "__uncategorized__":
             return
         group.enabled = not group.enabled
+        self._clear_group_selection_skip()
         self._refresh_rule_list()
         self._flush_save()
 
@@ -4668,6 +4669,7 @@ class MainWindow(QMainWindow):
         for g in self._groups:
             if g.id != "__uncategorized__":
                 g.enabled = new_state
+        self._clear_group_selection_skip()
         self._refresh_rule_list()
         self._flush_save()
 
@@ -5498,10 +5500,36 @@ class MainWindow(QMainWindow):
         )
 
     # === Start / Pause ===
+    def _load_group_selection_saved(self) -> dict:
+        """回傳目前任務記憶的群組選擇 {group_ids: [gids], skip: bool}。"""
+        saved = self._load_config().get("group_selection", {}).get(self._current_task, {})
+        if not isinstance(saved, dict):
+            saved = {}
+        return saved
+
+    def _clear_group_selection_skip(self):
+        """使用者手動改變群組啟用時清除 skip flag，恢復啟動時詢問。"""
+        if not self._current_task:
+            return
+        cfg = self._load_config()
+        sel = cfg.get("group_selection", {}).get(self._current_task, {})
+        if isinstance(sel, dict) and sel.get("skip"):
+            sel["skip"] = False
+            self._save_config(cfg)
+
     def _show_group_selection_dialog(self) -> Optional[list[str]]:
         enabled = [g for g in self._groups if g.enabled]
         if len(enabled) <= 1:
             return [g.id for g in enabled] if enabled else []
+        # 記憶的上次選擇（只保留仍存在且啟用的群組）；skip 為真時直接沿用，不再詢問
+        saved = self._load_group_selection_saved()
+        saved_ids = [
+            gid
+            for gid in saved.get("group_ids", [])
+            if any(g.id == gid and g.enabled for g in self._groups)
+        ]
+        if saved.get("skip") and saved_ids:
+            return saved_ids
         dialog = QDialog(self)
         dialog.setWindowTitle(T("dialog.group_selection"))
         dialog.setStyleSheet(
@@ -5520,10 +5548,15 @@ class MainWindow(QMainWindow):
         checks = []
         for g in enabled:
             cb = QCheckBox(g.name)
-            cb.setChecked(True)
+            cb.setChecked(g.id in saved_ids or not saved_ids)
             cb.setProperty("gid", g.id)
             checks.append(cb)
             layout.addWidget(cb)
+
+        remember_cb = QCheckBox(T("dialog.group_selection.remember"))
+        remember_cb.setChecked(False)
+        layout.addWidget(remember_cb)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -5533,7 +5566,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
-        return [cb.property("gid") for cb in checks if cb.isChecked()]
+        selected = [cb.property("gid") for cb in checks if cb.isChecked()]
+        # 記憶本次選擇與 skip 狀態
+        cfg = self._load_config()
+        cfg.setdefault("group_selection", {})[self._current_task] = {
+            "group_ids": selected,
+            "skip": remember_cb.isChecked(),
+        }
+        self._save_config(cfg)
+        return selected
 
     def nativeEvent(self, eventType, message):
         handled, result, hid = _hk_handle_native(eventType, message)

@@ -128,6 +128,7 @@
   "dialog.export_task": "Export Task",
   "dialog.about": "About OCR Trigger Clicker",
   "dialog.group_selection": "Select Groups to Execute",
+  "dialog.group_selection.remember": "Use these groups next time without asking",
   "dialog.group_ok": "Start",
   "dialog.test_result": "Test Result (Visualized)",
   "dialog.cannot_delete": "Cannot Delete",

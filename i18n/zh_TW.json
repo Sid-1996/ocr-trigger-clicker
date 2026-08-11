@@ -128,6 +128,7 @@
   "dialog.export_task": "匯出任務",
   "dialog.about": "關於 OCR Trigger Clicker",
   "dialog.group_selection": "選擇要執行的群組",
+  "dialog.group_selection.remember": "下次直接使用這些群組，不再詢問",
   "dialog.group_ok": "開始執行",
   "dialog.test_result": "測試結果（視覺化）",
   "dialog.cannot_delete": "無法刪除",
