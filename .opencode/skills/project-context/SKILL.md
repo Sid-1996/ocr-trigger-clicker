@@ -270,6 +270,8 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 13. **`template_source` match_image 互動模式防呆**（已實作，commit `fddd7f7`）：模板建立時記錄來源互動模式（前景/後台），比對時檢查一致性，跨模式不得比對（防止前景模板在後台誤用或反之）。跨模式比對會靜默失敗並寫入日誌警告。
 
+14. **效能檔位功能評估後不實作（2026-08-11）**：曾被提案加入「效能檔位」（節能/均衡/高效能，三檔一鍵調整 + 進階微調），評估後拒絕（YAGNI、刪除優先）。理由：實際可調的全局效能參數僅 `scan_interval_ms`（偵測頻率，`06_gui_main.py:2880`）＋ `max_cps`（點擊上限，`06_gui_main.py:2874`）兩顆，皆早已在設定頁可見——三檔只是重打包既有旋鈕，無實質增值。補充佐證：主循環 OCR 完全不縮圖（見第 8 條），高效能檔沒有更快空間；模板 scale 候選數（`11_template_matching.py` 13/5 個）是唯一「強硬體可多做工」的旋鈕，但影響有限不開放；內部常數（`_MIN_INTERVAL_SEC`、GPU provider、`_RATE_LIMIT_*`）屬實作細節或反作弊保護，不開放。
+
 ## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267` + `eda47c2`）
 
 **病灶**：`MainLoop` 執行中每 20 次迭代（或停止時），若 `_rules_dirty=True`（規則觸發時設定），會用自己記憶體中的 `self._rules` 快照直接呼叫 `save_rules()` 覆寫任務檔（此邏輯已於 commit `eda47c2` 完全移除，不再存在於目前的 `05_main_loop.py`）。GUI 端的一般規則編輯（`_save_current_rule`）在 loop 執行中會被 UI disabled 擋住，但 `_on_background_changed`（勾選「常駐監控」）沒有這層防護，可以在 loop 執行中直接存檔。GUI 的 `save_task()`/`save_groups()` 呼叫與 loop 的週期性存檔之間存在檔案層級的 write-write race：GUI 剛寫入的新規則，可能在下一瞬間被 loop 用舊快照覆寫掉。症狀：新建立的「常駐監控」規則，在 loop 執行過幾輪、且使用者編輯過後，重啟工具即消失。
