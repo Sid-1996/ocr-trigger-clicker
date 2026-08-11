@@ -2781,6 +2781,8 @@ Recorder = _recorder_mod.Recorder
 _recorder_convert_mod = load_sibling("recorder_convert", "core/20_recorder_convert.py")
 convert_recorded_sessions = _recorder_convert_mod.convert_sessions
 
+_group_sel = load_sibling("group_selection", "core/group_selection.py")
+
 # ── Helpers ──
 
 
@@ -5755,7 +5757,7 @@ class MainWindow(QMainWindow):
             for gid in saved.get("group_ids", [])
             if any(g.id == gid and g.enabled for g in self._groups)
         ]
-        if saved.get("skip") and saved_ids:
+        if _group_sel.should_skip(saved, saved_ids):
             return saved_ids
         dialog = QDialog(self)
         dialog.setWindowTitle(T("dialog.group_selection"))
@@ -5769,7 +5771,7 @@ class MainWindow(QMainWindow):
         checks = []
         for g in enabled:
             cb = QCheckBox(g.name)
-            cb.setChecked(g.id in saved_ids or not saved_ids)
+            cb.setChecked(True)  # 每次開啟預設全部啟用群組打勾
             cb.setProperty("gid", g.id)
             checks.append(cb)
             layout.addWidget(cb)
@@ -5788,12 +5790,11 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
         selected = [cb.property("gid") for cb in checks if cb.isChecked()]
-        # 記憶本次選擇與 skip 狀態
+        # 只有勾「下次直接使用」才記憶本次選擇；否則清空 → 下次照常詢問且預設全勾
         cfg = self._load_config()
-        cfg.setdefault("group_selection", {})[self._current_task] = {
-            "group_ids": selected,
-            "skip": remember_cb.isChecked(),
-        }
+        cfg.setdefault("group_selection", {})[self._current_task] = _group_sel.build_entry(
+            selected, remember_cb.isChecked()
+        )
         self._save_config(cfg)
         return selected
 
