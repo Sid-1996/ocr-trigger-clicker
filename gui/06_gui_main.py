@@ -3102,7 +3102,7 @@ class _NotificationStack(QWidget):
         self._max_width = 320
         self._labels: list[QLabel] = []
 
-    def push(self, msg: str, duration_ms: int = 2000):
+    def push(self, msg: str):
         label = QLabel(msg, self)
         label.setStyleSheet(
             "background: rgba(50,50,50,230); color: #fff; padding: 6px 10px; "
@@ -3115,7 +3115,7 @@ class _NotificationStack(QWidget):
         timer = QTimer(self)
         timer.setSingleShot(True)
         timer.timeout.connect(lambda lbl=label, t=timer: self._pop(lbl, t))
-        timer.start(duration_ms)
+        timer.start(2000)
 
         self._labels.append(label)
         self._reposition()
@@ -3392,7 +3392,7 @@ class MainWindow(QMainWindow):
             return
         config["hide_startup_guide"] = True
         self._save_config(config)
-        self._notif_stack.push(T("ui.start_guide"), duration_ms=6000)
+        self._notif_stack.push(T("ui.start_guide"))
 
     def _restore_last_state(self):
         config = self._load_config()
