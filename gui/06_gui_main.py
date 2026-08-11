@@ -4045,6 +4045,8 @@ class MainWindow(QMainWindow):
         if not ok:
             QMessageBox.warning(self, T("dialog.warning"), T("record.start_failed"))
             return
+        # 錄製前主動把目標視窗帶到前景，使用者可直接開始操作
+        activate_window(title)
         self._record_btn.setText(T("record.stop"))
         self._record_btn.setStyleSheet("color: #E74C3C; font-weight: bold;")
         self._status_bar.showMessage(T("record.recording", title=title), 5000)
