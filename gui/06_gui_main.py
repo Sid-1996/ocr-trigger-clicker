@@ -4148,7 +4148,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _make_mode_icon(g) -> QIcon:
         """群組執行模式徽章：彩色圓 + 白色符號（once=1 / repeat=N / loop=↻ / 停用=空）。"""
-        size = 14
+        size = 16
         if not g.enabled:
             return MainWindow._make_circle_icon((160, 160, 160), size)
         color = {"once": (74, 144, 217), "repeat": (243, 156, 18), "loop": (39, 174, 96)}.get(
@@ -4163,7 +4163,7 @@ class MainWindow(QMainWindow):
         p.setPen(QPen(QColor(*color), 1))
         p.drawEllipse(1, 1, size - 2, size - 2)
         font = p.font()
-        font.setPointSizeF(7.5)
+        font.setPointSizeF(9.0)
         font.setBold(True)
         p.setFont(font)
         p.setPen(QColor(255, 255, 255))
