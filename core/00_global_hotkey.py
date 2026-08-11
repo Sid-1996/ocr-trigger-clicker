@@ -9,6 +9,7 @@ MOD_NOREPEAT = 0x4000
 
 _HOTKEYS = {
     1: ("F8", 0x77),
+    2: ("F9", 0x78),
 }
 
 

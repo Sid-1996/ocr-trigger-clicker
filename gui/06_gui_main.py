@@ -2775,6 +2775,12 @@ _hk_register = _hk_mod.register
 _hk_unregister = _hk_mod.unregister
 _hk_handle_native = _hk_mod.handle_native_event
 
+_recorder_mod = load_sibling("recorder", "core/19_recorder.py")
+Recorder = _recorder_mod.Recorder
+
+_recorder_convert_mod = load_sibling("recorder_convert", "core/20_recorder_convert.py")
+convert_recorded_sessions = _recorder_convert_mod.convert_sessions
+
 # ── Helpers ──
 
 
@@ -2784,6 +2790,33 @@ def _get_images_dir() -> Path:
     if _is_frozen():
         return Path(get_data_path("images"))
     return _bundle_root() / "images"
+
+
+class _RecorderSignals(QObject):
+    """錄製 hook 執行緒 → GUI 執行緒的訊號橋。"""
+
+    count_changed = pyqtSignal(int)
+    error = pyqtSignal(str)
+
+
+class RecordConvertWorker(QThread):
+    """背景執行 session→規則轉換（OCR 分析可能耗時，避免凍結 UI）。"""
+
+    finished_ok = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, session_dirs, parent=None):
+        super().__init__(parent)
+        self._session_dirs = session_dirs
+
+    def run(self):
+        try:
+            result = convert_recorded_sessions(self._session_dirs)
+        except Exception as e:
+            logging.exception("錄製轉換失敗")
+            self.failed.emit(str(e))
+            return
+        self.finished_ok.emit(result)
 
 
 class WorkerSignals(QObject):
@@ -3474,8 +3507,11 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setToolTip(T("tooltip.toggle"))
         self._debug_btn = QPushButton(T("main.ocr_debug"))
         self._debug_btn.setToolTip(T("tooltip.debug"))
+        self._record_btn = QPushButton(T("record.start"))
+        self._record_btn.setToolTip(T("record.tooltip"))
         toolbar.addWidget(self._btn_toggle)
         toolbar.addWidget(self._debug_btn)
+        toolbar.addWidget(self._record_btn)
         toolbar.addStretch()
         self._sponsor_btn = QPushButton(T("main.sponsor"))
         self._sponsor_btn.setToolTip(T("tooltip.sponsor"))
@@ -3757,6 +3793,7 @@ class MainWindow(QMainWindow):
         self._edit_notes.textChanged.connect(self._on_notes_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
         self._debug_back_btn.clicked.connect(self._switch_to_rules)
+        self._record_btn.clicked.connect(self._on_record_clicked)
         self._task_combo.currentTextChanged.connect(self._on_task_changed)
         self._task_new_btn.clicked.connect(self._on_task_new)
         self._task_rename_btn.clicked.connect(self._on_task_rename)
@@ -3963,6 +4000,144 @@ class MainWindow(QMainWindow):
         if idx >= 0:
             self._task_combo.setCurrentIndex(idx)
         self._status_bar.showMessage(T("notif.task_created", name=name))
+
+    # === 示範錄製 ===
+
+    def _recordings_dir(self) -> Path:
+        from core._paths import get_data_path
+
+        return Path(get_data_path("recordings"))
+
+    def _on_record_clicked(self):
+        if getattr(self, "_recorder", None) and self._recorder.is_recording:
+            self._stop_recording()
+        else:
+            self._start_recording()
+
+    def _start_recording(self):
+        title = self._window_combo.currentText()
+        if not title:
+            QMessageBox.warning(self, T("dialog.warning"), T("status.no_window"))
+            return
+        if self._loop and self._loop.is_running:
+            QMessageBox.warning(self, T("dialog.warning"), T("record.stop_loop_first"))
+            return
+        hwnd = get_window_hwnd(title)
+        if not hwnd:
+            QMessageBox.warning(self, T("dialog.warning"), T("record.no_window_hwnd"))
+            return
+        if not hasattr(self, "_record_signals"):
+            self._record_signals = _RecorderSignals()
+            self._record_signals.count_changed.connect(self._on_record_count_changed)
+            self._record_signals.error.connect(self._on_record_error)
+        ts = time.strftime("session-%Y%m%d-%H%M%S")
+        session_dir = self._recordings_dir() / ts
+        session_dir.mkdir(parents=True, exist_ok=True)
+        if not hasattr(self, "_recorder") or self._recorder is None:
+            self._recorder = Recorder()
+        ok = self._recorder.start(
+            title,
+            hwnd,
+            str(session_dir),
+            on_event=lambda n: self._record_signals.count_changed.emit(n),
+            on_error=lambda msg: self._record_signals.error.emit(msg),
+        )
+        if not ok:
+            QMessageBox.warning(self, T("dialog.warning"), T("record.start_failed"))
+            return
+        self._record_btn.setText(T("record.stop"))
+        self._record_btn.setStyleSheet("color: #E74C3C; font-weight: bold;")
+        self._status_bar.showMessage(T("record.recording", title=title), 5000)
+
+    def _stop_recording(self):
+        rec = getattr(self, "_recorder", None)
+        if rec is None:
+            return
+        rec.stop()
+        self._record_btn.setText(T("record.start"))
+        self._record_btn.setStyleSheet("")
+        n = rec.event_count
+        sessions = sorted(p for p in self._recordings_dir().glob("session-*") if p.is_dir())
+        if n <= 0:
+            self._status_bar.showMessage(T("record.no_events"), 6000)
+            return
+        reply = QMessageBox.question(
+            self,
+            T("record.done_title"),
+            T("record.done_msg", n=n),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._convert_recording_to_task(sessions)
+        else:
+            self._status_bar.showMessage(T("record.keep_sessions"), 8000)
+
+    def _on_record_count_changed(self, n: int):
+        self._status_bar.showMessage(T("record.count", n=n))
+
+    def _on_record_error(self, msg: str):
+        self._record_btn.setText(T("record.start"))
+        self._record_btn.setStyleSheet("")
+        QMessageBox.warning(self, T("dialog.warning"), msg)
+
+    def _convert_recording_to_task(self, sessions):
+        if not sessions:
+            return
+        from PyQt6.QtWidgets import QInputDialog
+
+        name, ok = QInputDialog.getText(
+            self, T("record.convert_title"), T("record.convert_hint"), text=T("record.default_name")
+        )
+        if not ok or not name.strip():
+            self._status_bar.showMessage(T("record.convert_cancelled"), 6000)
+            return
+        name = name.strip()
+        if name in list_tasks():
+            reply = QMessageBox.question(
+                self,
+                T("record.overwrite_title"),
+                T("record.overwrite_msg", name=name),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        self._pending_task_name = name
+        self._status_bar.showMessage(T("record.converting"))
+        worker = RecordConvertWorker(sessions)
+        self._convert_worker = worker  # 防 GC
+        worker.finished_ok.connect(self._on_convert_done)
+        worker.failed.connect(self._on_convert_failed)
+        worker.start()
+
+    def _on_convert_done(self, result):
+        rules = result.get("rules", [])
+        groups = result.get("groups", [])
+        stats = result.get("stats", {})
+        if not rules:
+            QMessageBox.warning(self, T("dialog.warning"), T("record.no_rules_converted"))
+            return
+        name = self._pending_task_name
+        save_task(name, rules)
+        save_groups(groups, str(_rule_mod.get_tasks_dir() / f"{name}.json"))
+        self._refresh_task_list()
+        idx = self._task_combo.findText(name)
+        if idx >= 0:
+            self._task_combo.setCurrentIndex(idx)
+        self._status_bar.showMessage(
+            T(
+                "record.converted",
+                name=name,
+                rules=len(rules),
+                anchored=stats.get("anchored", 0),
+                timing=stats.get("timing", 0),
+            ),
+            10000,
+        )
+
+    def _on_convert_failed(self, msg: str):
+        QMessageBox.warning(self, T("dialog.warning"), T("record.convert_failed", error=msg))
 
     def _on_task_rename(self):
         if not self._current_task:
@@ -5610,6 +5785,10 @@ class MainWindow(QMainWindow):
         return handled, result
 
     def _on_hotkey(self, hid: int):
+        if hid == 2:
+            # F9：開始/停止示範錄製（不搶焦點，遊戲保持前景）
+            self._on_record_clicked()
+            return
         if hid == 1:
             if self.isHidden() or self.isMinimized():
                 self._restore_window()
@@ -5636,6 +5815,9 @@ class MainWindow(QMainWindow):
         title = self._window_combo.currentText()
         if not title:
             QMessageBox.warning(self, T("dialog.warning"), T("status.no_window"))
+            return
+        if getattr(self, "_recorder", None) and self._recorder.is_recording:
+            QMessageBox.warning(self, T("dialog.warning"), T("record.stop_recording_first"))
             return
         if not self._rules:
             QMessageBox.warning(self, T("dialog.warning"), T("status.rule_list_empty"))
@@ -6166,6 +6348,11 @@ class MainWindow(QMainWindow):
 
     def _quit_app(self):
         _hk_unregister(int(self.winId()))
+        if getattr(self, "_recorder", None) and self._recorder.is_recording:
+            try:
+                self._recorder.stop()
+            except Exception:
+                logging.exception("退出時停止錄製失敗")
         self._flush_save()
         self._status_timer.stop()
         if self._loop:
