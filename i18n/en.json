@@ -177,7 +177,7 @@
   "record.overwrite_title": "Task already exists",
   "record.overwrite_msg": "Task \"{name}\" already exists. Overwrite?",
   "record.converting": "Converting recording… (running OCR analysis, please wait)",
-  "record.converted": "Created task \"{name}\": {rules} rules ({anchored} text-anchored, {timing} timed)",
+  "record.converted": "Created task \"{name}\": {rules} rules ({anchored} text-anchored, {template} image-templates, {timing} timed)",
   "record.convert_failed": "Conversion failed: {error}",
   "record.no_rules_converted": "No convertible events in the recording data.",
   "tooltip.sponsor": "If this tool helps you, feel free to buy the developer a coffee ☕",

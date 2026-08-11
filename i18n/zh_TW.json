@@ -177,7 +177,7 @@
   "record.overwrite_title": "任務已存在",
   "record.overwrite_msg": "任務「{name}」已存在，要覆蓋嗎？",
   "record.converting": "正在轉換錄製資料…（OCR 分析中，請稍候）",
-  "record.converted": "已建立任務「{name}」：{rules} 條規則（{anchored} 條文字錨點、{timing} 條計時）",
+  "record.converted": "已建立任務「{name}」：{rules} 條規則（{anchored} 條文字錨點、{template} 條圖示模板、{timing} 條計時）",
   "record.convert_failed": "轉換失敗：{error}",
   "record.no_rules_converted": "錄製資料中沒有可轉換的事件。",
   "tooltip.sponsor": "如果這工具有幫助，歡迎請開發者喝杯咖啡 ☕",

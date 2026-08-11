@@ -8,7 +8,10 @@
   規則 = detect(關鍵字=區塊文字, roi=區塊比例座標, on_fail=stop) + click(text_center)。
   引擎在場景還沒出現該文字時會逐幀等待偵測，達成「等畫面出現再點擊」的穩定同步，
   且點擊座標隨文字位置自動縮放，不怕視窗大小變化。
-- 點擊位置沒有文字（點空白／點角色／截圖失敗）：
+- 點擊位置沒有文字（點圖示／點角色）：
+  先嘗試「模板錨點」：以點擊座標為中心向外擴張，裁出有紋理的特徵方塊存成
+  match_image（base64 內嵌）＋ click(text_center)，達成「等圖示出現再點擊」的視覺同步。
+- 區域無特徵（點空白）或方塊被視窗邊緣裁剪：
   規則 = wait(錄製間隔) + click(custom 比例座標)。純計時播放，只保證節奏一致。
 
 比率座標一律為「視窗比例」（0~1，對全視窗尺寸），與引擎 _resolve_point/_resolve_roi
@@ -35,9 +38,19 @@ Step = _models.Step
 Rule = _models.Rule
 RuleGroup = _models.RuleGroup
 
+_tmpl = load_sibling("template_matching", "core/11_template_matching.py")
+img_to_b64 = _tmpl.img_to_b64
+
 _ANCHOR_RADIUS = 160  # 點擊座標周圍 OCR 搜尋半徑（px）
 _ANCHOR_MARGIN = 12  # 文字區塊外擴距離（px），落在擴充框內即視為「點在文字上」
 _ROI_EXPAND = 0.25  # 偵測 ROI 外擴比例（吸收執行時文字位置微動）
+# 模板錨點參數
+_TMPL_MIN_RADIUS = 24  # 模板起始半徑（px），由小向外擴張找特徵
+_TMPL_MAX_RADIUS = 56  # 模板最大半徑（px），超過仍無特徵則放棄
+_TMPL_STEP = 8  # 外擴步進（px）
+_TMPL_STD_MIN = 16.0  # 灰階標準差門檻：低於此視為純色／無特徵
+_TMPL_THRESHOLD = 0.8  # match_image 相似度門檻（與引擎預設一致）
+_TMPL_SEARCH_EXPAND = 1.0  # 搜尋 ROI 相對模板邊的外擴倍率（吸收執行時位移）
 # 錨點 OCR 參數與執行時 _ocr_region（preprocess=False / max_side_len=0 / conf=0.25）一致，
 # 確保轉換時辨識到的文字在執行時同樣會被找到（同一條 OCR 路徑）。
 _MIN_OCR_CONF = 0.25
@@ -123,6 +136,39 @@ def _find_anchor(img_bgr, cx: int, cy: int):
     return best.text.strip(), roi
 
 
+def _make_template(img_bgr, cx: int, cy: int):
+    """以點擊座標為中心向外擴張，裁出有紋理的特徵方塊作為模板。
+
+    由小到大逐級外擴，選取第一個「完整位於視窗內且灰階 std 達標」的最小方塊；
+    被視窗邊緣裁剪或全為純色（無特徵）時回傳 None → 呼叫端退回計時規則。
+    回傳 (base64 模板, 搜尋 ROI 視窗比例座標)。
+    """
+    h, w = img_bgr.shape[:2]
+    if w <= 0 or h <= 0:
+        return None
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    for r in range(_TMPL_MIN_RADIUS, _TMPL_MAX_RADIUS + 1, _TMPL_STEP):
+        if cx - r < 0 or cy - r < 0 or cx + r > w or cy + r > h:
+            continue  # 被邊緣裁剪 → 模板中心會偏移點擊座標，放棄
+        x0, y0 = cx - r, cy - r
+        x1, y1 = cx + r, cy + r
+        if float(gray[y0:y1, x0:x1].std()) < _TMPL_STD_MIN:
+            continue  # 純色／無特徵 → 再外擴
+        b64 = img_to_b64(img_bgr[y0:y1, x0:x1])
+        padx = int((x1 - x0) * _TMPL_SEARCH_EXPAND)
+        pady = int((y1 - y0) * _TMPL_SEARCH_EXPAND)
+        sx0, sy0 = max(0, x0 - padx), max(0, y0 - pady)
+        sx1, sy1 = min(w, x1 + padx), min(h, y1 + pady)
+        roi = {
+            "x": round(sx0 / w, 4),
+            "y": round(sy0 / h, 4),
+            "w": round((sx1 - sx0) / w, 4),
+            "h": round((sy1 - sy0) / h, 4),
+        }
+        return b64, roi
+    return None
+
+
 def _build_anchored_rule(idx: int, keyword: str, roi: dict, button: str) -> Rule:
     return Rule(
         id=uuid.uuid4().hex[:12],
@@ -136,6 +182,26 @@ def _build_anchored_rule(idx: int, keyword: str, roi: dict, button: str) -> Rule
                     "roi": roi,
                     "match_mode": "fuzzy",
                     "fuzzy_threshold": _FUZZY_THRESHOLD,
+                    "on_fail": "stop",
+                },
+            ),
+            Step("click", {"target": "text_center", "button": button, "random_offset": 3}),
+        ],
+    )
+
+
+def _build_template_rule(idx: int, b64: str, roi: dict, button: str) -> Rule:
+    return Rule(
+        id=uuid.uuid4().hex[:12],
+        name=f"{idx + 1:02d} 圖示",
+        enabled=True,
+        steps=[
+            Step(
+                "match_image",
+                {
+                    "template_data": b64,
+                    "roi": roi,
+                    "threshold": _TMPL_THRESHOLD,
                     "on_fail": "stop",
                 },
             ),
@@ -177,7 +243,7 @@ def _session_to_rules(session_dir: Path) -> tuple[list[Rule], dict]:
     events = data.get("events", []) or []
     frames_dir = session_dir / "frames"
     rules: list[Rule] = []
-    stats = {"anchored": 0, "timing": 0, "skipped": 0}
+    stats = {"anchored": 0, "template": 0, "timing": 0, "skipped": 0}
     frame_cache: dict[str, object] = {}
     known_w, known_h = 0, 0
     prev_t = None
@@ -209,6 +275,14 @@ def _session_to_rules(session_dir: Path) -> tuple[list[Rule], dict]:
                 stats["anchored"] += 1
                 anchored = True
 
+        if not anchored and w > 0 and h > 0:
+            tpl = _make_template(img, wx, wy)
+            if tpl is not None:
+                b64, roi = tpl
+                rules.append(_build_template_rule(len(rules), b64, roi, button))
+                stats["template"] += 1
+                anchored = True
+
         if not anchored:
             if known_w <= 0 or known_h <= 0:
                 stats["skipped"] += 1
@@ -234,7 +308,7 @@ def convert_sessions(session_dirs: list[Path]) -> dict:
     """
     rules: list[Rule] = []
     groups: list[RuleGroup] = []
-    stats = {"sessions": 0, "rules": 0, "anchored": 0, "timing": 0, "skipped": 0}
+    stats = {"sessions": 0, "rules": 0, "anchored": 0, "template": 0, "timing": 0, "skipped": 0}
     for d in session_dirs:
         if not d.is_dir():
             continue
@@ -254,6 +328,7 @@ def convert_sessions(session_dirs: list[Path]) -> dict:
         stats["sessions"] += 1
         stats["rules"] += len(sess_rules)
         stats["anchored"] += sess_stats.get("anchored", 0)
+        stats["template"] += sess_stats.get("template", 0)
         stats["timing"] += sess_stats.get("timing", 0)
         stats["skipped"] += sess_stats.get("skipped", 0)
     return {"rules": rules, "groups": groups, "stats": stats}
@@ -321,5 +396,51 @@ if __name__ == "__main__":
         assert _format_ts("session-20260101-093005") == "2026-01-01 09:30"
         assert _format_ts("foobar") == "foobar"
         print("  [OK] 時間戳格式化")
+
+        # ── 模板錨點：紋理特徵 → match_image 規則 ──
+        sd2 = Path(td) / "session-20260812-150000"
+        (sd2 / "frames").mkdir(parents=True)
+        frame2 = np.full((600, 800, 3), 200, dtype=np.uint8)
+        # 同心圓圖示：有紋理但 OCR 不讀為文字（寫 PNG 避免 JPEG 偽影誤判）
+        cv2.circle(frame2, (400, 300), 44, (60, 80, 120), -1)
+        cv2.circle(frame2, (400, 300), 22, (200, 210, 220), -1)
+        cv2.imwrite(str(sd2 / "frames" / "00001.png"), frame2)
+        events2 = [{"t": 1.0, "button": "left", "wx": 400, "wy": 300, "frame": "00001.png"}]
+        (sd2 / "events.json").write_text(
+            json.dumps({"meta": {"window_title": "test"}, "events": events2}), encoding="utf-8"
+        )
+        res2 = convert_sessions([sd2])
+        assert res2["stats"]["template"] == 1, res2["stats"]
+        assert res2["stats"]["timing"] == 0, res2["stats"]
+        r = res2["rules"][0]
+        assert r.steps[0].type == "match_image"
+        assert r.steps[0].params["template_data"]
+        assert r.steps[0].params["on_fail"] == "stop"
+        assert r.steps[1].type == "click" and r.steps[1].params["target"] == "text_center"
+        print("  [OK] 紋理特徵 → 模板錨點規則（match_image + click）")
+
+        # ── 邊緣裁剪：點擊靠視窗邊緣 → 回退計時 ──
+        sd3 = Path(td) / "session-20260812-160000"
+        (sd3 / "frames").mkdir(parents=True)
+        cv2.imwrite(str(sd3 / "frames" / "00001.jpg"), frame2)
+        events3 = [{"t": 1.0, "button": "left", "wx": 5, "wy": 5, "frame": "00001.jpg"}]
+        (sd3 / "events.json").write_text(
+            json.dumps({"meta": {"window_title": "test"}, "events": events3}), encoding="utf-8"
+        )
+        res3 = convert_sessions([sd3])
+        assert res3["stats"]["timing"] == 1 and res3["stats"]["template"] == 0, res3["stats"]
+        print("  [OK] 邊緣裁剪 → 計時規則")
+
+        # ── 純色無特徵 → 回退計時 ──
+        sd4 = Path(td) / "session-20260812-170000"
+        (sd4 / "frames").mkdir(parents=True)
+        cv2.imwrite(str(sd4 / "frames" / "00001.jpg"), frame)  # 全灰 200
+        events4 = [{"t": 1.0, "button": "left", "wx": 400, "wy": 300, "frame": "00001.jpg"}]
+        (sd4 / "events.json").write_text(
+            json.dumps({"meta": {"window_title": "test"}, "events": events4}), encoding="utf-8"
+        )
+        res4 = convert_sessions([sd4])
+        assert res4["stats"]["timing"] == 1 and res4["stats"]["template"] == 0, res4["stats"]
+        print("  [OK] 純色無特徵 → 計時規則")
 
     print("\n=== All checks passed ===")

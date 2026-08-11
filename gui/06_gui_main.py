@@ -4148,6 +4148,7 @@ class MainWindow(QMainWindow):
                 name=name,
                 rules=len(rules),
                 anchored=stats.get("anchored", 0),
+                template=stats.get("template", 0),
                 timing=stats.get("timing", 0),
             ),
             10000,
