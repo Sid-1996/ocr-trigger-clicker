@@ -97,17 +97,8 @@ def _get_interaction_mode() -> str:
         return "pynput"
 
 
-def _template_type(ts: str) -> str:
-    """模板來源型別；舊任務（無 template_source）一律視為前景。"""
-    return "background" if ts == "background" else "foreground"
-
-
 def _current_template_type() -> str:
     return "background" if _get_interaction_mode() != "pynput" else "foreground"
-
-
-def _type_display(tt: str) -> str:
-    return T("combo.interaction_bg_frida") if tt == "background" else T("combo.interaction_fg")
 
 
 class _NoWheelCombo(QComboBox):
@@ -1426,13 +1417,7 @@ class _MatchImageStepForm(QWidget):
         color_tolerance = self._color_tolerance.value()
         mode = _get_interaction_mode()
         hwnd = get_window_hwnd(title) if title else None
-        _tmpl_tt = _template_type(str(self._step.params.get("template_source", "")))
-        _cur_tt = _template_type("background" if mode != "pynput" else "foreground")
-        _mode_warn = (
-            T("img_compare.mode_mismatch", src=_type_display(_tmpl_tt), cur=_type_display(_cur_tt))
-            if _tmpl_tt != _cur_tt
-            else ""
-        )
+        _mode_warn = ""
         if mode == "pynput":
             # 前景模式：先縮小主視窗→激活目標→再 mss 截圖，避免主視窗蓋住目標畫面；finally 確保復原
             win = self.window()
@@ -5907,59 +5892,8 @@ class MainWindow(QMainWindow):
         if not group_ids:
             QMessageBox.warning(self, T("dialog.warning"), T("status.at_least_one_group"))
             return
-        # 防呆：檢查所選群組內是否有模板來源與目前互動模式不符的 match_image 步驟
-        cur_tt = _current_template_type()
         allowed_ids = {rid for g in self._groups if g.id in group_ids for rid in g.rule_ids}
         rules_by_id = {r.id: r for r in self._rules}
-        mismatched = []
-        for rid in allowed_ids:
-            r = rules_by_id.get(rid)
-            if not r or not r.enabled:
-                continue
-            for idx, step in enumerate(r.steps, 1):
-                if step.type != "match_image":
-                    continue
-                p = step.params
-                if not (p.get("template_data", "").strip() or p.get("template", "").strip()):
-                    continue
-                tt = _template_type(str(p.get("template_source", "")))
-                if tt != cur_tt:
-                    mismatched.append((r.name, idx, tt))
-        if mismatched:
-            items = "\n".join(
-                f"  • {name}（步驟 {idx}，{_type_display(tt)}）" for name, idx, tt in mismatched
-            )
-            # 不符模板必然全是同一來源型別 → 提供一鍵切換；混合來源才退回純 Yes/No
-            target_types = {tt for _, _, tt in mismatched}
-            box = QMessageBox(self)
-            box.setIcon(QMessageBox.Icon.Warning)
-            box.setWindowTitle(T("start.mode_mismatch_title"))
-            box.setText(
-                T(
-                    "start.mode_mismatch_msg",
-                    cur=_type_display(cur_tt),
-                    items=items,
-                )
-            )
-            cancel_btn = box.addButton(T("ui.cancel"), QMessageBox.ButtonRole.RejectRole)
-            box.addButton(T("start.mode_mismatch_yes"), QMessageBox.ButtonRole.YesRole)
-            switch_tt = target_types.pop() if len(target_types) == 1 else None
-            switch_btn = None
-            if switch_tt is not None:
-                switch_btn = box.addButton(
-                    T("start.mode_mismatch_switch", target=_type_display(switch_tt)),
-                    QMessageBox.ButtonRole.AcceptRole,
-                )
-            box.setDefaultButton(cancel_btn)
-            box.exec()
-            clicked = box.clickedButton()
-            if clicked is None or clicked == cancel_btn:
-                return
-            if clicked == switch_btn:
-                new_mode = "frida" if switch_tt == "background" else "pynput"
-                self._rule_config_ctrl.set_setting(self, "interaction_mode", new_mode)
-                self._update_interaction_mode_label()
-                _main_loop_mod.log_main(f"互動模式已切換為 {_type_display(switch_tt)}")
         # 防呆：檢查所選群組內的 detect 空文字 / 自訂點擊 (0,0)，執行前硬性攔截
         hard_problems = []
         for rid in allowed_ids:
