@@ -5711,6 +5711,8 @@ class MainWindow(QMainWindow):
             self._exec_log_timer = QTimer()
             self._exec_log_timer.timeout.connect(self._update_exec_log)
             self._exec_log_timer.start(500)
+            self._exec_log_widget.setVisible(True)
+            self._exec_log_toggle.setText(T("exec_log.hide"))
         else:
             QMessageBox.critical(
                 self, T("dialog.init_failed"), T("dialog.loop_start_failed", error=error_msg)
