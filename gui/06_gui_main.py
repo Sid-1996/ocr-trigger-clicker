@@ -4145,6 +4145,47 @@ class MainWindow(QMainWindow):
         p.end()
         return QIcon(pix)
 
+    @staticmethod
+    def _make_mode_icon(g) -> QIcon:
+        """群組執行模式徽章：彩色圓 + 白色符號（once=1 / repeat=N / loop=↻ / 停用=空）。"""
+        size = 14
+        if not g.enabled:
+            return MainWindow._make_circle_icon((160, 160, 160), size)
+        color = {"once": (74, 144, 217), "repeat": (243, 156, 18), "loop": (39, 174, 96)}.get(
+            g.mode, (39, 174, 96)
+        )
+        symbol = {"once": "1", "repeat": "N", "loop": "↻"}.get(g.mode, "↻")
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor(*color))
+        p.setPen(QPen(QColor(*color), 1))
+        p.drawEllipse(1, 1, size - 2, size - 2)
+        font = p.font()
+        font.setPointSizeF(7.5)
+        font.setBold(True)
+        p.setFont(font)
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(pix.rect(), Qt.AlignmentFlag.AlignCenter, symbol)
+        p.end()
+        return QIcon(pix)
+
+    def _group_tooltip(self, g) -> str:
+        """群組列 tooltip：執行模式摘要 + 通用操作提示。"""
+        mode = {
+            "once": T("group_settings.mode_once"),
+            "repeat": T("group_settings.mode_repeat"),
+        }.get(g.mode, T("group_settings.mode_loop"))
+        parts = [mode]
+        if g.mode == "repeat":
+            parts.append(f"{T('group_settings.repeat_times')}: {g.repeat_times}")
+        if g.mode in ("loop", "repeat") and g.between_rounds_sec:
+            parts.append(f"{T('group_settings.interval')}: {g.between_rounds_sec}")
+        if g.order == "parallel":
+            parts.append(T("group_settings.order_parallel"))
+        return "、".join(parts) + "\n" + T("tooltip.group_item")
+
     def _refresh_rule_list(self, _expand_gid: str | None = None):
         parent = self._rule_list.parentWidget()
         if parent:
@@ -4168,24 +4209,16 @@ class MainWindow(QMainWindow):
         for g in self._groups:
             group_item = QTreeWidgetItem()
             if g.enabled:
-                if g.mode == "once":
-                    prefix = "[1]"
-                elif g.mode == "repeat":
-                    prefix = "[N]"
-                else:
-                    prefix = "[∞]"
-                order_tag = "∥" if g.order == "parallel" else "↻"
-                text = f"{prefix}{order_tag} {g.name}"
-                if g.mode == "repeat":
-                    text += f" ×{g.repeat_times}"
+                order_tag = "∥" if g.order == "parallel" else ""
+                text = f"{order_tag} {g.name}".strip()
             else:
-                prefix = "[■]"
-                text = f"{prefix} {g.name}"
+                text = g.name
                 group_item.setForeground(0, QColor("#888888"))
             group_item.setText(0, text)
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
             group_item.setFlags(group_item.flags() | Qt.ItemFlag.ItemIsDropEnabled)
-            group_item.setToolTip(0, T("tooltip.group_item"))
+            group_item.setIcon(0, self._make_mode_icon(g))
+            group_item.setToolTip(0, self._group_tooltip(g))
             for rid in g.rule_ids:
                 r = rule_map.get(rid)
                 if r is None:
