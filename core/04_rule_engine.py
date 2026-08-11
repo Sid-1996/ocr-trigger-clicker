@@ -42,6 +42,7 @@ load_groups = _serial.load_groups
 save_groups = _serial.save_groups
 load_rules = _serial.load_rules
 save_rules = _serial.save_rules
+save_task_with_groups = _serial.save_task_with_groups
 
 _tasks = load_sibling("task_management", "core/task_management.py")
 get_tasks_dir = _tasks.get_tasks_dir

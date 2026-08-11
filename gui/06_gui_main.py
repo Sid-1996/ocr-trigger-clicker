@@ -2741,6 +2741,7 @@ Step = _rule_mod.Step
 RuleGroup = _rule_mod.RuleGroup
 load_groups = _rule_mod.load_groups
 save_groups = _rule_mod.save_groups
+save_task_with_groups = _rule_mod.save_task_with_groups
 _STEP_DEFAULTS = _rule_mod._STEP_DEFAULTS
 _MAX_IMPORT_SIZE = _rule_mod._MAX_IMPORT_SIZE
 
@@ -2780,6 +2781,7 @@ Recorder = _recorder_mod.Recorder
 
 _recorder_convert_mod = load_sibling("recorder_convert", "core/20_recorder_convert.py")
 convert_recorded_sessions = _recorder_convert_mod.convert_sessions
+merge_rule_entries = _recorder_convert_mod.merge_rule_entries
 
 _group_sel = load_sibling("group_selection", "core/group_selection.py")
 
@@ -4095,25 +4097,48 @@ class MainWindow(QMainWindow):
     def _convert_recording_to_task(self, sessions):
         if not sessions:
             return
+        if getattr(self, "_convert_worker", None) and self._convert_worker.isRunning():
+            self._status_bar.showMessage(T("record.converting"))
+            return
         from PyQt6.QtWidgets import QInputDialog
 
-        name, ok = QInputDialog.getText(
-            self, T("record.convert_title"), T("record.convert_hint"), text=T("record.default_name")
+        existing = list_tasks()
+        choice, ok = QInputDialog.getItem(
+            self,
+            T("record.convert_title"),
+            T("record.choose_target"),
+            [T("record.new_task_option")] + existing,
+            0,
+            False,
         )
-        if not ok or not name.strip():
+        if not ok:
             self._status_bar.showMessage(T("record.convert_cancelled"), 6000)
             return
-        name = name.strip()
-        if name in list_tasks():
-            reply = QMessageBox.question(
+        if choice == T("record.new_task_option"):
+            name, ok = QInputDialog.getText(
                 self,
-                T("record.overwrite_title"),
-                T("record.overwrite_msg", name=name),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
+                T("record.convert_title"),
+                T("record.convert_hint"),
+                text=T("record.default_name"),
             )
-            if reply != QMessageBox.StandardButton.Yes:
+            if not ok or not name.strip():
+                self._status_bar.showMessage(T("record.convert_cancelled"), 6000)
                 return
+            name = name.strip()
+            if name in list_tasks():
+                reply = QMessageBox.question(
+                    self,
+                    T("record.overwrite_title"),
+                    T("record.overwrite_msg", name=name),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+            self._pending_merge_into = ""
+        else:
+            name = choice
+            self._pending_merge_into = name
         self._pending_task_name = name
         self._pending_session_dirs = list(sessions)
         self._status_bar.showMessage(T("record.converting"))
@@ -4131,9 +4156,26 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, T("dialog.warning"), T("record.no_rules_converted"))
             return
         name = self._pending_task_name
-        ok = save_task(name, rules) and save_groups(
-            groups, str(_rule_mod.get_tasks_dir() / f"{name}.json")
-        )
+        merge_into = getattr(self, "_pending_merge_into", "") or ""
+        tasks_dir = _rule_mod.get_tasks_dir()
+        if merge_into:
+            # 加入既有任務成群組。先把 merged 寫檔，並在「合併目標＝當前任務」時
+            # 同步記憶體狀態，避免 _refresh_task_list 內部的 debounced save 用舊狀態
+            # 覆寫剛合併的檔案；目標為其他任務時則保留現狀（flush 仍寫回原當前任務）。
+            existing_rules = load_task(merge_into)
+            existing_groups = load_groups(str(tasks_dir / f"{merge_into}.json"))
+            merged_rules, merged_groups = merge_rule_entries(
+                existing_rules, existing_groups, rules, groups
+            )
+            ok = save_task_with_groups(
+                merged_rules, merged_groups, str(tasks_dir / f"{merge_into}.json")
+            )
+            if getattr(self, "_current_task", "") == merge_into:
+                self._rules, self._groups = merged_rules, merged_groups
+            target = merge_into
+        else:
+            ok = save_task(name, rules) and save_groups(groups, str(tasks_dir / f"{name}.json"))
+            target = name
         if not ok:
             self._status_bar.showMessage(T("record.save_failed"), 8000)
             return
@@ -4144,13 +4186,14 @@ class MainWindow(QMainWindow):
                 logging.exception("清除錄製 session 失敗: %s", d)
         self._pending_session_dirs = []
         self._refresh_task_list()
-        idx = self._task_combo.findText(name)
+        idx = self._task_combo.findText(target)
         if idx >= 0:
             self._task_combo.setCurrentIndex(idx)
+        msg_key = "record.added_to_task" if merge_into else "record.converted"
         self._status_bar.showMessage(
             T(
-                "record.converted",
-                name=name,
+                msg_key,
+                name=target,
                 rules=len(rules),
                 anchored=stats.get("anchored", 0),
                 template=stats.get("template", 0),

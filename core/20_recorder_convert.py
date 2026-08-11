@@ -334,6 +334,70 @@ def convert_sessions(session_dirs: list[Path]) -> dict:
     return {"rules": rules, "groups": groups, "stats": stats}
 
 
+def merge_rule_entries(
+    existing_rules: list[Rule],
+    existing_groups: list[RuleGroup],
+    new_rules: list[Rule],
+    new_groups: list[RuleGroup],
+) -> tuple[list[Rule], list[RuleGroup]]:
+    """把新轉換出的規則+群組合併進既有任務資料（GUI「加入既有任務」用）。
+
+    - rule.id / group.id 若有碰撞，以 uuid4 重刷並維持唯一。
+    - 新規則 id 被重刷時，同步更新其所屬新群組的 rule_ids（轉換規則不含
+      step-level 的 rule_id 跳轉，只需處理群組層級引用）。
+    回傳 (merged_rules, merged_groups)，不修改傳入物件。
+    """
+    used_rule_ids = {r.id for r in existing_rules}
+    used_group_ids = {g.id for g in existing_groups}
+    id_map: dict[str, str] = {}
+
+    merged_rules = list(existing_rules)
+    for r in new_rules:
+        if r.id in used_rule_ids:
+            nid = uuid.uuid4().hex[:12]
+            while nid in used_rule_ids:
+                nid = uuid.uuid4().hex[:12]
+            id_map[r.id] = nid
+            used_rule_ids.add(nid)
+            merged_rules.append(
+                Rule(
+                    id=nid,
+                    name=r.name,
+                    enabled=r.enabled,
+                    steps=list(r.steps),
+                    background=r.background,
+                    notes=r.notes,
+                )
+            )
+        else:
+            used_rule_ids.add(r.id)
+            merged_rules.append(r)
+
+    merged_groups = list(existing_groups)
+    for g in new_groups:
+        gid = g.id
+        if gid in used_group_ids:
+            gid = uuid.uuid4().hex[:12]
+            while gid in used_group_ids:
+                gid = uuid.uuid4().hex[:12]
+            used_group_ids.add(gid)
+        else:
+            used_group_ids.add(gid)
+        merged_groups.append(
+            RuleGroup(
+                id=gid,
+                name=g.name,
+                enabled=g.enabled,
+                mode=g.mode,
+                repeat_times=g.repeat_times,
+                between_rounds_sec=g.between_rounds_sec,
+                rule_ids=[id_map.get(rid, rid) for rid in g.rule_ids],
+                order=g.order,
+            )
+        )
+    return merged_rules, merged_groups
+
+
 if __name__ == "__main__":
     import json
     import tempfile
@@ -442,5 +506,50 @@ if __name__ == "__main__":
         res4 = convert_sessions([sd4])
         assert res4["stats"]["timing"] == 1 and res4["stats"]["template"] == 0, res4["stats"]
         print("  [OK] 純色無特徵 → 計時規則")
+
+        # ── merge_rule_entries：合併進既有任務，id 碰撞重刷並同步 rule_ids ──
+        ext_rule = Rule(
+            id="ext-rule",
+            name="既有規則",
+            enabled=True,
+            steps=[Step(type="click", params={"target": "custom", "x": 0.1, "y": 0.1})],
+        )
+        ext_group = RuleGroup(
+            id="ext-group", name="既有群組", enabled=True, mode="once", rule_ids=["ext-rule"]
+        )
+        new_rule_col = Rule(
+            id="ext-rule",
+            name="新規則撞 id",
+            enabled=True,
+            steps=[Step(type="click", params={"x": 0.2, "y": 0.2})],
+        )
+        new_grp = RuleGroup(
+            id="ext-rule",
+            name="新群組撞 id",
+            enabled=True,
+            mode="once",
+            rule_ids=["ext-rule", "keep-rule"],
+        )
+        new_keep = Rule(
+            id="keep-rule",
+            name="不衝突",
+            enabled=True,
+            steps=[Step(type="wait", params={"ms": 100})],
+        )
+        mr, mg = merge_rule_entries([ext_rule], [ext_group], [new_rule_col, new_keep], [new_grp])
+        assert len(mr) == 3
+        map_rule = {r.id: r for r in mr}
+        # 碰撞的規則 id 被重刷，且新群組 rule_ids 同步指向最新 id
+        assert "ext-rule" not in map_rule or map_rule["ext-rule"] is ext_rule
+        assert "keep-rule" in map_rule
+        new_ids = [r.id for r in mr[1:]]
+        assert len(set(new_ids)) == len(new_ids)
+        assert "keep-rule" in mg[1].rule_ids
+        assert mg[1].rule_ids[0] == mr[1].id
+        # 群組 id 碰撞重刷，但不影響既有群組
+        assert mg[0].id == "ext-group"
+        assert len({g.id for g in mg}) == 2
+        assert map_rule.get("keep-rule").steps[0].type == "wait"
+        print("  [OK] merge_rule_entries：id 碰撞重刷 + rule_ids 同步")
 
     print("\n=== All checks passed ===")

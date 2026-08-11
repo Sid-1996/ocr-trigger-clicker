@@ -116,6 +116,44 @@ def save_groups(groups: list[RuleGroup], path: str) -> bool:
         return False
 
 
+def save_task_with_groups(rules: list[Rule], groups: list[RuleGroup], path: str) -> bool:
+    """單次原子寫入規則+群組，保留既有其他鍵（meta/window_title/_collapsed_groups）。
+
+    供「錄製轉換加入既有任務」使用：兩段式 save_rules + save_groups 在失敗時
+    可能留下半成品任務，此函式一次寫完避免破壞既有任務。
+    """
+    logging.debug(
+        "[save_task_with_groups] path=%s rules=%d groups=%d", path, len(rules), len(groups)
+    )
+    tmp_path: str = ""
+    try:
+        data = {
+            "rules": [_rule_to_dict(r) for r in rules],
+            "groups": [_group_to_dict(g) for g in groups],
+        }
+        p = Path(path)
+        if p.exists():
+            try:
+                with open(p, encoding="utf-8") as f:
+                    existing = json.load(f)
+                for k, v in existing.items():
+                    if k not in data:
+                        data[k] = v
+            except (json.JSONDecodeError, OSError):
+                pass
+        with tempfile.NamedTemporaryFile(
+            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp_path = f.name
+        _replace_file(tmp_path, str(p))
+        return True
+    except OSError:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+        return False
+
+
 def load_rules(path: str) -> list[Rule]:
     p = Path(path)
     if not p.exists():
