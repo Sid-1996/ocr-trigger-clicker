@@ -3307,12 +3307,13 @@ class MainWindow(QMainWindow):
         self.resize(900, 650)
         self._centered_once = False
 
-        from core._paths import _bundle_root, _is_frozen, get_data_path
+        from core._paths import _bundle_root, get_data_path
 
-        if _is_frozen():
-            self._config_path = get_data_path("config.json")
-        else:
-            self._config_path = str(_bundle_root() / "config.json")
+        self._config_path = get_data_path("config.json")
+        legacy = _bundle_root() / "config.json"
+        if not os.path.exists(self._config_path) and legacy.exists():
+            # 一次性遷移：舊版開發模式把設定寫在專案根目錄，統一後改以 %APPDATA% 為準
+            shutil.copy2(legacy, self._config_path)
 
         try:
             migrate_old_rules()
