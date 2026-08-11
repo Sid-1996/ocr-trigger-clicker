@@ -4062,6 +4062,8 @@ class MainWindow(QMainWindow):
         rec.stop()
         self._record_btn.setText(T("record.start"))
         self._record_btn.setStyleSheet("")
+        # 與開始時 activate_window(title) 對稱：停止後把工具視窗帶回前景
+        self._restore_window()
         n = rec.event_count
         sessions = sorted(p for p in self._recordings_dir().glob("session-*") if p.is_dir())
         if n <= 0:
@@ -6344,10 +6346,14 @@ class MainWindow(QMainWindow):
             )
 
     def _restore_window(self):
-        if getattr(self, "_was_maxed", False):
+        if self.isHidden():
+            self.show()
+        # 統一還原：先前最小化到匣記住的最大化，或目前仍可見且最大化的狀態都保留
+        if getattr(self, "_was_maxed", False) or self.isMaximized():
             self.showMaximized()
         else:
             self.showNormal()
+        self.raise_()
         self.activateWindow()
 
     def showEvent(self, event):
