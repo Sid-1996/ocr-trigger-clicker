@@ -4033,6 +4033,7 @@ class MainWindow(QMainWindow):
         ts = time.strftime("session-%Y%m%d-%H%M%S")
         session_dir = self._recordings_dir() / ts
         session_dir.mkdir(parents=True, exist_ok=True)
+        self._last_session_dir = session_dir
         if not hasattr(self, "_recorder") or self._recorder is None:
             self._recorder = Recorder()
         ok = self._recorder.start(
@@ -4061,12 +4062,15 @@ class MainWindow(QMainWindow):
         n = rec.event_count
         sessions = sorted(p for p in self._recordings_dir().glob("session-*") if p.is_dir())
         if n <= 0:
+            empty = getattr(self, "_last_session_dir", None)
+            if empty:
+                shutil.rmtree(empty, ignore_errors=True)
             self._status_bar.showMessage(T("record.no_events"), 6000)
             return
         reply = QMessageBox.question(
             self,
             T("record.done_title"),
-            T("record.done_msg", n=n),
+            T("record.done_msg", n=n, m=len(sessions)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
@@ -4106,6 +4110,7 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.StandardButton.Yes:
                 return
         self._pending_task_name = name
+        self._pending_session_dirs = list(sessions)
         self._status_bar.showMessage(T("record.converting"))
         worker = RecordConvertWorker(sessions)
         self._convert_worker = worker  # 防 GC
@@ -4121,8 +4126,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, T("dialog.warning"), T("record.no_rules_converted"))
             return
         name = self._pending_task_name
-        save_task(name, rules)
-        save_groups(groups, str(_rule_mod.get_tasks_dir() / f"{name}.json"))
+        ok = save_task(name, rules) and save_groups(
+            groups, str(_rule_mod.get_tasks_dir() / f"{name}.json")
+        )
+        if not ok:
+            self._status_bar.showMessage(T("record.save_failed"), 8000)
+            return
+        for d in getattr(self, "_pending_session_dirs", []):
+            try:
+                shutil.rmtree(d)
+            except OSError:
+                logging.exception("清除錄製 session 失敗: %s", d)
+        self._pending_session_dirs = []
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
         if idx >= 0:
