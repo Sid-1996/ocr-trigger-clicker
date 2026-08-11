@@ -73,7 +73,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 **`roi_coord: "client"` 機制。** ROI 比例預設以全視窗尺寸為基準儲存。若 `roi` 字典含 `"roi_coord": "client"`，代表比例是相對於客戶區（不含標題列/邊框）。還原時（`_resolve_roi()`）需呼叫 `get_window_client_offset()` 取得邊框偏移量，再轉換為含邊框的全視窗像素座標 —— 因為 `capture()` 截圖本身含邊框。忽略此標記會導致裁切區域系統性偏移。舊任務（無此標記）視為以全視窗比例儲存，向下相容。此機制在基準版本前已修補了多處遺漏（`_CompareStepForm`、OCR 診斷面板、舊檔載入路徑），commits：`2cc7db6`、`db094f4`、`2502b52`、`ff2ffb0`。
 
-**後台座標**：後台模式下的 ROI/點擊比例是相對於客戶區影像像素。`_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）讀取 `roi_coord` 標記，若為 `"client"` 即用 `client_offset` 轉換。**ROI/點擊/模板選取統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`，螢幕絕對 → 客戶區比例，`screenshot_controller.open_roi_selector` / `_capture_rect_to_roi` 與 `06_gui_main._on_pick_coord` 統一收斂），後台模式設定時也會把目標視窗前景化，不再有後台 PrintWindow 選取 UI（`17_bg_roi_selector.py`、`18_bg_click_picker.py` 均已刪）。已實測前景(mss)模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 前景→後台比對信心全數 1.0），故後台模板不再需要 PrintWindow 框選。`template_source` 仍依互動模式標記（後台建模板時標 `"background"`），執行時對 PrintWindow 畫面比對。
+**後台座標**：後台模式下的 ROI/點擊比例是相對於客戶區影像像素。`_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）讀取 `roi_coord` 標記，若為 `"client"` 即用 `client_offset` 轉換。**ROI/點擊/模板選取統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`，螢幕絕對 → 客戶區比例，`screenshot_controller.open_roi_selector` / `_capture_rect_to_roi` 與 `06_gui_main._on_pick_coord` 統一收斂），後台模式設定時也會把目標視窗前景化，不再有後台 PrintWindow 選取 UI（`17_bg_roi_selector.py`、`18_bg_click_picker.py` 均已刪）。已實測前景(mss)模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 前景→後台比對信心全數 1.0），故後台模板不再需要 PrintWindow 框選。`template_source` 僅為寫入 metadata（後台建模板時標 `"background"`），比對時不再檢查一致性（commit `a075576` 移除跨模式防呆），後台執行一律對 PrintWindow 畫面比對。
 
 ## 截圖備援鏈
 
@@ -191,9 +191,9 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 後台模式不會被工具前景保護擋下（commit `c2c5327`: `_ensure_window_foreground()` 在後台模式跳過保護）。
 
-### `template_source` 互動模式標記
+### `template_source` 寫入 metadata
 
-`match_image` 模板建立時記錄 `template_source`（前景/後台），於比對時檢查一致性，跨互動模式不得比對（commit `fddd7f7`），防止使用者偽造模板（前景建立 / 後台匹配或反之）。啟動時也會因銷毀不一致提示。
+`match_image` 模板建立時仍會寫入 `template_source`（前景/後台），但僅為留存的 metadata，比對與啟動不再做任何一致性檢查（commit `a075576` 移除跨模式防呆；前景/後台截圖像素相容，差異只在輸入能否後台操控，已由後台黑畫面偵測、硬性問題檢查與實測機制負責）。改動前要小心：曾有過 `fddd7f7` 防呆，錄製轉換遺漏 `template_source` 曾導致誤報「模板來源不符」。
 
 ## 一鍵啟動/取消群組
 
@@ -268,7 +268,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 12. **後台模式不被工具前景保護誤擋**（已修復，commit `c2c5327`）：`_ensure_window_foreground()` 在後台模式跳過窗口保護。若後台執行時視窗不斷被拉回前景，檢查 `interaction_mode` 是否正確。
 
-13. **`template_source` match_image 互動模式防呆**（已實作，commit `fddd7f7`）：模板建立時記錄來源互動模式（前景/後台），比對時檢查一致性，跨模式不得比對（防止前景模板在後台誤用或反之）。跨模式比對會靜默失敗並寫入日誌警告。
+13. **`template_source` 跨模式防呆已移除（commit `a075576`）**：曾有 `fddd7f7` 檢查模板來源（前景/後台）與互動模式一致性，因前景/後台截圖像素相容、防呆只是誤報源（錄製轉換遺漏 `template_source` 時錄製任務必彈警告），已整個拔除。現 `template_source` 僅為寫入 metadata，不參與比對；跨模式比對不再產生警告。
 
 14. **效能檔位功能評估後不實作（2026-08-11）**：曾被提案加入「效能檔位」（節能/均衡/高效能，三檔一鍵調整 + 進階微調），評估後拒絕（YAGNI、刪除優先）。理由：實際可調的全局效能參數僅 `scan_interval_ms`（偵測頻率，`06_gui_main.py:2880`）＋ `max_cps`（點擊上限，`06_gui_main.py:2874`）兩顆，皆早已在設定頁可見——三檔只是重打包既有旋鈕，無實質增值。補充佐證：主循環 OCR 完全不縮圖（見第 8 條），高效能檔沒有更快空間；模板 scale 候選數（`11_template_matching.py` 13/5 個）是唯一「強硬體可多做工」的旋鈕，但影響有限不開放；內部常數（`_MIN_INTERVAL_SEC`、GPU provider、`_RATE_LIMIT_*`）屬實作細節或反作弊保護，不開放。
 
@@ -302,7 +302,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 | `6618a31` | 前景模式圖片比對先縮小主視窗再 mss 截圖並用 finally 復原 |
 | `d1df9dc` | 圖片比對回饋無法作用（`_MatchImageStepForm` 呼叫 MainWindow 方法崩潰） |
 | `ae68d27` | ROI debug 格式化對 `roi_coord` 字串值防呆 |
-| `fddd7f7` | `match_image` 模板標記來源互動模式並於比對/啟動防呆 |
+| `fddd7f7` | `match_image` 模板標記來源互動模式並於比對/啟動防呆（防呆已於 `a075576` 移除，標記保留為 metadata） |
 | `17d4735` | 統一執行事件寫入 app.log，移除無消費者 `triggers.jsonl` |
 | `249d2cf` | 清掃殘留 `triggers.jsonl`，新增 `is_debug_enabled`，生命週期事件提升為 INFO |
 | `27b9dfa` | LogViewer 內容未變更時不打斷捲動，向上瀏覽不再被自動拉回底部 |
