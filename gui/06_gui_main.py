@@ -523,6 +523,9 @@ def _step_summary(step, rules_provider=None) -> str:
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
+        ad = p.get("after_delay_ms", 0) or 0
+        if ad > 0:
+            parts.append(T("summary.format_after_delay", ms=ad))
         return " ".join(parts)
     if t == "match_image":
         tmpl_data = p.get("template_data", "")
@@ -542,6 +545,9 @@ def _step_summary(step, rules_provider=None) -> str:
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
             parts.append(f"| {of}")
+        ad = p.get("after_delay_ms", 0) or 0
+        if ad > 0:
+            parts.append(T("summary.format_after_delay", ms=ad))
         return " ".join(parts)
     if t == "compare":
         op = p.get("operator", ">=")
@@ -1220,6 +1226,14 @@ class _MatchImageStepForm(QWidget):
         _on_match_color_toggled(self._match_color.isChecked())
         form.addRow("", self._color_tolerance)
 
+        self._after_delay = _NoWheelSpin()
+        self._after_delay.setRange(0, 60000)
+        self._after_delay.setSingleStep(100)
+        self._after_delay.setSuffix(" ms")
+        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
+        form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
+
         # ── on_fail collapsible section ──
         self._on_fail_expanded = False
         self._toggle_btn = QPushButton(T("step_form.toggle_image_collapsed"))
@@ -1612,6 +1626,7 @@ class _MatchImageStepForm(QWidget):
         p["threshold"] = self._threshold.value()
         p["match_color"] = self._match_color.isChecked()
         p["color_tolerance"] = self._color_tolerance.value()
+        p["after_delay_ms"] = self._after_delay.value()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":
@@ -1721,6 +1736,14 @@ class _DetectStepForm(QWidget):
         self._fuzzy_th.setValue(int(p.get("fuzzy_threshold", 0.8) * 100))
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
         adv_form.addRow(T("step_form.accuracy"), self._fuzzy_th)
+
+        self._after_delay = _NoWheelSpin()
+        self._after_delay.setRange(0, 60000)
+        self._after_delay.setSingleStep(100)
+        self._after_delay.setSuffix(" ms")
+        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
+        adv_form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
 
         # ── template helper toolbar ──
         self._template_helper = QWidget()
@@ -1919,6 +1942,7 @@ class _DetectStepForm(QWidget):
         self._step.params["text"] = self._text.text().strip()
         self._step.params["match_mode"] = self._match_mode.currentData()
         self._step.params["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
+        self._step.params["after_delay_ms"] = self._after_delay.value()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":
@@ -3006,6 +3030,18 @@ class SettingsDialog(QDialog):
         self._default_after_delay.setToolTip(T("settings.default_after_delay.tooltip"))
         aform.addRow(T("settings.default_after_delay"), self._default_after_delay)
 
+        self._default_detect_after_delay = QSpinBox()
+        self._default_detect_after_delay.setRange(0, 60000)
+        self._default_detect_after_delay.setSingleStep(100)
+        self._default_detect_after_delay.setSuffix(" ms")
+        self._default_detect_after_delay.setValue(
+            self._ctrl.get_setting(win, "default_detect_after_delay_ms")
+        )
+        self._default_detect_after_delay.setToolTip(
+            T("settings.default_detect_after_delay.tooltip")
+        )
+        aform.addRow(T("settings.default_detect_after_delay"), self._default_detect_after_delay)
+
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
         self._fuzzy_th.setSingleStep(0.05)
@@ -3062,6 +3098,9 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(self._win, "default_wait_ms", self._default_wait_ms.value())
         self._ctrl.set_setting(
             self._win, "default_after_delay_ms", self._default_after_delay.value()
+        )
+        self._ctrl.set_setting(
+            self._win, "default_detect_after_delay_ms", self._default_detect_after_delay.value()
         )
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
@@ -4136,6 +4175,9 @@ class MainWindow(QMainWindow):
             "color_tolerance": self._rule_config_ctrl.get_setting(self, "default_color_tolerance"),
             "random_offset": self._rule_config_ctrl.get_setting(self, "default_random_offset"),
             "after_delay_ms": self._rule_config_ctrl.get_setting(self, "default_after_delay_ms", 0),
+            "detect_after_delay_ms": self._rule_config_ctrl.get_setting(
+                self, "default_detect_after_delay_ms", 0
+            ),
         }
         worker = RecordConvertWorker(sessions, defaults)
         self._convert_worker = worker  # 防 GC
@@ -5121,6 +5163,10 @@ class MainWindow(QMainWindow):
         if step_type in ("click", "key", "drag", "scroll"):
             default_params["after_delay_ms"] = self._rule_config_ctrl.get_setting(
                 self, "default_after_delay_ms", 0
+            )
+        if step_type in ("detect", "match_image"):
+            default_params["after_delay_ms"] = self._rule_config_ctrl.get_setting(
+                self, "default_detect_after_delay_ms", 0
             )
         step = Step(type=step_type, params=default_params)
         rule = self._get_current_rule()

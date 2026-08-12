@@ -168,6 +168,25 @@ def test_convert_defaults_zero_omits_after_delay(tmp_path):
         assert click.params["random_offset"] == 0
 
 
+def test_convert_detect_after_delay_applied():
+    """偵測後延時預設套用到轉換出的 detect / match_image 步驟，0 不寫入。"""
+    roi = {"x": 0, "y": 0, "w": 0.2, "h": 0.1}
+    defs = {"detect_after_delay_ms": 500}
+    ar = _conv._build_anchored_rule(0, "確定", roi, "left", defs)
+    detect = [s for s in ar.steps if s.type == "detect"][0]
+    assert detect.params["after_delay_ms"] == 500
+    tr = _conv._build_template_rule(0, "b64data", roi, "left", defs)
+    mt = [s for s in tr.steps if s.type == "match_image"][0]
+    assert mt.params["after_delay_ms"] == 500
+    # 0 / 缺省 → 不寫入欄位
+    ar0 = _conv._build_anchored_rule(0, "確定", roi, "left", {"detect_after_delay_ms": 0})
+    d0 = [s for s in ar0.steps if s.type == "detect"][0]
+    assert "after_delay_ms" not in d0.params
+    tr0 = _conv._build_template_rule(0, "b64data", roi, "left")
+    mt0 = [s for s in tr0.steps if s.type == "match_image"][0]
+    assert "after_delay_ms" not in mt0.params
+
+
 def test_convert_no_defaults_keeps_builtins(tmp_path):
     """未傳 defaults 時維持內建常數（random_offset=0 for timing，不寫 after_delay_ms）。"""
     sd = _blank_session(tmp_path)

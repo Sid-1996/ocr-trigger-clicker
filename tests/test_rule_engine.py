@@ -184,6 +184,36 @@ def test_round_trip_serialization():
     assert deserialized.steps[0].type == "detect"
 
 
+def test_detect_match_after_delay_roundtrip():
+    """detect/match_image 的 after_delay_ms 會保留並正規化為非負整數。"""
+    for t in ("detect", "match_image"):
+        params = {"after_delay_ms": 700}
+        if t == "match_image":
+            params["template_data"] = "x"
+        rule = _dict_to_rule(
+            {
+                "id": f"rt-{t}",
+                "name": t,
+                "enabled": True,
+                "steps": [{"type": t, "params": params}],
+            }
+        )
+        s = _rule_to_dict(rule)
+        saved = [st for st in s["steps"] if st["type"] == t][0]["params"]["after_delay_ms"]
+        assert saved == 700, saved
+        assert rule.steps[0].params["after_delay_ms"] == 700
+    # 負值正規化為 0
+    bad = _dict_to_rule(
+        {
+            "id": "rt-neg",
+            "name": "n",
+            "enabled": True,
+            "steps": [{"type": "detect", "params": {"after_delay_ms": -5}}],
+        }
+    )
+    assert bad.steps[0].params["after_delay_ms"] == 0
+
+
 # ── Old-format load ──
 
 

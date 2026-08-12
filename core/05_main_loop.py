@@ -1031,6 +1031,7 @@ class MainLoop:
         while i < len(rule.steps):
             ctx.step_idx = i
             step = rule.steps[i]
+            ctx.on_fail_fired = False  # 每步重設，避免上一步 on_fail=key 的旗標污染本步判斷
             if step.type == "wait":
                 ms = step.params.get("ms", 500)
                 if not background:
@@ -1038,8 +1039,9 @@ class MainLoop:
             result = self._run_step(step, ctx, rule)
             ms = step.params.get("after_delay_ms", 0) or 0
             if (
-                step.type in ("click", "key", "drag", "scroll")
+                step.type in ("click", "key", "drag", "scroll", "detect", "match_image")
                 and result.action == "continue"
+                and not ctx.on_fail_fired  # on_fail=key 的失敗continue不算成功，不等待
                 and ms > 0
             ):
                 # 動作成功後固定延遲（社群「動作後 sleep」慣例）：與 _handle_wait 同款之中斷式等待，

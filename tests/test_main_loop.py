@@ -277,6 +277,94 @@ def test_after_delay_zero_skips_wait():
     assert captured == {}  # 0 → 不等待
 
 
+# ── 偵測後延時 detect/match_image after_delay_ms ──
+
+
+def _detect_hit_ctx():
+    return StepContext(
+        img=np.zeros((40, 40, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 40, "h": 40}
+    )
+
+
+def test_detect_after_delay_waits_on_success():
+    """detect 偵測成功 + after_delay_ms>0 → 等待（與動作後延遲同款 choke point）。"""
+    ml = _make_ml()
+    ctx = _detect_hit_ctx()
+    captured = {}
+    ml._stop_event.wait = lambda timeout: captured.update(timeout=timeout) or False
+    orig = _ml_mod.recognize
+    _ml_mod.recognize = lambda img, **kw: [
+        _ml_mod.OcrResult(text="確定", x=0, y=0, w=10, h=10, confidence=0.9)
+    ]
+    try:
+        step = Step(type="detect", params={"text": "確定", "after_delay_ms": 400})
+        rule = Rule(id="ad-detect", name="ad-detect", enabled=True, steps=[step])
+        ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    finally:
+        _ml_mod.recognize = orig
+    assert captured == {"timeout": 0.4}, f"detect 成功後應等待，got {captured}"
+
+
+def test_detect_after_delay_not_wait_on_fail_key_continue():
+    """detect 未命中 + on_fail=key（失敗但繼續）→ 不算成功，不等待。"""
+    ml = _make_ml()
+    ctx = _detect_hit_ctx()
+    captured = {}
+    ml._stop_event.wait = lambda timeout: captured.update(timeout=timeout) or False
+    ml._send_key = lambda k: True
+    orig = _ml_mod.recognize
+    _ml_mod.recognize = lambda img, **kw: []  # 未命中
+    try:
+        step = Step(
+            type="detect",
+            params={
+                "text": "確定",
+                "on_fail": {"action": "key", "key": "Escape"},
+                "after_delay_ms": 400,
+            },
+        )
+        rule = Rule(id="ad-fail", name="ad-fail", enabled=True, steps=[step])
+        ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    finally:
+        _ml_mod.recognize = orig
+    assert captured == {}, f"未命中的 key+continue 不應觸發偵測後延時，got {captured}"
+    assert ctx.on_fail_fired
+
+
+def test_detect_after_delay_resets_flag_per_step():
+    """on_fail_fired 每步重設：前一步 key+continue 不污染下一步成功的延時判斷。"""
+    ml = _make_ml()
+    ctx = _detect_hit_ctx()
+    captured = {}
+    ml._stop_event.wait = lambda timeout: captured.update(timeout=timeout) or False
+    ml._send_key = lambda k: True
+    calls = []
+    # 直接 stub _ocr_region 繞過幀 OCR 快取（同 ROI 第二步會命中快取的空結果）
+    orig_ocr = ml._ocr_region
+
+    def fake_ocr(img, roi):
+        calls.append(1)
+        if len(calls) <= 1:  # 第一步未命中
+            return []
+        return [_ml_mod.OcrResult(text="確定", x=0, y=0, w=10, h=10, confidence=0.9)]
+
+    ml._ocr_region = fake_ocr
+    try:
+        steps = [
+            Step(
+                type="detect",
+                params={"text": "確定", "on_fail": {"action": "key", "key": "Escape"}},
+            ),
+            Step(type="detect", params={"text": "確定", "after_delay_ms": 300}),
+        ]
+        rule = Rule(id="ad-reset", name="ad-reset", enabled=True, steps=steps)
+        ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    finally:
+        ml._ocr_region = orig_ocr
+    # 第二步成功 → 其 own on_fail_fired=False → 應等待
+    assert captured == {"timeout": 0.3}, f"旗標重置後第二步應等待，got {captured}"
+
+
 # ── _send_click frida 模式派發 ──
 
 

@@ -76,6 +76,14 @@ def _with_after_delay(params: dict, defaults: dict | None) -> dict:
     return params
 
 
+def _with_detect_after_delay(params: dict, defaults: dict | None) -> dict:
+    """偵測後延遲預設（>0 才寫入，0/缺省＝不等待）。套用於 detect / match_image 步驟。"""
+    ad = _resolved(defaults, "detect_after_delay_ms", 0)
+    if ad > 0:
+        params["after_delay_ms"] = ad
+    return params
+
+
 def _format_ts(dir_name: str) -> str:
     """session-YYYYMMDD-HHMMSS → 'YYYY-MM-DD HH:MM'。非預期格式回原名。"""
     name = Path(dir_name).name
@@ -192,13 +200,16 @@ def _build_anchored_rule(
         steps=[
             Step(
                 "detect",
-                {
-                    "text": keyword,
-                    "roi": roi,
-                    "match_mode": "fuzzy",
-                    "fuzzy_threshold": _resolved(defaults, "fuzzy_threshold", _FUZZY_THRESHOLD),
-                    "on_fail": "stop",
-                },
+                _with_detect_after_delay(
+                    {
+                        "text": keyword,
+                        "roi": roi,
+                        "match_mode": "fuzzy",
+                        "fuzzy_threshold": _resolved(defaults, "fuzzy_threshold", _FUZZY_THRESHOLD),
+                        "on_fail": "stop",
+                    },
+                    defaults,
+                ),
             ),
             Step(
                 "click",
@@ -233,7 +244,7 @@ def _build_template_rule(
         name=f"{idx + 1:02d} 圖示",
         enabled=True,
         steps=[
-            Step("match_image", mt_params),
+            Step("match_image", _with_detect_after_delay(mt_params, defaults)),
             Step(
                 "click",
                 _with_after_delay(

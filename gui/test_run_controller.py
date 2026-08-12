@@ -258,6 +258,9 @@ class TestRunController:
                                 "y": cy,
                             }
                         )
+                        ad = p.get("after_delay_ms", 0) or 0
+                        if ad:
+                            log.append(T("summary.format_after_delay", ms=ad))
                     else:
                         best_ratio = 0.0
                         if match_mode == "fuzzy" and results_ocr and text:
@@ -631,6 +634,9 @@ class TestRunController:
                                 "y": cy,
                             }
                         )
+                        ad = p.get("after_delay_ms", 0) or 0
+                        if ad:
+                            log.append(T("summary.format_after_delay", ms=ad))
                     else:
                         rx, ry = roi.get("x", 0), roi.get("y", 0)
                         rw = roi.get("w", img.shape[1]) or img.shape[1]
