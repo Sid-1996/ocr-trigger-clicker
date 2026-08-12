@@ -158,7 +158,7 @@
   "tooltip.task_share": "開啟任務資料夾或前往分享網站",
   "tooltip.toggle": "開始偵測所選視窗",
   "tooltip.debug": "即時顯示視窗內所有辨識到的文字與位置",
-  "record.start": "🖱️ 錄製操作",
+  "record.start": "🖱️ 錄製操作[F9]",
   "record.stop": "⏹ 停止錄製",
   "record.tooltip": "錄製滑鼠操作：在目標視窗上錄製點擊流程，自動轉成「偵測+點擊」規則（F9 可快速開始/停止）",
   "record.no_window_hwnd": "找不到目標視窗，請重新選擇視窗。",
