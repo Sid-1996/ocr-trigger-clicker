@@ -14,11 +14,12 @@
 
 #### 變更
 - **互動模式不符警告移除**：錄製轉換的規則不再因 `template_source`（模板來源）與互動模式不符而誤報警告，模板來源僅作為 metadata 留存。
+- **錄製轉換套用設定窗預設**：轉出的規則自動套用設定窗的五個預設值（動作後延遲 `default_after_delay_ms`、點擊隨機偏移 `default_random_offset`、模糊比對門檻 `default_fuzzy_threshold`、模板比對門檻 `default_template_threshold`、顏色容差 `default_color_tolerance`），與手動新增動作步驟的行為一致。
 
 ### 給開發者
 
 - **滑鼠示範錄製器**：`core/19_recorder.py` 以 `WH_MOUSE_LL` 全域滑鼠攔截目標視窗內點擊，先截「動作前」畫面再以 SendInput（帶 magic `dwExtraInfo`）重送維持操控節奏；輸出 `session-YYYYMMDD-HHMMSS/`（`events.json` + `frames/*.jpg`）至 `%APPDATA%\ocr-trigger-clicker\recordings\`。停止後自動還原目標視窗。無 Qt 依賴，GUI 以 `load_sibling` 載入、callback 回報。
-- **錄製 session → 規則轉換器**：`core/20_recorder_convert.py` 離線後處理，每個滑鼠事件一條規則：OCR 錨點（`detect` + `click(text_center)`）、模板錨點（`match_image` base64 內嵌 + `click`）、或 wait+click 純計時；座標一律視窗比例 0~1，session 轉成群組 `mode=once`。
+- **錄製 session → 規則轉換器**：`core/20_recorder_convert.py` 離線後處理，每個滑鼠事件一條規則：OCR 錨點（`detect` + `click(text_center)`）、模板錨點（`match_image` base64 內嵌 + `click`）、或 wait+click 純計時；座標一律視窗比例 0~1，session 轉成群組 `mode=once`。`convert_sessions(session_dirs, defaults=None)` 接受設定窗預設 dict（`fuzzy_threshold` / `template_threshold` / `color_tolerance` / `random_offset` / `after_delay_ms`），由 GUI `_convert_recording_to_task` 從 `RuleConfigController` 組出傳入；`None` 時回退模組內建常數維持既有行為。
 - **GUI 整合**：`_record_btn` 工具列按鈕 + F9 全域熱鍵（`_on_hotkey` hid=2）開始/停止；`_convert_recording_to_task` 以 QInputDialog 選目標（新任務 / 既有任務，`list_tasks()`），併入既有任務時以 `save_task_with_groups` 合併；`_pending_merge_into` 與併發防護。
 - **`template_source` 跨模式防呆移除**（commit `a075576`）：`gui/06_gui_main.py`、`gui/test_run_controller.py` 的來源比對邏輯全數拔除，i18n 對應 5 個 key 一併刪除；`_current_template_type` 保留寫入 metadata，引擎不再檢查。
 

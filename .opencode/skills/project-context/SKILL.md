@@ -373,7 +373,9 @@ AHK 移除後，`clicker.ahk` datas 已刪除。新增 `pynput`、`dxcam`、`com
 
 座標一律**視窗比例**（0~1）；session 轉成群組 `mode=once`。**`template_source` 防呆已於 `a075576` 移除**（見陷阱 13），轉換規則不會誤報模板來源警告。
 
-**測試**：`tests/test_recorder_convert.py`（6 測試）涵蓋轉換三層與群組結構。GUI 端 `Recorder`/`RecordConvertWorker`（`gui/06_gui_main.py:2765/2791`）依賴 Win32 畫面，無 pytest，以手動驗證。
+**設定窗預設套用**：`convert_sessions(session_dirs, defaults=None)` 接受預設 dict（`fuzzy_threshold` / `template_threshold` / `color_tolerance` / `random_offset` / `after_delay_ms`），由 GUI `_convert_recording_to_task`（`gui/06_gui_main.py:4082`）從 `RuleConfigController` 組出經 `RecordConvertWorker` 傳入；`None` 回退模組內建常數。`after_delay_ms` 只在 `> 0` 寫入（缺欄位＝0 等價，JSON 精簡）。刻意排除：anchored 固定 `match_mode=fuzzy`（錨點設計）、button 沿用錄製實際按鍵、timing 的 wait 用錄製間隔。
+
+**測試**：`tests/test_recorder_convert.py`（11 測試）涵蓋轉換三層、群組結構與預設套用。GUI 端 `Recorder`/`RecordConvertWorker`（`gui/06_gui_main.py:2765/2791`）依賴 Win32 畫面，無 pytest，以手動驗證。
 
 ## 診斷工作流程慣例
 
