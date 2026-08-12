@@ -5636,6 +5636,7 @@ class MainWindow(QMainWindow):
                         "roi": rule_data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                         "match_mode": cfg.get("default_match_mode", "fuzzy"),
                         "fuzzy_threshold": cfg.get("default_fuzzy_threshold", 0.8),
+                        "after_delay_ms": cfg.get("default_detect_after_delay_ms", 0),
                     },
                 ),
                 Step(
@@ -5700,6 +5701,7 @@ class MainWindow(QMainWindow):
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "match_mode": cfg.get("default_match_mode", "fuzzy"),
                     "fuzzy_threshold": cfg.get("default_fuzzy_threshold", 0.8),
+                    "after_delay_ms": cfg.get("default_detect_after_delay_ms", 0),
                 },
             )
         )
@@ -5737,6 +5739,7 @@ class MainWindow(QMainWindow):
                         "threshold": cfg.get("default_template_threshold", 0.85),
                         "match_color": False,
                         "color_tolerance": cfg.get("default_color_tolerance", 10),
+                        "after_delay_ms": cfg.get("default_detect_after_delay_ms", 0),
                     },
                 ),
                 Step(
@@ -5802,6 +5805,7 @@ class MainWindow(QMainWindow):
                     "threshold": cfg.get("default_template_threshold", 0.85),
                     "match_color": False,
                     "color_tolerance": cfg.get("default_color_tolerance", 10),
+                    "after_delay_ms": cfg.get("default_detect_after_delay_ms", 0),
                 },
             )
         )
