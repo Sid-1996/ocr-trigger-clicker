@@ -25,7 +25,7 @@
   "settings.default_wait_ms": "預設等待毫秒:",
   "settings.default_wait_ms.tooltip": "新增「等待」步驟時的預設毫秒數。",
   "settings.default_after_delay": "動作後延遲預設:",
-  "settings.default_after_delay.tooltip": "新增動作步驟（點擊/按鍵/拖曳/滾輪）時預先填入的動作後延遲毫秒數。0 = 不等待。",
+  "settings.default_after_delay.tooltip": "新增動作步驟（點擊/按鍵/拖曳/滾輪）或錄製轉換規則時預先填入的動作後延遲毫秒數。0 = 不等待。",
   "settings.default_fuzzy_threshold": "模糊比對靈敏度:",
   "settings.default_fuzzy_threshold.tooltip": "文字比對的寬嚴程度。數字越大越嚴格（要幾乎一樣才算找到），越小越寬鬆。0.8 為預設。",
   "settings.default_template_threshold": "圖片辨識靈敏度:",

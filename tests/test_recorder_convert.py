@@ -14,6 +14,7 @@ _serial = load_sibling("rule_serialization", "core/rule_serialization.py")
 
 merge_rule_entries = _conv.merge_rule_entries
 save_task_with_groups = _serial.save_task_with_groups
+convert_sessions = _conv.convert_sessions
 
 
 def _rule(rid):
@@ -123,3 +124,84 @@ def test_save_task_with_groups_atomic_and_preserves_keys(tmp_path):
     assert data["_meta"]["format_version"] == 1
     assert len(data["rules"]) == 1 and data["rules"][0]["id"] == "new"
     assert data["groups"][0]["id"] == "g"
+
+
+def _blank_session(tmp_path, name="session-20260812-140000", n=2):
+    """合成無文字的空白 frame session（全走計時規則，不需 OCR model）。"""
+    import cv2
+    import numpy as np
+
+    sd = tmp_path / name
+    (sd / "frames").mkdir(parents=True)
+    frame = np.full((600, 800, 3), 200, dtype=np.uint8)
+    events = []
+    for i in range(n):
+        fname = f"{i + 1:05d}.jpg"
+        cv2.imwrite(str(sd / "frames" / fname), frame)
+        events.append(
+            {"t": 100.0 + i * 1.2, "button": "left", "wx": 400, "wy": 300, "frame": fname}
+        )
+    (sd / "events.json").write_text(
+        json.dumps({"meta": {"window_title": "test"}, "events": events}), encoding="utf-8"
+    )
+    return sd
+
+
+def test_convert_applies_defaults(tmp_path):
+    """轉換時套用設定窗預設（random_offset / after_delay_ms），0 時不寫入欄位。"""
+    sd = _blank_session(tmp_path)
+    res = convert_sessions([sd], {"random_offset": 5, "after_delay_ms": 800})
+    assert res["stats"]["rules"] == 2, res["stats"]
+    for rule in res["rules"]:
+        click = [s for s in rule.steps if s.type == "click"][0]
+        assert click.params["random_offset"] == 5
+        assert click.params["after_delay_ms"] == 800
+
+
+def test_convert_defaults_zero_omits_after_delay(tmp_path):
+    """after_delay_ms=0 時不寫入欄位（缺欄位＝0 行為等價，維持 JSON 精簡）。"""
+    sd = _blank_session(tmp_path)
+    res = convert_sessions([sd], {"random_offset": 0, "after_delay_ms": 0})
+    for rule in res["rules"]:
+        click = [s for s in rule.steps if s.type == "click"][0]
+        assert "after_delay_ms" not in click.params
+        assert click.params["random_offset"] == 0
+
+
+def test_convert_no_defaults_keeps_builtins(tmp_path):
+    """未傳 defaults 時維持內建常數（random_offset=0 for timing，不寫 after_delay_ms）。"""
+    sd = _blank_session(tmp_path)
+    res = convert_sessions([sd])
+    for rule in res["rules"]:
+        click = [s for s in rule.steps if s.type == "click"][0]
+        assert "after_delay_ms" not in click.params
+        assert click.params["random_offset"] == 0
+
+
+def test_build_template_rule_applies_threshold_and_color(tmp_path):
+    """模板規則套用 template_threshold / color_tolerance，缺省時不寫 color_tolerance。"""
+    r = _conv._build_template_rule(
+        0,
+        "b64",
+        {"x": 0, "y": 0, "w": 0.1, "h": 0.1},
+        "left",
+        {"template_threshold": 0.9, "color_tolerance": 20, "random_offset": 4},
+    )
+    mt = r.steps[0]
+    assert mt.params["threshold"] == 0.9
+    assert mt.params["color_tolerance"] == 20
+    assert r.steps[1].params["random_offset"] == 4
+    r0 = _conv._build_template_rule(0, "b64", {"x": 0, "y": 0, "w": 0.1, "h": 0.1}, "left")
+    assert r0.steps[0].params["threshold"] == _conv._TMPL_THRESHOLD
+    assert "color_tolerance" not in r0.steps[0].params
+
+
+def test_build_anchored_rule_applies_fuzzy_threshold():
+    """錨點規則套用 fuzzy_threshold；match_mode 固定 fuzzy（錨點設計）。"""
+    r = _conv._build_anchored_rule(
+        0, "確認", {"x": 0, "y": 0, "w": 0.1, "h": 0.1}, "left", {"fuzzy_threshold": 0.7}
+    )
+    assert r.steps[0].params["match_mode"] == "fuzzy"
+    assert r.steps[0].params["fuzzy_threshold"] == 0.7
+    r0 = _conv._build_anchored_rule(0, "確認", {"x": 0, "y": 0, "w": 0.1, "h": 0.1}, "left")
+    assert r0.steps[0].params["fuzzy_threshold"] == _conv._FUZZY_THRESHOLD

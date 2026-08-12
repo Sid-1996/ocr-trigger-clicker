@@ -63,6 +63,19 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
+def _resolved(defaults: dict | None, key: str, fallback):
+    """從設定窗預設 dict 取值；defaults 為 None 或缺 key 時回 fallback（維持既有行為）。"""
+    return defaults.get(key, fallback) if defaults else fallback
+
+
+def _with_after_delay(params: dict, defaults: dict | None) -> dict:
+    """動作後延遲預設（>0 才寫入，0/缺省＝不等待）。"""
+    ad = _resolved(defaults, "after_delay_ms", 0)
+    if ad > 0:
+        params["after_delay_ms"] = ad
+    return params
+
+
 def _format_ts(dir_name: str) -> str:
     """session-YYYYMMDD-HHMMSS → 'YYYY-MM-DD HH:MM'。非預期格式回原名。"""
     name = Path(dir_name).name
@@ -169,7 +182,9 @@ def _make_template(img_bgr, cx: int, cy: int):
     return None
 
 
-def _build_anchored_rule(idx: int, keyword: str, roi: dict, button: str) -> Rule:
+def _build_anchored_rule(
+    idx: int, keyword: str, roi: dict, button: str, defaults: dict | None = None
+) -> Rule:
     return Rule(
         id=uuid.uuid4().hex[:12],
         name=f"{idx + 1:02d} {keyword[:12]}",
@@ -181,37 +196,68 @@ def _build_anchored_rule(idx: int, keyword: str, roi: dict, button: str) -> Rule
                     "text": keyword,
                     "roi": roi,
                     "match_mode": "fuzzy",
-                    "fuzzy_threshold": _FUZZY_THRESHOLD,
+                    "fuzzy_threshold": _resolved(defaults, "fuzzy_threshold", _FUZZY_THRESHOLD),
                     "on_fail": "stop",
                 },
             ),
-            Step("click", {"target": "text_center", "button": button, "random_offset": 3}),
+            Step(
+                "click",
+                _with_after_delay(
+                    {
+                        "target": "text_center",
+                        "button": button,
+                        "random_offset": _resolved(defaults, "random_offset", 3),
+                    },
+                    defaults,
+                ),
+            ),
         ],
     )
 
 
-def _build_template_rule(idx: int, b64: str, roi: dict, button: str) -> Rule:
+def _build_template_rule(
+    idx: int, b64: str, roi: dict, button: str, defaults: dict | None = None
+) -> Rule:
+    mt_params = {
+        "template_data": b64,
+        "roi": roi,
+        "threshold": _resolved(defaults, "template_threshold", _TMPL_THRESHOLD),
+        "on_fail": "stop",
+    }
+    # 顏色容差僅在設定窗有提供時寫入（0 = 不啟用顏色過濾）
+    ct = _resolved(defaults, "color_tolerance", None)
+    if ct is not None:
+        mt_params["color_tolerance"] = ct
     return Rule(
         id=uuid.uuid4().hex[:12],
         name=f"{idx + 1:02d} 圖示",
         enabled=True,
         steps=[
+            Step("match_image", mt_params),
             Step(
-                "match_image",
-                {
-                    "template_data": b64,
-                    "roi": roi,
-                    "threshold": _TMPL_THRESHOLD,
-                    "on_fail": "stop",
-                },
+                "click",
+                _with_after_delay(
+                    {
+                        "target": "text_center",
+                        "button": button,
+                        "random_offset": _resolved(defaults, "random_offset", 3),
+                    },
+                    defaults,
+                ),
             ),
-            Step("click", {"target": "text_center", "button": button, "random_offset": 3}),
         ],
     )
 
 
 def _build_timing_rule(
-    idx: int, gap_ms: int, wx: int, wy: int, button: str, w: int, h: int
+    idx: int,
+    gap_ms: int,
+    wx: int,
+    wy: int,
+    button: str,
+    w: int,
+    h: int,
+    defaults: dict | None = None,
 ) -> Rule:
     steps = []
     if gap_ms > 0:
@@ -219,19 +265,22 @@ def _build_timing_rule(
     steps.append(
         Step(
             "click",
-            {
-                "target": "custom",
-                "x": round(wx / w, 4) if w else 0,
-                "y": round(wy / h, 4) if h else 0,
-                "button": button,
-                "random_offset": 0,
-            },
+            _with_after_delay(
+                {
+                    "target": "custom",
+                    "x": round(wx / w, 4) if w else 0,
+                    "y": round(wy / h, 4) if h else 0,
+                    "button": button,
+                    "random_offset": _resolved(defaults, "random_offset", 0),
+                },
+                defaults,
+            ),
         )
     )
     return Rule(id=uuid.uuid4().hex[:12], name=f"{idx + 1:02d} 點擊", enabled=True, steps=steps)
 
 
-def _session_to_rules(session_dir: Path) -> tuple[list[Rule], dict]:
+def _session_to_rules(session_dir: Path, defaults: dict | None = None) -> tuple[list[Rule], dict]:
     evt_path = session_dir / "events.json"
     if not evt_path.exists():
         return [], {}
@@ -271,7 +320,7 @@ def _session_to_rules(session_dir: Path) -> tuple[list[Rule], dict]:
             anchor = _find_anchor(img, wx, wy)
             if anchor is not None:
                 keyword, roi = anchor
-                rules.append(_build_anchored_rule(len(rules), keyword, roi, button))
+                rules.append(_build_anchored_rule(len(rules), keyword, roi, button, defaults))
                 stats["anchored"] += 1
                 anchored = True
 
@@ -279,7 +328,7 @@ def _session_to_rules(session_dir: Path) -> tuple[list[Rule], dict]:
             tpl = _make_template(img, wx, wy)
             if tpl is not None:
                 b64, roi = tpl
-                rules.append(_build_template_rule(len(rules), b64, roi, button))
+                rules.append(_build_template_rule(len(rules), b64, roi, button, defaults))
                 stats["template"] += 1
                 anchored = True
 
@@ -293,17 +342,21 @@ def _session_to_rules(session_dir: Path) -> tuple[list[Rule], dict]:
                 gap_ms = int(_clamp(round((t_now - prev_t) * 1000), *_FALLBACK_GAP_MS))
             else:
                 gap_ms = _DEFAULT_FIRST_GAP_MS
-            rules.append(_build_timing_rule(len(rules), gap_ms, wx, wy, button, known_w, known_h))
+            rules.append(
+                _build_timing_rule(len(rules), gap_ms, wx, wy, button, known_w, known_h, defaults)
+            )
             stats["timing"] += 1
         prev_t = ev.get("t", 0)
 
     return rules, stats
 
 
-def convert_sessions(session_dirs: list[Path]) -> dict:
+def convert_sessions(session_dirs: list[Path], defaults: dict | None = None) -> dict:
     """把多個 session 目錄轉成規則 + 群組。
 
     每個 session 一組群組（mode=once），群組名取錄製時間戳。
+    defaults 為設定窗預設值 dict（fuzzy_threshold / template_threshold / color_tolerance /
+    random_offset / after_delay_ms），None 時用模組內建常數。
     回傳 {"rules": [...], "groups": [...], "stats": {...}}。
     """
     rules: list[Rule] = []
@@ -312,7 +365,7 @@ def convert_sessions(session_dirs: list[Path]) -> dict:
     for d in session_dirs:
         if not d.is_dir():
             continue
-        sess_rules, sess_stats = _session_to_rules(d)
+        sess_rules, sess_stats = _session_to_rules(d, defaults)
         if not sess_rules:
             continue
         group = RuleGroup(
@@ -445,6 +498,48 @@ if __name__ == "__main__":
         r2 = res["rules"][2]
         assert r2.steps[0].params["ms"] == 5000, r2.steps[0].params  # 8.8s → 上限 5000
         print("  [OK] wait 間隔與 clamp")
+
+        # ── 設定窗預設套用：after_delay_ms / random_offset / thresholds ──
+        defaults = {
+            "fuzzy_threshold": 0.7,
+            "template_threshold": 0.9,
+            "color_tolerance": 20,
+            "random_offset": 5,
+            "after_delay_ms": 800,
+        }
+        resd = convert_sessions([sd], defaults)
+        # 空白 frame → 全走計時規則：click 套用 random_offset + after_delay_ms
+        rd0 = resd["rules"][0]
+        assert rd0.steps[1].params["random_offset"] == 5, rd0.steps[1].params
+        assert rd0.steps[1].params["after_delay_ms"] == 800, rd0.steps[1].params
+        # 預設 0 時不寫入欄位（缺欄位＝0 行為等價）
+        resz = convert_sessions([sd], {"random_offset": 0, "after_delay_ms": 0})
+        assert "after_delay_ms" not in resz["rules"][0].steps[1].params
+        assert resz["rules"][0].steps[1].params["random_offset"] == 0
+        # anchored / template 規則直接套用 fuzzy_threshold / threshold / color_tolerance
+        a = _build_anchored_rule(
+            3, "確認", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left", defaults
+        )
+        assert a.steps[0].params["fuzzy_threshold"] == 0.7
+        assert a.steps[1].params["random_offset"] == 5
+        assert a.steps[1].params["after_delay_ms"] == 800
+        t = _build_template_rule(
+            3, "b64", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left", defaults
+        )
+        assert t.steps[0].params["threshold"] == 0.9
+        assert t.steps[0].params["color_tolerance"] == 20
+        assert t.steps[1].params["random_offset"] == 5
+        assert t.steps[1].params["after_delay_ms"] == 800
+        # 無 defaults → 維持既有常數、不寫 color_tolerance
+        a0 = _build_anchored_rule(3, "確認", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left")
+        assert a0.steps[0].params["fuzzy_threshold"] == _FUZZY_THRESHOLD
+        assert "after_delay_ms" not in a0.steps[1].params
+        t0 = _build_template_rule(3, "b64", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left")
+        assert t0.steps[0].params["threshold"] == _TMPL_THRESHOLD
+        assert "color_tolerance" not in t0.steps[0].params
+        print(
+            "  [OK] 設定窗預設套用（random_offset / after_delay_ms / thresholds / color_tolerance）"
+        )
 
         a = _build_anchored_rule(3, "確認", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left")
         assert a.steps[0].type == "detect" and a.steps[0].params["text"] == "確認"

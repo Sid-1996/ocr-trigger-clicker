@@ -25,7 +25,7 @@
   "settings.default_wait_ms": "Default wait (ms):",
   "settings.default_wait_ms.tooltip": "Default milliseconds when adding a new Wait step.",
   "settings.default_after_delay": "Default after-delay (ms):",
-  "settings.default_after_delay.tooltip": "After-delay ms pre-filled when adding an action step (click/key/drag/scroll). 0 = no wait.",
+  "settings.default_after_delay.tooltip": "After-delay ms pre-filled when adding an action step (click/key/drag/scroll) or converting recorded rules. 0 = no wait.",
   "settings.default_fuzzy_threshold": "Fuzzy match sensitivity:",
   "settings.default_fuzzy_threshold.tooltip": "How strict text matching is. Higher values require closer matches. Default 0.8.",
   "settings.default_template_threshold": "Image match sensitivity:",

@@ -2794,13 +2794,14 @@ class RecordConvertWorker(QThread):
     finished_ok = pyqtSignal(dict)
     failed = pyqtSignal(str)
 
-    def __init__(self, session_dirs, parent=None):
+    def __init__(self, session_dirs, defaults: dict | None = None, parent=None):
         super().__init__(parent)
         self._session_dirs = session_dirs
+        self._defaults = defaults
 
     def run(self):
         try:
-            result = convert_recorded_sessions(self._session_dirs)
+            result = convert_recorded_sessions(self._session_dirs, self._defaults)
         except Exception as e:
             logging.exception("錄製轉換失敗")
             self.failed.emit(str(e))
@@ -4127,7 +4128,16 @@ class MainWindow(QMainWindow):
         self._pending_task_name = name
         self._pending_session_dirs = list(sessions)
         self._status_bar.showMessage(T("record.converting"))
-        worker = RecordConvertWorker(sessions)
+        defaults = {
+            "fuzzy_threshold": self._rule_config_ctrl.get_setting(self, "default_fuzzy_threshold"),
+            "template_threshold": self._rule_config_ctrl.get_setting(
+                self, "default_template_threshold"
+            ),
+            "color_tolerance": self._rule_config_ctrl.get_setting(self, "default_color_tolerance"),
+            "random_offset": self._rule_config_ctrl.get_setting(self, "default_random_offset"),
+            "after_delay_ms": self._rule_config_ctrl.get_setting(self, "default_after_delay_ms", 0),
+        }
+        worker = RecordConvertWorker(sessions, defaults)
         self._convert_worker = worker  # 防 GC
         worker.finished_ok.connect(self._on_convert_done)
         worker.failed.connect(self._on_convert_failed)
