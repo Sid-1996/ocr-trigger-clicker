@@ -17,7 +17,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 
 | 檔案 | 一行摘要 | 本 skill 關鍵細節 |
 |---|---|---|
-| `00_global_hotkey.py` | 全域熱鍵 F8 | 僅 hid=1，切換開始/暫停/停止 |
+| `00_global_hotkey.py` | 全域熱鍵 F8/F9 | hid=1：開始/暫停/停止；hid=2：錄製開始/停止 |
 | `00_logging_config.py` | 日誌初始化 | rotation、等級、格式 |
 | `01_screenshot.py` | 視窗截圖 | mss → mss/DXGI 雙層備援，GDI 備援僅客戶區；統一管線見 `17_capture_pipeline` |
 | `02_ocr_engine.py` | OCR 引擎 | `_DEFAULT_MAX_SIDE_LEN = 480`，但主循環繞過此預設 |
@@ -30,6 +30,8 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `15_print_window.py` | PrintWindow 截圖（後台） | `capture_print_window` / `is_admin` / `is_black_capture` |
 | `16_bg_input.py` | 後台輸入 | pynput / frida 雙模。frida 支援點擊＋鍵盤（`18_frida_bg.py` 假造游標/鍵盤狀態 + PostMessage）；滾輪/拖曳回退 PostMessage primitive（Unity 下可能無效） |
 | `17_capture_pipeline.py` | 統一截圖管線 | `capture_frame()` 前景 mss / 後台 PrintWindow 單一入口 |
+| `19_recorder.py` | 滑鼠示範錄製器 | 全域攔截＋動作前截圖＋前景重送，session 輸出到 `recordings/` |
+| `20_recorder_convert.py` | 錄製 session → 規則轉換 | 離線後處理，三層錨點（OCR/模板/計時） |
 | `box_utils.py` | 座標工具集 | 10 純函式 + 17 self-check（見 box_utils 小節） |
 | `rule_models.py` | 資料模型 | `Rule`、`Step`、`RuleGroup`、`ImportPreview` |
 | `rule_migration.py` | 舊格式遷移 | v1→v2/v2→v3 + `_STEP_DEFAULTS` |
@@ -358,6 +360,21 @@ AHK 移除後，`clicker.ahk` datas 已刪除。新增 `pynput`、`dxcam`、`com
 
 排除清單新增：`mypy`、`ast_serialize`（numpy typing stubs 拉入的開發工具）、`lxml`、`Pythonwin`、`win32`、`pythoncom`、`win32com`、`pywin32_bootstrap`（無人使用的 XML/COM 相關）。dist 瘦身效果顯著。
 
+### G. 錄製操作（示範錄製，v0.2.3 後）
+
+**資料流**：GUI 按「錄製操作」（`_record_btn`，`gui/06_gui_main.py:3500`）或按 F9（`core/00_global_hotkey.py` 新增 hid=2；`_on_hotkey` hid==2 → `_on_record_clicked()`，hid==1 → `_restore_window()`+`_toggle_start()`）→ `Recorder.start(title, hwnd, session_dir)`（`core/19_recorder.py:228`）開始攔截目標視窗內滑鼠點擊 → 停止後（`_stop_recording`，`gui/06_gui_main.py:4045`，先 `_restore_window()`）問是否轉換 → `_convert_recording_to_task`（`gui/06_gui_main.py:4082`）以 QInputDialog 選「新任務」或「併入既有任務」（`list_tasks()`），併入用 `merge_rule_entries` + `save_task_with_groups`。
+
+**session 目錄**：`%APPDATA%\ocr-trigger-clicker\recordings\session-YYYYMMDD-HHMMSS\`（`events.json` + `frames/*.jpg`），由 `_recordings_dir()` = `get_data_path("recordings")`。轉換成功後清除已用 session（commit `dd0fb06`）。
+
+**三層轉換規則**（`core/20_recorder_convert.py`，每滑鼠事件一條規則）：
+1. 點擊落於動作前畫面的 OCR 文字區塊 → `detect(關鍵字, roi, on_fail=stop)` + `click(text_center)`（等文字出現再點，座標隨文字縮放）。錨點參數：`_ANCHOR_RADIUS=160`、`_ANCHOR_MARGIN=12`、`_ROI_EXPAND=0.25`。
+2. 無文字但有紋理 → 以點擊座標向外擴張裁特徵方塊存 `match_image`（base64 內嵌）+ `click(text_center)`。參數：`_TMPL_MIN_RADIUS=24`/`_MAX_RADIUS=56`/`_STEP=8`、`_TMPL_STD_MIN=16.0`、`_TMPL_THRESHOLD=0.8`。
+3. 無特徵或被裁剪 → `wait(錄製間隔)` + `click(custom 比例)`（純計時播放，`_FALLBACK_GAP_MS=(300,5000)`）。
+
+座標一律**視窗比例**（0~1）；session 轉成群組 `mode=once`。**`template_source` 防呆已於 `a075576` 移除**（見陷阱 13），轉換規則不會誤報模板來源警告。
+
+**測試**：`tests/test_recorder_convert.py`（6 測試）涵蓋轉換三層與群組結構。GUI 端 `Recorder`/`RecordConvertWorker`（`gui/06_gui_main.py:2765/2791`）依賴 Win32 畫面，無 pytest，以手動驗證。
+
 ## 診斷工作流程慣例
 
 加印 debug log 在關鍵 signal/slot 邊界（如 `dropEvent`、`_on_rules_reordered`、`_refresh_rule_list`）→ 從終端機執行重現以取得輸出 → 找出實際分歧的程式碼路徑 → 修根因 → 用 `git log` 驗證 commit 確實落地。改動指令給執行端（小弟/OpenCode）時必須完整明確，不預期來回確認。
@@ -406,7 +423,7 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 - fail_duration_sec 修正（commit `4cb403c`）— 首次失敗回傳 `stop`、容忍期內持續 `stop`、過期後正常觸發 on_fail，完整生命週期覆蓋。
 - 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1265` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆直接讀取原始碼與執行測試腳本第一手確認。
-- 全域熱鍵 — `core/00_global_hotkey.py` 僅註冊 F8（hid=1），對應 `MainWindow._on_hotkey()` → `_toggle_start()`。
+- 全域熱鍵 — `core/00_global_hotkey.py` 註冊 F8（hid=1，對應 `MainWindow._on_hotkey()` → `_restore_window()`+`_toggle_start()`）與 F9（hid=2，→ `_on_record_clicked()`）。
 - i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON 各 631 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
 - 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `%TEMP%/ocr_update_*/staging/`，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py` 含 copytree 逐檔複製、rollback、暫存目錄清理機制。
 - 路徑集中 — `core/_paths.py` 5 函式，取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
@@ -419,5 +436,6 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 - 後台模式 — `_get_interaction_mode()` 於 `gui/06_gui_main.py:85-95`，後台輸入 `core/16_bg_input.py:192` `click()`，ROI/點擊/模板選取統一走前景 selector（後台模式設定時會將目標視窗前景化）。
 - LogViewer — `gui/12_log_viewer.py:30` `LogViewer(QDialog)`，開啟於 `gui/06_gui_main.py:5644` `_open_log_viewer()`。
 - 停止統計 — `core/05_main_loop.py:1308-1321` `start()`/`stop()`，`_started_at` + `_total_clicks`（`core/10_performance_monitor.py` `get_total_clicks()`）。
+- 錄製操作 — `core/19_recorder.py:228` `Recorder.start()`、`core/20_recorder_convert.py` `convert_sessions()`/`merge_rule_entries()`、`core/00_global_hotkey.py` F9（hid=2）、`gui/06_gui_main.py` `_on_record_clicked`(4001)/`_start_recording`(4007)/`_stop_recording`(4045)/`_convert_recording_to_task`(4082)。
 
 其餘內容來自代碼分析與自我審查，審查時逐項附上程式碼引用，未發現推測性內容，但未逐一做第一手覆核，使用時若涉及關鍵決策建議二次確認。
