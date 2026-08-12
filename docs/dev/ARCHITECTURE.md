@@ -48,6 +48,8 @@ gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──�
                   │               └──→  gui/screenshot_controller
                   │               └──→  gui/rule_config_controller
                   │               └──→  gui/test_run_controller
+                  │               └──→  core/19_recorder        ──→  core/17_capture_pipeline
+                  │               └──→  core/20_recorder_convert ──→  core/02_ocr_engine, core/11_template_matching
                   │
 core/05_main_loop ──→  _loader ──→  core/17_capture_pipeline
                    │               └──→  core/02_ocr_engine
@@ -84,6 +86,8 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
 | `core/16_bg_input.py` | 後台互動（pynput / frida 切換，底層 PostMessage primitive 供 frida） | `set_method()`, `click()`, `send_key()`, `send_hold_key()`, `drag()`, `scroll()`, `detach()` |
 | `core/18_frida_bg.py` | Frida 行程注入（Unity 後台點擊＋鍵盤） | `ensure_attached()`, `click()`, `key()`, `detach()`, `last_error()` |
+| `core/19_recorder.py` | 滑鼠示範錄製器（全域攔截＋動作前截圖＋前景重送） | `Recorder` class（`start(title, hwnd, session_dir)` / `stop()`）、session 輸出 `recordings/session-*` |
+| `core/20_recorder_convert.py` | 錄製 session → 規則轉換器（離線後處理） | `convert_sessions()`, `merge_rule_entries()`（OCR 錨點 / 模板錨點 / wait+click 三層） |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
 | `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
 | `core/11_template_matching.py` | 圖示模板比對 + inline 模板 LRU 解碼快取 | `match_template()`, `nms_suppress()`, `MatchResult`, `clear_template_cache()` |
@@ -94,7 +98,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、下載、解壓、套用更新） | `check_for_update()`, `download_update()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
-| `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊 |
+| `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊（開始/暫停/停止）＋ F9 熱鍵註冊（錄製開始/停止） |
 | `gui/group_settings_controller.py` | 群組設定對話框控制器（v0.0.10 從 MainWindow 拆出） | `GroupSettingsController` |
 | `gui/screenshot_controller.py` | 截圖／模板控制器（v0.0.10 從 MainWindow 拆出） | `ScreenshotController` |
 | `gui/rule_config_controller.py` | 規則配置控制器（v0.0.10 從 MainWindow 拆出） | `RuleConfigController` |
@@ -428,6 +432,8 @@ MainLoop.emergency_stop()
 
 任務檔案：`<基底>/tasks/<任務名稱>.json`（如 `%APPDATA%\ocr-trigger-clicker\tasks\每日任務.json`）。
 
+錄製 session 目錄：`<基底>/recordings/session-YYYYMMDD-HHMMSS/`（`events.json` + `frames/*.jpg`），轉換成任務後由 GUI 清除。
+
 ### 匯入／匯出
 
 匯入與匯出的對話框起始目錄：
@@ -683,6 +689,7 @@ python -m pytest                # 含覆蓋報告
 | `test_task_management.py` | 任務 CRUD、匯入匯出、UUID 重映射、無效輸入過濾 |
 | `test_template_matching.py` | match_template、NMS、多尺度、色彩容差、跨解析度 |
 | `test_i18n.py` | 程式碼用到的 `T("key")` 必須存在於所有語言檔 |
+| `test_recorder_convert.py` | 錄製 session → 規則轉換（OCR 錨點 / 模板錨點 / wait+click 三層、座標比例、群組結構） |
 | `test_ocr_merge.py` | OCR 合併快取 vs 逐 ROI 等價（需本機 RapidOCR model，無則 skip） |
 | `test_prematch_equiv.py` | 並行 prematch vs 循序等價 |
 | `test_template_cache.py` | 模板解碼 LRU 快取等價/命中/清除 |

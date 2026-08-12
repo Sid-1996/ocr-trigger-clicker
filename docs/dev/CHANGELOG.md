@@ -1,6 +1,28 @@
 
 
-## [v0.2.3] - 2026-08-11
+## [Unreleased]
+
+### 給使用者
+
+#### 新增
+- **錄製操作（示範錄製）**：按「錄製操作」按鈕或 F9 開始錄製，在目標視窗點擊示範一遍，停止後自動轉成規則並建立任務。每個錄製段（session）變成一個群組，可選擇建立新任務或併入既有任務。
+  - 點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，不怕視窗大小變化）
+  - 點在無文字圖示上 → 嘗試轉成圖示比對（match_image）後點擊
+  - 點在空白處或找不到特徵 → 固定等待後點擊
+- **錄製時自動激活目標視窗**：開始錄製時自動把目標視窗帶到前景，不用手動切換。
+- **轉換後清理錄製原始檔**：轉成規則後自動移除已用的錄製 session，避免累積佔空間。
+
+#### 變更
+- **互動模式不符警告移除**：錄製轉換的規則不再因 `template_source`（模板來源）與互動模式不符而誤報警告，模板來源僅作為 metadata 留存。
+
+### 給開發者
+
+- **滑鼠示範錄製器**：`core/19_recorder.py` 以 `WH_MOUSE_LL` 全域滑鼠攔截目標視窗內點擊，先截「動作前」畫面再以 SendInput（帶 magic `dwExtraInfo`）重送維持操控節奏；輸出 `session-YYYYMMDD-HHMMSS/`（`events.json` + `frames/*.jpg`）至 `%APPDATA%\ocr-trigger-clicker\recordings\`。停止後自動還原目標視窗。無 Qt 依賴，GUI 以 `load_sibling` 載入、callback 回報。
+- **錄製 session → 規則轉換器**：`core/20_recorder_convert.py` 離線後處理，每個滑鼠事件一條規則：OCR 錨點（`detect` + `click(text_center)`）、模板錨點（`match_image` base64 內嵌 + `click`）、或 wait+click 純計時；座標一律視窗比例 0~1，session 轉成群組 `mode=once`。
+- **GUI 整合**：`_record_btn` 工具列按鈕 + F9 全域熱鍵（`_on_hotkey` hid=2）開始/停止；`_convert_recording_to_task` 以 QInputDialog 選目標（新任務 / 既有任務，`list_tasks()`），併入既有任務時以 `save_task_with_groups` 合併；`_pending_merge_into` 與併發防護。
+- **`template_source` 跨模式防呆移除**（commit `a075576`）：`gui/06_gui_main.py`、`gui/test_run_controller.py` 的來源比對邏輯全數拔除，i18n 對應 5 個 key 一併刪除；`_current_template_type` 保留寫入 metadata，引擎不再檢查。
+
+
 
 ### 給使用者
 

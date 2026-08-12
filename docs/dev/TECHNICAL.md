@@ -16,6 +16,7 @@
 - **Foreground Protection & Safety** — Optional foreground-only execution, configurable rate limiting, emergency stop, and on_fail actions (stop rule / stop group / send notification)
 - **Multi-Task Management** — Independent task files with JSON import/export; quick switch between different scenarios
 - **On-Fail Step Handling** — Per-step failure actions: stop rule, press key, skip to step, jump to rule in group, advance to next rule, system notification; allows robust error recovery flows
+- **Demo Recording (Action Recorder)** — Record mouse clicks on the target window (F9 hotkey / toolbar button) and auto-convert into rules: text-anchored clicks → `detect` + `click(text_center)`, texture-anchored clicks → `match_image` (base64 inline) + `click`, featureless clicks → fixed wait + `click`. Each recording segment becomes a rule group (`mode=once`); sessions may create a new task or merge into an existing one
 
 ---
 
