@@ -353,6 +353,11 @@
         <h3>安全與通知</h3>
         <p>前景保護、系統托盤常駐、on_fail 通知與自動停止群組，長時間運行也安心。</p>
       </div>
+      <div class="feature-card">
+        <div class="icon">🎬</div>
+        <h3>錄製操作</h3>
+        <p>按 F9 開始錄製，在遊戲裡點擊示範一遍，停止後自動轉成規則——不用一條條手動設定。</p>
+      </div>
     </div>
   </div>
 </section>
@@ -396,6 +401,7 @@
       <li><strong>用 OCR 診斷確認</strong>：按「OCR 診斷」確認文字有沒有被偵測到。</li>
       <li><strong>加動作步驟</strong>：偵測後面加「點擊（click）」或「按鍵（key）」。</li>
       <li><strong>測試</strong>：按「▶測試」確認規則是否正常觸發。OK 就按「啟動」開始跑。</li>
+      <li><strong>不想手動設？錄製操作</strong>：按「錄製操作」（或 <kbd>F9</kbd>）錄一遍點擊示範，停止後自動轉成規則。</li>
     </ol>
 
     <h3 style="margin-top:1.5rem;">進階技巧</h3>
@@ -406,6 +412,7 @@
       <li><strong>用 compare 做數值判斷</strong>：對 ROI 內的數字做大於／小於／等於判斷。</li>
       <li><strong>用 match_image 比對圖示</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕辨識。</li>
       <li><strong>善用常駐監控</strong>：勾選「常駐監控」讓規則每幀都跑，適合做錯誤攔截。</li>
+      <li><strong>用錄製當起點</strong>：複雜流程先錄一遍生成規則，再微調偵測文字與點擊位置，比從零開始快很多。</li>
     </ul>
   </div>
 </section>
@@ -471,6 +478,18 @@
         <li>按「▶測試」按鈕。偵測步驟會實際截圖辨識，但點擊／按鍵不會真的執行。</li>
         <li>查看結果，根據結果調整參數再測一次。</li>
       </ol>
+    </div>
+
+    <div class="pattern-card">
+      <h4>🎬 錄製操作（示範錄製）</h4>
+      <p>不知道怎麼設定規則？直接錄一遍，工具自動轉成規則。</p>
+      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+        <li>選取目標視窗，按「錄製操作」按鈕（或按 <kbd>F9</kbd>）開始錄製。</li>
+        <li>在遊戲裡正常點擊要做的事情，錄製期間不搶焦點。</li>
+        <li>再按一次 <kbd>F9</kbd>（或按「停止」）結束錄製。</li>
+        <li>選擇「建立新任務」或「併入既有任務」，每個錄製段會變成一個群組。</li>
+      </ol>
+      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換邏輯：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖示比對後點擊；空白處 → 固定等待後點擊。</p>
     </div>
   </div>
 </section>
@@ -652,6 +671,16 @@
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">可以比對圖示或按鈕圖片嗎？</button>
       <div class="faq-answer">可以。步驟類型選擇 <code>match_image</code>（圖像比對），載入範本圖片並設定相似度門檻即可。</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">錄製操作會把我的點擊也錄進去嗎？要怎麼開始？</button>
+      <div class="faq-answer">按「錄製操作」按鈕或按 <kbd>F9</kbd> 開始錄製，錄製期間在遊戲裡正常點擊示範；再按一次 <kbd>F9</kbd>（或按「停止」）結束。停止後會跳出對話框，可選擇建立新任務或併入既有任務（每個錄製段變一個群組）。錄製不搶焦點，可安心操作。</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">錄製轉出來的規則為什麼有些是「等文字出現」有些是固定等待？</button>
+      <div class="faq-answer">轉換時會自動判斷每次點擊：點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，較穩定）；點在無文字的圖示上 → 嘗試轉成圖示比對（match_image）後點擊；點在空白處或找不到特徵 → 轉成固定等待後點擊。三種都自動處理，不需要手動挑。</div>
     </div>
 
     <div class="faq-item">

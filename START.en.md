@@ -72,6 +72,31 @@ For detailed tutorials, see the [documentation site](https://sid-1996.github.io/
 
 ---
 
+## Path C: Record actions
+
+Don't want to set up rules one by one? Record once and the tool converts it into rules automatically.
+
+### ① Prepare
+
+1. Select the target window
+2. Click the "**Record actions**" button (or press **F9**) to start recording
+
+> Recording doesn't steal focus — keep using the game window normally while recording.
+
+### ② Demonstrate once
+
+Click through the actions in the game as you normally would. The tool records every click position and key press.
+
+### ③ Stop → convert into a task
+
+1. Press F9 again (or click "Stop") to finish recording
+2. Choose whether to **create a new task** or **merge into an existing task** (each recording segment becomes one group)
+3. Click "Start" to run it
+
+> 💡 Clicks on text become "wait for text to appear, then click"; clicks with no text underneath try icon matching; otherwise they become a fixed wait then click. Window resizing is not a problem.
+
+---
+
 ## Share your tasks
 
 Once you've built and tested a task, share it with others:

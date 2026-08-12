@@ -56,6 +56,7 @@
 | 👁️ | **Set up rules visually** | OCR diagnostic panel lists every text on screen — double-click to create a rule |
 | 🎮 | **Background (daemon) mode** | PrintWindow capture + Frida-injected clicks & keys — run with the window minimized or covered, zero cursor disturbance, without stealing focus (most Unity games don't support background mode — that's a game-engine limitation, not a tool issue) |
 | ⌨️ | **F8 global hotkey** | Start / pause / stop any time with F8 — no need to switch back to the tool |
+| 🎬 | **Record actions** | Press F9 to record, click through the game once as a demo, then convert it into rules automatically — no manual setup |
 | 🔄 | **Auto-update** | Checks for new versions on launch, one-click upgrade via the built-in updater |
 | 🌐 | **Bilingual UI** | Traditional Chinese / English, switch anytime |
 
