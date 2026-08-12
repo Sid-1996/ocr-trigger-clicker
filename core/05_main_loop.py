@@ -90,6 +90,11 @@ class StepContext:
     triggered: bool = False
     force_advance: bool = False
     on_fail_fired: bool = False
+    # ponytail: 跳轉旗標——_handle_jump / _handle_on_fail(jump) 設為 True 後，
+    # _process_rules 不再呼叫 _advance_rule_in_group()，避免覆蓋跳轉目標 ptr。
+    # 否則當前一步是 click/key/drag/scroll（設 triggered=True）的規則執行 jump 時，
+    # 下一幀 _advance_rule_in_group() 會把 ptr 再 +1 蓋掉跳轉目標，導致目標規則從未執行。
+    jumped: bool = False
     step_idx: int = -1
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
@@ -731,6 +736,7 @@ class MainLoop:
                     f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 跳轉至規則「{target_name}」"
                 )
                 self._rule_in_group_ptr = group.rule_ids.index(rule_id)
+                ctx.jumped = True
             return StepResult("stop", detail=T("exec_log.detail.jump_rule"))
 
         if action == "notify":
@@ -989,6 +995,7 @@ class MainLoop:
             f"規則「{rule.name}」跳轉至「{target_name}」",
             dedup_key=f"{rule.id}:jump",
         )
+        ctx.jumped = True
         return StepResult("stop")
 
     def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -1238,7 +1245,7 @@ class MainLoop:
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
 
-        if ctx.triggered or ctx.force_advance:
+        if (ctx.triggered or ctx.force_advance) and not ctx.jumped:
             if ctx.triggered:
                 self._rule_completed.add(rule.id)
                 self._log_exec(rule.name, -1, "completed", "completed")

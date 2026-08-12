@@ -115,13 +115,17 @@ def test_handle_jump_group_restriction():
     result = ml._handle_jump({"rule_id": "rule_b"}, ctx, test_rule)
     assert result.action == "stop"
     assert ml._rule_in_group_ptr == 1
+    assert ctx.jumped is True  # 成功跳轉要設旗標
     ml._rule_in_group_ptr = 0
+    ctx.jumped = False
     result = ml._handle_jump({"rule_id": "rule_c"}, ctx, test_rule)
     assert result.action == "stop"
     assert ml._rule_in_group_ptr == 0
+    assert ctx.jumped is False  # 跨群組被拒 → 不設旗標
     result = ml._handle_jump({"rule_id": "ghost"}, ctx, test_rule)
     assert result.action == "stop"
     assert ml._rule_in_group_ptr == 0
+    assert ctx.jumped is False  # 幽靈目標 → 不設旗標
 
 
 # ── _handle_detect empty text ──
@@ -970,6 +974,71 @@ def test_jump_within_group():
     result = ml._handle_jump({"rule_id": "j2"}, ctx, test_rule)
     assert result.action == "stop"
     assert ml._rule_in_group_ptr == 1
+    assert ctx.jumped is True
+
+
+# ── Jump after triggered step (the regression this fix prevents) ──
+# 前一步 click 設 ctx.triggered=True，jump 設 ptr=2 且 ctx.jumped=True，
+# _process_rules 的推進分支必須因 not ctx.jumped 而略過 _advance_rule_in_group()，
+# 否則 ptr 會被 +1 蓋掉跳轉目標 → 目標規則從未執行。
+def test_jump_after_triggered_step():
+    ml = _make_ml()
+    ml._rules = [
+        Rule(id="r_click", name="Click", enabled=True, steps=[]),
+        Rule(id="r_other", name="Other", enabled=True, steps=[]),
+        Rule(id="r_target", name="Target", enabled=True, steps=[]),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="g", name="G", rule_ids=["r_click", "r_other", "r_target"])]
+    ml.set_active_groups(["g"])
+    ml._rule_in_group_ptr = 0  # 目前執行 r_click
+
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    # 模擬 click 成功 + jump 成功（_process_rules 看到的同一幀 ctx 狀態）
+    ctx.triggered = True
+    jump_rule = ml._rules[0]
+    result = ml._handle_jump({"rule_id": "r_target"}, ctx, jump_rule)
+    assert result.action == "stop"
+    assert ml._rule_in_group_ptr == 2  # ptr 指向 r_target
+    assert ctx.jumped is True
+
+    # 重現 _process_rules L1241 的推進檢查：triggered 且 jumped → 不應 advance
+    if (ctx.triggered or ctx.force_advance) and not ctx.jumped:
+        ml._advance_rule_in_group()
+    assert ml._rule_in_group_ptr == 2, "jumped=True 時不應推進 ptr，否則目標規則被覆蓋"
+
+
+# ── on_fail: jump after triggered step (same root cause, second path) ──
+# _handle_on_fail 的 jump 分支同樣必須設 ctx.jumped=True，
+# 否則 on_fail: key（L712 也會設 triggered=True）後再 on_fail: jump 會觸發同樣 bug。
+def test_on_fail_jump_after_triggered():
+    ml = _make_ml()
+    ml._rules = [
+        Rule(id="f_click", name="Click", enabled=True, steps=[]),
+        Rule(id="f_mid", name="Mid", enabled=True, steps=[]),
+        Rule(id="f_target", name="Target", enabled=True, steps=[]),
+    ]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [RuleGroup(id="gf", name="GF", rule_ids=["f_click", "f_mid", "f_target"])]
+    ml.set_active_groups(["gf"])
+    ml._rule_in_group_ptr = 0
+
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    ctx.triggered = True  # 前一步 on_fail: key 設的（L712）
+    ctx.step_idx = 0
+    rule = ml._rules[0]
+    result = ml._handle_on_fail({"on_fail": {"action": "jump", "rule_id": "f_target"}}, ctx, rule)
+    assert result.action == "stop"
+    assert ml._rule_in_group_ptr == 2  # ptr 指向 f_target
+    assert ctx.jumped is True
+
+    if (ctx.triggered or ctx.force_advance) and not ctx.jumped:
+        ml._advance_rule_in_group()
+    assert ml._rule_in_group_ptr == 2, "on_fail jump 後 triggered+jumped 不應推進 ptr"
 
 
 # ── Jump across groups ──
