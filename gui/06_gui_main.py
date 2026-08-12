@@ -5640,10 +5640,6 @@ class MainWindow(QMainWindow):
                     },
                 ),
                 Step(
-                    type="wait",
-                    params={"ms": cfg.get("default_wait_ms", 500)},
-                ),
-                Step(
                     type="click",
                     params={
                         "target": "text_center",
@@ -5651,6 +5647,7 @@ class MainWindow(QMainWindow):
                         "random_offset": cfg.get("default_random_offset", 3),
                         "x": 0,
                         "y": 0,
+                        "after_delay_ms": cfg.get("default_after_delay_ms", 0),
                     },
                 ),
             ],
@@ -5743,10 +5740,6 @@ class MainWindow(QMainWindow):
                     },
                 ),
                 Step(
-                    type="wait",
-                    params={"ms": cfg.get("default_wait_ms", 500)},
-                ),
-                Step(
                     type="click",
                     params={
                         "target": "text_center",
@@ -5754,6 +5747,7 @@ class MainWindow(QMainWindow):
                         "random_offset": cfg.get("default_random_offset", 3),
                         "x": 0,
                         "y": 0,
+                        "after_delay_ms": cfg.get("default_after_delay_ms", 0),
                     },
                 ),
             ],
