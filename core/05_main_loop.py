@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import random
@@ -5,7 +6,7 @@ import re
 import sys as _sys
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -138,6 +139,12 @@ def _prematch_pure(
     )
 
 
+def _crop_hash(crop: np.ndarray) -> bytes:
+    """ROI 裁切內容指紋（blake2b-16B）。RapidOCR 對相同輸入 deterministic，
+    故逐位元相同的裁切可直接複用上次辨識結果而不需重跑 OCR。"""
+    return hashlib.blake2b(np.ascontiguousarray(crop).tobytes(), digest_size=16).digest()
+
+
 class MainLoop:
     def __init__(
         self,
@@ -171,6 +178,10 @@ class MainLoop:
         self._has_detect_rules: bool = False
         self._frame_ocr_cache: dict = {}
         self._ocr_cache_hits: int = 0
+        # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
+        # key=(x,y,w,h) value=(crop_hash, results)；有界 LRU，視窗縮放會因 rect 不同自動 miss。
+        self._xframe_ocr_cache: OrderedDict = OrderedDict()
+        self._xframe_ocr_cache_max = 64
 
         self._rule_pointer: int = 0
         self._groups: list[RuleGroup] = load_groups(rules_path)
@@ -295,6 +306,7 @@ class MainLoop:
             self._group_rounds_completed.clear()
             self._match_image_warn_counter.clear()
             self._detect_warn_counter.clear()
+            self._xframe_ocr_cache.clear()
             self._fail_since.clear()
             self._last_active_rule_id = None
             self._update_has_detect()
@@ -418,28 +430,44 @@ class MainLoop:
                 urect = (ux, uy, ux2 - ux, uy2 - uy)
                 if urect == rect:
                     continue
-                uimg = img[uy:uy2, ux:ux2]
-                results = recognize(uimg, preprocess=False, max_side_len=0, min_confidence=0.25)
-                for r in results:
-                    r.x += ux
-                    r.y += uy
-                    r.center_x = r.x + r.w // 2
-                    r.center_y = r.y + r.h // 2
-                self._frame_ocr_cache[urect] = results
+                results = self._ocr_crop(img, ux, uy, ux2, uy2)
                 return [
                     r
                     for r in results
                     if not (r.x + r.w <= x1 or r.y + r.h <= y1 or r.x >= x2 or r.y >= y2)
                 ]
 
-        roi_img = img[y1:y2, x1:x2]
-        results = recognize(roi_img, preprocess=False, max_side_len=0, min_confidence=0.25)
+        return self._ocr_crop(img, x1, y1, x2, y2)
+
+    def _ocr_crop(self, img: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> list:
+        """對像素區域做 OCR，帶跨幀內容快取（方案 A）。
+
+        裁切逐位元相同 → 引擎 deterministic → 直接複用上次結果，逐位元等價。
+        key 含 rect，視窗縮放會因像素座標不同而自動 miss，不會誤用舊結果。
+        """
+        rect = (x1, y1, x2 - x1, y2 - y1)
+        cached = self._frame_ocr_cache.get(rect)
+        if cached is not None:
+            self._ocr_cache_hits += 1
+            return cached
+        crop = img[y1:y2, x1:x2]
+        ch = _crop_hash(crop)
+        entry = self._xframe_ocr_cache.get(rect)
+        if entry is not None and entry[0] == ch:
+            self._ocr_cache_hits += 1
+            self._frame_ocr_cache[rect] = entry[1]
+            return entry[1]
+        results = recognize(crop, preprocess=False, max_side_len=0, min_confidence=0.25)
         for r in results:
             r.x += x1
             r.y += y1
             r.center_x = r.x + r.w // 2
             r.center_y = r.y + r.h // 2
         self._frame_ocr_cache[rect] = results
+        self._xframe_ocr_cache[rect] = (ch, results)
+        self._xframe_ocr_cache.move_to_end(rect)
+        while len(self._xframe_ocr_cache) > self._xframe_ocr_cache_max:
+            self._xframe_ocr_cache.popitem(last=False)
         return results
 
     def _resolve_roi(self, roi: dict, rect: dict, chrome: tuple | None = None) -> dict:
@@ -1183,12 +1211,95 @@ class MainLoop:
                     )
         return ""
 
+    def _prewarm_ocr_clusters(self, img: np.ndarray, rect: dict) -> None:
+        """方案 B：本幀會執行的 step-0 detect/compare ROI 預聚類，每叢集 bbox 只 OCR 一次，
+        寫入 _frame_ocr_cache，規則執行時走既有 superset 過濾路徑（05_main_loop.py:408）。
+        行為等價（OCR 大區域→過濾到子區域，與 ee08013 union-merge 同類語義），
+        每幀 OCR 呼叫數從 ~N 降到 ~叢集數。
+
+        ponytail: 只收 step-0（step>0 是條件觸發，預先 OCR 是浪費）；收集對象為
+        背景規則 + loop+parallel 群組規則 + 當前群組當前規則——即本幀實際會執行的規則。
+        """
+        with self._rules_lock:
+            rules = list(self._rules)
+        if not rules:
+            return
+        rule_ids: set[str] = set()
+        for r in rules:
+            if r.enabled and r.background:
+                rule_ids.add(r.id)
+        for g in self._groups:
+            if (
+                g.enabled
+                and g.id in self._active_group_ids
+                and g.mode == "loop"
+                and g.order == "parallel"
+            ):
+                rule_ids.update(g.rule_ids)
+        cur = self._current_group()
+        if cur is not None and self._rule_in_group_ptr < len(cur.rule_ids):
+            rule_ids.add(cur.rule_ids[self._rule_in_group_ptr])
+
+        rects: list[tuple[int, int, int, int]] = []
+        for r in rules:
+            if r.id not in rule_ids or not r.enabled or not r.steps:
+                continue
+            s0 = r.steps[0]
+            if s0.type not in ("detect", "compare"):
+                continue
+            params = s0.params
+            if s0.type == "detect" and not (params.get("text") or "").strip():
+                continue
+            roi = self._resolve_roi(params.get("roi", {}), rect)
+            if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+                continue
+            rk = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
+            if rk[2] <= 0 or rk[3] <= 0 or rk in rects:
+                continue
+            rects.append(rk)
+        if not rects:
+            return
+
+        parent = list(range(len(rects)))
+
+        def _find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        def _union(a, b):
+            ra, rb = _find(a), _find(b)
+            if ra != rb:
+                parent[rb] = ra
+
+        def _overlap(a, b):
+            ax, ay, aw, ah = a
+            bx, by, bw, bh = b
+            return not (ax + aw <= bx or bx + bw <= ax or ay + ah <= by or by + bh <= ay)
+
+        for i in range(len(rects)):
+            for j in range(i + 1, len(rects)):
+                if _overlap(rects[i], rects[j]):
+                    _union(i, j)
+        clusters: dict[int, list[tuple[int, int, int, int]]] = {}
+        for i, rk in enumerate(rects):
+            clusters.setdefault(_find(i), []).append(rk)
+        for members in clusters.values():
+            x1 = min(r[0] for r in members)
+            y1 = min(r[1] for r in members)
+            x2 = max(r[0] + r[2] for r in members)
+            y2 = max(r[1] + r[3] for r in members)
+            self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
+
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()
         with self._rules_lock:
             rules_snapshot = list(self._rules)
         if not rules_snapshot:
             return
+        if self._has_detect_rules:
+            self._prewarm_ocr_clusters(img, rect)
 
         # ponytail: run all background rules each frame; jumps are cancelled
         for rule in rules_snapshot:
@@ -2502,6 +2613,8 @@ if __name__ == "__main__":
     _ml_ocr = MainLoop.__new__(MainLoop)
     _ml_ocr._frame_ocr_cache = {}
     _ml_ocr._ocr_cache_hits = 0
+    _ml_ocr._xframe_ocr_cache = OrderedDict()
+    _ml_ocr._xframe_ocr_cache_max = 64
     _ocalls = {"n": 0}
     _orig_rec = recognize
 
