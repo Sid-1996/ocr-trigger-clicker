@@ -1,5 +1,24 @@
 
 
+## [v0.2.5] - 2026-08-14
+
+### 給使用者
+
+#### 新增
+- **English 語系自動改用英文 OCR 模型**：介面切到 English 後，文字偵測自動改用英文專用 OCR 模型，英文與數字的辨識準確度大幅提升；繁體中文介面維持原本的繁中模型。英文模型檔隨安裝包一同提供。
+
+#### 修復
+- **語系切換無法自動重啟**：修正設定內切換語言後不會自動重啟的問題（開發模式啟動讀取了錯誤位置的設定檔，導致切換判斷失效、沒有任何反應）。重啟流程改為更新器與主程式完全脫離、確保舊程式確實結束後再啟動新程式，關閉 console 視窗也不再影響；重啟過程會寫入系統暫存檔 `%TEMP%\ocr_relaunch.log` 方便排障。
+
+#### 變更（文件）
+- 官網導覽改版：功能卡片可點擊導引、嵌入 DailyMotion 示範影片、補上免責聲明。
+- 跨解析度說明補正（同長寬比通用、來源解析度標註）、後台模式限制說明（視窗可遮蓋但不能最小化；StarSavior 僅支援前景）、OCR 語言能力敘述修正。
+
+### 給開發者
+
+- **英文 OCR 模型**（commit `68f762b`）：`core/02_ocr_engine.py::init_engine()` 依 `i18n.get_language()` 選模型——`en` 且 `custom_models/en_rec_mobile.onnx`＋`en_dict.txt` 存在時用英文模型，否則回退繁中。模型隨 release ZIP 分發（`custom_models/` gitignored）。
+- **語系切換重啟修正**（commit `5a9f0bf`）：啟動語言統一讀 `get_data_path("config.json")`（不再依 frozen 讀專案根，消除 dev 模式寫 APPDATA／啟動讀專案根的不一致）；relaunch 以 `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS`（附掛 `CREATE_BREAKAWAY_FROM_JOB`、OSError fallback 無旗標）啟動 `updater_main.py`；`Popen`／`_quit_app()` 包 try/except，結尾 `os._exit(0)` 並以 3 秒 watchdog 兜底；dev 重啟保留 `--debug`；`updater_main.py` relaunch 分支寫 `%TEMP%\ocr_relaunch.log`。
+
 ## [v0.2.4] - 2026-08-13
 
 ### 給使用者
