@@ -7,7 +7,7 @@
 
 ## Feature Details
 
-- **OCR Text Detection** — Powered by RapidOCR with a bundled Traditional Chinese (cht) model + dictionary (English letters and digits are also recognized); ROI (region-of-interest) cropping reduces interference and improves speed
+- **OCR Text Detection** — Powered by RapidOCR with bundled models: Traditional Chinese (cht) by default, and a dedicated English (en) model auto-selected when the UI language is English (the cht dictionary also covers English letters and digits); ROI (region-of-interest) cropping reduces interference and improves speed
 - **Image Template Matching** — OpenCV `matchTemplate` + Non-Maximum Suppression (NMS); 10–50× faster than OCR, ideal for buttons without text labels
 - **Window-Ratio Coordinates** — All coordinates stored as 0–1 ratios (relative to window size); compatible across 1080p, 4K, 150% DPI scaling, and window resizing
 - **Group Rule Management** — Drag-and-drop sorting, loop / run-once / repeat-N-times execution modes, sequential or parallel group processing

@@ -54,7 +54,7 @@
 
 | | Feature | Description |
 |:-:|---------|-------------|
-| 🔍 | **Detect text on screen** | Tell it what text to look for and what to do — when found, it acts automatically (OCR is optimized for Traditional Chinese; English letters and digits are also recognized) |
+| 🔍 | **Detect text on screen** | Tell it what text to look for and what to do — when found, it acts automatically (OCR is optimized for Traditional Chinese; the English UI auto-switches to a dedicated English model) |
 | 🖼️ | **Find buttons with images** | No text? Use a screenshot as a template — faster than reading text |
 | 🔗 | **Chain multiple steps** | Detect → click → wait → drag… runs all the way through like a recorded macro |
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |

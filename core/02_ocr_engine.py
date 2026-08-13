@@ -95,10 +95,21 @@ def init_engine() -> None:
         if _engine is not None:
             return
         from core._paths import _bundle_root
+        from i18n import get_language
 
         custom_dir = _bundle_root() / "custom_models"
-        rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
-        dict_path = custom_dir / "chinese_cht_dict.txt"
+        # 依 UI 語系選 OCR 辨識模型（英文語系用英文模型，其餘用繁中）。語言切換需重啟，
+        # 故只需在引擎初始化時選一次。en 模型檔缺失時 fallback 回繁中（字典已含英數）。
+        lang = get_language()
+        if lang == "en":
+            rec_path = custom_dir / "en_rec_mobile.onnx"
+            dict_path = custom_dir / "en_dict.txt"
+            if not (rec_path.exists() and dict_path.exists()):
+                rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
+                dict_path = custom_dir / "chinese_cht_dict.txt"
+        else:
+            rec_path = custom_dir / "chinese_cht_rec_mobile.onnx"
+            dict_path = custom_dir / "chinese_cht_dict.txt"
         kwargs: dict = dict(
             det_limit_type="max",
             det_limit_side_len=_DEFAULT_DET_LIMIT_SIDE_LEN,
