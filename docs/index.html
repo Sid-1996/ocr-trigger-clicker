@@ -357,8 +357,7 @@
         <div class="icon">🎬</div>
         <h3>錄製操作</h3>
         <p>按 F9 開始錄製，在遊戲裡點擊示範一遍，停止後自動轉成規則——不用一條條手動設定。</p>
-      </div>
-    </div>
+      </div>    </div>
   </div>
 </section>
 
@@ -401,7 +400,7 @@
       <li><strong>用 OCR 診斷確認</strong>：按「OCR 診斷」確認文字有沒有被偵測到。</li>
       <li><strong>加動作步驟</strong>：偵測後面加「點擊（click）」或「按鍵（key）」。</li>
       <li><strong>測試</strong>：按「▶測試」確認規則是否正常觸發。OK 就按「啟動」開始跑。</li>
-      <li><strong>不想手動設？錄製操作</strong>：按「錄製操作」（或 <kbd>F9</kbd>）錄一遍點擊示範，停止後自動轉成規則。</li>
+      <li><strong>不想手動設？錄製操作</strong>：按「錄製操作」（或 <kbd>F9</kbd>）錄一遍點擊示範，停止後自動轉成規則（只記錄滑鼠點擊，盡量點在文字或圖示上效果更好）。</li>
     </ol>
 
     <h3 style="margin-top:1.5rem;">進階技巧</h3>
@@ -412,7 +411,7 @@
       <li><strong>用 compare 做數值判斷</strong>：對 ROI 內的數字做大於／小於／等於判斷。</li>
       <li><strong>用 match_image 比對圖示</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕辨識。</li>
       <li><strong>善用常駐監控</strong>：勾選「常駐監控」讓規則每幀都跑，適合做錯誤攔截。</li>
-      <li><strong>用錄製當起點</strong>：複雜流程先錄一遍生成規則，再微調偵測文字與點擊位置，比從零開始快很多。</li>
+      <li><strong>用錄製當起點</strong>：複雜流程先錄一遍生成規則，再微調偵測文字與點擊位置，比從零開始快很多（點在 UI 文字或圖示上，轉換品質最好）。</li>
     </ul>
   </div>
 </section>
@@ -482,14 +481,21 @@
 
     <div class="pattern-card">
       <h4>🎬 錄製操作（示範錄製）</h4>
-      <p>不知道怎麼設定規則？直接錄一遍，工具自動轉成規則。</p>
+      <p>不知道怎麼設定規則？直接錄一遍，工具自動轉成規則——不用一條條手動設定。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>選取目標視窗，按「錄製操作」按鈕（或按 <kbd>F9</kbd>）開始錄製。</li>
-        <li>在遊戲裡正常點擊要做的事情，錄製期間不搶焦點。</li>
+        <li>在遊戲裡正常點擊要做的事情，錄製期間不搶焦點，可照常操作。</li>
         <li>再按一次 <kbd>F9</kbd>（或按「停止」）結束錄製。</li>
         <li>選擇「建立新任務」或「併入既有任務」，每個錄製段會變成一個群組。</li>
       </ol>
-      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換邏輯：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖示比對後點擊；空白處 → 固定等待後點擊。</p>
+      <p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px;">⚠️ 本模式<b>只記錄滑鼠點擊</b>（左鍵／右鍵／中鍵）。鍵盤按鍵、拖曳、滾輪不會被錄製——錄製時想「等一下再點」就直接放慢手速，不要按鍵盤。</p>
+      <p style="color:var(--text-secondary);font-size:0.9rem;margin-top:8px;"><strong>錄製小技巧：點在「有東西」的地方，轉換品質更好</strong></p>
+      <ul style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;">
+        <li>✅ 點在 <strong>UI 文字上方</strong> → 自動轉成「等文字出現再點擊」，畫面縮放／換解析度都不怕，最穩定。</li>
+        <li>✅ 點在 <strong>圖示／按鈕</strong>（無文字但有特徵）→ 自動轉成圖示比對（match_image）後點擊。</li>
+        <li>❌ 點在 <strong>空白處</strong> → 只能轉成固定等待後點擊（純計時播放），換解析度或畫面位移後容易點錯位置。</li>
+      </ul>
+      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖示比對後點擊；空白處 → 固定等待後點擊。座標一律存為視窗比例，換螢幕／換解析度不用重設。</p>
     </div>
   </div>
 </section>
@@ -674,13 +680,15 @@
     </div>
 
     <div class="faq-item">
-      <button class="faq-question" aria-expanded="false">錄製操作會把我的點擊也錄進去嗎？要怎麼開始？</button>
-      <div class="faq-answer">按「錄製操作」按鈕或按 <kbd>F9</kbd> 開始錄製，錄製期間在遊戲裡正常點擊示範；再按一次 <kbd>F9</kbd>（或按「停止」）結束。停止後會跳出對話框，可選擇建立新任務或併入既有任務（每個錄製段變一個群組）。錄製不搶焦點，可安心操作。</div>
+      <button class="faq-question" aria-expanded="false">錄製操作會把我的操作都錄進去嗎？要怎麼開始？</button>
+      <div class="faq-answer">按「錄製操作」按鈕或按 <kbd>F9</kbd> 開始錄製，錄製期間在遊戲裡正常點擊示範；再按一次 <kbd>F9</kbd>（或按「停止」）結束。停止後會跳出對話框，可選擇建立新任務或併入既有任務（每個錄製段變一個群組）。錄製不搶焦點，可安心操作。<br><br>
+      ⚠️ 注意：本模式<b>只記錄滑鼠點擊</b>（左／右／中鍵），鍵盤按鍵、拖曳、滾輪不會被錄製。錄製時想等畫面變化，就直接放慢手速，不要按鍵盤。</div>
     </div>
 
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">錄製轉出來的規則為什麼有些是「等文字出現」有些是固定等待？</button>
-      <div class="faq-answer">轉換時會自動判斷每次點擊：點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，較穩定）；點在無文字的圖示上 → 嘗試轉成圖示比對（match_image）後點擊；點在空白處或找不到特徵 → 轉成固定等待後點擊。三種都自動處理，不需要手動挑。</div>
+      <div class="faq-answer">轉換時會自動判斷每次點擊：點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，較穩定）；點在無文字的圖示上 → 嘗試轉成圖示比對（match_image）後點擊；點在空白處或找不到特徵 → 轉成固定等待後點擊。三種都自動處理，不需要手動挑。<br><br>
+      💡 <b>錄製小技巧</b>：點擊時盡量瞄準 UI 文字或圖示等「有特徵」的位置，轉換品質最好；避免點空白處，否則只能變固定等待、換解析度後容易點偏。</div>
     </div>
 
     <div class="faq-item">

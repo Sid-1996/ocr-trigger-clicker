@@ -85,7 +85,11 @@ Don't want to set up rules one by one? Record once and the tool converts it into
 
 ### ② Demonstrate once
 
-Click through the actions in the game as you normally would. The tool records every click position and key press.
+Click through the actions in the game as you normally would. The tool records every click's position and mouse button (left / right / middle).
+
+> ⚠️ **Note: only mouse clicks are recorded.** Keyboard keys, drags, and scroll wheel are not captured — if you want to wait for the screen to change, just slow down your clicking instead of pressing keys.
+
+> 💡 **Recording tips**: aim your clicks at **UI text** or **icons / buttons** that have recognizable features — the conversion quality is best there; avoid clicking empty areas (they can only become fixed-wait clicks, which drift out of position after a resolution change).
 
 ### ③ Stop → convert into a task
 
@@ -93,7 +97,7 @@ Click through the actions in the game as you normally would. The tool records ev
 2. Choose whether to **create a new task** or **merge into an existing task** (each recording segment becomes one group)
 3. Click "Start" to run it
 
-> 💡 Clicks on text become "wait for text to appear, then click"; clicks with no text underneath try icon matching; otherwise they become a fixed wait then click. Window resizing is not a problem.
+> 💡 Clicks on text become "wait for text to appear, then click"; clicks with no text underneath try icon matching; otherwise they become a fixed wait then click. Coordinates are always stored as window ratios, so window resizing / resolution changes are not a problem.
 
 ---
 
