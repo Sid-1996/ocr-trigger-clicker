@@ -137,7 +137,7 @@
   .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.2rem; }
   .feature-card {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 1.5rem; transition: transform 0.2s, border-color 0.2s;
+    padding: 1.5rem; transition: transform 0.2s, border-color 0.2s; cursor: pointer;
   }
   .feature-card:hover { transform: translateY(-3px); border-color: var(--accent); }
   .feature-card .icon { font-size: 1.8rem; margin-bottom: 0.6rem; }
@@ -252,6 +252,7 @@
       <li><a href="#screenshots">截圖</a></li>
       <li><a href="#guide">使用</a></li>
       <li><a href="#tools">工具</a></li>
+      <li><a href="#recording">錄製</a></li>
       <li><a href="#patterns">模式</a></li>
       <li><a href="#faq">FAQ</a></li>
       <li><a href="#gametasks">遊戲任務</a></li>
@@ -323,37 +324,37 @@
     <h2>核心功能</h2>
     <p class="section-desc">一套工具涵蓋文字偵測、圖像比對、流程編排與多任務管理。</p>
     <div class="features-grid">
-      <div class="feature-card">
+      <div class="feature-card" data-target="tool-ocr">
         <div class="icon">🔍</div>
         <h3>OCR 文字辨識</h3>
         <p>基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI 精確比對，避免全螢幕干擾。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-target="tool-matchimage">
         <div class="icon">🖼️</div>
         <h3>圖像模板比對</h3>
         <p>以圖找圖，支援多尺度搜尋與 NMS 篩選。適合無文字的按鈕或圖示辨識，效能比 OCR 快 10~50 倍。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-target="patterns">
         <div class="icon">🔗</div>
         <h3>多步驟流程</h3>
         <p>每條規則由有序步驟組成：偵測、點擊、按鍵、等待、跳轉、數值比對、圖像比對、滾輪、拖曳。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-target="gametasks">
         <div class="icon">📂</div>
         <h3>多任務管理</h3>
         <p>不同場景（不同遊戲、不同表單）建立獨立任務，規則完全隔離，一鍵切換。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-target="tool-ocr">
         <div class="icon">👁️</div>
         <h3>OCR 即時診斷</h3>
         <p>即時顯示目前視窗內所有可辨識文字及其位置與信心度，按兩下直接建立規則。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-target="faq">
         <div class="icon">🛡️</div>
         <h3>安全與通知</h3>
         <p>前景保護、系統托盤常駐、on_fail 通知與自動停止群組，長時間運行也安心。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-target="recording">
         <div class="icon">🎬</div>
         <h3>錄製操作</h3>
         <p>按 F9 開始錄製，在遊戲裡點擊示範一遍，停止後自動轉成規則——不用一條條手動設定。</p>
@@ -424,7 +425,7 @@
     <h2>工具教學</h2>
     <p class="section-desc">每個工具都有專屬功能，搭配使用能大幅降低設定難度。</p>
 
-    <div class="pattern-card">
+    <div class="pattern-card" id="tool-ocr">
       <h4>🔍 OCR 診斷面板</h4>
       <p>即時顯示目標視窗中所有可辨識的文字、位置與信心度。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
@@ -457,7 +458,7 @@
       </ol>
     </div>
 
-    <div class="pattern-card">
+    <div class="pattern-card" id="tool-matchimage">
       <h4>🖼️ match_image 圖像比對</h4>
       <p>以圖找圖，效能約為 OCR 的 10~50 倍，且不受背景文字干擾。建議優先選用。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
@@ -479,7 +480,7 @@
       </ol>
     </div>
 
-    <div class="pattern-card">
+    <div class="pattern-card" id="recording">
       <h4>🎬 錄製操作（示範錄製）</h4>
       <p>不知道怎麼設定規則？直接錄一遍，工具自動轉成規則——不用一條條手動設定。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
@@ -857,16 +858,24 @@ var sections = {
   faq: document.getElementById('faq'),
   gametasks: document.getElementById('gametasks')
 };
+function scrollToTarget(el) {
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 document.querySelectorAll('.path-card').forEach(function(card) {
   card.onclick = function() {
     var target = this.getAttribute('data-target');
-    var section = sections[target];
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      document.querySelectorAll('.path-card').forEach(function(node) {
-        node.classList.toggle('active', node === card);
-      });
-    }
+    scrollToTarget(sections[target]);
+    document.querySelectorAll('.path-card').forEach(function(node) {
+      node.classList.toggle('active', node === card);
+    });
+  };
+});
+
+// ── Feature cards ──
+document.querySelectorAll('.feature-card').forEach(function(card) {
+  card.onclick = function() {
+    var id = this.getAttribute('data-target');
+    scrollToTarget(id ? document.getElementById(id) : null);
   };
 });
 
