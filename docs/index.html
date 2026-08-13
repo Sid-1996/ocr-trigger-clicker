@@ -330,7 +330,7 @@
       <div class="feature-card" data-target="tool-ocr">
         <div class="icon">🔍</div>
         <h3>OCR 文字辨識</h3>
-        <p>基於 RapidOCR 引擎，支援繁體中文與簡體中文。可指定 ROI 精確比對，避免全螢幕干擾。</p>
+        <p>基於 RapidOCR 引擎（繁體中文專用模型，英文與數字亦可辨識，可選 DirectML GPU 加速）。可指定 ROI 精確比對，避免全螢幕干擾。</p>
       </div>
       <div class="feature-card" data-target="tool-matchimage">
         <div class="icon">🖼️</div>
@@ -684,7 +684,7 @@
 
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">支援哪些語言的文字辨識？</button>
-      <div class="faq-answer">預設使用 RapidOCR 通用模型，辨識效果以繁體中文與簡體中文最佳。可透過 <code>custom_models/</code> 自訂模型。</div>
+      <div class="faq-answer">預設內建繁體中文專用 RapidOCR 模型（含英文與數字辨識能力），以繁體中文辨識效果最佳。若要更換模型，需在 <code>custom_models/</code> 資料夾中以相同檔名取代模型與字典檔案。</div>
     </div>
 
     <div class="faq-item">

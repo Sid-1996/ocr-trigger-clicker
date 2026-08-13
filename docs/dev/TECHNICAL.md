@@ -7,7 +7,7 @@
 
 ## Feature Details
 
-- **OCR Text Detection** — Powered by RapidOCR, supports Traditional / Simplified Chinese; ROI (region-of-interest) cropping reduces interference and improves speed
+- **OCR Text Detection** — Powered by RapidOCR with a bundled Traditional Chinese (cht) model + dictionary (English letters and digits are also recognized); ROI (region-of-interest) cropping reduces interference and improves speed
 - **Image Template Matching** — OpenCV `matchTemplate` + Non-Maximum Suppression (NMS); 10–50× faster than OCR, ideal for buttons without text labels
 - **Window-Ratio Coordinates** — All coordinates stored as 0–1 ratios (relative to window size); compatible across 1080p, 4K, 150% DPI scaling, and window resizing
 - **Group Rule Management** — Drag-and-drop sorting, loop / run-once / repeat-N-times execution modes, sequential or parallel group processing
@@ -25,7 +25,7 @@
 | Feature | OCR Trigger Clicker | AutoHotkey | Airtest | AutoIt |
 |---------|:---:|:---:|:---:|:---:|
 | Learning Curve | ✅ GUI, no coding required | ❌ Manual scripting | ⚠️ Requires Python basics | ❌ Manual scripting |
-| OCR Text Detection | ✅ Built-in, Chinese + English | ❌ Needs plugin | ⚠️ Available but complex setup | ❌ None |
+| OCR Text Detection | ✅ Built-in, Traditional Chinese + English | ❌ Needs plugin | ⚠️ Available but complex setup | ❌ None |
 | Resolution Independence | ✅ Ratio coordinates (0–1), auto-adapt | ❌ Pixel coordinates, breaks on resize | ❌ Same | ❌ Same |
 | Image Template Matching | ✅ Built-in OpenCV + NMS | ❌ Needs plugin | ✅ Available | ❌ None |
 | Mouse / Keyboard Simulation | ✅ pynput (Win32 SendInput) | ✅ Native | ✅ Available | ✅ Native |
