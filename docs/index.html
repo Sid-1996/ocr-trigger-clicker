@@ -508,11 +508,11 @@
       <p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px;">⚠️ 本模式<b>只記錄滑鼠點擊</b>（左鍵／右鍵／中鍵）。鍵盤按鍵、拖曳、滾輪不會被錄製——錄製時想「等一下再點」就直接放慢手速，不要按鍵盤。</p>
       <p style="color:var(--text-secondary);font-size:0.9rem;margin-top:8px;"><strong>錄製小技巧：點在「有東西」的地方，轉換品質更好</strong></p>
       <ul style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;">
-        <li>✅ 點在 <strong>UI 文字上方</strong> → 自動轉成「等文字出現再點擊」，畫面縮放／換解析度都不怕，最穩定。</li>
+        <li>✅ 點在 <strong>UI 文字上方</strong> → 自動轉成「等文字出現再點擊」，畫面縮放／同長寬比換解析度都不怕，最穩定。</li>
         <li>✅ 點在 <strong>圖示／按鈕</strong>（無文字但有特徵）→ 自動轉成圖示比對（match_image）後點擊。</li>
         <li>❌ 點在 <strong>空白處</strong> → 只能轉成固定等待後點擊（純計時播放），換解析度或畫面位移後容易點錯位置。</li>
       </ul>
-      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖示比對後點擊；空白處 → 固定等待後點擊。座標一律存為視窗比例，換螢幕／換解析度不用重設。</p>
+      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖示比對後點擊；空白處 → 固定等待後點擊。座標一律存為視窗比例，<strong>相同長寬比（16:9）</strong>換螢幕／換解析度不用重設。</p>
       <p style="margin-top:10px;">▶ <a href="#video">看示範影片</a> — 一鏡到底示範錄製與轉換。</p>
     </div>
   </div>
@@ -743,6 +743,16 @@
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">規則設定檔存在哪裡？</button>
       <div class="faq-answer">設定檔與任務資料儲存在 <code>%APPDATA%\ocr-trigger-clicker\</code>，刪除 exe 後設定仍會保留。</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">不同解析度可以通用嗎？</button>
+      <div class="faq-answer">
+        座標一律存為視窗比例，<strong>只要遊戲視窗長寬比不變</strong>（遊戲通常會鎖定比例），同長寬比解析度間可自動通用——例如 1920×1080 與 1600×900 互換不用重設。<br><br>
+        ⚠️ <strong>長寬比不同</strong>時遊戲 UI 布局會重排，ROI／點擊位置偏移，需重新框選調整。<br>
+        ⚠️ <strong>圖像比對有限制</strong>：match_image 的模板縮放範圍約 0.5~2 倍，解析度差距過大時可能找不到；文字偵測（OCR）不受此限。<br>
+        💡 通用性以任務<strong>來源解析度</strong>為基準：用自己解析度建立的任務最穩定；匯入他人分享的任務前，確認來源解析度長寬比與自己一致（分享時請註明來源解析度）。Windows 系統顯示縮放建議與建立任務時一致。
+      </div>
     </div>
 
     <div class="faq-item">

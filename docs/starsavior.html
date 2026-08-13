@@ -90,7 +90,7 @@
     <span class="badge gray">1600x900</span>
   </p>
   <p>OCR Trigger Clicker 內建兩套可直接使用的 <strong>星之救援者 (StarSavior)</strong> 自動化任務：<strong>每日任務全自動</strong>（掛機獎勵、派遣、戰鬥探索、星際迴廊、商店、好友、信件檢查、每日 PVP）與<strong>跑馬事件輔助</strong>（自動應對隨機事件、跳過戰鬥選項）。</p>
-  <p>來源解析度：<strong>1920x1080</strong> 或 <strong>1600x900</strong>（16:9），繁體中文遊戲環境。</p>
+  <p>任務來源解析度：<strong>1920x1080</strong>（16:9，同為 16:9 的解析度如 1600x900 可直接通用），繁體中文遊戲環境。</p>
 </header>
 
 <div class="cta">
@@ -115,6 +115,7 @@
 <section id="download">
   <h2>下載任務檔案</h2>
   <p>點擊下載 JSON 檔案，然後在工具中按「匯入任務」選取即可。</p>
+  <p style="font-size:.9em;color:#8b949e;">📌 <strong>任務來源解析度：1920×1080</strong>（16:9）。座標存為視窗比例，同為 16:9 的解析度（如 1600×900）可直接通用；長寬比不同需重新框選 ROI。</p>
   <div class="dl-grid">
     <div class="dl-card">
       <h3>StarSavior-每日任務</h3>
@@ -173,8 +174,8 @@
 <section id="faq">
   <h2>常見問題</h2>
 
-  <h3>任務不支援哪些解析度？</h3>
-  <p>腳本以 <strong>1920x1080</strong> 與 <strong>1600x900</strong>（16:9）為基準設計。其他解析度可能需要重新框選 ROI 或調整點擊座標。</p>
+  <h3>任務支援哪些解析度？</h3>
+  <p>任務以 <strong>1920x1080</strong>（16:9）為來源解析度設計。座標存為視窗比例，<strong>同為 16:9</strong> 的解析度（如 1600x900、1280x720、2560x1440）通常可直接通用；<strong>長寬比不同</strong>時遊戲 UI 布局會重排，需重新框選 ROI 或調整點擊座標。圖像比對的模板縮放範圍約 0.5~2 倍，解析度差距過大時可能失效。</p>
 
   <h3>匯入後沒有反應？</h3>
   <p>請確認：1) 遊戲處於主頁（大廳） 2) 工具已選取目標視窗為「StarSavior」 3) 繁體中文遊戲環境。</p>

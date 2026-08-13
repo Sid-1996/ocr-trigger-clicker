@@ -99,7 +99,7 @@ Click through the actions in the game as you normally would. The tool records ev
 2. Choose whether to **create a new task** or **merge into an existing task** (each recording segment becomes one group)
 3. Click "Start" to run it
 
-> 💡 Clicks on text become "wait for text to appear, then click"; clicks with no text underneath try icon matching; otherwise they become a fixed wait then click. Coordinates are always stored as window ratios, so window resizing / resolution changes are not a problem.
+> 💡 Clicks on text become "wait for text to appear, then click"; clicks with no text underneath try icon matching; otherwise they become a fixed wait then click. Coordinates are always stored as window ratios, so switching between same-aspect-ratio (16:9) resolutions needs no re-configuring; a different aspect ratio requires re-framing the regions.
 
 ---
 
@@ -107,7 +107,7 @@ Click through the actions in the game as you normally would. The tool records ev
 
 Once you've built and tested a task, share it with others:
 
-Click **Export Task** in the toolbar → save as JSON → post it in the [Task file sharing category](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB). Others download it, click **Import Task**, and it loads instantly — coordinates auto-adapt to any resolution.
+Click **Export Task** in the toolbar → save as JSON → post it in the [Task file sharing category](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB) (mention the source resolution). Others download it, click **Import Task**, and it loads instantly — coordinates auto-adapt between same-aspect-ratio (16:9) resolutions.
 
 > The exported JSON is a plain-text file and contains no personal settings or data.
 
@@ -121,7 +121,7 @@ First check: is the right window selected? Is the tool actually running? If both
 
 ### My resolution isn't 1920×1080?
 
-Ratio coordinates auto-adapt to different resolutions, but ROI positions may need tweaking. Use "OCR Diagnostic" to check whether text is being detected.
+Ratio coordinates auto-adapt between same-aspect-ratio (16:9) resolutions — for example 1920×1080 and 1600×900 work interchangeably with no re-configuring. A different aspect ratio re-layouts the game UI, shifting ROI / click positions, so re-frame them. Image matching (match_image) only scales templates within about 0.5–2×, so very large resolution gaps may fail; text detection (OCR) has no such limit. Use "OCR Diagnostic" to confirm text is being detected.
 
 ### Where are task files stored?
 
