@@ -70,7 +70,7 @@ else:
 sys.path.insert(0, str(_base))
 
 from _loader import load_sibling
-from i18n import T, set_language
+from i18n import T, detect_system_language, get_language, set_language
 
 _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
@@ -3082,7 +3082,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_accept(self):
-        old_lang = self._ctrl.get_setting(self._win, "language")
+        old_lang = get_language()
         self._ctrl.set_setting(self._win, "max_cps", self._max_cps.value())
         self._ctrl.set_setting(self._win, "scan_interval_ms", self._scan_interval.value())
         self._ctrl.set_setting(self._win, "default_match_mode", self._match_mode.currentData())
@@ -6580,12 +6580,14 @@ if __name__ == "__main__":
 
     # 統一以 %APPDATA% config 為準（與 MainWindow._config_path 一致），
     # 避免 dev 模式寫 APPDATA、啟動卻讀專案根 config 導致語系永不生效。
+    # 使用者存過的 language 優先；沒存 → 依系統語言（中文→繁中、其他→英文）。
     _cfg_path = Path(get_data_path("config.json"))
+    _detected_lang = detect_system_language()
     try:
         _app_cfg = json.loads(_cfg_path.read_text(encoding="utf-8"))
-        set_language(_app_cfg.get("language", "zh_TW"))
+        set_language(_app_cfg.get("language") or _detected_lang)
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        pass
+        set_language(_detected_lang)
 
     try:
         app = QApplication(sys.argv)

@@ -42,3 +42,16 @@ def test_code_keys_exist_in_all_langs():
     all_keys = set().union(*langs.values())
     orphans = sorted(_code_keys() - all_keys)
     assert not orphans, f"程式碼用到的 T() key 在所有語言檔皆缺漏: {orphans}"
+
+
+def test_langid_to_code():
+    from i18n import _langid_to_code
+
+    # primary language 0x04 = 中文，sublanguage 一律歸繁中
+    assert _langid_to_code(0x0404) == "zh_TW"  # zh-TW
+    assert _langid_to_code(0x0804) == "zh_TW"  # zh-CN
+    assert _langid_to_code(0x0C04) == "zh_TW"  # zh-HK
+    # 非中文（含偵測失敗的 0）→ 預設英文
+    assert _langid_to_code(0x0409) == "en"  # en-US
+    assert _langid_to_code(0x0C0A) == "en"  # es-ES
+    assert _langid_to_code(0) == "en"

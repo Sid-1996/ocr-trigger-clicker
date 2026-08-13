@@ -8,6 +8,27 @@ _dir = Path(__file__).parent
 _current = "zh_TW"
 _cache: dict[str, dict[str, str]] = {}
 
+# Windows LANGID primary language：0x04 = 中文（繁中／簡中／港澳皆屬）
+_LANG_CHINESE = 0x04
+
+
+def _langid_to_code(lang_id: int) -> str:
+    # ponytail: 預設英文，只有偵測到中文系統才用繁體中文（工具已無簡中介面）
+    return "zh_TW" if (lang_id & 0xFF) == _LANG_CHINESE else "en"
+
+
+def detect_system_language() -> str:
+    """第一次啟動的預設語系：中文系統 → zh_TW，其餘（含偵測失敗）→ en。"""
+    try:
+        import ctypes
+
+        lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+        if lang_id == 0:
+            lang_id = ctypes.windll.kernel32.GetSystemDefaultUILanguage()
+        return _langid_to_code(lang_id)
+    except Exception:
+        return "en"
+
 
 def set_language(lang: str) -> None:
     # ponytail: 語言檔不存在（如舊 config 存了已淘汰的 zh_CN）時 fallback 繁中，避免 T() 逐 key 警告

@@ -1,5 +1,16 @@
 
 
+## [Unreleased]
+
+### 給使用者
+
+#### 變更
+- **第一次啟動自動選擇語言**：未存過語言設定的全新安裝，啟動時依系統語言自動決定介面——中文系統用繁體中文、其他系統用英文；之後以設定內的選擇為準。
+
+### 給開發者
+
+- **系統語系偵測**（`i18n/__init__.py` 新增 `detect_system_language()`）：以 Win32 `GetUserDefaultUILanguage()`（回退 `GetSystemDefaultUILanguage()`）讀取 LANGID，primary language `0x04`（中文）→ `zh_TW`、其餘（含偵測失敗）→ `en`；純函式 `_langid_to_code()` 可測（`tests/test_i18n.py`）。啟動時 config 無 `language` 才套用偵測值；`SettingsDialog._on_accept` 的 `old_lang` 改以 `get_language()` 為準，避免非中文使用者首次進設定未改語言卻誤彈重啟提示。
+
 ## [v0.2.5] - 2026-08-14
 
 ### 給使用者
