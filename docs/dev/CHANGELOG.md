@@ -1,21 +1,27 @@
 
 
-## [Unreleased]
+## [v0.2.4] - 2026-08-13
 
 ### 給使用者
 
 #### 新增
-- **錄製操作（示範錄製）**：按「錄製操作」按鈕或 F9 開始錄製，在目標視窗點擊示範一遍，停止後自動轉成規則並建立任務。每個錄製段（session）變成一個群組，可選擇建立新任務或併入既有任務。
+- **錄製操作（示範錄製）**：按「錄製操作」按鈕或 F9 開始錄製，在目標視窗點擊示範一遍，停止後自動轉成規則並建立任務。每個錄製段（session）變成一個群組，可選擇建立新任務或併入既有任務。**只記錄滑鼠點擊**（左／右／中鍵），鍵盤按鍵、拖曳、滾輪不會被錄製——錄製時點擊盡量瞄準 UI 文字或圖示等有特徵的位置，轉換品質最好。
   - 點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，不怕視窗大小變化）
   - 點在無文字圖示上 → 嘗試轉成圖示比對（match_image）後點擊
   - 點在空白處或找不到特徵 → 固定等待後點擊
 - **錄製時自動激活目標視窗**：開始錄製時自動把目標視窗帶到前景，不用手動切換。
 - **轉換後清理錄製原始檔**：轉成規則後自動移除已用的錄製 session，避免累積佔空間。
 - **偵測後延時**：OCR 辨識（`detect`）與圖示比對（`match_image`）步驟偵測成功後，可固定等待指定毫秒讓遊戲 UI 準備好，再執行下一步驟，避免畫面一出就瞬間點擊導致點空。新增偵測步驟時會依設定窗的「偵測後延時預設」自動填入；錄製轉換出的偵測規則也會套用。
+- **任務記憶互動模式與視窗**：任務會記住上次成功執行用的互動模式（前景／後台）與目標視窗，切換任務時自動套用，不必每次重設；成功執行後也會以實際使用的視窗與模式校正綁定。
+- **偵測效能優化**：每幀步驟 0 的偵測區域預聚類合併 OCR，加上跨幀內容快取，跑馬任務每幀 OCR 呼叫從 15 次降到 7~9 次（約 -44%），「偵測執行太慢」警告大幅減少。等價驗證：實境畫面逐位元比對 dropped==0、false_pos==0，精準度不變。
 
 #### 變更
 - **互動模式不符警告移除**：錄製轉換的規則不再因 `template_source`（模板來源）與互動模式不符而誤報警告，模板來源僅作為 metadata 留存。
 - **錄製轉換套用設定窗預設**：轉出的規則自動套用設定窗的五個預設值（動作後延遲 `default_after_delay_ms`、點擊隨機偏移 `default_random_offset`、模糊比對門檻 `default_fuzzy_threshold`、模板比對門檻 `default_template_threshold`、顏色容差 `default_color_tolerance`），與手動新增動作步驟的行為一致。
+- **OCR 診斷建立規則預設帶延時**：從 OCR 診斷一鍵建立規則／步驟時，偵測與動作步驟自動帶上「偵測後延時」「動作後延遲」預設（250ms），移除舊的 wait 步驟。
+
+#### 修復
+- **規則跳轉被推進邏輯覆蓋**：修正規則 `jump` 跳轉在「前一步已觸發動作」時被群組指標推進邏輯覆蓋，導致目標規則未執行的問題。
 
 ### 給開發者
 
@@ -23,8 +29,11 @@
 - **錄製 session → 規則轉換器**：`core/20_recorder_convert.py` 離線後處理，每個滑鼠事件一條規則：OCR 錨點（`detect` + `click(text_center)`）、模板錨點（`match_image` base64 內嵌 + `click`）、或 wait+click 純計時；座標一律視窗比例 0~1，session 轉成群組 `mode=once`。`convert_sessions(session_dirs, defaults=None)` 接受設定窗預設 dict（`fuzzy_threshold` / `template_threshold` / `color_tolerance` / `random_offset` / `after_delay_ms`），由 GUI `_convert_recording_to_task` 從 `RuleConfigController` 組出傳入；`None` 時回退模組內建常數維持既有行為。
 - **GUI 整合**：`_record_btn` 工具列按鈕 + F9 全域熱鍵（`_on_hotkey` hid=2）開始/停止；`_convert_recording_to_task` 以 QInputDialog 選目標（新任務 / 既有任務，`list_tasks()`），併入既有任務時以 `save_task_with_groups` 合併；`_pending_merge_into` 與併發防護。
 - **`template_source` 跨模式防呆移除**（commit `a075576`）：`gui/06_gui_main.py`、`gui/test_run_controller.py` 的來源比對邏輯全數拔除，i18n 對應 5 個 key 一併刪除；`_current_template_type` 保留寫入 metadata，引擎不再檢查。
+- **任務記憶互動模式與視窗**（commits `74440e8`、`51ae316`）：`config.task_binding.<task>` 記錄最後成功執行的互動模式與視窗，切換任務時自動套用；成功執行後以實際使用值校正綁定。
+- **偵測效能優化**（commit `b12e78f`）：`_prewarm_ocr_clusters()` 以 union-find 將步驟 0 的 detect/compare ROI 預聚類，每叢集 OCR 一次；`_ocr_crop` 跨幀內容快取（blake2b 指紋、LRU 64），standalone 與聯集路徑共用。回歸測試 `tests/test_ocr_precluster.py` 4 項全過，全套 158 測試綠燈。
+- **config 路徑統一至 APPDATA**（commit `d10ceb7`）：dev 與 EXE 共用設定，支援一次性遷移。
 
-
+## [v0.2.3] - 2026-08-11
 
 ### 給使用者
 
