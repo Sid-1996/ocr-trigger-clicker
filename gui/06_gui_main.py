@@ -3131,25 +3131,53 @@ class SettingsDialog(QDialog):
                 else:
                     _launch_exe = sys.executable
                     _launch_args = ["gui/06_gui_main.py"]
+                    if "--debug" in sys.argv:
+                        _launch_args.append("--debug")
                     _launch_cwd = str(Path(__file__).resolve().parent.parent)
                     _relaunch_cmd = [
                         sys.executable,
                         str(Path(__file__).resolve().parent.parent / "updater_main.py"),
                     ]
-                subprocess.Popen(
-                    _relaunch_cmd
-                    + [
-                        "--mode=relaunch",
-                        f"--wait-pid={os.getpid()}",
-                        f"--launch-exe={_launch_exe}",
-                        *[f"--launch-arg={a}" for a in _launch_args],
-                        f"--launch-cwd={_launch_cwd}",
-                    ],
-                    close_fds=True,
-                )
+                _relaunch_args = _relaunch_cmd + [
+                    "--mode=relaunch",
+                    f"--wait-pid={os.getpid()}",
+                    f"--launch-exe={_launch_exe}",
+                    *[f"--launch-arg={a}" for a in _launch_args],
+                    f"--launch-cwd={_launch_cwd}",
+                ]
+                # 與主程序脫離（console/job 關閉時不會連帶結束 updater），
+                # 比照 core/12_updater.py::apply_update 的 detach 旗標。
+                _flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                try:
+                    subprocess.Popen(
+                        _relaunch_args,
+                        creationflags=_flags
+                        | getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000),
+                        close_fds=True,
+                    )
+                except OSError:
+                    try:
+                        subprocess.Popen(
+                            _relaunch_args,
+                            creationflags=_flags,
+                            close_fds=True,
+                        )
+                    except OSError:
+                        logging.exception("無法啟動 relauncher，將退出供使用者手動重啟")
+                # watchdog：萬一 _quit_app 卡住（如 _rules_lock），3 秒後強制結束，
+                # 保證 updater 的 --wait-pid 能繼續重啟。
+                threading.Thread(
+                    target=lambda: (time.sleep(3), os._exit(1)),
+                    daemon=True,
+                ).start()
                 self.accept()
-                self._win._quit_app()
-                return
+                try:
+                    self._win._quit_app()
+                except Exception:
+                    logging.exception("語言切換退出時例外")
+                # os._exit 跳過直譯器 shutdown（可能被非 daemon 執行緒卡住），
+                # 確保舊程序結束、新程序由 updater 接管啟動。
+                os._exit(0)
         self.accept()
 
 
@@ -6548,12 +6576,11 @@ if __name__ == "__main__":
     sys.excepthook = _excepthook
 
     # Read language preference before creating any GUI
-    from core._paths import _bundle_root, _is_frozen, get_data_path
+    from core._paths import get_data_path
 
-    if _is_frozen():
-        _cfg_path = Path(get_data_path("config.json"))
-    else:
-        _cfg_path = _bundle_root() / "config.json"
+    # 統一以 %APPDATA% config 為準（與 MainWindow._config_path 一致），
+    # 避免 dev 模式寫 APPDATA、啟動卻讀專案根 config 導致語系永不生效。
+    _cfg_path = Path(get_data_path("config.json"))
     try:
         _app_cfg = json.loads(_cfg_path.read_text(encoding="utf-8"))
         set_language(_app_cfg.get("language", "zh_TW"))

@@ -53,6 +53,16 @@ def main():
     args = parser.parse_args()
 
     if args.mode == "relaunch":
+        # 除錯用 relaunch log（固定寫入系統 TEMP，無需額外參數）。
+        _relaunch_log = Path(tempfile.gettempdir()) / "ocr_relaunch.log"
+        try:
+            with _relaunch_log.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] relaunch wait_pid={args.wait_pid} "
+                    f"launch={args.launch_exe} {args.launch_arg}\n"
+                )
+        except OSError:
+            pass
         if args.wait_pid:
             wait_for_pid_exit(args.wait_pid)
         launch_cmd = [args.launch_exe] + args.launch_arg
@@ -62,6 +72,14 @@ def main():
             shell=False,
             close_fds=True,
         )
+        try:
+            with _relaunch_log.open("a", encoding="utf-8") as f:
+                f.write(
+                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] relaunch done → "
+                    f"{launch_cmd} cwd={args.launch_cwd}\n"
+                )
+        except OSError:
+            pass
         sys.exit(0)
 
     # onedir update 模式：暫存 → 逐檔複製取代 + rollback
