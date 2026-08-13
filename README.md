@@ -5,7 +5,7 @@
 <h1 align="center">OCR Trigger Clicker</h1>
 
 <p align="center">
-  <em>給一般玩家的免寫程式遊戲自動點擊器 — 錄製一遍或設定規則，偵測畫面文字／圖像後自動點擊與按鍵</em><br>
+  <em>給一般玩家的免寫程式遊戲自動化工具 — 看畫面文字點兩下就建好規則，或錄製一遍操作自動轉成腳本</em><br>
   支援繁體中文 / English UI 切換 · Author: Sid
 </p>
 

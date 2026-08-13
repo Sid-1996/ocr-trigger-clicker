@@ -5,7 +5,7 @@
 <h1 align="center">OCR Trigger Clicker</h1>
 
 <p align="center">
-  <em>A no-code game script tool for everyday players — record once or build rules, auto-detect text & icons and click/type for you</em><br>
+  <em>A no-code game automation tool for everyday players — double-click on-screen text to build a rule, or record once and it auto-converts into a script</em><br>
   Traditional Chinese / English UI · Author: Sid
 </p>
 
