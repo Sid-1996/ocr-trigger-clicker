@@ -88,6 +88,47 @@ def set_run_mode(path: str, mode: str, repeat_times: int = 1, between_rounds_sec
         return False
 
 
+_VALID_INTERACTION_MODES = frozenset({"pynput", "frida"})
+
+
+def get_task_interaction_mode(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        mode = data.get("interaction_mode")
+        return mode if mode in _VALID_INTERACTION_MODES else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def set_task_interaction_mode(path: str, mode: str) -> bool:
+    if mode not in _VALID_INTERACTION_MODES:
+        return False
+    tmp_path: str = ""
+    try:
+        p = Path(path)
+        if p.exists():
+            with open(p, encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {}
+        data["interaction_mode"] = mode
+        with tempfile.NamedTemporaryFile(
+            "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            tmp_path = f.name
+        _replace_file(tmp_path, str(p))
+        return True
+    except (OSError, json.JSONDecodeError):
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        return False
+
+
 def get_capture_size(path: str) -> list | None:
     try:
         with open(path, encoding="utf-8") as f:

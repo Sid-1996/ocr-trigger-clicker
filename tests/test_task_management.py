@@ -152,3 +152,49 @@ def test_import_task_invalid_rules_filtered(tmp_tasks_dir, tmp_path):
     loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
     assert len(loaded["rules"]) == 1
     assert loaded["rules"][0]["id"] == "ok2"
+
+
+def test_import_task_preserves_window_and_mode(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "imp1",
+                "name": "Imported",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 200}}],
+            }
+        ],
+        "window_title": "StarSavior",
+        "interaction_mode": "frida",
+    }
+    src = tmp_path / "preserve.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=False)
+    assert result == "preserve"
+    loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    assert loaded["window_title"] == "StarSavior"
+    assert loaded["interaction_mode"] == "frida"
+
+
+def test_import_task_drops_invalid_mode_and_empty_title(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "imp1",
+                "name": "Imported",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 200}}],
+            }
+        ],
+        "window_title": "",
+        "interaction_mode": "postmessage",
+    }
+    src = tmp_path / "drop.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=False)
+    assert result == "drop"
+    loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    assert "window_title" not in loaded
+    assert "interaction_mode" not in loaded

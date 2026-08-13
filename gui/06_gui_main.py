@@ -2738,6 +2738,8 @@ save_task = _rule_mod.save_task
 delete_task = _rule_mod.delete_task
 get_task_window = _rule_mod.get_task_window
 set_task_window = _rule_mod.set_task_window
+get_task_interaction_mode = _rule_mod.get_task_interaction_mode
+set_task_interaction_mode = _rule_mod.set_task_interaction_mode
 get_run_mode = _rule_mod.get_run_mode
 set_run_mode = _rule_mod.set_run_mode
 rename_task = _rule_mod.rename_task
@@ -3093,6 +3095,9 @@ class SettingsDialog(QDialog):
         )
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
+        if getattr(self._win, "_current_task", ""):
+            task_path = str(_rule_mod.get_tasks_dir() / f"{self._win._current_task}.json")
+            set_task_interaction_mode(task_path, self._interaction_mode.currentData())
         self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
         self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
         self._ctrl.set_setting(self._win, "default_wait_ms", self._default_wait_ms.value())
@@ -3366,6 +3371,7 @@ class MainWindow(QMainWindow):
             self._screenshot_ctrl = ScreenshotController(self)
             self._rule_config_ctrl = RuleConfigController()
             self._test_ctrl = TestRunController(self, _of_summary, _resolve_rule_name)
+            self._applying_task_window = False
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
@@ -3464,7 +3470,11 @@ class MainWindow(QMainWindow):
         if last_win:
             idx = self._window_combo.findText(last_win)
             if idx >= 0:
-                self._window_combo.setCurrentIndex(idx)
+                self._applying_task_window = True
+                try:
+                    self._window_combo.setCurrentIndex(idx)
+                finally:
+                    self._applying_task_window = False
             else:
                 self._window_combo.setPlaceholderText(
                     T("status.last_window_not_found", title=last_win)
@@ -3875,6 +3885,8 @@ class MainWindow(QMainWindow):
         if title and self._current_task:
             task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
             set_task_window(task_path, title)
+            if not self._applying_task_window:
+                set_task_interaction_mode(task_path, self._get_interaction_mode())
 
     def _refresh_window_list(self):
         self._window_combo.clear()
@@ -3999,13 +4011,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel.clear_results()
         self._status_bar.showMessage(T("format.task_rules", name=name, count=len(self._rules)))
-        # 自動選取任務綁定的視窗
-        task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
+        # 套用任務綁定的互動模式（若有紀錄）
+        task_mode = get_task_interaction_mode(task_path)
+        if task_mode and self._rule_config_ctrl.get_setting(self, "interaction_mode") != task_mode:
+            self._rule_config_ctrl.set_setting(self, "interaction_mode", task_mode)
+            self._update_interaction_mode_label()
+        # 自動選取任務綁定的視窗（guard 避免覆寫任務模式紀錄）
         saved_window = get_task_window(task_path)
         if saved_window:
             idx = self._window_combo.findText(saved_window)
             if idx >= 0:
-                self._window_combo.setCurrentIndex(idx)
+                self._applying_task_window = True
+                try:
+                    self._window_combo.setCurrentIndex(idx)
+                finally:
+                    self._applying_task_window = False
 
     def _on_task_new(self):
         from PyQt6.QtWidgets import QInputDialog

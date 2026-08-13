@@ -185,6 +185,10 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
     raw_data: dict = {"rules": valid_rules}
     if valid_groups:
         raw_data["groups"] = valid_groups
+    if isinstance(data.get("window_title"), str) and data["window_title"]:
+        raw_data["window_title"] = data["window_title"]
+    if data.get("interaction_mode") in ("pynput", "frida"):
+        raw_data["interaction_mode"] = data["interaction_mode"]
 
     return ImportPreview(
         meta=meta,
