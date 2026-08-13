@@ -42,6 +42,12 @@
   <em>OCR diagnostic — real-time text recognition, double-click to create rules</em>
 </p>
 
+<br>
+
+<p align="center">
+  <a href="https://www.dailymotion.com/video/xaxgcfq">🎬 Watch the demo video — record once, auto-convert to rules, foreground / background modes</a>
+</p>
+
 ---
 
 ## What it does

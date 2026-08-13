@@ -76,6 +76,8 @@ For detailed tutorials, see the [documentation site](https://sid-1996.github.io/
 
 Don't want to set up rules one by one? Record once and the tool converts it into rules automatically.
 
+> 🎬 Want to see it in action? [Watch the recording demo video](https://www.dailymotion.com/video/xaxgcfq).
+
 ### ① Prepare
 
 1. Select the target window

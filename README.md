@@ -42,6 +42,12 @@
   <em>OCR 診斷 — 即時辨識畫面文字，按兩下直接建立規則</em>
 </p>
 
+<br>
+
+<p align="center">
+  <a href="https://www.dailymotion.com/video/xaxgcfq">🎬 看示範影片 — 一鏡到底示範錄製操作、自動轉規則與前景／後台模式</a>
+</p>
+
 ---
 
 ## 它能做什麼
