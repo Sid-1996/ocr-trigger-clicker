@@ -5,7 +5,7 @@
 <h1 align="center">OCR Trigger Clicker</h1>
 
 <p align="center">
-  <em>A no-code Windows automation tool — detects text on screen and automatically clicks and types</em><br>
+  <em>A no-code game script tool for everyday players — record once or build rules, auto-detect text & icons and click/type for you</em><br>
   Traditional Chinese / English UI · Author: Sid
 </p>
 
@@ -90,6 +90,12 @@ Your saved tasks aren't just for you — share them:
 - **Windows 10 / 11** (64-bit)
 - No installation or Python needed — download the ZIP, extract, run
 - If nothing happens, or background capture comes back as a black screen, try **right-click → Run as Administrator**
+
+---
+
+## Disclaimer
+
+This tool is intended for personal automation of repetitive operations. Before using it, please make sure your usage complies with the **terms of service** of the target game / software and applicable laws. The authors and contributors are not liable for any account risk, loss, or third-party disputes arising from the use of this tool (including background mode / Frida injection). Please carefully consider whether automation is appropriate for your game.
 
 ---
 
