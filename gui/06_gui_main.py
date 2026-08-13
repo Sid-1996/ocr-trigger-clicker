@@ -3886,7 +3886,10 @@ class MainWindow(QMainWindow):
             task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
             set_task_window(task_path, title)
             if not self._applying_task_window:
-                set_task_interaction_mode(task_path, self._get_interaction_mode())
+                set_task_interaction_mode(
+                    task_path,
+                    self._rule_config_ctrl.get_setting(self, "interaction_mode", "pynput"),
+                )
 
     def _refresh_window_list(self):
         self._window_combo.clear()
@@ -6025,6 +6028,14 @@ class MainWindow(QMainWindow):
         if success:
             self._loop = self._init_worker.loop
             self._loop.set_tool_hwnd(int(self.winId()))
+            if self._current_task:
+                # 執行事實綁定：以實際成功執行的視窗+模式校正任務紀錄
+                task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+                set_task_window(task_path, self._window_combo.currentText())
+                set_task_interaction_mode(
+                    task_path,
+                    self._rule_config_ctrl.get_setting(self, "interaction_mode", "pynput"),
+                )
             self._btn_toggle.setText(T("main.stop"))
             self._update_edit_enabled(False)
             self._status_bar.showMessage(
