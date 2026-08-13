@@ -71,7 +71,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | 檔案 | 角色 | 對外暴露 |
 |------|------|----------|
 | `core/01_screenshot.py` | 視窗擷取 | `capture()`, `capture_window_content()`, `list_windows()`, `get_window_rect()`, `activate_window()`, `activate_window_bg()` |
-| `core/02_ocr_engine.py` | OCR 引擎 | `init_engine()`, `recognize()`, `find_text()`, `OcrResult` |
+| `core/02_ocr_engine.py` | OCR 引擎（依 i18n 語系自動選模型：`en` 且 en 模型存在時用英文，否則繁中；英文模型缺失 fallback 繁中） | `init_engine()`, `recognize()`, `find_text()`, `OcrResult` |
 | `core/03_pynput_input.py` | 輸入模擬（前景 pynput SendInput） | `send_click()`, `send_key()`, `send_scroll()`, `send_drag()`, `send_hold_key()` |
 | `core/box_utils.py` | 座標工具集（純函式） | `roi_center()`, `roi_to_pixels()`, `roi_crop()`, `roi_sanitize()`, `box_to_rect()` 等 10 函式 |
 | `core/04_rule_engine.py` | 規則引擎 re-export hub（委派給 6 個子模組） | `Rule`, `RuleGroup`, `Step`, `load_groups()`, `save_groups()`, `load_rules()`, `save_rules()` |

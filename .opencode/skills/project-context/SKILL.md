@@ -315,7 +315,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 ### A. i18n 多語言系統（commit `21a611c` 起至 `ad9a65e`、`db7de24` 等）
 
-`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。三份 JSON（zh_TW/zh_CN/en.json 各 631 keys）均為扁平 dot-separated key。`i18n/check.py` 強制三語言 key set 一致。
+`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。兩份 JSON（zh_TW/en.json 各 703 keys）均為扁平 dot-separated key。`i18n/check.py` 強制雙語言 key set 一致。
 
 v0.1.8 新增 key：`main.toggle_all_on`、`main.toggle_all_off`、`tooltip.toggle_all_groups`。移除 AHK 相關 6 個 key（`status.ahk_*`、`dialog.install_ahk*`）。
 
