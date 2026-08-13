@@ -43,7 +43,7 @@
     {
       "id": "group_65292e04",
       "name": "體力型跑馬",
-      "enabled": true,
+      "enabled": false,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -59,7 +59,7 @@
     {
       "id": "group_ab1510a9",
       "name": "力量型跑馬",
-      "enabled": false,
+      "enabled": true,
       "mode": "loop",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -136,13 +136,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "on_fail": "stop",
+            "after_delay_ms": 500
           }
         },
         {
@@ -154,20 +149,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Space",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -191,7 +182,7 @@
             },
             "pattern": "-?\\d+\\.?\\d*",
             "operator": ">=",
-            "value": 50.0,
+            "value": 51.0,
             "on_fail": "stop"
           }
         },
@@ -205,7 +196,8 @@
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -232,26 +224,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -278,33 +260,24 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "on_fail": "stop",
+            "after_delay_ms": 500
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 500
           }
         },
         {
           "type": "key",
           "params": {
             "key": "3",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -331,20 +304,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -371,33 +340,24 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 1000
+            "hold_ms": 0,
+            "after_delay_ms": 1000
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Space",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -424,33 +384,24 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -475,20 +426,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -515,46 +462,32 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "3",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -579,39 +512,24 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "3",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -638,7 +556,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -658,33 +577,24 @@
               "action": "key",
               "key": "1",
               "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            },
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -709,20 +619,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -749,13 +655,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -794,33 +695,24 @@
             "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -847,13 +739,8 @@
             "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -870,7 +757,7 @@
         }
       ],
       "background": false,
-      "notes": ""
+      "notes": "【選項1】: 心情+ 1，失敗: 無\n【選項2】: 體力+10，失敗: 無"
     },
     {
       "id": "rule_e47d7d64",
@@ -889,34 +776,25 @@
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "fuzzy_threshold": 0.9,
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -940,34 +818,25 @@
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "fuzzy_threshold": 0.9,
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -994,26 +863,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1040,26 +899,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -1086,26 +935,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1132,26 +971,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -1178,7 +1007,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -1198,20 +1028,16 @@
               "action": "key",
               "key": "2",
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            },
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1238,20 +1064,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1278,7 +1100,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -1298,33 +1121,24 @@
               "action": "key",
               "key": "1",
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1351,20 +1165,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1391,33 +1201,24 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 1000
+            "hold_ms": 0,
+            "after_delay_ms": 1000
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Space",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1444,26 +1245,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1490,13 +1281,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1509,13 +1295,8 @@
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1542,20 +1323,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1582,20 +1359,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1622,26 +1395,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -1668,20 +1431,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1708,20 +1467,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1748,33 +1503,24 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 1000
+            "hold_ms": 0,
+            "after_delay_ms": 1000
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Space",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1801,20 +1547,16 @@
             "threshold": 0.8,
             "match_color": true,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Tab",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1839,20 +1581,16 @@
             },
             "match_mode": "contains",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1877,20 +1615,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Space",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1917,20 +1651,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -1957,7 +1687,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -1977,20 +1708,16 @@
               "action": "key",
               "key": "2",
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -2017,20 +1744,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "4",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2057,26 +1780,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -2103,20 +1816,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -2143,7 +1852,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -2164,7 +1874,8 @@
             "on_fail": {
               "action": "key",
               "key": "Space"
-            }
+            },
+            "after_delay_ms": 0
           }
         }
       ],
@@ -2191,26 +1902,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -2237,26 +1938,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -2283,26 +1974,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -2329,26 +2010,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 100
           }
         }
       ],
@@ -2375,20 +2046,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2415,20 +2082,16 @@
             "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2455,7 +2118,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -2475,20 +2139,16 @@
               "action": "key",
               "key": "1",
               "fail_duration_sec": 0.2
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "3",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2515,33 +2175,24 @@
             "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2568,33 +2219,24 @@
             "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2621,33 +2263,24 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2674,26 +2307,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2720,20 +2343,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2758,33 +2377,24 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "3",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2811,13 +2421,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2843,20 +2448,16 @@
               "action": "key",
               "key": "2",
               "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -2883,20 +2484,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -2923,20 +2520,16 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 10,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -2961,20 +2554,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "4",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2999,26 +2588,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3043,33 +2622,24 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3094,20 +2664,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "2",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -3132,20 +2698,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3170,20 +2732,16 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "1",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 0
           }
         }
       ],
@@ -3192,15 +2750,17 @@
     }
   ],
   "_collapsed_groups": [
-    "group_aaf9e64a",
-    "group_b96d8712",
+    "group_65292e04",
     "group_ab1510a9",
-    "group_65292e04"
+    "group_aaf9e64a",
+    "group_c12c5d3c",
+    "group_b96d8712"
   ],
   "window_title": "StarSavior",
   "capture_size": [
     1920,
     1080
   ],
-  "ratio_coords": true
+  "ratio_coords": true,
+  "interaction_mode": "pynput"
 }

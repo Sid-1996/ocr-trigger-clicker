@@ -54,7 +54,7 @@
         "a068faa605e9",
         "82cdad4adbfa",
         "1e95387f6db1",
-        "rule_e0089a7d"
+        "rule_c6eef45d"
       ],
       "order": "sequential"
     },
@@ -220,9 +220,9 @@
         "rule_ee024608",
         "rule_dec0e9ed",
         "rule_5fdede7a",
+        "rule_a85bc879",
         "rule_3b4adf6b",
         "rule_e41e2118",
-        "rule_26ed8f6d",
         "rule_99561389"
       ],
       "order": "sequential"
@@ -281,13 +281,8 @@
                 "__default__"
               ],
               "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -299,6 +294,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -324,13 +320,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -342,20 +333,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 600,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -383,6 +370,7 @@
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop",
+            "after_delay_ms": 0,
             "match_mode": "fuzzy",
             "template_source": "foreground"
           }
@@ -400,13 +388,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -418,6 +401,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -443,13 +427,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -461,26 +440,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -505,39 +474,24 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 800
+            "hold_ms": 0,
+            "after_delay_ms": 800
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -566,12 +520,13 @@
             "color_tolerance": 100,
             "on_fail": {
               "action": "notify",
-              "message": "沒找到大廳特徵",
+              "message": "找不到大廳特徵",
               "stop_groups": [
                 "group_266e1f8c"
               ],
               "fail_duration_sec": 0.5
             },
+            "after_delay_ms": 0,
             "match_mode": "fuzzy",
             "template_source": "foreground"
           }
@@ -596,13 +551,8 @@
                 "group_266e1f8c"
               ],
               "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -614,6 +564,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -639,13 +590,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -657,13 +603,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -688,13 +629,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -706,13 +642,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -737,13 +668,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -755,13 +681,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -786,13 +707,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -804,13 +720,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -837,13 +748,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -855,7 +761,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
+            "after_delay_ms": 250
           }
         }
       ],
@@ -880,13 +786,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -898,13 +799,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -929,13 +824,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -947,13 +837,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -985,13 +869,8 @@
                 "group_39a1b80d"
               ],
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -1003,13 +882,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1034,13 +907,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1052,13 +920,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1083,13 +945,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1101,13 +958,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1124,21 +975,16 @@
           "params": {
             "text": "X3",
             "roi": {
-              "x": 0.8145833333333333,
-              "y": 0.825,
-              "w": 0.049479166666666664,
-              "h": 0.07407407407407407,
+              "x": 0.8090796019900498,
+              "y": 0.8149779735682819,
+              "w": 0.05286069651741294,
+              "h": 0.08039647577092511,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1150,26 +996,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1194,13 +1030,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1212,13 +1043,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1243,13 +1069,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1261,13 +1082,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1292,13 +1108,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1310,13 +1121,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1333,21 +1138,16 @@
           "params": {
             "text": "X3",
             "roi": {
-              "x": 0.8145833333333333,
-              "y": 0.825,
-              "w": 0.049479166666666664,
-              "h": 0.07407407407407407,
+              "x": 0.8177860696517413,
+              "y": 0.829295154185022,
+              "w": 0.03731343283582089,
+              "h": 0.04955947136563876,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1359,26 +1159,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1403,13 +1193,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1421,13 +1206,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1452,13 +1232,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1470,13 +1245,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1501,13 +1271,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1519,13 +1284,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1533,7 +1293,7 @@
       "notes": ""
     },
     {
-      "id": "rule_e0089a7d",
+      "id": "rule_c6eef45d",
       "name": "是否為三次 (3)",
       "enabled": true,
       "steps": [
@@ -1542,21 +1302,16 @@
           "params": {
             "text": "X3",
             "roi": {
-              "x": 0.8145833333333333,
-              "y": 0.825,
-              "w": 0.049479166666666664,
-              "h": 0.07407407407407407,
+              "x": 0.8090796019900498,
+              "y": 0.8149779735682819,
+              "w": 0.05286069651741294,
+              "h": 0.08039647577092511,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1568,26 +1323,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1619,26 +1364,16 @@
                 "group_a1d5b815"
               ],
               "fail_duration_sec": 1.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1672,8 +1407,9 @@
                 "group_fdab3a16",
                 "group_36068123"
               ],
-              "fail_duration_sec": 2.5
-            }
+              "fail_duration_sec": 1.5
+            },
+            "after_delay_ms": 0
           }
         },
         {
@@ -1689,13 +1425,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1707,13 +1438,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1740,13 +1466,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1758,13 +1479,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1789,13 +1505,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1807,13 +1518,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 800
           }
         }
       ],
@@ -1845,32 +1551,16 @@
                 "group_36068123"
               ],
               "fail_duration_sec": 2.5
-            }
+            },
+            "after_delay_ms": 250
           }
         },
         {
-          "type": "wait",
+          "type": "key",
           "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.0390625,
-            "y": 0.06296296296296296,
-            "button": "left",
-            "random_offset": 3,
+            "key": "Escape",
             "hold_ms": 0,
-            "roi_coord": "client",
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -1906,7 +1596,8 @@
                 "group_3c07d078"
               ],
               "fail_duration_sec": 2.5
-            }
+            },
+            "after_delay_ms": 0
           }
         },
         {
@@ -1922,13 +1613,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -1940,13 +1626,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -1980,13 +1661,8 @@
                 "group_e8efb9ff"
               ],
               "fail_duration_sec": 5.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -1998,6 +1674,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -2023,13 +1700,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2041,13 +1713,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2072,13 +1739,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2090,13 +1752,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2121,13 +1778,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2139,13 +1791,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2170,13 +1817,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2188,26 +1830,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2232,13 +1864,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2250,14 +1877,9 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": "",
             "roi_coord": "client"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2291,13 +1913,8 @@
                 "group_3c07d078"
               ],
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -2309,14 +1926,9 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": "",
             "roi_coord": "client"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2343,13 +1955,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2361,13 +1968,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
@@ -2383,13 +1985,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2401,13 +1998,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2432,39 +2024,24 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 350
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2491,13 +2068,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 300
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2509,6 +2081,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -2539,13 +2112,8 @@
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 300
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -2557,6 +2125,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -2585,13 +2154,8 @@
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 300
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -2603,6 +2167,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -2631,13 +2196,8 @@
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 300
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -2649,33 +2209,24 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         },
         {
-          "type": "wait",
+          "type": "key",
           "params": {
-            "ms": 300
+            "key": "Escape",
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 300
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -2709,7 +2260,8 @@
                 "group_8db83f5b"
               ],
               "fail_duration_sec": 1.0
-            }
+            },
+            "after_delay_ms": 0
           }
         },
         {
@@ -2725,13 +2277,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2743,13 +2290,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2774,13 +2316,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2792,6 +2329,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -2824,13 +2362,8 @@
                 "group_8db83f5b"
               ],
               "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -2842,13 +2375,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2873,7 +2401,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -2889,13 +2418,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -2907,13 +2431,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -2942,14 +2461,9 @@
             "color_tolerance": 100,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 0.5
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 1.0
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -2961,6 +2475,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -2995,7 +2510,8 @@
                 "group_53eec035"
               ],
               "fail_duration_sec": 0.5
-            }
+            },
+            "after_delay_ms": 0
           }
         },
         {
@@ -3011,13 +2527,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3029,13 +2540,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3060,13 +2566,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3078,13 +2579,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3109,7 +2605,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
+            "on_fail": "stop",
+            "after_delay_ms": 0
           }
         },
         {
@@ -3125,13 +2622,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3143,13 +2635,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3174,13 +2661,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3192,13 +2674,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3223,13 +2699,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3241,13 +2712,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3278,14 +2744,9 @@
               "stop_groups": [
                 "group_53eec035"
               ],
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -3297,13 +2758,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3328,13 +2784,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3346,13 +2797,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3377,13 +2823,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3395,13 +2836,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3432,14 +2868,9 @@
               "stop_groups": [
                 "group_53eec035"
               ],
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -3451,13 +2882,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3482,13 +2908,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3500,13 +2921,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3531,13 +2946,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3549,7 +2959,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3579,13 +2989,8 @@
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -3597,13 +3002,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3637,13 +3036,8 @@
                 "group_f1d46de3"
               ],
               "fail_duration_sec": 1.0
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -3655,13 +3049,8 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         }
       ],
@@ -3686,13 +3075,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3704,26 +3088,16 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Space",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3750,13 +3124,8 @@
             "threshold": 0.8,
             "match_color": false,
             "color_tolerance": 100,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3769,13 +3138,8 @@
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 100
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3800,13 +3164,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3817,7 +3176,8 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3842,13 +3202,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3859,7 +3214,8 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3887,7 +3243,8 @@
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 0.3
-            }
+            },
+            "after_delay_ms": 0
           }
         },
         {
@@ -3903,13 +3260,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -3920,7 +3272,8 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3947,14 +3300,9 @@
             "fuzzy_threshold": 0.8,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -3993,14 +3341,9 @@
             "fuzzy_threshold": 0.8,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -4011,12 +3354,60 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
       "background": false,
       "notes": "如果有次數則點擊文字[挑戰]，如果找不到則執行下一條規則[刷新]"
+    },
+    {
+      "id": "rule_a85bc879",
+      "name": "跳過戰鬥",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "跳過戰鬥",
+            "roi": {
+              "x": 0.8103233830845771,
+              "y": 0.8270925110132159,
+              "w": 0.07898009950248756,
+              "h": 0.07488986784140969,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "jump",
+          "params": {
+            "rule_id": "rule_99561389"
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
     },
     {
       "id": "rule_3b4adf6b",
@@ -4038,14 +3429,9 @@
             "fuzzy_threshold": 0.8,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -4056,7 +3442,8 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -4083,14 +3470,9 @@
             "fuzzy_threshold": 0.8,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -4101,61 +3483,14 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "jump",
           "params": {
             "rule_id": "rule_5fdede7a"
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "rule_26ed8f6d",
-      "name": "跳過戰鬥",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "跳過戰鬥",
-            "roi": {
-              "x": 0.8103233830845771,
-              "y": 0.8270925110132159,
-              "w": 0.07898009950248756,
-              "h": 0.07488986784140969,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0
           }
         }
       ],
@@ -4183,14 +3518,9 @@
             "on_fail": {
               "action": "key",
               "key": "Escape",
-              "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -4201,266 +3531,28 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
       "background": false,
-      "notes": ""
-    },
-    {
-      "id": "fd3b58a1522f",
-      "name": "REWARD (esc)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "REWARD",
-            "roi": {
-              "x": 0.4317708333333333,
-              "y": 0.30462962962962964,
-              "w": 0.13802083333333334,
-              "h": 0.08703703703703704,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
-            "hold_ms": 0
-          }
-        }
-      ],
-      "background": true,
-      "notes": ""
-    },
-    {
-      "id": "61b1aa294c8d",
-      "name": "LEVELUP(esc)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "LEVELUP",
-            "roi": {
-              "x": 0.4348958333333333,
-              "y": 0.2601851851851852,
-              "w": 0.13020833333333334,
-              "h": 0.08611111111111111,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.4942708333333333,
-            "y": 0.8888888888888888,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "text": ""
-          }
-        }
-      ],
-      "background": true,
-      "notes": ""
-    },
-    {
-      "id": "rule_f3cb90dc",
-      "name": "確定要跳過動畫嗎？",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "確定要跳過動畫嗎？",
-            "roi": {
-              "x": 0.43385416666666665,
-              "y": 0.4638888888888889,
-              "w": 0.13072916666666667,
-              "h": 0.062037037037037036,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.578125,
-            "y": 0.6462962962962963,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "text": ""
-          }
-        }
-      ],
-      "background": true,
-      "notes": ""
-    },
-    {
-      "id": "rule_6dc1fbbd",
-      "name": "specialsale",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "紀念",
-            "roi": {
-              "x": 0.396875,
-              "y": 0.29444444444444445,
-              "w": 0.203125,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "contains",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "detect",
-          "params": {
-            "text": "SpecialSale",
-            "roi": {
-              "x": 0.3223958333333333,
-              "y": 0.18055555555555555,
-              "w": 0.36770833333333336,
-              "h": 0.15092592592592594,
-              "roi_coord": "client"
-            },
-            "match_mode": "contains",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 800
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Space",
-            "hold_ms": 0
-          }
-        }
-      ],
-      "background": true,
-      "notes": ""
-    },
-    {
-      "id": "rule_bb3b4bd8",
-      "name": "點擊以繼續(ESC)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "點擊以繼續",
-            "roi": {
-              "x": 0.4546875,
-              "y": 0.8564814814814815,
-              "w": 0.08333333333333333,
-              "h": 0.06481481481481481,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Space",
-            "hold_ms": 0
-          }
-        }
-      ],
-      "background": true,
       "notes": ""
     },
     {
@@ -4485,15 +3577,10 @@
             "color_tolerance": 100,
             "on_fail": {
               "action": "advance",
-              "fail_duration_sec": 2.0
+              "fail_duration_sec": 1.5
             },
+            "after_delay_ms": 250,
             "template_source": "foreground"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 500
           }
         },
         {
@@ -4505,6 +3592,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
+            "after_delay_ms": 250,
             "text": ""
           }
         }
@@ -4530,13 +3618,8 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
-            "on_fail": "stop"
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "on_fail": "stop",
+            "after_delay_ms": 250
           }
         },
         {
@@ -4547,7 +3630,8 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -4575,13 +3659,8 @@
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -4592,7 +3671,8 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
@@ -4621,13 +3701,8 @@
               "action": "key",
               "key": "Escape",
               "fail_duration_sec": 0.1
-            }
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -4638,48 +3713,248 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0
-          }
-        },
-        {
-          "type": "wait",
-          "params": {
-            "ms": 250
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         },
         {
           "type": "key",
           "params": {
             "key": "Escape",
-            "hold_ms": 0
+            "hold_ms": 0,
+            "after_delay_ms": 250
           }
         }
       ],
       "background": false,
       "notes": ""
+    },
+    {
+      "id": "fd3b58a1522f",
+      "name": "REWARD (esc)",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "REWARD",
+            "roi": {
+              "x": 0.4317708333333333,
+              "y": 0.30462962962962964,
+              "w": 0.13802083333333334,
+              "h": 0.08703703703703704,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Escape",
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    },
+    {
+      "id": "61b1aa294c8d",
+      "name": "LEVELUP(esc)",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "LEVELUP",
+            "roi": {
+              "x": 0.4348958333333333,
+              "y": 0.2601851851851852,
+              "w": 0.13020833333333334,
+              "h": 0.08611111111111111,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "custom",
+            "x": 0.4942708333333333,
+            "y": 0.8888888888888888,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 250,
+            "text": ""
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    },
+    {
+      "id": "rule_f3cb90dc",
+      "name": "確定要跳過動畫嗎？",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "確定要跳過動畫嗎？",
+            "roi": {
+              "x": 0.43385416666666665,
+              "y": 0.4638888888888889,
+              "w": 0.13072916666666667,
+              "h": 0.062037037037037036,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "custom",
+            "x": 0.578125,
+            "y": 0.6462962962962963,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 250,
+            "text": ""
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    },
+    {
+      "id": "rule_6dc1fbbd",
+      "name": "specialsale",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "紀念",
+            "roi": {
+              "x": 0.396875,
+              "y": 0.29444444444444445,
+              "w": 0.203125,
+              "h": 0.06574074074074074,
+              "roi_coord": "client"
+            },
+            "match_mode": "contains",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "detect",
+          "params": {
+            "text": "SpecialSale",
+            "roi": {
+              "x": 0.3223958333333333,
+              "y": 0.18055555555555555,
+              "w": 0.36770833333333336,
+              "h": 0.15092592592592594,
+              "roi_coord": "client"
+            },
+            "match_mode": "contains",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Escape",
+            "hold_ms": 0,
+            "after_delay_ms": 500
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Space",
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    },
+    {
+      "id": "rule_bb3b4bd8",
+      "name": "點擊以繼續(ESC)",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "點擊以繼續",
+            "roi": {
+              "x": 0.4546875,
+              "y": 0.8564814814814815,
+              "w": 0.08333333333333333,
+              "h": 0.06481481481481481,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Space",
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
     }
   ],
   "_collapsed_groups": [
-    "group_39a1b80d",
-    "group_36068123",
-    "group_261f6f66",
-    "group_3c07d078",
-    "__default__",
     "group_e8efb9ff",
-    "group_fdab3a16",
-    "group_40b2992f",
-    "group_a1d5b815",
-    "group_8db83f5b",
     "group_266e1f8c",
-    "group_2f0c668c",
-    "group_c7a80073",
+    "group_261f6f66",
+    "group_f1d46de3",
+    "group_fdab3a16",
     "group_53eec035",
-    "group_f1d46de3"
+    "group_a1d5b815",
+    "group_40b2992f",
+    "group_3c07d078",
+    "group_36068123",
+    "group_39a1b80d",
+    "__default__",
+    "group_8db83f5b"
   ],
   "capture_size": [
     1920,
     1080
   ],
   "ratio_coords": true,
-  "window_title": "StarSavior"
+  "window_title": "StarSavior",
+  "interaction_mode": "pynput"
 }
