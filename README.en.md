@@ -60,7 +60,7 @@
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |
 | 📐 | **Resolution-proof (same aspect ratio)** | Coordinates are stored as window ratios — switch between same-aspect-ratio (16:9, e.g. 1080p↔900p) resolutions with no reconfiguring; different aspect ratios need re-framing |
 | 👁️ | **Set up rules visually** | OCR diagnostic panel lists every text on screen — double-click to create a rule |
-| 🎮 | **Background (daemon) mode** | PrintWindow capture + Frida-injected clicks & keys — run with the window minimized or covered, zero cursor disturbance, without stealing focus (most Unity games don't support background mode — that's a game-engine limitation, not a tool issue) |
+| 🎮 | **Background (daemon) mode** | PrintWindow capture + Frida-injected clicks & keys — the window can be covered by other windows (but **not minimized**), zero cursor disturbance, without stealing focus (most Unity games don't support background mode — that's a game-engine limitation, not a tool issue) |
 | ⌨️ | **F8 global hotkey** | Start / pause / stop any time with F8 — no need to switch back to the tool |
 | 🎬 | **Record actions** | Press F9 to record, click through the game once as a demo, then convert it into rules automatically — no manual setup (only mouse clicks are recorded; aiming at text or icons gives the best result) |
 | 🔄 | **Auto-update** | Checks for new versions on launch, one-click upgrade via the built-in updater |
