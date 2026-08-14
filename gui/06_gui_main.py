@@ -6036,6 +6036,10 @@ class MainWindow(QMainWindow):
             return
         # 後台模式：啟動前先截一張測試幀，全黑 + 非系統管理員 → 彈窗（關鍵防線）
         if self._is_bg_mode():
+            # 非系統管理員 → session 內只提醒一次（不阻斷）
+            if not is_admin() and not getattr(self, "_admin_warned", False):
+                self._admin_warned = True
+                QMessageBox.warning(self, T("bg_capture.admin_title"), T("bg_capture.admin_warn"))
             _hwnd = get_window_hwnd(title)
             _test_img = capture_frame("frida", title, hwnd=_hwnd)
             if _test_img is not None and is_black_capture(_test_img) and not is_admin():

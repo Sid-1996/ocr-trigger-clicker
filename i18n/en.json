@@ -395,6 +395,8 @@
   "start.hard_problems_msg": "These rules have incomplete steps, please fix first:\n{items}",
   "bg_capture.black_admin_warn": "Background capture failed: try running as Administrator!",
   "bg_capture.black_admin_title": "Background capture failed",
+  "bg_capture.admin_title": "Background Mode Notice",
+  "bg_capture.admin_warn": "Background mode requires Administrator privileges for proper capture. Consider restarting as Administrator.",
   "step_form.select_image": "Select Image",
   "step_form.capture_region": "Capture Region",
   "step_form.compare_image": "Compare Image",
