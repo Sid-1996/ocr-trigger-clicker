@@ -132,6 +132,8 @@
   "dialog.group_selection": "Select Groups to Execute",
   "dialog.group_selection.remember": "Use these groups next time without asking",
   "dialog.group_ok": "Start",
+  "dialog.group_switch_to_bg": "Switch to Background Mode & Execute",
+  "dialog.group_switch_to_fg": "Switch to Foreground Mode & Execute",
   "dialog.test_result": "Test Result (Visualized)",
   "dialog.cannot_delete": "Cannot Delete",
   "dialog.uncategorized_system": "\"Uncategorized\" is a system group and cannot be deleted.\nUse the right-click menu \"Clear Uncategorized\" to remove all rules.",

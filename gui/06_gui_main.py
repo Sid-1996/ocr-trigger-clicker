@@ -5915,6 +5915,26 @@ class MainWindow(QMainWindow):
         remember_cb.setChecked(False)
         layout.addWidget(remember_cb)
 
+        # 便利按鈕：一鍵切換互動模式並執行（前景 ↔ 後台）
+        if self._is_bg_mode():
+            switch_text = T("dialog.group_switch_to_fg")
+            switch_target = "pynput"
+        else:
+            switch_text = T("dialog.group_switch_to_bg")
+            switch_target = "frida"
+
+        def _switch_mode_and_run():
+            self._rule_config_ctrl.set_setting(self, "interaction_mode", switch_target)
+            if self._current_task:
+                task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+                set_task_interaction_mode(task_path, switch_target)
+            self._update_interaction_mode_label()
+            dialog.accept()
+
+        switch_btn = QPushButton(switch_text)
+        switch_btn.clicked.connect(_switch_mode_and_run)
+        layout.addWidget(switch_btn)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
