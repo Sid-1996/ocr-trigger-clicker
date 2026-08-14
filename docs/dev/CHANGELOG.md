@@ -1,15 +1,23 @@
 
 
-## [Unreleased]
+## [v0.2.6] - 2026-08-14
 
 ### 給使用者
 
-#### 變更
+#### 新增
 - **第一次啟動自動選擇語言**：未存過語言設定的全新安裝，啟動時依系統語言自動決定介面——中文系統用繁體中文、其他系統用英文；之後以設定內的選擇為準。
+
+#### 修復
+- **匯入舊版任務可能崩潰或跑錯**：修正匯入匯出跟上現行 schema 的三個落差——①失敗處理（on_fail）為「跳轉至規則」時，目標規則的 UUID 現在會正確重映射到新任務；②形狀正確的 `capture_size`（截圖尺寸）保留，不再被丟棄；③步驟參數不是物件格式時改為略過驗證，不再直接報錯中斷匯入。同時清理已不存在的舊欄位分支（wait_rule／collect_rounds／on_all_fail）。
+
+#### 變更（文件）
+- 官網「規則設計原則」改寫為口語化說明：修正「三個原則」→「四個原則」，移除 on_fail／notify 等技術詞，用語對齊 GUI（跳過本次／動作後延遲），並補上「跳過此規則」「按下按鍵後繼續」的例外說明。
+- 官網「建立群組／新增規則」改為按工具列的「+ 群組」／「+ 規則」按鈕操作（右鍵選單並無此功能），OCR 診斷按鈕名稱對齊「建立為新文字規則」，功能清單補上「提示訊息」步驟。
 
 ### 給開發者
 
 - **系統語系偵測**（`i18n/__init__.py` 新增 `detect_system_language()`）：以 Win32 `GetUserDefaultUILanguage()`（回退 `GetSystemDefaultUILanguage()`）讀取 LANGID，primary language `0x04`（中文）→ `zh_TW`、其餘（含偵測失敗）→ `en`；純函式 `_langid_to_code()` 可測（`tests/test_i18n.py`）。啟動時 config 無 `language` 才套用偵測值；`SettingsDialog._on_accept` 的 `old_lang` 改以 `get_language()` 為準，避免非中文使用者首次進設定未改語言卻誤彈重啟提示。
+- **匯入匯出 schema 修正**（`core/task_management.py`，commit `c40bfb2`）：`_remap_ids` 把 on_fail `jump` 的目標 ID 一併重映射（涵蓋 detect／compare／match_image）；`preview_import_task` 僅在 `capture_size` 為長度 2 的 list 時保留；`_validate_rule_structure` 對非 dict 的 `params` 直接略過參數驗證。新增 5 個測試涵蓋上述路徑（`tests/test_task_management.py`）。
 
 ## [v0.2.5] - 2026-08-14
 
