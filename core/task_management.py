@@ -17,7 +17,6 @@ ImportPreview = _models.ImportPreview
 Rule = _models.Rule
 
 _FORMAT_VERSION = 1
-_IMPORT_DESCRIPTION_MAX = 200
 _MAX_IMPORT_SIZE = 10 * 1024 * 1024
 
 
@@ -111,6 +110,10 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         if s.get("type") not in valid_types:
             warnings.append(f"規則「{raw['name']}」步驟 {i} 未知類型「{s.get('type')}」，已略過")
             return False
+        p = s.get("params")
+        if p is not None and not isinstance(p, dict):
+            warnings.append(f"規則「{raw['name']}」步驟 {i} params 格式錯誤，已略過")
+            return False
     return True
 
 
@@ -189,6 +192,9 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
         raw_data["window_title"] = data["window_title"]
     if data.get("interaction_mode") in ("pynput", "frida"):
         raw_data["interaction_mode"] = data["interaction_mode"]
+    cs = data.get("capture_size")
+    if isinstance(cs, list) and len(cs) == 2:
+        raw_data["capture_size"] = cs
 
     return ImportPreview(
         meta=meta,
@@ -214,21 +220,17 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
         for r in data["rules"]:
             for s in r.get("steps", []):
                 p = s.get("params", {})
-                if s["type"] in ("wait_rule", "jump"):
+                if s["type"] == "jump":
                     rid = p.get("rule_id", "")
                     if rid in id_map:
                         p["rule_id"] = id_map[rid]
-                if s["type"] in ("detect", "match_image") and isinstance(p.get("on_fail"), dict):
+                if s["type"] in ("detect", "compare", "match_image") and isinstance(
+                    p.get("on_fail"), dict
+                ):
                     rid = p["on_fail"].get("rule_id", "") or p["on_fail"].get("jump_rule_id", "")
                     if rid in id_map:
                         p["on_fail"]["rule_id"] = id_map[rid]
                     p["on_fail"].pop("jump_rule_id", None)
-                if s["type"] == "collect_rounds":
-                    oaf = p.get("on_all_fail", {})
-                    if isinstance(oaf, dict):
-                        rid = oaf.get("rule_id", "")
-                        if rid in id_map:
-                            oaf["rule_id"] = id_map[rid]
         for g in data.get("groups", []):
             g["rule_ids"] = [id_map.get(rid, rid) for rid in g.get("rule_ids", [])]
 

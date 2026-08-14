@@ -198,3 +198,143 @@ def test_import_task_drops_invalid_mode_and_empty_title(tmp_tasks_dir, tmp_path)
     loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
     assert "window_title" not in loaded
     assert "interaction_mode" not in loaded
+
+
+def test_import_task_remaps_compare_on_fail_jump(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "cmp_rule",
+                "name": "Compare",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "compare",
+                        "params": {
+                            "operator": ">=",
+                            "value": 0.0,
+                            "on_fail": {"action": "jump", "rule_id": "target_rule"},
+                        },
+                    }
+                ],
+            },
+            {
+                "id": "target_rule",
+                "name": "Target",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+        ]
+    }
+    src = tmp_path / "compare_jump.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=True)
+    assert result is not None
+    imported = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    new_ids = {r["id"] for r in imported["rules"]}
+    assert "cmp_rule" not in new_ids and "target_rule" not in new_ids
+    on_fail = imported["rules"][0]["steps"][0]["params"]["on_fail"]
+    assert on_fail["rule_id"] in new_ids
+
+
+def test_import_task_remaps_detect_and_match_image_on_fail_jump(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "det_rule",
+                "name": "Detect",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "detect",
+                        "params": {"text": "x", "on_fail": {"action": "jump", "rule_id": "dst"}},
+                    },
+                    {
+                        "type": "match_image",
+                        "params": {
+                            "template_data": "a",
+                            "on_fail": {"action": "jump", "rule_id": "dst"},
+                        },
+                    },
+                ],
+            },
+            {
+                "id": "dst",
+                "name": "Dst",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {}}],
+            },
+        ]
+    }
+    src = tmp_path / "det_img_jump.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=True)
+    assert result is not None
+    imported = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    new_ids = {r["id"] for r in imported["rules"]}
+    for step in imported["rules"][0]["steps"]:
+        assert step["params"]["on_fail"]["rule_id"] in new_ids
+
+
+def test_import_task_preserves_capture_size(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "capture_size": [1920, 1080],
+        "rules": [
+            {
+                "id": "imp1",
+                "name": "Imported",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 200}}],
+            }
+        ],
+    }
+    src = tmp_path / "with_capture_size.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=False)
+    assert result == "with_capture_size"
+    loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    assert loaded["capture_size"] == [1920, 1080]
+
+
+def test_import_task_drops_malformed_capture_size(tmp_tasks_dir, tmp_path):
+    for bad in ("abc", [1], {"w": 10}):
+        src_data = {
+            "capture_size": bad,
+            "rules": [
+                {
+                    "id": "imp1",
+                    "name": "Imported",
+                    "enabled": True,
+                    "steps": [{"type": "wait", "params": {"ms": 200}}],
+                }
+            ],
+        }
+        src = tmp_path / "bad_cap.json"
+        src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+        result = _tm.import_task(str(src), regenerate_uuids=False)
+        assert result is not None
+        loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+        assert "capture_size" not in loaded
+
+
+def test_import_task_rejects_non_dict_params(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "imp1",
+                "name": "Imported",
+                "enabled": True,
+                "steps": [{"type": "jump", "params": "not_a_dict"}],
+            }
+        ]
+    }
+    src = tmp_path / "bad_params.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=True)
+    assert result is None
+    assert (tmp_tasks_dir / "bad_params.json").exists() is False
