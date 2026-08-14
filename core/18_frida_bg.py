@@ -1,12 +1,13 @@
-"""Frida-based background input — zero-flicker clicks for Unity games.
+"""Frida-based background input — zero-flicker clicks for games that reject plain PostMessage.
 
-Unity 驗證 WM_LBUTTON 事件時會用 GetCursorPos/ScreenToClient 對照實體游標位置，
+許多遊戲（常見於 Unity）驗證 WM_LBUTTON 事件時會用 GetCursorPos/ScreenToClient 對照實體游標位置，
 純 PostMessage 因實體游標不在目標點而被丟棄。本模組注入目標行程 hook 這兩個 API，
-在收到 update 訊息時回傳假座標，讓 Unity 通過驗證 —— 全程游標不動、焦點不搶。
+在收到 update 訊息時回傳假座標，讓此類遊戲通過驗證 —— 全程游標不動、焦點不搶。
+（多數 Unity 遊戲因底層限制仍不支援後台，實際效果以遊戲視窗自行測試為準。）
 
 鍵盤（key）已同步支援：與點擊同架構——hook GetKeyState / GetAsyncKeyState /
 GetKeyboardState 假造按鍵狀態（僅覆寫注入中的 vk，其餘 pass-through），再
-PostMessage 送 WM_KEYDOWN/UP，讓 Unity 無論走訊息佇列或 state-polling 都收得到。
+PostMessage 送 WM_KEYDOWN/UP，讓此類遊戲無論走訊息佇列或 state-polling 都收得到。
 
 焦點假造：hook GetForegroundWindow / GetActiveWindow / GetFocus，在點擊/按鍵
 瞬間回傳遊戲自己的視窗 hwnd（arm(hwnd) 注入），讓查焦點的遊戲（Application.isFocused）

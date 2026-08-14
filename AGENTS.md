@@ -112,7 +112,7 @@ pwsh -Command "
 
 ## 座標系統
 
-所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。後台模式（`roi_coord:"client"`）以客戶區為基準。互動方法兩種：`pynput`（前景）、`frida`（後台 Frida 注入，解 Unity 無法後台點擊；零游標/焦點干擾，有防作弊風險）。後台 PostMessage 模式已移除。
+所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。後台模式（`roi_coord:"client"`）以客戶區為基準。互動方法兩種：`pynput`（前景）、`frida`（後台 Frida 注入，可嘗試解決部分遊戲無法後台點擊；零游標/焦點干擾，有防作弊風險；多數 Unity 遊戲因底層限制不支援後台，以遊戲視窗自行測試為準）。後台 PostMessage 模式已移除。
 
 | 來源 | 原始座標系 | 轉換方式 |
 |---|---|---|

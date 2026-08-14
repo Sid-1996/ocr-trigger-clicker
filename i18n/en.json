@@ -50,7 +50,7 @@
   "combo.interaction_fg": "Foreground (pynput)",
   "combo.interaction_bg_frida": "Background (Frida inject)",
   "settings.interaction_mode": "Interaction method:",
-  "settings.interaction_mode.tooltip": "How to send clicks and keyboard input.\nForeground is most stable and requires the window to be in front. Background (Frida inject) controls Unity-style games while you work on another window (no flicker), but carries an anti-cheat detection risk.\nIf the game does not respond to keys, it is a game limitation (some games only accept keyboard input while focused), not a tool issue.",
+  "settings.interaction_mode.tooltip": "How to send clicks and keyboard input.\nForeground is most stable and requires the window to be in front. Background (Frida inject) lets you try controlling the game while you work on another window (no flicker), but most Unity games don't support background mode due to engine limitations — verify on your actual game window. It also carries an anti-cheat detection risk.\nIf the game does not respond to keys, it is a game limitation (some games only accept keyboard input while focused), not a tool issue.",
   "template_helper.insert": "Insert:",
   "template_helper.digit": "Digit",
   "template_helper.letter": "Letter",

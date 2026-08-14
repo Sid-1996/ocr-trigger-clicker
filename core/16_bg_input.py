@@ -2,7 +2,7 @@
 
 Methods:
 - pynput: Physical input via pynput (requires foreground, works for all apps)
-- frida: Frida 行程注入（零閃爍 Unity 後台操控，見 18_frida_bg.py）
+- frida: Frida 行程注入（零閃爍後台操控，可嘗試解決部分遊戲無法後台點擊；多數 Unity 遊戲因底層限制不支援，以遊戲視窗自行測試為準，見 18_frida_bg.py）
   click/key 委派給 frida 模組（hook 假造游標/鍵盤狀態 + PostMessage）；scroll/drag
   仍回退 PostMessage primitive（v1 限制，Unity 下可能無效）
 
