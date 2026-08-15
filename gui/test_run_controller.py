@@ -23,29 +23,13 @@ is_admin = _pw_mod.is_admin
 recognize = _main_loop_mod.recognize
 
 
-def _get_interaction_mode() -> str:
-    import json
-    from pathlib import Path
-
-    try:
-        from core._paths import _bundle_root, _is_frozen, get_data_path
-
-        if _is_frozen():
-            p = Path(get_data_path("config.json"))
-        else:
-            p = _bundle_root() / "config.json"
-        with open(p, encoding="utf-8") as f:
-            return json.load(f).get("interaction_mode", "pynput")
-    except Exception:
-        return "pynput"
-
-
 find_text = _main_loop_mod.find_text
 crop_roi = _main_loop_mod.crop_roi
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
 
 _rule_engine = load_sibling("rule_engine", "core/04_rule_engine.py")
+_get_interaction_mode = _rule_engine.get_config_interaction_mode
 get_capture_size = _rule_engine.get_capture_size
 
 

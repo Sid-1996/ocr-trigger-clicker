@@ -91,6 +91,21 @@ def set_run_mode(path: str, mode: str, repeat_times: int = 1, between_rounds_sec
 _VALID_INTERACTION_MODES = frozenset({"pynput", "frida"})
 
 
+def get_config_interaction_mode() -> str:
+    """Read interaction_mode from config.json (app-level). Defaults to "pynput"."""
+    try:
+        from core._paths import _bundle_root, _is_frozen, get_data_path
+
+        if _is_frozen():
+            p = Path(get_data_path("config.json"))
+        else:
+            p = _bundle_root() / "config.json"
+        with open(p, encoding="utf-8") as f:
+            return json.load(f).get("interaction_mode", "pynput")
+    except Exception:
+        return "pynput"
+
+
 def get_task_interaction_mode(path: str) -> str | None:
     try:
         with open(path, encoding="utf-8") as f:

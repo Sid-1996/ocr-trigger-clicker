@@ -82,21 +82,6 @@ def _parse_version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in v.strip().split("."))
 
 
-def _get_interaction_mode() -> str:
-    """Read interaction mode directly from config.json (avoids needing MainWindow instance)."""
-    try:
-        from core._paths import _bundle_root, _is_frozen, get_data_path
-
-        if _is_frozen():
-            p = Path(get_data_path("config.json"))
-        else:
-            p = _bundle_root() / "config.json"
-        with open(p, encoding="utf-8") as f:
-            return json.load(f).get("interaction_mode", "pynput")
-    except Exception:
-        return "pynput"
-
-
 def _current_template_type() -> str:
     return "background" if _get_interaction_mode() != "pynput" else "foreground"
 
@@ -2738,6 +2723,7 @@ save_task = _rule_mod.save_task
 delete_task = _rule_mod.delete_task
 get_task_window = _rule_mod.get_task_window
 set_task_window = _rule_mod.set_task_window
+_get_interaction_mode = _rule_mod.get_config_interaction_mode
 get_task_interaction_mode = _rule_mod.get_task_interaction_mode
 set_task_interaction_mode = _rule_mod.set_task_interaction_mode
 get_run_mode = _rule_mod.get_run_mode

@@ -59,6 +59,7 @@ _MAX_IMPORT_SIZE = _tasks._MAX_IMPORT_SIZE
 _config = load_sibling("run_config", "core/run_config.py")
 get_task_window = _config.get_task_window
 set_task_window = _config.set_task_window
+get_config_interaction_mode = _config.get_config_interaction_mode
 get_task_interaction_mode = _config.get_task_interaction_mode
 set_task_interaction_mode = _config.set_task_interaction_mode
 get_run_mode = _config.get_run_mode

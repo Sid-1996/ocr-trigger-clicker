@@ -65,7 +65,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `build.py` | PyInstaller 打包 + updater.exe 構建 |
 | `updater_main.py` | 獨立更新/重啟程序 |
 
-另有 `i18n/`（多語言，631 keys × 3 語言）與 `tests/`（pytest 單元測試）。
+另有 `i18n/`（多語言，701 keys × 2 語言）與 `tests/`（pytest 單元測試）。
 
 任務檔案實際路徑：`%APPDATA%\ocr-trigger-clicker\tasks\`（不在專案目錄內）。
 
@@ -315,7 +315,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 ### A. i18n 多語言系統（commit `21a611c` 起至 `ad9a65e`、`db7de24` 等）
 
-`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。兩份 JSON（zh_TW/en.json 各 703 keys）均為扁平 dot-separated key。`i18n/check.py` 強制雙語言 key set 一致。
+`T(msg_id, **kwargs)` 函式（`i18n/__init__.py`）查目前語言 JSON → fallback `zh_TW` → 回傳原始 key。兩份 JSON（zh_TW/en.json 各 701 keys）均為扁平 dot-separated key。`i18n/check.py` 強制雙語言 key set 一致。
 
 v0.1.8 新增 key：`main.toggle_all_on`、`main.toggle_all_off`、`tooltip.toggle_all_groups`。移除 AHK 相關 6 個 key（`status.ahk_*`、`dialog.install_ahk*`）。
 
@@ -426,7 +426,7 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 - 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1265` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆直接讀取原始碼與執行測試腳本第一手確認。
 - 全域熱鍵 — `core/00_global_hotkey.py` 註冊 F8（hid=1，對應 `MainWindow._on_hotkey()` → `_restore_window()`+`_toggle_start()`）與 F9（hid=2，→ `_on_record_clicked()`）。
-- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON 各 631 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
+- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，雙語言 JSON 各 701 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
 - 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt`，`download_update` 下載 ZIP 至 `%TEMP%/ocr_update_*/staging/`，`apply_update` 啟動 `updater.exe --mode=update`。`updater_main.py` 含 copytree 逐檔複製、rollback、暫存目錄清理機制。
 - 路徑集中 — `core/_paths.py` 5 函式，取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
 - 截圖 — `core/17_capture_pipeline.py:48` `capture_frame(mode, title, hwnd)` 為統一管線：前景 `_capture_foreground`（mss 三層備援）、後台 `_capture_background`（PrintWindow）。`core/15_print_window.py:25` `is_black_capture()` 全黑偵測。

@@ -38,26 +38,12 @@ _pw_mod = load_sibling("print_window", "core/15_print_window.py")
 is_black_capture = _pw_mod.is_black_capture
 is_admin = _pw_mod.is_admin
 
+_rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
+_get_interaction_mode = _rule_mod.get_config_interaction_mode
+
 activate_window = _screenshot.activate_window
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 recognize = _ocr.recognize
-
-
-def _get_interaction_mode() -> str:
-    import json
-    from pathlib import Path
-
-    try:
-        from core._paths import _bundle_root, _is_frozen, get_data_path
-
-        if _is_frozen():
-            p = Path(get_data_path("config.json"))
-        else:
-            p = _bundle_root() / "config.json"
-        with open(p, encoding="utf-8") as f:
-            return json.load(f).get("interaction_mode", "pynput")
-    except Exception:
-        return "pynput"
 
 
 def _find_text_after_click(block_results: list, target: str) -> bool:
