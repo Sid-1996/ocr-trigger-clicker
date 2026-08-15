@@ -373,3 +373,41 @@ class PerformanceMonitor:
             self._rate_violations = 0
             self._rate_violation_window_start = 0.0
             self._penalty_until = 0.0
+
+
+if __name__ == "__main__":
+    # ponytail: automated self-check (run via python core/10_performance_monitor.py)
+    ft = _FILETIME()
+    ft.dwHighDateTime = 1
+    ft.dwLowDateTime = 0
+    assert _ft_to_int(ft) == 1 << 32
+
+    mon = PerformanceMonitor(max_cps=5)
+    assert mon.get_total_clicks() == 0
+    mon.record_click()
+    mon.record_click()
+    mon.record_click()
+    assert mon.get_total_clicks() == 3
+
+    # under the limit: allowed
+    assert mon.check_rate_limit() is True
+    # exceed the limit: penalized (False), total clicks unchanged
+    for _ in range(6):
+        mon.record_click()
+    assert mon.check_rate_limit() is False
+    assert mon.get_total_clicks() == 9
+
+    mon.record_frame(ocr_ms=12.5, loop_ms=3.0)
+    stats = mon.get_stats()
+    assert stats["ocr_avg_ms"] == 12.5
+    assert stats["loop_avg_ms"] == 3.0
+    assert stats["ocr_failures"] == 0
+    mon.record_ocr_failure()
+    assert mon.get_ocr_failures() == 1
+    mon.reset_ocr_failures()
+    assert mon.get_ocr_failures() == 0
+
+    fresh = PerformanceMonitor(max_cps=5)
+    assert fresh.check_rate_limit() is True
+
+    print("  [OK] performance_monitor self-check")

@@ -52,3 +52,30 @@ def register(hwnd: int) -> dict[int, bool]:
 def unregister(hwnd: int) -> None:
     for hid in _HOTKEYS:
         ctypes.windll.user32.UnregisterHotKey(hwnd, hid)
+
+
+if __name__ == "__main__":
+    # ponytail: automated self-check (run via python core/00_global_hotkey.py)
+    assert _HOTKEYS == {1: ("F8", 0x77), 2: ("F9", 0x78)}, _HOTKEYS
+
+    # non-windows event must pass through
+    assert handle_native_event("other_event", 0) == (False, 0, None)
+
+    # WM_HOTKEY with a registered id returns (True, 0, hid)
+    msg = wintypes.MSG()
+    msg.message = WM_HOTKEY
+    msg.wParam = 1
+    assert handle_native_event(b"windows_generic_MSG", ctypes.addressof(msg)) == (True, 0, 1)
+
+    # WM_HOTKEY with unknown id is swallowed
+    msg2 = wintypes.MSG()
+    msg2.message = WM_HOTKEY
+    msg2.wParam = 999
+    assert handle_native_event(b"windows_generic_MSG", ctypes.addressof(msg2)) == (True, 0, None)
+
+    # non-WM_HOTKEY message passes through
+    msg3 = wintypes.MSG()
+    msg3.message = 0x0100  # WM_KEYDOWN
+    assert handle_native_event(b"windows_generic_MSG", ctypes.addressof(msg3)) == (False, 0, None)
+
+    print("  [OK] global_hotkey self-check")
