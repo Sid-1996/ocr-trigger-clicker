@@ -19,7 +19,3 @@ tasks/
 /images/
 /stderr.txt
 /config.json
-
-
-
-# 已移除的診斷工具目錄 tools/（如重建再補規則）
