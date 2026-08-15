@@ -112,14 +112,14 @@ pwsh -Command "
 
 ## 座標系統
 
-所有 ROI / 點擊座標統一儲存為**視窗比例座標**（window-ratio, 0~1）。後台模式（`roi_coord:"client"`）以客戶區為基準。互動方法兩種：`pynput`（前景）、`frida`（後台 Frida 注入，可嘗試解決部分遊戲無法後台點擊；零游標/焦點干擾，有防作弊風險；多數 Unity 遊戲因底層限制不支援後台，以遊戲視窗自行測試為準）。後台 PostMessage 模式已移除。
+所有 ROI / 點擊座標統一儲存為**比例座標**（0~1）。前景 selector 建立時統一收斂為**客戶區比例**（`roi_coord:"client"`，以客戶區不含標題列/邊框為基準）；舊任務無 `roi_coord` 標記視為全視窗比例，向下相容。互動方法兩種：`pynput`（前景）、`frida`（後台 Frida 注入，可嘗試解決部分遊戲無法後台點擊；零游標/焦點干擾，有防作弊風險；多數 Unity 遊戲因底層限制不支援後台，以遊戲視窗自行測試為準）。後台 PostMessage 模式已移除。
 
 | 來源 | 原始座標系 | 轉換方式 |
 |---|---|---|
-| OCR 辨識結果 | 視窗相對（OCR 在截圖上執行） | ÷ win_size → 比例座標 |
-| debug panel「建立為新規則」 | 視窗相對（同上） | ÷ win_size → 比例座標 |
-| 框選偵測區域 (ROI selector) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
-| 選取點擊座標 (click picker) | 螢幕絕對 | (螢幕 - win_rect) ÷ win_size → 比例 |
+| OCR 辨識結果 | 視窗相對（OCR 在截圖上執行） | ÷ client_size → 客戶區比例（debug panel 建立規則時） |
+| debug panel「建立為新規則」 | 視窗相對（同上） | ÷ client_size → 客戶區比例 |
+| 框選偵測區域 (ROI selector) | 螢幕絕對 | (螢幕 - win_rect - chrome) ÷ client_size → 客戶區比例 |
+| 選取點擊座標 (click picker) | 螢幕絕對 | (螢幕 - win_rect - chrome) ÷ client_size → 客戶區比例 |
 | 模板擷取 (capture region) | 螢幕絕對 | (螢幕 - win_rect - chrome) ÷ client_size → 客戶區比例 |
 
 > ROI/點擊/模板選取**統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`），後台模式也相同（設定時將目標視窗前景化），收斂為客戶區比例。已實測前景(mss)模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 全部信心 1.0），故後台模板不再需要 PrintWindow 框選 UI。

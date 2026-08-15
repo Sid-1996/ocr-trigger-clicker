@@ -348,8 +348,8 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 |------|------|------|
 | **螢幕絕對** (screen-absolute) | ROI selector、click picker、`GetWindowRect` | 多螢幕虛擬桌面座標 |
 | **視窗相對** (window-relative) | OCR 辨識結果、主循環內部運算 | 以視窗左上角為 `(0,0)`，單位像素 |
-| **客戶區比例** (client-ratio) | 後台 ROI/座標選取器、`roi_coord:"client"` 標記 | 0~1 比值，基準為客戶區（不含標題列/邊框） |
-| **視窗比例** (window-ratio) | ROI 儲存值、點擊座標儲存值 | 0~1 比值，與視窗解析度無關 |
+| **客戶區比例** (client-ratio) | 統一前景 selector（`07_gui_roi`/`13_gui_click_picker`/`14_capture_region`）、`roi_coord:"client"` 標記 | 0~1 比值，基準為客戶區（不含標題列/邊框） |
+| **視窗比例** (window-ratio) | 舊任務無 `roi_coord` 標記（向下相容） | 0~1 比值，與視窗解析度無關 |
 | **影像像素** (image pixel) | numpy array `[h, w, 3]` | 截圖陣列索引 |
 
 ### 轉換發生點
@@ -358,12 +358,12 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 來源                        原始座標          轉換方式                               最終
 ──────────────────────────────────────────────────────────────────────────────────
 OCR 辨識                     視窗相對          × 暫不轉換，保留像素值                  視窗相對
-debug panel 建立規則         視窗相對          ÷ win_size → 比例座標                   視窗比例
-框選偵測區域 (gui_roi)       螢幕絕對          (螢幕 - win_rect) ÷ win_size → 比例      視窗比例
-選取點擊座標 (click_picker)  螢幕絕對          (螢幕 - win_rect) ÷ win_size → 比例      視窗比例
-後台框選/座標 (bg selectors) 影像像素          (像素 - chrome) ÷ client_size → 比例     客戶區比例
-主循環 _resolve_roi()        視窗比例          × 當前 capture 圖寬高 → 像素              影像像素
-主循環 _resolve_point()      視窗比例          × 當前視窗寬高 → 像素 → +win_rect        螢幕絕對（送 pynput / Frida）
+debug panel 建立規則         視窗相對          ÷ client_size → 比例座標                 客戶區比例
+框選偵測區域 (gui_roi)       螢幕絕對          (螢幕 - win_rect - chrome) ÷ client_size → 比例  客戶區比例
+選取點擊座標 (click_picker)  螢幕絕對          (螢幕 - win_rect - chrome) ÷ client_size → 比例  客戶區比例
+模板擷取 (capture_region)    螢幕絕對          (螢幕 - win_rect - chrome) ÷ client_size → 比例  客戶區比例
+主循環 _resolve_roi()        比例＋`roi_coord`  依標記 × client_size+chrome 或 × 圖寬高     影像像素
+主循環 _resolve_point()      比例＋`roi_coord`  依標記 × client_size+chrome 或 × 圖寬高     螢幕絕對（送 pynput / Frida）
 ```
 
 ### 比例轉換實作
