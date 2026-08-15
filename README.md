@@ -77,6 +77,8 @@
 
 > 📖 詳細引導請看 [快速上手指南](./START.md)。
 
+> 💡 內建範例：已打包 **星之救援者 StarSavior** 每日任務／跑馬輔助任務檔 → [StarSavior 任務頁](./docs/starsavior.html)
+
 ---
 
 ## 分享你的任務

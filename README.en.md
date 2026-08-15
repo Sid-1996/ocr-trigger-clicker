@@ -77,6 +77,8 @@
 
 > 📖 For step-by-step guidance, see the [Quick Start Guide](./START.en.md).
 
+> 💡 Built-in sample tasks: **StarSavior (星之救援者)** daily quests / racing assist → [StarSavior tasks page](./docs/starsavior.html)
+
 ---
 
 ## Share your tasks
