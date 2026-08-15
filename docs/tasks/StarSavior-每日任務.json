@@ -210,7 +210,7 @@
     {
       "id": "group_2f0c668c",
       "name": "每日PVP一次",
-      "enabled": true,
+      "enabled": false,
       "mode": "once",
       "repeat_times": 1,
       "between_rounds_sec": 0,
@@ -223,7 +223,8 @@
         "rule_a85bc879",
         "rule_3b4adf6b",
         "rule_e41e2118",
-        "rule_99561389"
+        "rule_99561389",
+        "rule_e00b0a98"
       ],
       "order": "sequential"
     },
@@ -3203,7 +3204,7 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop",
-            "after_delay_ms": 250
+            "after_delay_ms": 500
           }
         },
         {
@@ -3516,8 +3517,7 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": {
-              "action": "key",
-              "key": "Escape",
+              "action": "advance",
               "fail_duration_sec": 0.5
             },
             "after_delay_ms": 250
@@ -3533,14 +3533,6 @@
             "random_offset": 3,
             "hold_ms": 0,
             "after_delay_ms": 500
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
-            "hold_ms": 0,
-            "after_delay_ms": 250
           }
         }
       ],
@@ -3723,7 +3715,7 @@
     },
     {
       "id": "fd3b58a1522f",
-      "name": "REWARD (esc)",
+      "name": "REWARD (Space)",
       "enabled": true,
       "steps": [
         {
@@ -3746,48 +3738,9 @@
         {
           "type": "key",
           "params": {
-            "key": "Escape",
+            "key": "Space",
             "hold_ms": 0,
             "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": true,
-      "notes": ""
-    },
-    {
-      "id": "61b1aa294c8d",
-      "name": "LEVELUP(esc)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "LEVELUP",
-            "roi": {
-              "x": 0.4348958333333333,
-              "y": 0.2601851851851852,
-              "w": 0.13020833333333334,
-              "h": 0.08611111111111111,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.4942708333333333,
-            "y": 0.8888888888888888,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
           }
         }
       ],
@@ -3894,7 +3847,7 @@
     },
     {
       "id": "rule_bb3b4bd8",
-      "name": "點擊以繼續(ESC)",
+      "name": "點擊以繼續(Esc)",
       "enabled": true,
       "steps": [
         {
@@ -3915,9 +3868,13 @@
           }
         },
         {
-          "type": "key",
+          "type": "click",
           "params": {
-            "key": "Space",
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
             "hold_ms": 0,
             "after_delay_ms": 250
           }
@@ -3925,24 +3882,62 @@
       ],
       "background": true,
       "notes": ""
+    },
+    {
+      "id": "rule_e00b0a98",
+      "name": "對戰列表",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "對戰列表",
+            "roi": {
+              "x": 0.34950248756218905,
+              "y": 0.10462555066079295,
+              "w": 0.08333333333333333,
+              "h": 0.07378854625550661,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 250
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
     }
   ],
   "_collapsed_groups": [
-    "group_36068123",
-    "group_40b2992f",
-    "group_2f0c668c",
     "__default__",
-    "group_3c07d078",
-    "group_39a1b80d",
-    "group_c7a80073",
-    "group_e8efb9ff",
-    "group_53eec035",
+    "group_2f0c668c",
     "group_a1d5b815",
-    "group_fdab3a16",
     "group_8db83f5b",
     "group_266e1f8c",
+    "group_39a1b80d",
+    "group_36068123",
+    "group_53eec035",
+    "group_40b2992f",
+    "group_fdab3a16",
     "group_f1d46de3",
-    "group_261f6f66"
+    "group_261f6f66",
+    "group_c7a80073",
+    "group_e8efb9ff",
+    "group_3c07d078"
   ],
   "capture_size": [
     1920,
