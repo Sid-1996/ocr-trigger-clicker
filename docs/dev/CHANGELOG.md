@@ -1,5 +1,23 @@
 
 
+## [v0.2.7] - 2026-08-17
+
+### 給使用者
+
+#### 新增
+- **修剪模板**：圖示比對（match_image）步驟的範本截圖現在可以再次微調——按「修剪模板」，在彈出視窗中用**貼著圖片四邊的箭頭**把範本四周的空白／雜訊一格一格剪掉（一格 = 1px，也可直接輸入精確像素），剪到最準的範圍再比對，命中率更穩。同時移除幾乎沒人用的「選擇圖片」按鈕（外部圖片需求為零）。
+- **F8 確認窗「切換模式並執行」**：按 F8 彈出的執行確認視窗新增一鍵「切換為前景／後台模式並執行」——不用先進設定改互動模式，直接在確認窗切換並開跑。
+- **後台模式管理員提醒**：以非系統管理員啟動並使用後台模式時，會提醒「後台模式需以系統管理員啟動才能正常截圖」（每個 session 提醒一次，不阻斷）。
+
+### 給開發者
+
+- **模板修剪**（commits `253868f`、`1b6ea24`、`546da56`）：`core/11_template_matching.py` 新增 `crop_template_b64`（`MIN_TEMPLATE_SIDE=4`）與 margin 純幾何函式 `margins_from_rect`／`rect_from_margins`／`clamp_margins`（交叉限制 `left+right ≤ w−min`、idempotent）；`gui/15_template_crop.py` 新增 `trim_template_dialog()`——四邊空間化雙向箭頭按鈕（上／下橫排、左／右直排，箭頭指向圖片中心＝往內剪）＋底部精確數值行，`_CropView` 移除拖曳選框（非每位使用者都能一次框選正確）；`gui/06_gui_main.py` `_MatchImageStepForm` 移除「選擇圖片」按鈕與 `_pick_template`，新增「修剪模板」；i18n 刪 3 個無引用 key、加 `template_crop.*`。測試 `tests/test_template_crop.py` 11 項，全量 175 通過。
+- **F8 切換模式並執行**（commit `27a0954`）：`gui/06_gui_main.py` 群組確認視窗依目前互動模式新增對應的切換按鈕，同步更新 config `interaction_mode` 與任務檔。
+- **後台模式管理員提醒**（commit `ed6e054`）：啟動後台模式前以 `is_admin()` 檢查，非管理員以 `_admin_warned` 每 session 只提醒一次。
+- **`_get_interaction_mode` 收斂**（commit `a9a5eb4`）：集中至 `core/run_config.py`，`gui/06_gui_main`／`09_ocr_debug`／`test_run_controller` 共用，並移除 6 個 i18n 孤兒 key。
+- **測試補強**（commit `a3c6d48`）：`00_global_hotkey`、`10_performance_monitor` 補 `__main__` self-check。
+- 清理與文件：移除過時 `.plan.md`、清理 `.gitignore` 註解與已刪本地分支、任務 JSON 同步、README 與首頁 SEO 加入星之救援者 StarSavior 關鍵字、frida 後台模式 Unity 支援宣稱修正。
+
 ## [v0.2.6] - 2026-08-14
 
 ### 給使用者

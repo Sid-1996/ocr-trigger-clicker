@@ -55,7 +55,7 @@
 | | Feature | Description |
 |:-:|---------|-------------|
 | 🔍 | **Detect text on screen** | Tell it what text to look for and what to do — when found, it acts automatically (OCR is optimized for Traditional Chinese; the English UI auto-switches to a dedicated English model) |
-| 🖼️ | **Find buttons with images** | No text? Use a screenshot as a template — faster than reading text |
+| 🖼️ | **Find buttons with images** | No text? Use a screenshot as a template — faster than reading text; captured templates can be **trimmed** to the exact area needed |
 | 🔗 | **Chain multiple steps** | Detect → click → wait → drag… runs all the way through like a recorded macro |
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |
 | 📐 | **Resolution-proof (same aspect ratio)** | Coordinates are stored as window ratios — switch between same-aspect-ratio (16:9, e.g. 1080p↔900p) resolutions with no reconfiguring; different aspect ratios need re-framing |
