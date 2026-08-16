@@ -1155,16 +1155,16 @@ class _MatchImageStepForm(QWidget):
             else (T("step_form.embedded_image") if tmpl_data.strip() else T("ui.no_group"))
         )
         self._tmpl_label = QLabel(label_text)
-        self._tmpl_btn = QPushButton(T("step_form.select_image"))
-        self._tmpl_btn.clicked.connect(self._pick_template)
         self._capture_btn = QPushButton(T("step_form.capture_region"))
         self._capture_btn.clicked.connect(self._capture_template)
+        self._trim_btn = QPushButton(T("step_form.trim_template"))
+        self._trim_btn.clicked.connect(self._trim_template)
         self._img_compare_btn = QPushButton(T("step_form.compare_image"))
         self._img_compare_btn.clicked.connect(self._img_compare_match)
         self._img_compare_result = QLabel("")
         tmpl_layout.addWidget(self._tmpl_label, 1)
-        tmpl_layout.addWidget(self._tmpl_btn)
         tmpl_layout.addWidget(self._capture_btn)
+        tmpl_layout.addWidget(self._trim_btn)
         tmpl_layout.addWidget(self._img_compare_btn)
         tmpl_layout.addWidget(self._img_compare_result)
         form.addRow(T("step_form.template_image"), tmpl_row)
@@ -1563,20 +1563,20 @@ class _MatchImageStepForm(QWidget):
             self._update_thumbnail()
             self._list.steps_changed.emit()
 
-    def _pick_template(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, T("step_form.select_image_title"), "", T("step_form.img_file_filter")
-        )
-        if path:
-            import cv2 as _cv2
-
-            _img = _cv2.imread(path, _cv2.IMREAD_COLOR)
-            if _img is not None:
-                self._step.params["template_data"] = img_to_b64(_img)
-                self._step.params.pop("template", None)
-                self._tmpl_label.setText(Path(path).stem)
-                self._update_thumbnail()
-                self._list.steps_changed.emit()
+    def _trim_template(self):
+        tmpl_data = self._step.params.get("template_data", "")
+        if not tmpl_data.strip():
+            self._img_compare_result.setText(T("template_crop.no_template"))
+            self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            return
+        result = trim_template_dialog(self, tmpl_data)
+        if result is None:
+            return
+        self._step.params["template_data"] = result
+        self._step.params.pop("template", None)
+        self._tmpl_label.setText(T("format.embedded_image"))
+        self._update_thumbnail()
+        self._list.steps_changed.emit()
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -2763,8 +2763,9 @@ TestRunController = _test_run_mod.TestRunController
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
-img_to_b64 = _tmpl_mod.img_to_b64
-b64_to_img = _tmpl_mod.b64_to_img
+
+_template_crop_mod = load_sibling("template_crop", "gui/15_template_crop.py")
+trim_template_dialog = _template_crop_mod.trim_template_dialog
 
 _updater_mod = load_sibling("updater", "core/12_updater.py")
 

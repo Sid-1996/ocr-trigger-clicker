@@ -45,6 +45,27 @@ def b64_to_img(data: str) -> Optional[np.ndarray]:
         return None
 
 
+MIN_TEMPLATE_SIDE = 4  # 模板裁切最小邊長（px），小於此視為無效
+
+
+def crop_template_b64(b64: str, x: int, y: int, w: int, h: int) -> Optional[str]:
+    """從內嵌 base64 模板裁切子區塊，回傳新 base64（PNG）。
+
+    邊界自動 clamp；裁切後任一邊 < MIN_TEMPLATE_SIDE 或輸入非法回 None。
+    """
+    img = b64_to_img(b64)
+    if img is None or w <= 0 or h <= 0:
+        return None
+    ih, iw = img.shape[:2]
+    x0 = max(0, min(iw, x))
+    y0 = max(0, min(ih, y))
+    x1 = max(0, min(iw, x + w))
+    y1 = max(0, min(ih, y + h))
+    if x1 - x0 < MIN_TEMPLATE_SIDE or y1 - y0 < MIN_TEMPLATE_SIDE:
+        return None
+    return img_to_b64(img[y0:y1, x0:x1])
+
+
 def _resolve_template(template_path: str) -> Optional[Path]:
     p = Path(template_path)
     if p.is_absolute() and p.exists():
