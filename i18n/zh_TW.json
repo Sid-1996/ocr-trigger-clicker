@@ -497,7 +497,7 @@
   "step_form.detect_after_delay_label": "偵測後延時 (0=不等待):",
   "step_form.love_fadian": "愛發電",
   "template_crop.title": "修剪模板",
-  "template_crop.instruction": "用下方箭頭往內修剪邊緣，一格 = 1px（十字為點擊位置）",
+  "template_crop.instruction": "點圖片四邊的箭頭往內修剪，一格 = 1px（十字為點擊位置）",
   "template_crop.margins": "修剪邊距 (px)",
   "template_crop.margin_top": "上邊距",
   "template_crop.margin_bottom": "下邊距",

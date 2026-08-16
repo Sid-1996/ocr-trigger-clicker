@@ -1,10 +1,11 @@
 """內嵌模板圖片修剪對話框（match_image 步驟「修剪模板」用）。
 
 在應用程式內對已存 base64 模板做裁切：原圖放大顯示、中央十字標記（=
-點擊落點提示）、「修剪邊距」四邊雙向箭頭步進器（每格 1px，向內剪／向外
-還原）、「還原」重置回整張原圖。互動一律經步進器，不做拖曳選框——非每位
-使用者都能一次框選正確。只有按「確認」才把裁切結果回傳給呼叫端，取消／
-Esc 回傳 None（呼叫端不寫入任何值）。
+點擊落點提示）、圖片四邊的雙向箭頭按鈕（貼圖放置，箭頭指向圖片中心＝
+往內剪，反向＝往外還原，每格 1px）、底部精確數值行、「還原」重置回整張
+原圖。互動一律經按鈕／數值輸入，不做拖曳選框——非每位使用者都能一次框選
+正確。只有按「確認」才把裁切結果回傳給呼叫端，取消／Esc 回傳 None（呼叫
+端不寫入任何值）。
 """
 
 import base64
@@ -36,14 +37,6 @@ MIN_TEMPLATE_SIDE = _tmpl.MIN_TEMPLATE_SIDE
 margins_from_rect = _tmpl.margins_from_rect
 rect_from_margins = _tmpl.rect_from_margins
 clamp_margins = _tmpl.clamp_margins
-
-# 各側：向外還原箭頭、向內剪箭頭（箭頭指向圖片中心＝往內剪）
-_SIDES = (
-    ("top", "↑", "↓"),
-    ("bottom", "↓", "↑"),
-    ("left", "←", "→"),
-    ("right", "→", "←"),
-)
 
 
 class _CropView(QWidget):
@@ -152,33 +145,68 @@ class _TemplateCropDialog(QDialog):
         top_row.addStretch()
         top_row.addWidget(self._size_label)
 
+        # 四邊空間化箭頭按鈕：上/下橫排、左/右直排，貼圖放置（箭頭指向圖片中心＝往內剪）
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(4)
+
+        top_in = self._make_arrow_btn("top", 1, "↓", "template_crop.trim_in")
+        top_out = self._make_arrow_btn("top", -1, "↑", "template_crop.expand_out")
+        bottom_in = self._make_arrow_btn("bottom", 1, "↑", "template_crop.trim_in")
+        bottom_out = self._make_arrow_btn("bottom", -1, "↓", "template_crop.expand_out")
+        left_in = self._make_arrow_btn("left", 1, "→", "template_crop.trim_in")
+        left_out = self._make_arrow_btn("left", -1, "←", "template_crop.expand_out")
+        right_in = self._make_arrow_btn("right", 1, "←", "template_crop.trim_in")
+        right_out = self._make_arrow_btn("right", -1, "→", "template_crop.expand_out")
+
+        top_bar = QHBoxLayout()
+        top_bar.addStretch()
+        top_bar.addWidget(top_in)
+        top_bar.addWidget(top_out)
+        top_bar.addStretch()
+        grid.addLayout(top_bar, 0, 1)
+
+        bottom_bar = QHBoxLayout()
+        bottom_bar.addStretch()
+        bottom_bar.addWidget(bottom_in)
+        bottom_bar.addWidget(bottom_out)
+        bottom_bar.addStretch()
+        grid.addLayout(bottom_bar, 2, 1)
+
+        left_col = QVBoxLayout()
+        left_col.addStretch()
+        left_col.addWidget(left_in)
+        left_col.addWidget(left_out)
+        left_col.addStretch()
+        grid.addLayout(left_col, 1, 0)
+
+        right_col = QVBoxLayout()
+        right_col.addStretch()
+        right_col.addWidget(right_in)
+        right_col.addWidget(right_out)
+        right_col.addStretch()
+        grid.addLayout(right_col, 1, 2)
+
+        grid.addWidget(self._view, 1, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setRowStretch(1, 1)
+
+        # 底部精確數值行：上/下/左/右 四個 spinbox，可直接輸入 px
         margin_box = QGroupBox(T("template_crop.margins"))
-        margin_grid = QGridLayout(margin_box)
-        margin_grid.setHorizontalSpacing(6)
-        margin_grid.setVerticalSpacing(4)
+        margin_bar = QHBoxLayout(margin_box)
+        margin_bar.setSpacing(8)
         self._spins: dict[str, QSpinBox] = {}
-        for row, (side, out_arrow, in_arrow) in enumerate(_SIDES):
-            margin_grid.addWidget(QLabel(T(f"template_crop.margin_{side}")), row, 0)
-            out_btn = QToolButton()
-            out_btn.setText(out_arrow)
-            out_btn.setFixedSize(26, 26)
-            out_btn.setToolTip(T("template_crop.expand_out"))
-            out_btn.clicked.connect(lambda _checked, s=side, d=-1: self._adjust_margin(s, d))
-            in_btn = QToolButton()
-            in_btn.setText(in_arrow)
-            in_btn.setFixedSize(26, 26)
-            in_btn.setToolTip(T("template_crop.trim_in"))
-            in_btn.clicked.connect(lambda _checked, s=side, d=1: self._adjust_margin(s, d))
+        for side in ("top", "bottom", "left", "right"):
+            margin_bar.addWidget(QLabel(T(f"template_crop.margin_{side}")))
             spin = QSpinBox()
             spin.setRange(0, 0)
             spin.setSingleStep(1)
             spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
             spin.setSuffix(" px")
             spin.valueChanged.connect(self._on_margin_changed)
-            margin_grid.addWidget(out_btn, row, 1)
-            margin_grid.addWidget(in_btn, row, 2)
-            margin_grid.addWidget(spin, row, 3)
+            margin_bar.addWidget(spin)
             self._spins[side] = spin
+        margin_bar.addStretch()
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(self._restore_btn)
@@ -188,13 +216,21 @@ class _TemplateCropDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addLayout(top_row)
-        layout.addWidget(self._view, 1)
+        layout.addLayout(grid, 1)
         layout.addWidget(margin_box)
         layout.addWidget(self._hint_label)
         layout.addLayout(btn_row)
 
         self._sync_steppers_from_view()
         self._update_size_label()
+
+    def _make_arrow_btn(self, side: str, delta: int, arrow: str, tip_key: str) -> QToolButton:
+        btn = QToolButton()
+        btn.setText(arrow)
+        btn.setFixedSize(30, 30)
+        btn.setToolTip(T(tip_key))
+        btn.clicked.connect(lambda _checked, s=side, d=delta: self._adjust_margin(s, d))
+        return btn
 
     def _adjust_margin(self, side: str, delta: int):
         """點箭頭：該側邊距 ±1px（Qt 會 clamp 到範圍，min 0、max 交叉限制）。"""

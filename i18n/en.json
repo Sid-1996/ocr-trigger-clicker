@@ -497,7 +497,7 @@
   "step_form.detect_after_delay_label": "Detect After Delay (0=no wait):",
   "step_form.love_fadian": "Afdian",
   "template_crop.title": "Trim Template",
-  "template_crop.instruction": "Use the arrows below to trim edges inward, 1 step = 1px (cross = click point)",
+  "template_crop.instruction": "Click the arrows around the image to trim edges inward, 1 step = 1px (cross = click point)",
   "template_crop.margins": "Trim Margins (px)",
   "template_crop.margin_top": "Top Margin",
   "template_crop.margin_bottom": "Bottom Margin",
