@@ -51,7 +51,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `12_log_viewer.py` | LogViewer 日誌檢視器 | `LogViewer(QDialog)` 獨立視窗顯示 `app.log` |
 | `13_gui_click_picker.py` | 點擊座標選取 | 前景螢幕絕對 → 比例座標 |
 | `14_capture_region.py` | 模板擷取 | base64 編碼、capture_size |
-| `15_template_crop.py` | 內嵌模板修剪 | `trim_template_dialog()` 拖曳裁切，確認才回傳；`還原`重置整圖；核心邏輯 `core/11_template_matching.py` `crop_template_b64`（`MIN_TEMPLATE_SIDE=4`） |
+| `15_template_crop.py` | 內嵌模板修剪 | `trim_template_dialog()` 四邊雙向箭頭步進器（無拖曳選框，每格 1px）；核心邏輯 `core/11_template_matching.py` `crop_template_b64` + `clamp_margins`（交叉限制，`MIN_TEMPLATE_SIDE=4`） |
 | `group_settings_controller.py` | 群組設定 | 對話框邏輯 |
 | `rule_config_controller.py` | 規則設定 | 對話框邏輯 |
 | `screenshot_controller.py` | 截圖設定 | 對話框邏輯 |

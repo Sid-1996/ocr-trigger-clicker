@@ -73,3 +73,40 @@ def test_crop_invalid_rect_returns_none():
     b64 = img_to_b64(img)
     assert crop_template_b64(b64, 0, 0, 0, 10) is None
     assert crop_template_b64(b64, 0, 0, -5, 10) is None
+
+
+margins_from_rect = _tm.margins_from_rect
+rect_from_margins = _tm.rect_from_margins
+clamp_margins = _tm.clamp_margins
+
+
+def test_margins_roundtrip():
+    assert margins_from_rect(5, 7, 10, 10, 30, 20) == (5, 7, 15, 3)
+    assert rect_from_margins((5, 7, 15, 3), 30, 20) == (5, 7, 10, 10)
+    assert margins_from_rect(0, 0, 30, 20, 30, 20) == (0, 0, 0, 0)
+
+
+def test_clamp_margins_zeros_and_negative():
+    assert clamp_margins((0, 0, 0, 0), 48, 48, 4) == (0, 0, 0, 0)
+    assert clamp_margins((-3, -2, -1, 0), 48, 48, 4) == (0, 0, 0, 0)
+
+
+def test_clamp_margins_cross_constraint():
+    # left 過大時，right 的剩餘空間被壓縮
+    assert clamp_margins((30, 0, 30, 0), 48, 48, 4) == (14, 0, 30, 0)
+    assert clamp_margins((40, 0, 40, 0), 48, 48, 4) == (4, 0, 40, 0)
+    # 對邊和 ≤ 尺寸 − min
+    for cand in ((10, 10, 10, 10), (0, 0, 0, 0), (40, 40, 40, 40)):
+        left_m, top_m, right_m, bottom_m = clamp_margins(cand, 48, 48, 4)
+        assert 0 <= left_m <= 48 and 0 <= right_m <= 48 and left_m + right_m <= 44
+        assert 0 <= top_m <= 48 and 0 <= bottom_m <= 48 and top_m + bottom_m <= 44
+
+
+def test_clamp_margins_idempotent():
+    m1 = clamp_margins((25, 30, 28, 26), 48, 48, 4)
+    assert clamp_margins(m1, 48, 48, 4) == m1
+
+
+def test_clamp_margins_tiny_image():
+    # 圖本身小於 min_side：收斂到全 0 不崩潰
+    assert clamp_margins((3, 3, 3, 3), 3, 3, 4) == (0, 0, 0, 0)

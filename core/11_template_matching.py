@@ -66,6 +66,40 @@ def crop_template_b64(b64: str, x: int, y: int, w: int, h: int) -> Optional[str]
     return img_to_b64(img[y0:y1, x0:x1])
 
 
+def margins_from_rect(
+    x: int, y: int, w: int, h: int, img_w: int, img_h: int
+) -> tuple[int, int, int, int]:
+    """選取矩形 → 四邊距 (left, top, right, bottom)，以原圖邊界為基準（px）。"""
+    return x, y, max(0, img_w - (x + w)), max(0, img_h - (y + h))
+
+
+def rect_from_margins(
+    margins: tuple[int, int, int, int], img_w: int, img_h: int
+) -> tuple[int, int, int, int]:
+    """四邊距 → 選取矩形 (x, y, w, h)。
+
+    呼叫端需先以 clamp_margins 保證可行性（left+right ≤ img_w、top+bottom ≤ img_h），
+    本函式保持誠實、不隱藏呼叫端 bug。
+    """
+    left, top, right, bottom = margins
+    return left, top, img_w - left - right, img_h - top - bottom
+
+
+def clamp_margins(
+    margins: tuple[int, int, int, int], img_w: int, img_h: int, min_side: int
+) -> tuple[int, int, int, int]:
+    """收斂四邊距到合法範圍：各邊 ≥ 0，且對邊和 ≤ 對應尺寸 − min_side。
+
+    依序 clamp（先左後右、先上後下），結果必然滿足交叉限制，重複呼叫為不變式（idempotent）。
+    """
+    left, top, right, bottom = margins
+    left = max(0, min(left, img_w - min_side - right))
+    right = max(0, min(right, img_w - min_side - left))
+    top = max(0, min(top, img_h - min_side - bottom))
+    bottom = max(0, min(bottom, img_h - min_side - top))
+    return left, top, right, bottom
+
+
 def _resolve_template(template_path: str) -> Optional[Path]:
     p = Path(template_path)
     if p.is_absolute() and p.exists():
@@ -484,4 +518,29 @@ if __name__ == "__main__":
     assert _decode_template.cache_info().currsize == 0, "clear_template_cache should empty it"
     print("  [OK] clear_template_cache empties cache")
 
-    print("\n=== All 16 tests passed ===")
+    # ── Margin helpers (trim steppers) ──
+    assert margins_from_rect(5, 7, 10, 10, 30, 20) == (5, 7, 15, 3)
+    assert rect_from_margins((5, 7, 15, 3), 30, 20) == (5, 7, 10, 10)
+    assert margins_from_rect(0, 0, 30, 20, 30, 20) == (0, 0, 0, 0)
+    print("  [OK] margins_from_rect / rect_from_margins roundtrip")
+
+    # clamp: zero margins stay zero
+    assert clamp_margins((0, 0, 0, 0), 48, 48, 4) == (0, 0, 0, 0)
+    # clamp: negative margins -> 0
+    assert clamp_margins((-3, -2, -1, 0), 48, 48, 4) == (0, 0, 0, 0)
+    # clamp: cross-constraint (left too big shrinks right's room)
+    assert clamp_margins((30, 0, 30, 0), 48, 48, 4) == (14, 0, 30, 0)
+    assert clamp_margins((40, 0, 40, 0), 48, 48, 4) == (4, 0, 40, 0)
+    # clamp: idempotent (clamping twice == once)
+    m1 = clamp_margins((25, 30, 28, 26), 48, 48, 4)
+    assert clamp_margins(m1, 48, 48, 4) == m1
+    # clamp result always feasible
+    for cand in ((10, 10, 10, 10), (0, 0, 0, 0), (40, 40, 40, 40)):
+        left_m, top_m, right_m, bottom_m = clamp_margins(cand, 48, 48, 4)
+        assert 0 <= left_m <= 48 and 0 <= right_m <= 48 and left_m + right_m <= 44
+        assert 0 <= top_m <= 48 and 0 <= bottom_m <= 48 and top_m + bottom_m <= 44
+    # tiny image (< min_side): clamps to all-zero without crash
+    assert clamp_margins((3, 3, 3, 3), 3, 3, 4) == (0, 0, 0, 0)
+    print("  [OK] clamp_margins cross-constraint / idempotence / tiny-image")
+
+    print("\n=== All 19 tests passed ===")
