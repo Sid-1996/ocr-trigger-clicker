@@ -343,6 +343,8 @@
   "update.dialog.auto": "自動更新",
   "update.dialog.manual": "前往 Release 頁面",
   "update.dialog.no_notes": "無法取得更新說明，請前往 Release 頁面查看。",
+  "update.delta_size": "差異更新：僅下載變更檔案（約 {mb} MB）",
+  "update.fallback_full": "差異更新不可用，改用完整更新…",
   "about.author": "<p>作者: {author}</p>",
   "about.project": "<p>專案: <a href='{url}'>{url}</a></p>",
   "about.guide": "<p>新手教學: <a href='{url}'>{url}</a></p>",

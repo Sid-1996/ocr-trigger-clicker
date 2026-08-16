@@ -111,21 +111,37 @@ Write-Output "成功讀取發行說明 ($($noteLines.Count) 行)"
 
 # ---- 更新版本號 ----
 
+# base_version = 上一版（差異更新要與「已發布的上一版」比對）
+$baseVersion = ""
+$latestFile = Join-Path $root "latest_version.txt"
+if (Test-Path $latestFile) {
+    $baseVersion = (Get-Content -Path $latestFile -Encoding utf8 | Select-Object -First 1).Trim()
+}
+
 "__version__ = `"$Version`"" | Set-Content _version.py -Encoding utf8
 "__author__ = `"Sid`"" | Add-Content _version.py -Encoding utf8
 '__github__ = "https://github.com/Sid-1996/ocr-trigger-clicker"' | Add-Content _version.py -Encoding utf8
 $Version | Set-Content latest_version.txt -Encoding utf8
-
-# ---- commit（本地，還不 push） ----
-
-git add _version.py latest_version.txt docs/dev/CHANGELOG.md
-git commit -m "chore: bump to v$Version"
 
 # ---- 打包 ----
 
 Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
 python build.py
 Compress-Archive -Path dist\ocr-trigger-clicker\* -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
+
+# ---- 差異更新（delta） ----
+# 產出 dist\ocr-trigger-clicker-delta.zip + 更新 repo 根的 manifest.json / delta_info.json
+
+if ($baseVersion) {
+    python make_delta.py $Version $baseVersion "dist\ocr-trigger-clicker" "dist"
+} else {
+    python make_delta.py $Version "" "dist\ocr-trigger-clicker" "dist"
+}
+
+# ---- commit（本地，還不 push；含 manifest / delta_info 供用戶端 raw 讀取） ----
+
+git add _version.py latest_version.txt docs/dev/CHANGELOG.md manifest.json delta_info.json
+git commit -m "chore: bump to v$Version"
 
 # ---- 清理既有 tag / release（-Force 模式） ----
 
@@ -147,9 +163,13 @@ if ($LASTEXITCODE -ne 0) { git tag -d v$Version; throw "Failed to push tag" }
 # ---- draft release ----
 
 $title = "v$Version"
+$assets = @("dist/ocr-trigger-clicker.zip")
+if (Test-Path "dist\ocr-trigger-clicker-delta.zip") {
+    $assets += "dist\ocr-trigger-clicker-delta.zip"
+}
 $ghArgs = @(
-    "release", "create", "v$Version",
-    "dist/ocr-trigger-clicker.zip",
+    "release", "create", "v$Version"
+) + $assets + @(
     "--title", $title,
     "--draft", "--prerelease",
     "--notes", $releaseNote

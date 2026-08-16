@@ -1,5 +1,18 @@
 
 
+## [v0.2.8] - 2026-08-17
+
+### 給使用者
+
+- **更新更快、更省流量**：自動更新改為「差異更新」——只下載自上一版以來真正變更的檔案（典型約 1~13 MB，取代原本整包 318 MB）。若差異更新不適用（例如跳過多個版本），會自動退回完整下載，安全網不變。
+
+### 給開發者
+
+- **差異更新（Delta Update）**：`core/12_updater.py` 新增 delta 純函式（`sha256_of_file` / `build_manifest` / `diff_manifests` / `apply_delta_to_staging` / `verify_tree`）與 `download_delta_update()`（`DeltaUpdateError` 判定「不適用／驗證失敗」時自動退回整包）；`UpdateInfo` 增 `delta_url` / `delta_base_version` / `delta_bytes`；`check_for_update()` 額外抓 `delta_info.json`（非致命，失敗不擋更新檢查）。`gui/06_gui_main.py` `_start_download` 有 delta_url 優先走 delta、失敗自動回退整包；`_UpdateInfoDialog` 顯示「差異更新約 X MB」提示。i18n 新增 `update.delta_size` / `update.fallback_full`。
+- **發版工具**：新增 `make_delta.py`（`release.ps1` 於 build 後呼叫）產出 `ocr-trigger-clicker-delta.zip` + repo 根 `manifest.json` / `delta_info.json`；`release.ps1` 改為 commit 含 delta 判定檔、`gh release create` 附整包 + delta 兩 asset；base_version = 更新 `latest_version.txt` 前的舊版號。第一次發版／跳多版／delta 過大（> 整包 40%）→ 不產 delta。
+- **測試**：新增 `tests/test_updater_delta.py` 6 項（diff 分類、staging 覆蓋/刪除/保留、payload 篡改偵測、整樹驗證損壞偵測、路徑穿越拒絕）；`core/12_updater.py` `demo()` 與 `make_delta.py --demo` 補 delta self-check。
+- **文件**：AGENTS.md 發版流程與新增「差異更新」章節、ARCHITECTURE.md 新增「自動更新（差異更新）」章節與模組表更新、TECHNICAL.md Build & Packaging 補 delta 產物與大小比例。
+
 ## [v0.2.7] - 2026-08-17
 
 ### 給使用者

@@ -95,7 +95,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/07_gui_roi.py` | 框選偵測區域（全螢幕 overlay） | `select_roi()` |
 | `gui/09_ocr_debug.py` | OCR 除錯面板（即時截圖＋標註） | `OcrDebugPanel` |
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
-| `core/12_updater.py` | 自動更新核心邏輯（版本檢查、下載、解壓、套用更新） | `check_for_update()`, `download_update()`, `apply_update()` |
+| `core/12_updater.py` | 自動更新核心邏輯（版本檢查、差異/整包下載、解壓、staging 驗證、套用更新） | `check_for_update()`, `download_update()`, `download_delta_update()`, `build_manifest()`, `diff_manifests()`, `apply_delta_to_staging()`, `verify_tree()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊（開始/暫停/停止）＋ F9 熱鍵註冊（錄製開始/停止） |
@@ -587,6 +587,41 @@ MainLoop.emergency_stop()
 | 視窗消失自動暫停 | `05_main_loop.py` | `get_window_rect()` 回傳 None → 暫停循環，每 5 秒檢查視窗是否重現 |
 | 座標驗證 | `03_pynput_input.py` `_validate_coords()` | 使用 `GetSystemMetrics(VIRTUALSCREEN)` 確保點擊不超出多螢幕範圍 |
 | 關閉行為設定 | `06_gui_main.py` `SettingsDialog` | 可選「縮小至托盤」或「直接關閉」，關閉前可跳出確認對話框 |
+
+## 自動更新（差異更新）
+
+每個版本除了整包 `ocr-trigger-clicker.zip`（~318 MB），另發行只含變更檔案的 `ocr-trigger-clicker-delta.zip`（典型 1~13 MB）。安裝樹 606 MB 中 562 MB 是幾乎不變的靜態二進位（frida / onnx 模型 / cv2 / Qt / numpy），應用程式自身程式碼僅 0.82 MB，故差異更新節省約 96% 下載量。
+
+**產物**（`make_delta.py`，由 `release.ps1` 在 build 後呼叫）：
+
+- `ocr-trigger-clicker-delta.zip` — `manifest.json`（本版完整檔案清單：rel 路徑 + size + sha256 + `removed`）＋ `files/<rel>`（變更／新增 payload）
+- repo 根 `manifest.json` — 每版覆寫成最新完整清單，下一版當差異基準
+- repo 根 `delta_info.json` — `{version, base_version, asset, delta_bytes}`，用戶端 raw 讀取判定
+
+**用戶端流程**（`core/12_updater.py`）：
+
+```
+check_for_update()
+  └─ 抓 latest_version.txt + delta_info.json（後者失敗不阻擋，退回整包）
+     └─ delta_info.version == 最新 且 delta_info.base_version == __version__
+        → UpdateInfo.delta_url 填入 → GUI 走 download_delta_update()
+        └─ 否則 → 整包 download_update()
+
+download_delta_update()
+  1. 下載 delta.zip → safe-extract（拒絕 ../ 與絕對路徑）
+  2. 驗證 manifest.base_version == delta_base_version
+  3. staging = 複製目前安裝樹（運行時唯讀，安全）
+  4. 覆蓋 files/ payload（逐檔驗 sha256）＋ 刪除 removed 清單
+  5. verify_tree() 整棵樹對 manifest 全檔驗證
+  6. 通過 → apply_update(staging)（沿用 updater.exe 備份/rollback/重啟）
+  7. DeltaUpdateError（基準不符/驗證失敗）→ 自動退回整包
+```
+
+**判定基準用 `__version__`（build 時烘焙）**：用戶無論整包或 delta 升級到某版，只要版本相符即可用 delta，鏈式一致。使用者自訂檔案（manifest 未列出）一律保留。
+
+**不產 delta 的情況**（用戶端自動走整包）：第一次發版（無前一版 manifest）、跳過多版更新（base_version 不符）、delta 過大（> 整包 40%）。
+
+**信任邊界**：delta 與整包同樣來自自有 GitHub 官方 URL，完整性靠 manifest sha256（staging 驗證過才交換），authenticity 與現況相同（HTTPS + 無簽章）。rollback 由 updater.exe 既有備份機制涵蓋。
 
 ## 日誌架構（三通道）
 

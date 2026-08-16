@@ -50,6 +50,18 @@ python build.py
 Output: `dist/ocr-trigger-clicker/` (onedir, includes `ocr-trigger-clicker.exe` + `updater.exe` + `_internal/`)
 Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 
+### 差異更新（Delta Update）
+
+發版時 `release.ps1` 會再跑 `python make_delta.py <version> <base_version> dist\ocr-trigger-clicker dist`，額外產出：
+
+- `dist/ocr-trigger-clicker-delta.zip` — 只含「上一版 → 本版」變更／新增檔案 + `manifest.json`（本版完整檔案清單：rel 路徑 + size + sha256 + `removed`）
+- repo 根 `manifest.json` — 本版完整清單，下一版當差異基準
+- repo 根 `delta_info.json` — `{version, base_version, asset, delta_bytes}`，用戶端 raw 讀取判定用
+
+典型大小比例：整包 ZIP ~318 MB，而變更只有應用程式程式碼（core/gui/i18n 共 0.82 MB）+ 主 exe（12.8 MB，PyInstaller 把 PYZ 內嵌其中）→ 典型 delta 約 **1~13 MB**。大檔（frida.pyd 118MB、ONNX 模型 88MB、cv2.pyd 86MB、ffmpeg/Qt/onnxruntime/numpy 等 562MB）幾乎不變，所以不需要進 delta。
+
+不產 delta 的情況（用戶端自動走整包）：第一次發版（無前一版 manifest）、跳過多版更新（`base_version` 不符）、delta 過大（> 整包 40%）。
+
 ---
 
 ## Known Pitfalls

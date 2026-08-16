@@ -230,6 +230,8 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 ### 版本資訊
 - `_version.py` — 單一事實來源（`__version__` / `__author__` / `__github__`）
 - `latest_version.txt` — 給客戶端版本檢查用（純文字，一行版本號）
+- `manifest.json` — 本版完整檔案清單（rel 路徑 + size + sha256），每版覆寫；下一版發版時作為差異更新基準
+- `delta_info.json` — 差異更新判定資料（`version` / `base_version` / `asset` / `delta_bytes`），用戶端 raw 讀取
 
 ### 發版流程
 
@@ -249,16 +251,27 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 2. 從 docs/dev/CHANGELOG.md 解析 `## [v$x.y.z]` 區塊作為 release notes
    - 找不到該版本 → 報錯
    - 缺日期 → 自動填入當天
-3. 更新 `_version.py` + `latest_version.txt`
-4. git commit（含 docs/dev/CHANGELOG.md / _version.py / latest_version.txt）
-5. `python build.py` 打包 + 壓 ZIP
-6. git tag + push commit + tag 到遠端
-7. `gh release create --draft --prerelease` Release notes = CHANGELOG 內容
+3. 更新 `_version.py` + `latest_version.txt`（base_version = 更新前的舊版本號）
+4. `python build.py` 打包 + 壓整包 ZIP
+5. `python make_delta.py` 產生差異更新：`dist/ocr-trigger-clicker-delta.zip` + 覆寫 repo 根 `manifest.json` / `delta_info.json`
+6. git commit（含 docs/dev/CHANGELOG.md / _version.py / latest_version.txt / manifest.json / delta_info.json）
+7. git tag + push commit + tag 到遠端
+8. `gh release create --draft --prerelease` 附**兩個 asset**（整包 ZIP + delta ZIP），Release notes = CHANGELOG 內容
 
 **發版後：**
 - Release 建立為 **Draft** 狀態 → 從 GitHub Releases 頁面下載 EXE 再次測試
 - 確認無誤 → 按「Publish release」公開
 - 有問題 → 刪除 Draft + `-Force` 重發，或修復後再發
+
+### 差異更新（Delta Update）
+
+每個版本除整包 ZIP 外，另產「只含變更檔案」的 delta。用戶端判定規則：
+
+- 檢查更新時抓 `delta_info.json`，**`base_version == 本機目前版本`**（`__version__`）才提供 delta 下載
+- delta 套用 = 複製目前安裝樹 → staging → 覆蓋變更檔（逐檔驗 sha256）→ 刪除 `removed` 清單 → **整棵樹驗 manifest** → 沿用 updater.exe 備份／rollback
+- 任何 delta 驗證失敗 → **自動退回整包下載**（安全網，不降級信任）
+- 第一次發版（無前一版 manifest）、跳過多版更新、delta 過大（> 整包 40%）→ 不產 delta，用戶端自動走整包
+- 使用者自訂檔案（manifest 未列出者）一律保留，不會被更新刪除
 
 ### 重發流程
 
@@ -271,7 +284,7 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 `-Force` 會自動：
 1. 刪除既有遠端 tag（如存在）
 2. 刪除既有 GitHub release（如存在）
-3. 然後正常建立新 tag + release
+3. 然後正常建立新 tag + release（delta 會重新產生，無需額外步驟）
 
 ### CHANGELOG 維護
 

@@ -6317,16 +6317,24 @@ class MainWindow(QMainWindow):
             finished = pyqtSignal(object)
             error = pyqtSignal(str)
             progress = pyqtSignal(int, int)
+            fallback = pyqtSignal()
 
             def run(self):
                 try:
-                    exe_path = _updater_mod.download_update(
-                        info,
+                    kwargs = dict(
                         progress_cb=lambda d, t: self.progress.emit(d, t),
                         cancel_event=self.parent()._update_cancel
                         if hasattr(self.parent(), "_update_cancel")
                         else None,
                     )
+                    if info.delta_url:
+                        exe_path = _updater_mod.download_delta_update(
+                            info,
+                            fallback_cb=lambda: self.fallback.emit(),
+                            **kwargs,
+                        )
+                    else:
+                        exe_path = _updater_mod.download_update(info, **kwargs)
                     self.finished.emit(exe_path)
                 except Exception as e:
                     self.error.emit(str(e))
@@ -6336,6 +6344,7 @@ class MainWindow(QMainWindow):
         self._dl_worker.progress.connect(self._on_download_progress)
         self._dl_worker.finished.connect(self._on_download_finished)
         self._dl_worker.error.connect(self._on_download_error)
+        self._dl_worker.fallback.connect(self._on_download_fallback)
         self._dl_worker.start()
 
     def _on_download_progress(self, downloaded, total):
@@ -6354,6 +6363,9 @@ class MainWindow(QMainWindow):
             self._progress.setLabelText(
                 T("update.downloading_unknown", downloaded=downloaded // 1024)
             )
+
+    def _on_download_fallback(self):
+        self._progress.setLabelText(T("update.fallback_full"))
 
     def _cancel_download(self):
         if self._update_cancel:
@@ -6506,6 +6518,12 @@ class _UpdateInfoDialog(QDialog):
         header.setWordWrap(True)
         header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 8px;")
         layout.addWidget(header)
+
+        if info.delta_url and info.delta_bytes > 0:
+            mb = max(1, round(info.delta_bytes / 1024 / 1024))
+            delta_hint = QLabel(T("update.delta_size", mb=mb))
+            delta_hint.setStyleSheet("color: #2d8a5f; margin-bottom: 4px;")
+            layout.addWidget(delta_hint)
 
         browser = QTextBrowser()
         browser.setOpenExternalLinks(True)
