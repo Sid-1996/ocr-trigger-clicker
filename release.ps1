@@ -178,4 +178,4 @@ gh @ghArgs
 
 Write-Output "Draft release v$Version 建立完成: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v$Version"
 Write-Output ""
-Write-Output "請先下載 dist/ocr-trigger-clicker.exe 測試，確認無誤後在 GitHub Releases 頁面按「Publish release」公開。"
+Write-Output "請先下載 dist\ocr-trigger-clicker\ocr-trigger-clicker.exe 測試，確認無誤後在 GitHub Releases 頁面按「Publish release」公開。"

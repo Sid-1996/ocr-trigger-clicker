@@ -237,7 +237,7 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 
 **手動準備階段：**
 1. 更新 `docs/dev/CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（內容 = 從上一個版本至今的所有變更，格式參照 Keep a Changelog，既有區塊可當範本）
-2. `python build.py` 打包 → `dist/ocr-trigger-clicker.exe`
+2. `python build.py` 打包 → `dist\ocr-trigger-clicker\ocr-trigger-clicker.exe`
 3. 手動測試該 EXE，功能確認無誤
 4. 測試失敗 → 修復 → 回到步驟 2
 
