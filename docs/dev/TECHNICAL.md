@@ -58,7 +58,7 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 - repo 根 `manifest.json` — 本版完整清單，下一版當差異基準
 - repo 根 `delta_info.json` — `{version, base_version, asset, delta_bytes}`，用戶端 raw 讀取判定用
 
-典型大小比例：整包 ZIP ~318 MB，而變更只有應用程式程式碼（core/gui/i18n 共 0.82 MB）+ 主 exe（12.8 MB，PyInstaller 把 PYZ 內嵌其中）→ 典型 delta 約 **1~13 MB**。大檔（frida.pyd 118MB、ONNX 模型 88MB、cv2.pyd 86MB、ffmpeg/Qt/onnxruntime/numpy 等 562MB）幾乎不變，所以不需要進 delta。
+典型大小比例：整包 ZIP ~200 MB（v0.2.9 瘦身後，此前 ~318 MB），而變更通常只有應用程式程式碼（core/gui/i18n 共 0.82 MB）+ 主 exe（12.8 MB，PyInstaller 把 PYZ 內嵌其中）→ 典型 delta 約 **1~20 MB**。大檔（frida.pyd、ONNX 模型、cv2.pyd、Qt/onnxruntime/numpy 等）幾乎不變，所以不需要進 delta。
 
 不產 delta 的情況（用戶端自動走整包）：第一次發版（無前一版 manifest）、跳過多版更新（`base_version` 不符）、delta 過大（> 整包 40%）。
 

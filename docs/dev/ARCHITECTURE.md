@@ -50,6 +50,8 @@ gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──�
                   │               └──→  gui/test_run_controller
                   │               └──→  core/19_recorder        ──→  core/17_capture_pipeline
                   │               └──→  core/20_recorder_convert ──→  core/02_ocr_engine, core/11_template_matching
+                  │               └──→  core/group_selection
+                  │               └──→  gui/15_template_crop
                   │
 core/05_main_loop ──→  _loader ──→  core/17_capture_pipeline
                    │               └──→  core/02_ocr_engine
@@ -80,6 +82,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/rule_serialization.py` | 規則/群組 JSON 序列化 | `load_rules()`, `save_rules()`, `load_groups()`, `save_groups()` |
 | `core/task_management.py` | 任務檔案 CRUD | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()` |
 | `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()` |
+| `core/group_selection.py` | 啟動群組選擇（記憶上次勾選／skip 旗標） | `should_skip()`, `build_entry()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
 | `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
 | `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型 + 重疊 ROI OCR 合併） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
@@ -95,6 +98,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/07_gui_roi.py` | 框選偵測區域（全螢幕 overlay） | `select_roi()` |
 | `gui/09_ocr_debug.py` | OCR 除錯面板（即時截圖＋標註） | `OcrDebugPanel` |
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
+| `gui/15_template_crop.py` | 模板修剪對話框（四邊空間化向內剪＋精確數值） | `trim_template_dialog()` |
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、差異/整包下載、解壓、staging 驗證、套用更新） | `check_for_update()`, `download_update()`, `download_delta_update()`, `build_manifest()`, `diff_manifests()`, `apply_delta_to_staging()`, `verify_tree()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
@@ -590,7 +594,7 @@ MainLoop.emergency_stop()
 
 ## 自動更新（差異更新）
 
-每個版本除了整包 `ocr-trigger-clicker.zip`（~318 MB），另發行只含變更檔案的 `ocr-trigger-clicker-delta.zip`（典型 1~13 MB）。安裝樹 606 MB 中 562 MB 是幾乎不變的靜態二進位（frida / onnx 模型 / cv2 / Qt / numpy），應用程式自身程式碼僅 0.82 MB，故差異更新節省約 96% 下載量。
+每個版本除了整包 `ocr-trigger-clicker.zip`（~200 MB，v0.2.9 瘦身後），另發行只含變更檔案的 `ocr-trigger-clicker-delta.zip`（典型 1~20 MB）。安裝樹 ~458 MB 中絕大部分是幾乎不變的靜態二進位（frida / onnx 模型 / cv2 / Qt / numpy），應用程式自身程式碼僅 0.82 MB，故差異更新節省約 90% 下載量。
 
 **產物**（`make_delta.py`，由 `release.ps1` 在 build 後呼叫）：
 
