@@ -250,7 +250,8 @@ def slim_dist():
     targets = [
         (root / "cv2", "opencv_videoio_ffmpeg*_64.dll"),
         (root / "PIL", "_avif*"),
-        (root / "dxcam" / "processor", "_numpy_kernels.{c,pyx}"),
+        (root / "dxcam" / "processor", "_numpy_kernels.c"),
+        (root / "dxcam" / "processor", "_numpy_kernels.pyx"),
     ]
     removed = 0
     for base, pattern in targets:
