@@ -1,6 +1,6 @@
 {
- "version": "0.2.8",
- "base_version": "0.2.7",
+ "version": "0.2.9",
+ "base_version": "0.2.8",
  "files": {
   "_internal/_asyncio.pyd": {
    "size": 74096,
@@ -72,7 +72,7 @@
   },
   "_internal/base_library.zip": {
    "size": 1333717,
-   "sha256": "88f07efd7e8e1f11203ac5230e7b7d6a4374c052326b7f067db3ce413384c791"
+   "sha256": "6b2ef6ce254228f09035aee752695bc79cc71bac81f2237f566e580cee69ad7f"
   },
   "_internal/charset_normalizer/cd.cp312-win_amd64.pyd": {
    "size": 10752,
@@ -814,10 +814,6 @@
    "size": 8244,
    "sha256": "a5657a30309eed8cd3b51ec9ba9234c5d83c778247cf5539c34c836ae0fbcabd"
   },
-  "_internal/custom_models/ch_PP-OCRv5_server_det.onnx": {
-   "size": 88030804,
-   "sha256": "61824840edf6e74581898930b8091b1b2318f4b2705a2e8a40ad3de7ac480133"
-  },
   "_internal/custom_models/chinese_cht_dict.txt": {
    "size": 74012,
    "sha256": "d1979e9f794c464c0d2e0b70a7fe14dd978e9dc644c0e71f14158cdf8342af1b"
@@ -1026,14 +1022,6 @@
    "size": 7122,
    "sha256": "5287ef45e3783d1a6ca96e5fbff39aa7ec3e5da2130026dc6324455a96b762b1"
   },
-  "_internal/cv2/opencv_videoio_ffmpeg4100_64.dll": {
-   "size": 26391552,
-   "sha256": "3de83b84588b3ee8bacdbea85a8f92d4855a32a1108183963315a7db06ad5744"
-  },
-  "_internal/cv2/opencv_videoio_ffmpeg500_64.dll": {
-   "size": 30876160,
-   "sha256": "7aabff029d1fa47cf56ede4dbbe05dc62da3208f07cd16471d4c966a33f9aa31"
-  },
   "_internal/cv2/optflow/__init__.pyi": {
    "size": 10705,
    "sha256": "f70d7af04c11e025fa0d858cc5b83e461111545693ffe3994da91176a104e1da"
@@ -1238,17 +1226,9 @@
    "size": 293,
    "sha256": "b2c92608a3d5bd5cb6a64310d7e59123bc003c00793516277701d159e3ca9276"
   },
-  "_internal/dxcam/processor/_numpy_kernels.c": {
-   "size": 1584905,
-   "sha256": "c7f9f0904a109f5cec32ce3f2b7a22973a3b28b62be6da6dbeef23840ef8544f"
-  },
   "_internal/dxcam/processor/_numpy_kernels.cp312-win_amd64.pyd": {
    "size": 202240,
    "sha256": "ee96fafb3624bb29d1e4fe9944e402ba7aa96058040b0ec30b9b31d6a5d7eff2"
-  },
-  "_internal/dxcam/processor/_numpy_kernels.pyx": {
-   "size": 22956,
-   "sha256": "dfe71663250f8b1ef542a9126b8475787958dd0c2cb8b6dc4d8f80c08c1492a9"
   },
   "_internal/dxcam/processor/base.py": {
    "size": 4278,
@@ -5242,10 +5222,6 @@
    "size": 94,
    "sha256": "ee1dadc9761cd36148a1e2cb6009d4c081305d9b669bee21eacd2ee6d05ce607"
   },
-  "_internal/PIL/_avif.cp312-win_amd64.pyd": {
-   "size": 7893504,
-   "sha256": "6731dce52baab0b96b0eeb3c664844b5b42c2168ea8668af2430e2fbdd2dfbd8"
-  },
   "_internal/PIL/_imaging.cp312-win_amd64.pyd": {
    "size": 2632704,
    "sha256": "c8c519ec72bf75b2945b4fc4afa854af2fca8b970a403134f9ddda3e164d85e9"
@@ -6092,11 +6068,19 @@
   },
   "ocr-trigger-clicker.exe": {
    "size": 12822147,
-   "sha256": "3a01dc9ba12772a5da5cb5efe1628cc823f7856d4efb138a89a9ef4bccb52cd7"
+   "sha256": "a4bea9d61725fd37c1d02b3fe12cd1eb2df43524e3795433c17b6713ff7a4143"
   },
   "updater.exe": {
-   "size": 7375771,
-   "sha256": "d1c5f9c66486d9099670ac9fbffb358633cfa5a06810f914f7212b84ecf3d3a6"
+   "size": 7376701,
+   "sha256": "5686817a76efbb68f68fdba6c105aadf60cae6107ed0f84725b4263c39b5e0ad"
   }
- }
+ },
+ "removed": [
+  "_internal/custom_models/ch_PP-OCRv5_server_det.onnx",
+  "_internal/cv2/opencv_videoio_ffmpeg4100_64.dll",
+  "_internal/cv2/opencv_videoio_ffmpeg500_64.dll",
+  "_internal/dxcam/processor/_numpy_kernels.c",
+  "_internal/dxcam/processor/_numpy_kernels.pyx",
+  "_internal/PIL/_avif.cp312-win_amd64.pyd"
+ ]
 }
