@@ -1,5 +1,17 @@
 
 
+## [v0.2.9]
+
+### 給使用者
+
+- **安裝包瘦身**：移除打包時夾帶、但從未被使用的檔案（未參考的 OCR 偵測模型、OpenCV 影片編碼元件、AVIF 支援、dxcam 原始碼），安裝後佔用空間約減少 150 MB，下載更省時。
+- **差異更新正式生效**：自本版起自動更新全面走「差異更新」——只下載真正變更的檔案；安裝在 v0.2.8 的使用者可直接套用，其餘版本自動退回整包下載。
+
+### 給開發者
+
+- **打包瘦身**（commit `33da4e9`）：build.py 新增 `slim_dist()`，於 build 後移除已實測確認為零使用的檔案——`custom_models/ch_PP-OCRv5_server_det.onnx`（84 MB，det 實際用 rapidocr 內建 v4 模型）、`cv2` 兩顆 ffmpeg DLL（54.6 MB，全專案無 `VideoCapture`/`VideoWriter`）、`PIL/_avif*`（7.5 MB，`AvifImagePlugin` 的 `_avif` import 有 `try/except ImportError` 保護）、`dxcam/processor/_numpy_kernels.{c,pyx}`（1.5 MB，打包夾帶的原始碼）。瘦身前後：dist 606 MB/1524 檔 → 458.5 MB/1518 檔。commit `21c3cf6` 修正 `pathlib.glob` 不支援花括號 pattern 導致的 dxcam 原始碼未移除。
+- **差異更新首次生效**：`delta_info.json` base_version = 0.2.8，v0.2.8 使用者走 delta（`removed` 清單含本次 5 個瘦身檔），其餘自動退回整包。
+
 ## [v0.2.8] - 2026-08-17
 
 ### 給使用者
