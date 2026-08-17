@@ -238,9 +238,29 @@ def main():
         import shutil
 
         shutil.rmtree(here / "build", ignore_errors=True)
+        slim_dist()
         build_updater()
     else:
         print("\n打包失敗")
+
+
+def slim_dist():
+    # ponytail: 移除打包後已確認零使用的檔案（究責：PE import 表/程式碼參考皆無引用）
+    root = Path(__file__).parent / "dist" / "ocr-trigger-clicker" / "_internal"
+    targets = [
+        (root / "cv2", "opencv_videoio_ffmpeg*_64.dll"),
+        (root / "PIL", "_avif*"),
+        (root / "dxcam" / "processor", "_numpy_kernels.{c,pyx}"),
+    ]
+    removed = 0
+    for base, pattern in targets:
+        for f in base.glob(pattern) if base.exists() else []:
+            size = f.stat().st_size
+            f.unlink()
+            removed += size
+            print(f"瘦身: 移除 {f.relative_to(root.parent)} ({size / 1048576:.1f} MB)")
+    if removed:
+        print(f"瘦身: 共釋出 {removed / 1048576:.1f} MB")
 
 
 def build_updater():
