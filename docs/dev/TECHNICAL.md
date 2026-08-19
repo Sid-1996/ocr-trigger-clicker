@@ -42,9 +42,10 @@
 - Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python, mss, pynput, dxcam, numpy, pygetwindow, pywin32
 - Optional GPU acceleration: DirectML via DirectX 12
 - Foreground input via pynput (SendInput); background mode via Frida inject for background clicks (may not work on most Unity games — engine limitation, verify per window); no standalone PostMessage mode
+- Developer dependencies are managed by global `uv`; run `uv sync --dev` before local development
 
 ```powershell
-python build.py
+uv run python build.py
 ```
 
 Output: `dist/ocr-trigger-clicker/` (onedir, includes `ocr-trigger-clicker.exe` + `updater.exe` + `_internal/`)
@@ -52,7 +53,7 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 
 ### 差異更新（Delta Update）
 
-發版時 `release.ps1` 會再跑 `python make_delta.py <version> <base_version> dist\ocr-trigger-clicker dist`，額外產出：
+發版時 `release.ps1` 會再跑 `uv run python make_delta.py <version> <base_version> dist\ocr-trigger-clicker dist`，額外產出：
 
 - `dist/ocr-trigger-clicker-delta.zip` — 只含「上一版 → 本版」變更／新增檔案 + `manifest.json`（本版完整檔案清單：rel 路徑 + size + sha256 + `removed`）
 - repo 根 `manifest.json` — 本版完整清單，下一版當差異基準

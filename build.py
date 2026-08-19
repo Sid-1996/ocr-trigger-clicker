@@ -23,7 +23,7 @@ def main():
     try:
         import PyInstaller.__main__
     except ImportError:
-        print("請先安裝 PyInstaller: pip install pyinstaller")
+        print("請先同步開發依賴: uv sync --dev")
         sys.exit(1)
 
     here = Path(__file__).parent
@@ -37,11 +37,10 @@ def main():
         print(f"   工作目錄: {Path.cwd()}")
         print()
         print("   請確認已在正確的 Python 環境中執行：")
-        print("   1. 啟動虛擬環境（如有）：venv\\Scripts\\activate")
-        print("   2. 安裝依賴：pip install rapidocr-onnxruntime")
-        print("   3. 或直接在專案目錄執行：")
+        print("   1. 同步依賴：uv sync --dev")
+        print("   2. 直接在專案目錄執行：")
         print(f'      cd "{here}"')
-        print(f'      "{sys.executable}" build.py')
+        print("      uv run python build.py")
         sys.exit(1)
 
     rap_path = Path(rapidocr_onnxruntime.__file__).parent

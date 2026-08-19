@@ -17,8 +17,8 @@ if ($status) {
     exit 1
 }
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Error "找不到 python，請確認在 PATH 中"
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Error "找不到 uv，請先安裝全域 uv 並確認在 PATH 中"
     exit 1
 }
 
@@ -123,24 +123,29 @@ if (Test-Path $latestFile) {
 '__github__ = "https://github.com/Sid-1996/ocr-trigger-clicker"' | Add-Content _version.py -Encoding utf8
 $Version | Set-Content latest_version.txt -Encoding utf8
 
+$pyprojectPath = Join-Path $root "pyproject.toml"
+$pyprojectText = Get-Content -Path $pyprojectPath -Raw -Encoding utf8
+$pyprojectText = [regex]::Replace($pyprojectText, '(?m)^version = ".*"$', "version = `"$Version`"")
+Set-Content -Path $pyprojectPath -Value $pyprojectText -Encoding utf8
+
 # ---- 打包 ----
 
 Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
-python build.py
+uv run python build.py
 Compress-Archive -Path dist\ocr-trigger-clicker\* -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
 
 # ---- 差異更新（delta） ----
 # 產出 dist\ocr-trigger-clicker-delta.zip + 更新 repo 根的 manifest.json / delta_info.json
 
 if ($baseVersion) {
-    python make_delta.py $Version $baseVersion "dist\ocr-trigger-clicker" "dist"
+    uv run python make_delta.py $Version $baseVersion "dist\ocr-trigger-clicker" "dist"
 } else {
-    python make_delta.py $Version "" "dist\ocr-trigger-clicker" "dist"
+    uv run python make_delta.py $Version "" "dist\ocr-trigger-clicker" "dist"
 }
 
 # ---- commit（本地，還不 push；含 manifest / delta_info 供用戶端 raw 讀取） ----
 
-git add _version.py latest_version.txt docs/dev/CHANGELOG.md manifest.json delta_info.json
+git add _version.py latest_version.txt pyproject.toml docs/dev/CHANGELOG.md manifest.json delta_info.json
 git commit -m "chore: bump to v$Version"
 
 # ---- 清理既有 tag / release（-Force 模式） ----

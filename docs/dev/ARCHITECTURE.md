@@ -8,7 +8,7 @@
 
 | 層級 | 技術 | 用途 |
 |------|------|------|
-| 語言 | Python 3.12 | 主程式 |
+| 語言 | Python 3.13 | 主程式 |
 | GUI | PyQt6 | 設定視窗、偵測日誌、除錯面板、日誌檢視器 |
 | OCR | rapidocr-onnxruntime (DirectML + CPU) | 文字辨識 |
 | 影像處理 | OpenCV (cv2), numpy | 截圖、縮放、二值化、差異偵測 |
@@ -429,7 +429,7 @@ MainLoop.emergency_stop()
 
 | 執行模式 | 基底目錄 |
 |----------|----------|
-| `python gui/06_gui_main.py`（開發模式） | `%APPDATA%\ocr-trigger-clicker\` |
+| `uv run python gui/06_gui_main.py`（開發模式） | `%APPDATA%\ocr-trigger-clicker\` |
 | 打包 EXE（PyInstaller） | `%APPDATA%\ocr-trigger-clicker\` |
 
 兩種模式皆同，因為 `core._paths.get_data_path()` 在任何模式皆可 import。可透過環境變數 `OCR_TRIGGER_DATA` 覆蓋基底路徑。
@@ -444,7 +444,7 @@ MainLoop.emergency_stop()
 
 | 執行模式 | 起始目錄 |
 |----------|----------|
-| `python gui/06_gui_main.py` | 專案根目錄（`_here` = `Path(__file__).resolve().parent.parent`） |
+| `uv run python gui/06_gui_main.py` | 專案根目錄（`_here` = `Path(__file__).resolve().parent.parent`） |
 | 打包 EXE | PyInstaller 暫存目錄（`sys._MEIPASS`），通常為 `%TEMP%\_MEIxxxxx` |
 
 使用者可透過對話框自由選擇任意路徑，起始目錄僅為開啟對話框時的預設位置。
@@ -714,8 +714,8 @@ ctx.ocr_elapsed_ms = elapsed_ms  # 在 handler 中設定
 `tests/` 以 pytest 涵蓋核心邏輯，`pyproject.toml` 設定 `addopts = "--cov"`。執行方式：
 
 ```powershell
-python -m pytest --no-cov -q    # 冒煙（不產覆蓋報告）
-python -m pytest                # 含覆蓋報告
+uv run python -m pytest --no-cov -q    # 冒煙（不產覆蓋報告）
+uv run python -m pytest                # 含覆蓋報告
 ```
 
 ### 檔案地圖

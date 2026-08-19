@@ -38,20 +38,20 @@
 
 1. **Lint / 格式化**（本次有改 `.py` 檔才需要，純文件/設定變更跳過）：
    ```powershell
-   pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; ruff check --fix .; ruff format ."
+   pwsh -Command "Set-Location 'C:\Code play first\ocr-trigger-clicker'; uv run ruff check --fix .; uv run ruff format ."
    ```
    確認無殘留 error 才進下一步。
 
 2. **自檢測試**（本次有改 `core/` 或 `gui/` 下任何非 trivial 邏輯——有分支、迴圈、解析、信任邊界/資料安全路徑——才需要）：
    檢查該檔案是否有 `if __name__ == "__main__":` self-check，有就執行：
    ```powershell
-   python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<改動的檔案路徑>', run_name='__main__')"
+   uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<改動的檔案路徑>', run_name='__main__')"
    ```
    把 `<改動的檔案路徑>` 換成實際修改的檔案（例如 `core/04_rule_engine.py`）。單行 trivial 變更、或該檔案本來就沒有 self-check，跳過。不要依賴任何寫死的檔名清單——用「這次改了什麼檔」來判斷，而不是查表。self-check 以可斷言、非互動的 `__main__` 為限（Qt overlay／主視窗啟動器、無 `__main__` 的檔跳過，例如 `core/10_performance_monitor.py`）。
 
    同時跑 pytest 套件（`tests/` 對應的 `test_*.py`，或整個套件冒煙）：
    ```powershell
-   python -m pytest --no-cov -q
+   uv run python -m pytest --no-cov -q
    ```
    改 `core/` 邏輯後不跑 pytest 視為未完成。對應範圍除了實體 import，也含 `tests/conftest.py` 的 fixture／factory（`make_main_loop` / `tmp_tasks_dir`）落點；改含 `T()` 的 `.py` 或 `i18n/*.json` 時加跑 `tests/test_i18n.py`。整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip；對應測試因環境 skip 時改用該模組 self-check 補位並在回覆明說，不當作綠燈。
 
@@ -107,6 +107,7 @@ pwsh -Command "
 ### 其他規範
 
 - 全局已設 `core.pager=cat`，git log 不需額外加 `--no-pager`
+- Python 依賴由全域 `uv` 管理；先跑 `uv sync --dev`，日常命令一律透過 `uv run ...` 執行。`pyproject.toml` + `uv.lock` 是依賴事實來源，不再使用 `requirements.txt`。
 
 ---
 
@@ -207,20 +208,20 @@ rg "pattern" -n -i
 
 ```powershell
 # 檢查整個專案
-ruff check "C:\Code play first\ocr-trigger-clicker"
+uv run ruff check "C:\Code play first\ocr-trigger-clicker"
 
 # 自動修復可修的問題
-ruff check --fix "C:\Code play first\ocr-trigger-clicker"
+uv run ruff check --fix "C:\Code play first\ocr-trigger-clicker"
 
 # 格式化
-ruff format "C:\Code play first\ocr-trigger-clicker"
+uv run ruff format "C:\Code play first\ocr-trigger-clicker"
 ```
 
 ### 自檢測試
 強制執行時機與判斷方式見上方「工作完成規範」清單第 2 步（依實際改動的檔案動態判斷，不要對照固定清單）。單一檔案的執行語法：
 
 ```powershell
-python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路徑>', run_name='__main__')"
+uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路徑>', run_name='__main__')"
 ```
 
 ---
@@ -237,7 +238,7 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 
 **手動準備階段：**
 1. 更新 `docs/dev/CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（內容 = 從上一個版本至今的所有變更，格式參照 Keep a Changelog，既有區塊可當範本）
-2. `python build.py` 打包 → `dist\ocr-trigger-clicker\ocr-trigger-clicker.exe`
+2. `uv run python build.py` 打包 → `dist\ocr-trigger-clicker\ocr-trigger-clicker.exe`
 3. 手動測試該 EXE，功能確認無誤
 4. 測試失敗 → 修復 → 回到步驟 2
 
@@ -247,13 +248,13 @@ python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路�
 ```
 
 腳本自動完成：
-1. Pre-flight 檢查（python / gh / git 乾淨度 / tag 衝突）
+1. Pre-flight 檢查（uv / gh / git 乾淨度 / tag 衝突）
 2. 從 docs/dev/CHANGELOG.md 解析 `## [v$x.y.z]` 區塊作為 release notes
    - 找不到該版本 → 報錯
    - 缺日期 → 自動填入當天
 3. 更新 `_version.py` + `latest_version.txt`（base_version = 更新前的舊版本號）
-4. `python build.py` 打包 + 壓整包 ZIP
-5. `python make_delta.py` 產生差異更新：`dist/ocr-trigger-clicker-delta.zip` + 覆寫 repo 根 `manifest.json` / `delta_info.json`
+4. `uv run python build.py` 打包 + 壓整包 ZIP
+5. `uv run python make_delta.py` 產生差異更新：`dist/ocr-trigger-clicker-delta.zip` + 覆寫 repo 根 `manifest.json` / `delta_info.json`
 6. git commit（含 docs/dev/CHANGELOG.md / _version.py / latest_version.txt / manifest.json / delta_info.json）
 7. git tag + push commit + tag 到遠端
 8. `gh release create --draft --prerelease` 附**兩個 asset**（整包 ZIP + delta ZIP），Release notes = CHANGELOG 內容
