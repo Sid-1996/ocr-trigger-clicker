@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 > nul
 cd /d "%~dp0"
 
@@ -10,7 +10,8 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-python gui/06_gui_main.py --debug
+REM 使用 uv 執行專案（會自動使用 .venv 虛擬環境）
+uv run python gui/06_gui_main.py --debug
 if errorlevel 1 (
     echo 啟動過程發生錯誤。
     if exist startup_error.log (
@@ -22,3 +23,4 @@ if errorlevel 1 (
 ) else (
     echo 程式已結束。
 )
+

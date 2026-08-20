@@ -103,6 +103,8 @@ def main():
         "comtypes",
         # frida: 後台注入模式，lazy-imported，DLL 需 collect-all 收集
         "frida",
+        # stdlib submodule imported from _loader-loaded data files; PyInstaller can miss it.
+        "logging.handlers",
     ]
 
     exclude = [
