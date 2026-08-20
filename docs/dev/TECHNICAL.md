@@ -39,7 +39,7 @@
 - Onedir bundle via PyInstaller (`build.py`)
 - Windows 10/11 64-bit only
 - No Python runtime required for end users
-- Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python, mss, pynput, dxcam, numpy, pygetwindow, pywin32
+- Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python, mss, pynput, dxcam, numpy, pygetwindow, pywin32, frida
 - Optional GPU acceleration: DirectML via DirectX 12
 - Foreground input via pynput (SendInput); background mode via Frida inject for background clicks (may not work on most Unity games — engine limitation, verify per window); no standalone PostMessage mode
 - Developer dependencies are managed by global `uv`; run `uv sync --dev` before local development

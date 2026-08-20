@@ -1,5 +1,12 @@
 
 
+## [Unreleased]
+
+### 給開發者
+
+- **遷移至 Python 3.13 與 uv 管理**（commit `a6fcac6`）：`pyproject.toml` 改 `requires-python = ">=3.13,<3.14"` 並整合依賴宣告，`uv.lock` 為鎖定檔，`requirements.txt` 退役刪除。開發依賴由全域 `uv` 管理，先 `uv sync --dev`，日常命令（build / pytest / ruff）一律 `uv run ...` 執行；`build.py`、`release.ps1`、`run.bat` 同步改用 uv 啟動。
+- **修正 run.bat 啟動**（commit `f767d4a`）：改用 `uv run python gui/06_gui_main.py --debug`，並在 `build.py` 隱藏導入 `logging.handlers` 補足 PyInstaller 靜態分析遺漏。
+
 ## [v0.2.9] - 2026-08-17
 
 ### 給使用者
