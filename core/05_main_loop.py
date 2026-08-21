@@ -1487,6 +1487,26 @@ class MainLoop:
                 self._log("所有選中群組執行完畢，停止")
                 self._stop_event.set()
 
+    def _wait_window_recover(self, title: str) -> None:
+        """視窗遺失時自動暫停並輪詢等待重現。
+
+        hwnd 在此重置為 None：視窗可能已被關閉重建（同標題新 handle），
+        恢復後由 _loop 的延遲解析重新取得，避免對死 hwnd 截圖/輸入靜默失敗。
+        """
+        log_main(f"視窗「{title}」遺失，自動暫停")
+        if self.on_window_lost:
+            self.on_window_lost()
+        self._pause_event.set()
+        self._window_hwnd = None
+        while not self._stop_event.is_set() and not self._emergency_event.is_set():
+            if not self._pause_event.is_set():
+                break
+            if get_window_rect(title) is not None:
+                self._pause_event.clear()
+                self._log("視窗已重新出現，恢復偵測")
+                break
+            time.sleep(0.5)
+
     def _loop(self):
         iteration = 0
         try:
@@ -1510,19 +1530,7 @@ class MainLoop:
                         title = self._window_title
                     rect = get_window_rect(title)
                     if rect is None:
-                        log_main(f"視窗「{title}」遺失，自動暫停")
-                        if self.on_window_lost:
-                            self.on_window_lost()
-                        self._pause_event.set()
-                        while not self._stop_event.is_set() and not self._emergency_event.is_set():
-                            if not self._pause_event.is_set():
-                                break
-                            rect = get_window_rect(title)
-                            if rect is not None:
-                                self._pause_event.clear()
-                                self._log("視窗已重新出現，恢復偵測")
-                                break
-                            time.sleep(0.5)
+                        self._wait_window_recover(title)
                         self._perf.record_frame()
                         continue
 
