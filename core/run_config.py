@@ -92,16 +92,18 @@ _VALID_INTERACTION_MODES = frozenset({"pynput", "frida"})
 
 
 def get_config_interaction_mode() -> str:
-    """Read interaction_mode from config.json (app-level). Defaults to "pynput"."""
-    try:
-        from core._paths import _bundle_root, _is_frozen, get_data_path
+    """Read interaction_mode from config.json (app-level). Defaults to "pynput".
 
-        if _is_frozen():
-            p = Path(get_data_path("config.json"))
-        else:
-            p = _bundle_root() / "config.json"
+    一律讀 %APPDATA%（get_data_path），與 GUI 的 _config_path 同源——dev 模式若讀
+    專案根 config.json 會與 GUI 分歧，導致前景模式被誤判為後台（commit 歷史 bug）。
+    """
+    try:
+        from core._paths import get_data_path
+
+        p = Path(get_data_path("config.json"))
         with open(p, encoding="utf-8") as f:
-            return json.load(f).get("interaction_mode", "pynput")
+            mode = json.load(f).get("interaction_mode", "pynput")
+        return mode if mode in _VALID_INTERACTION_MODES else "pynput"
     except Exception:
         return "pynput"
 

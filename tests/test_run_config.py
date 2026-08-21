@@ -3,11 +3,36 @@ import json
 from core import run_config
 from core.run_config import (
     get_capture_size,
+    get_config_interaction_mode,
     get_task_interaction_mode,
     set_capture_size,
     set_task_interaction_mode,
     set_task_window,
 )
+
+
+def test_get_config_interaction_mode_reads_appdata(tmp_path, monkeypatch):
+    """回歸測試：dev 模式不得讀專案根 config.json（曾殘留 frida 導致前景誤判後台）。"""
+    monkeypatch.setenv("OCR_TRIGGER_DATA", str(tmp_path))
+    cfg = tmp_path / "config.json"
+    # 專案根的真實 config.json 含 "frida"——這裡寫 "pynput"，若函式仍讀專案根就會失敗
+    cfg.write_text(json.dumps({"interaction_mode": "pynput"}), encoding="utf-8")
+    assert get_config_interaction_mode() == "pynput"
+
+    cfg.write_text(json.dumps({"interaction_mode": "frida"}), encoding="utf-8")
+    assert get_config_interaction_mode() == "frida"
+
+
+def test_get_config_interaction_mode_defaults_and_validation(tmp_path, monkeypatch):
+    monkeypatch.setenv("OCR_TRIGGER_DATA", str(tmp_path))
+    # 檔案不存在 → 預設 pynput
+    assert get_config_interaction_mode() == "pynput"
+    # 已淘汰/非法值 → 回退 pynput（與 task 層級驗證一致）
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"interaction_mode": "postmessage"}), encoding="utf-8")
+    assert get_config_interaction_mode() == "pynput"
+    cfg.write_text("not json", encoding="utf-8")
+    assert get_config_interaction_mode() == "pynput"
 
 
 def test_set_get_task_interaction_mode_round_trip(tmp_path):
