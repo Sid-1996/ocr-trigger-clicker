@@ -55,6 +55,7 @@ def _find_text_after_click(block_results: list, target: str) -> bool:
 
 
 _KEY_TEST_DEFAULT = "space"  # 16_bg_input / 03_pynput_input 兩邊都相容的按鍵名
+_ERR_MODE_SWITCHED = "mode changed to pynput"  # key verify 的假失敗（非注入問題）
 _KEY_TEST_OPTIONS = (
     "space",
     "enter",
@@ -128,6 +129,8 @@ class OcrDebugPanel(QWidget):
     step_requested = pyqtSignal(dict)
     template_requested = pyqtSignal(dict)
     template_step_requested = pyqtSignal(dict)
+    # 後台測試失敗（注入失敗／遊戲無反應／截圖全黑）→ 請求主視窗開「診斷＋行動」對話框
+    bg_inject_fail = pyqtSignal()
 
     _OCR_MODES = {
         "full_test": {"preprocess": False, "max_side_len": 0, "min_confidence": 0.25},
@@ -994,8 +997,12 @@ class OcrDebugPanel(QWidget):
         self._click_error_label.setText(T(f"ocr_debug.click_verify.short.{key}", text=text))
         self._click_error_label.show()
         QTimer.singleShot(15000, self._click_error_label.hide)
-        if key in ("no_response", "inject_fail", "black"):
+        if key in ("inject_fail", "no_response", "black"):
+            # 後台測試失敗簽名：注入層失敗／遊戲無視輸入／截圖轉黑 → 請求主視窗開服務對話框。
+            # 帶 last_error 的 black 是 verify 例外（非真全黑），不誤導使用者去提權/切前景
             logging.warning("ocr_dbg click verify=%s text=%s last_error=%s", key, text, last_error)
+            if key != "black" or not last_error:
+                self.bg_inject_fail.emit()
 
     def _on_key_test(self):
         self._click_error_label.hide()
@@ -1041,7 +1048,7 @@ class OcrDebugPanel(QWidget):
         try:
             mode = _get_interaction_mode()
             if mode == "pynput":
-                emit("fail", err="mode changed to pynput")
+                emit("fail", err=_ERR_MODE_SWITCHED)
                 return
             t0 = time.monotonic()
             before = capture_frame(mode, self._window_title, hwnd=hwnd)
@@ -1126,6 +1133,9 @@ class OcrDebugPanel(QWidget):
             logging.warning(
                 "ocr_dbg key verify=%s key=%s err=%s", key, test_key, out.get("err", "")
             )
+            # 假失敗（使用者已切回前景）不觸發服務對話框；其餘失敗簽名一律請求
+            if not (key == "fail" and out.get("err") == _ERR_MODE_SWITCHED):
+                self.bg_inject_fail.emit()
 
     def _open_click_detail(self):
         guidance = getattr(self, "_last_verify_guidance", "")

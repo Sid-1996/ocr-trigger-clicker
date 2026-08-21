@@ -3395,6 +3395,7 @@ class MainWindow(QMainWindow):
             self._applying_task_window = False
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
+            self._debug_panel.bg_inject_fail.connect(self._on_debug_bg_fail)
             self._debug_panel.rule_requested.connect(self._on_debug_rule_requested)
             self._debug_panel.step_requested.connect(self._on_debug_step_requested)
             self._debug_panel.template_requested.connect(self._on_debug_template_requested)
@@ -6169,6 +6170,20 @@ class MainWindow(QMainWindow):
             self._relaunch_as_admin()
         elif clicked is switch_btn:
             self._switch_to_fg_and_restart()
+
+    def _on_debug_bg_fail(self):
+        """診斷面板點擊/按鍵測試後台失敗：提供與執行中一致的服務對話框。
+
+        測試是反覆操作，每 App 生命週期只彈一次；之後由面板紅色橫幅持續提供細節。
+        """
+        if getattr(self, "_debug_bg_fail_shown", False):
+            return
+        self._debug_bg_fail_shown = True
+        if not is_admin():
+            text = T("dialog.bg_fail_not_admin")
+        else:
+            text = T("dialog.bg_fail_admin")
+        self._show_bg_recover_dialog("dialog.bg_fail_title", text)
 
     def _switch_to_fg_and_restart(self):
         """切回前景模式並以剩餘群組重新開始。
