@@ -6,7 +6,7 @@
 
 <p align="center">
   <em>A no-code game automation tool for everyday players — double-click on-screen text to build a rule, or record once and it auto-converts into a script</em><br>
-  Traditional Chinese / English UI · Author: Sid
+  Traditional Chinese / English / Japanese UI · Author: Sid
 </p>
 
 <p align="center">
@@ -64,7 +64,7 @@
 | ⌨️ | **F8 global hotkey** | Start / pause / stop any time with F8 — no need to switch back to the tool |
 | 🎬 | **Record actions** | Press F9 to record, click through the game once as a demo, then convert it into rules automatically — no manual setup (only mouse clicks are recorded; aiming at text or icons gives the best result) |
 | 🔄 | **Auto-update** | Checks for new versions on launch; delta updates download only changed files (90%+ less traffic), one-click upgrade via the built-in updater |
-| 🌐 | **Bilingual UI** | Traditional Chinese / English, switch anytime |
+| 🌐 | **Multilingual UI** | Traditional Chinese / English / Japanese, switch anytime |
 
 ---
 
