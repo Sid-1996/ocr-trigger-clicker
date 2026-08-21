@@ -1376,3 +1376,52 @@ def test_check_black_frame_skips_foreground():
     black = np.zeros((10, 10, 3), dtype=np.uint8)
     assert ml._check_black_frame(black, False) is False
     assert ml._black_streak == 0, "前景模式不掃描、不累計"
+
+
+# ── _report_bg_failure（後台注入失敗回報）──
+
+
+def _make_frida_ml(monkeypatch, err="boom"):
+    """frida 模式 + 失敗環境的 MainLoop，回傳 (ml, calls)。"""
+    ml = _make_ml()
+    calls = []
+    ml.on_bg_fail = lambda: calls.append("fail")
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
+    )()
+    _bg = load_sibling("bg_input", "core/16_bg_input.py")
+    monkeypatch.setattr(_bg, "last_error", lambda: err)
+    monkeypatch.setattr(_ml_mod.time, "monotonic", lambda: 1000.0)
+    ml._send_click = lambda *a, **k: False
+    ml._send_key = lambda k: False
+    return ml, calls
+
+
+def test_report_bg_failure_throttled(monkeypatch):
+    ml, calls = _make_frida_ml(monkeypatch)
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(_ml_mod.time, "monotonic", lambda: clock["t"])
+    ml._report_bg_failure()
+    ml._report_bg_failure()
+    assert len(calls) == 1, "節流窗內只觸發一次"
+    clock["t"] += 31.0
+    ml._report_bg_failure()
+    assert len(calls) == 2, "超窗後重新觸發"
+
+
+def test_report_bg_failure_silent_without_error(monkeypatch):
+    ml, calls = _make_frida_ml(monkeypatch, err="")
+    ml._report_bg_failure()
+    assert calls == [], "last_error 空字串（無失敗）不應觸發"
+
+
+def test_click_and_key_failures_route_to_on_bg_fail(monkeypatch):
+    ml, calls = _make_frida_ml(monkeypatch)
+    rule = Rule(id="r_bg", name="背景測試", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    ml._handle_click({"target": "custom", "x": 0.5, "y": 0.5, "button": "left"}, ctx, rule)
+    assert calls == ["fail"], "click 後台失敗應觸發 on_bg_fail"
+    ml._handle_key({"key": "Escape"}, ctx, rule)
+    assert calls == ["fail"], "節流窗內 key 失敗不重複觸發，但不得拋例外"

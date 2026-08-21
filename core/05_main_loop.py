@@ -217,6 +217,8 @@ class MainLoop:
 
         self.on_error: Optional[Callable[[str], None]] = None
         self.on_warning: Optional[Callable[[str], None]] = None
+        # 後台（frida）注入失敗通知：GUI 依管理員狀態呈現診斷＋行動按鈕（30s 節流）
+        self.on_bg_fail: Optional[Callable[[], None]] = None
         self.on_resource_warning: Optional[Callable[[str], None]] = None
         self.on_info: Optional[Callable[[str], None]] = None
         self.on_window_lost: Optional[Callable[[], None]] = None
@@ -368,6 +370,22 @@ class MainLoop:
         if mode and mode != "pynput":
             return _screenshot.activate_window_bg(self._window_title)
         return _screenshot.activate_window(self._window_title)
+
+    def _report_bg_failure(self) -> None:
+        """後台（frida）輸入失敗的統一回報：30s 節流 + 寫 log + 通知 GUI。
+
+        呈現（診斷對話框／前景切換建議）由 GUI 層決定，core 只負責偵測與節流。
+        """
+        err = _bg_input.last_error()
+        if not err:
+            return
+        now = time.monotonic()
+        if now - self._last_frida_err_ts <= self._FRIDA_ERR_THROTTLE_SEC:
+            return
+        self._last_frida_err_ts = now
+        self._log(f"後台輸入失敗：{err}")
+        if self.on_bg_fail:
+            self.on_bg_fail()
 
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
@@ -896,20 +914,8 @@ class MainLoop:
                 f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」",
                 dedup_key=f"{rule.id}:click",
             )
-        elif (
-            self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida"
-            and self.on_error
-        ):
-            err = _bg_input.last_error()
-            if err:
-                # 30s 節流：後台持續失敗時不讓彈窗洗版
-                now = time.monotonic()
-                if now - self._last_frida_err_ts > self._FRIDA_ERR_THROTTLE_SEC:
-                    self._last_frida_err_ts = now
-                    self.on_error(
-                        f"後台點擊失敗。請用「OCR 診斷」頁的點擊測試確認後台操控是否正常，"
-                        f"或先切到前景模式使用。除錯詳細：{err}"
-                    )
+        elif self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida":
+            self._report_bg_failure()
 
         return StepResult("continue")
 
@@ -942,6 +948,8 @@ class MainLoop:
                 f"規則「{rule.name}」按鍵「{key}」",
                 dedup_key=f"{rule.id}:key:{key}",
             )
+        elif self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida":
+            self._report_bg_failure()
 
         return StepResult("continue")
 
@@ -1762,6 +1770,10 @@ class MainLoop:
 
     def get_perf_stats(self) -> dict:
         return self._perf.get_stats()
+
+    def get_active_group_ids(self) -> list[str]:
+        """目前啟用中的群組 id（notify on_fail 移除後的剩餘群組），供 GUI 切模式後原群組重啟。"""
+        return list(self._active_group_ids)
 
     def get_rules_status(self) -> list[dict]:
         with self._rules_lock:

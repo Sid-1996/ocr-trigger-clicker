@@ -66,9 +66,12 @@ def make_main_loop():
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
     ml._black_streak = 0
+    ml._last_frida_err_ts = 0.0
+    ml._FRIDA_ERR_THROTTLE_SEC = 30.0
     ml._prematch_pool = None
     ml.on_error = None
     ml.on_warning = None
+    ml.on_bg_fail = None
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None
