@@ -65,6 +65,7 @@ def make_main_loop():
     ml._action_log_ts = {}
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
+    ml._black_streak = 0
     ml._prematch_pool = None
     ml.on_error = None
     ml.on_warning = None

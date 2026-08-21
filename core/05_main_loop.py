@@ -35,6 +35,7 @@ get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: Non
 _MIN_INTERVAL_SEC = 0.1
 _MAX_CPS = 5
 _CPS_WINDOW_SEC = 1.0
+_BLACK_STREAK_WARN = 3  # 後台連續全黑幀數達標才警告（避開單帧 GDI 抖動誤報）
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -43,6 +44,9 @@ capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 _capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
 capture_frame = _capture_pipeline.capture_frame
+_pw = load_sibling("print_window", "core/15_print_window.py")
+is_black_capture = _pw.is_black_capture
+is_admin = _pw.is_admin
 activate_window = _screenshot.activate_window
 get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 is_window_foreground = _perf.is_window_foreground
@@ -194,6 +198,8 @@ class MainLoop:
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
+        # 後台全黑偵測：連續黑幀計數，每次黑幕期只警告一次（見 _check_black_frame）
+        self._black_streak: int = 0
         self._fail_since: dict[
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
@@ -377,6 +383,24 @@ class MainLoop:
 
     def _should_process_static_frame(self) -> bool:
         return self._has_detect_rules
+
+    def _check_black_frame(self, img: np.ndarray, is_bg: bool) -> bool:
+        """後台 PrintWindow 權限失敗會回全黑圖（真實畫面再暗也有非零像素）。
+
+        回傳 True = 本幀視同截圖失敗，呼叫端應跳過規則處理（全黑不可能有可偵測內容，
+        省下每幀白跑的 OCR）。連續 _BLACK_STREAK_WARN 幀才警告一次，非管理員時附提示；
+        黑幕期內不重複警告，出現正常幀即歸零。
+        """
+        if not is_bg or not is_black_capture(img):
+            self._black_streak = 0
+            return False
+        self._black_streak += 1
+        if self._black_streak == _BLACK_STREAK_WARN:
+            hint = "" if is_admin() else "，請以系統管理員身分執行本工具"
+            self._log(f"後台截圖連續全黑（{self._black_streak} 幀）")
+            if self.on_warning:
+                self.on_warning(f"後台截圖全黑，無法辨識畫面{hint}")
+        return True
 
     def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:
         is_full = roi is None or all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
@@ -1557,6 +1581,11 @@ class MainLoop:
                         self._perf.record_frame()
                         continue
 
+                    if self._check_black_frame(img, mode != "pynput"):
+                        self._perf.record_frame()
+                        self._stop_event.wait(self._interval)
+                        continue
+
                     prev = self._prev_frame
                     self._prev_frame = img
 
@@ -1622,6 +1651,7 @@ class MainLoop:
         self._last_exec_log.clear()
         self._rule_completed.clear()
         self._last_completed_log.clear()
+        self._black_streak = 0
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
