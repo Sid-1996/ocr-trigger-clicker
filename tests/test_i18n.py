@@ -51,7 +51,9 @@ def test_langid_to_code():
     assert _langid_to_code(0x0404) == "zh_TW"  # zh-TW
     assert _langid_to_code(0x0804) == "zh_TW"  # zh-CN
     assert _langid_to_code(0x0C04) == "zh_TW"  # zh-HK
-    # 非中文（含偵測失敗的 0）→ 預設英文
+    # primary language 0x11 = 日文
+    assert _langid_to_code(0x0411) == "ja"  # ja-JP
+    # 非中文/日文（含偵測失敗的 0）→ 預設英文
     assert _langid_to_code(0x0409) == "en"  # en-US
     assert _langid_to_code(0x0C0A) == "en"  # es-ES
     assert _langid_to_code(0) == "en"

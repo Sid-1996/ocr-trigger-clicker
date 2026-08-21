@@ -8,17 +8,23 @@ _dir = Path(__file__).parent
 _current = "zh_TW"
 _cache: dict[str, dict[str, str]] = {}
 
-# Windows LANGID primary language：0x04 = 中文（繁中／簡中／港澳皆屬）
+# Windows LANGID primary language：0x04 = 中文（繁中／簡中／港澳皆屬）、0x11 = 日文
 _LANG_CHINESE = 0x04
+_LANG_JAPANESE = 0x11
 
 
 def _langid_to_code(lang_id: int) -> str:
-    # ponytail: 預設英文，只有偵測到中文系統才用繁體中文（工具已無簡中介面）
-    return "zh_TW" if (lang_id & 0xFF) == _LANG_CHINESE else "en"
+    # ponytail: 預設英文，偵測到中文系統用繁體中文、日文系統用日文
+    primary = lang_id & 0xFF
+    if primary == _LANG_CHINESE:
+        return "zh_TW"
+    if primary == _LANG_JAPANESE:
+        return "ja"
+    return "en"
 
 
 def detect_system_language() -> str:
-    """第一次啟動的預設語系：中文系統 → zh_TW，其餘（含偵測失敗）→ en。"""
+    """第一次啟動的預設語系：中文系統 → zh_TW、日文系統 → ja，其餘（含偵測失敗）→ en。"""
     try:
         import ctypes
 
