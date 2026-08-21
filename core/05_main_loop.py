@@ -219,6 +219,8 @@ class MainLoop:
         self.on_warning: Optional[Callable[[str], None]] = None
         # 後台（frida）注入失敗通知：GUI 依管理員狀態呈現診斷＋行動按鈕（30s 節流）
         self.on_bg_fail: Optional[Callable[[], None]] = None
+        # 後台截圖連續全黑通知：同上，呈現由 GUI 層決定（每幕期一次）
+        self.on_black_fail: Optional[Callable[[], None]] = None
         self.on_resource_warning: Optional[Callable[[str], None]] = None
         self.on_info: Optional[Callable[[str], None]] = None
         self.on_window_lost: Optional[Callable[[], None]] = None
@@ -414,10 +416,10 @@ class MainLoop:
             return False
         self._black_streak += 1
         if self._black_streak == _BLACK_STREAK_WARN:
-            hint = "" if is_admin() else "，請以系統管理員身分執行本工具"
             self._log(f"後台截圖連續全黑（{self._black_streak} 幀）")
-            if self.on_warning:
-                self.on_warning(f"後台截圖全黑，無法辨識畫面{hint}")
+            if self.on_black_fail:
+                # 呈現（診斷＋行動對話框／降級狀態列）由 GUI 層決定
+                self.on_black_fail()
         return True
 
     def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:

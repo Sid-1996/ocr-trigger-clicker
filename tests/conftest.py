@@ -72,6 +72,7 @@ def make_main_loop():
     ml.on_error = None
     ml.on_warning = None
     ml.on_bg_fail = None
+    ml.on_black_fail = None
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None

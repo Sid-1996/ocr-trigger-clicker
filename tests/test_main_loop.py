@@ -1350,23 +1350,19 @@ def test_wait_window_recover_stops_on_stop_event(monkeypatch):
 # ── _check_black_frame（後台全黑偵測）──
 
 
-def test_check_black_frame_warns_once_per_episode():
+def test_check_black_frame_notifies_once_per_episode():
     ml = _make_ml()
-    warnings = []
-    ml.on_warning = warnings.append
+    calls = []
+    ml.on_black_fail = lambda: calls.append(1)
     black = np.zeros((10, 10, 3), dtype=np.uint8)
     normal = np.full((10, 10, 3), 128, dtype=np.uint8)
     assert ml._check_black_frame(black, True) is True
     assert ml._check_black_frame(black, True) is True
-    assert warnings == [], "未達連續幀數門檻不應警告"
+    assert calls == [], "未達連續幀數門檻不應通知"
     assert ml._check_black_frame(black, True) is True
-    assert len(warnings) == 1, "達門檻應警告一次"
+    assert len(calls) == 1, "達門檻應通知一次（呈現由 GUI 層決定）"
     assert ml._check_black_frame(black, True) is True
-    assert len(warnings) == 1, "黑幕期內不重複警告"
-    # 非管理員時提示需以系統管理員執行
-    _pw = load_sibling("print_window", "core/15_print_window.py")
-    if not _pw.is_admin():
-        assert "系統管理員" in warnings[0]
+    assert len(calls) == 1, "黑幕期內不重複通知"
     assert ml._check_black_frame(normal, True) is False
     assert ml._black_streak == 0, "正常幀應歸零計數"
 

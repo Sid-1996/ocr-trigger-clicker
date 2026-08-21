@@ -2830,6 +2830,7 @@ class WorkerSignals(QObject):
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
     bg_fail_signal = pyqtSignal()
+    black_fail_signal = pyqtSignal()
     test_done_signal = pyqtSignal(dict)
     finished = pyqtSignal(bool, str)
 
@@ -2870,6 +2871,7 @@ class InitWorker(QThread):
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
             loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
             loop.on_bg_fail = lambda: self._signals.bg_fail_signal.emit()
+            loop.on_black_fail = lambda: self._signals.black_fail_signal.emit()
             loop.on_resource_warning = lambda msg: self._signals.resource_warning_signal.emit(msg)
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
@@ -3869,6 +3871,7 @@ class MainWindow(QMainWindow):
         self._signals.warning_signal.connect(self._notif_stack.push)
         self._signals.resource_warning_signal.connect(self._on_resource_warning)
         self._signals.bg_fail_signal.connect(self._on_bg_fail)
+        self._signals.black_fail_signal.connect(self._on_black_fail)
         self._signals.error_signal.connect(
             lambda msg: QMessageBox.warning(self, T("dialog.engine_error"), msg)
         )
@@ -5976,6 +5979,7 @@ class MainWindow(QMainWindow):
     def _start_loop(self, group_ids: Optional[list[str]] = None):
         self._window_lost = False
         self._bg_fail_dialog_shown = False
+        self._black_fail_dialog_shown = False
         title = self._window_combo.currentText()
         if not title:
             QMessageBox.warning(self, T("dialog.warning"), T("status.no_window"))
@@ -6122,16 +6126,33 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(f"⚠ {T('dialog.bg_fail_status')}", 5000)
             return
         self._bg_fail_dialog_shown = True
-        box = QMessageBox(QMessageBox.Icon.Warning, T("dialog.bg_fail_title"), "", parent=self)
-        admin_btn = None
         if not is_admin():
-            box.setText(T("dialog.bg_fail_not_admin"))
-            if getattr(sys, "frozen", False):
-                admin_btn = box.addButton(
-                    T("dialog.bg_fail_relaunch_admin"), QMessageBox.ButtonRole.ActionRole
-                )
+            text = T("dialog.bg_fail_not_admin")
         else:
-            box.setText(T("dialog.bg_fail_admin"))
+            text = T("dialog.bg_fail_admin")
+        self._show_bg_recover_dialog("dialog.bg_fail_title", text)
+
+    def _on_black_fail(self):
+        """後台截圖連續全黑：同 bg_fail 的「診斷＋行動」對話框模式。"""
+        if getattr(self, "_black_fail_dialog_shown", False):
+            self._status_bar.showMessage(f"⚠ {T('dialog.black_status')}", 5000)
+            return
+        self._black_fail_dialog_shown = True
+        if not is_admin():
+            text = T("dialog.black_not_admin")
+        else:
+            text = T("dialog.black_admin")
+        self._show_bg_recover_dialog("dialog.black_title", text)
+
+    def _show_bg_recover_dialog(self, title_key: str, text: str) -> None:
+        """後台故障共通對話框：依管理員狀態給管理員重啟／前景切換建議，使用者保留選擇權。"""
+        box = QMessageBox(QMessageBox.Icon.Warning, T(title_key), "", parent=self)
+        admin_btn = None
+        if not is_admin() and getattr(sys, "frozen", False):
+            admin_btn = box.addButton(
+                T("dialog.bg_fail_relaunch_admin"), QMessageBox.ButtonRole.ActionRole
+            )
+        box.setText(text)
         switch_btn = box.addButton(T("dialog.bg_fail_switch_fg"), QMessageBox.ButtonRole.ActionRole)
         box.addButton(T("dialog.bg_fail_keep_bg"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
@@ -6169,6 +6190,9 @@ class MainWindow(QMainWindow):
         if ret > 32:
             self._stop_loop()
             QApplication.quit()
+        else:
+            # UAC 被取消或非管理者帳戶：給回饋，不做任何變動
+            self._status_bar.showMessage(T("dialog.admin_cancelled"), 5000)
 
     def _on_exec_log_toggle(self):
         visible = not self._exec_log_widget.isVisible()
