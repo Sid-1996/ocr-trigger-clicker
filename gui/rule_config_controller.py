@@ -1,4 +1,6 @@
 import json
+import tempfile
+from pathlib import Path
 
 from PyQt6.QtCore import Qt
 
@@ -7,6 +9,9 @@ from i18n import T
 
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 list_tasks = _rule_mod.list_tasks
+
+_utils = load_sibling("file_utils", "core/file_utils.py")
+_replace_file = _utils._replace_file
 
 
 class RuleConfigController:
@@ -50,12 +55,20 @@ class RuleConfigController:
         self.save_config(win, cfg)
 
     def save_config(self, win, data: dict):
+        # 原子寫入（tempfile + _replace_file）：中途崩潰不會留下半份 config.json
+        tmp_path = ""
         try:
-            with open(win._config_path, "w", encoding="utf-8") as f:
+            p = Path(win._config_path)
+            with tempfile.NamedTemporaryFile(
+                "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
+            ) as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+                tmp_path = f.name
+            _replace_file(tmp_path, str(p))
             self._config_cache = data
         except OSError:
-            pass
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
 
     def refresh_task_list(self, win):
         win._task_combo.blockSignals(True)
