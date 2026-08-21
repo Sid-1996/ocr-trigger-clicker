@@ -2,13 +2,9 @@
 
 ## [Unreleased]
 
-### 給使用者
-
-- **English 介面 OCR 模型升級**：英文辨識模型由 PP-OCRv4 專用版升級為 PP-OCRv5 專用版（官方基準 70.39% → 85.25%），實測辨識速度加快約 30%（109.6ms → 77.2ms/張），並新增 ✓、™、© 等符號與重音字母的辨識能力。僅影響 English 介面使用者，繁體中文／日本語介面不受影響。
-
 ### 給開發者
 
-- **en rec 模型換檔 v4 → v5**（無程式碼變更，純資產替換）：`custom_models/en_rec_mobile.onnx` 換為 RapidAI 官方轉換的 `en_PP-OCRv5_rec_mobile.onnx`（sha256 `c3461add…` 驗證），`en_dict.txt` 同步換為官方 `inference.yml` 內嵌字典（95 行 → 436 行；RapidOCR CTCLabelDecode 慣例 classes = 1 blank + dict + 1 space = 438，與 ONNX 輸出維度核對一致）。v4 模型輸入本為 dynamic shape，`02_ocr_engine` 的 320 寬 monkey-patch 對兩代皆安全。舊檔備份於 `%TEMP%\opencode\en_v4_backup\`。
+- **en rec 模型試升級 v5 後回滾至 v4**：曾換入 RapidAI 轉換的 `en_PP-OCRv5_rec_mobile.onnx`（合成測試快 30%、命中 200/200），但實戰遊戲畫面（hololive-Dreams，1413×825）三模型對照顯示 v5 en 對含標點/空格的長句嚴重退化——`'1 result(s) available to claim.'` 讀成 `'1reul(vaiabl '`（67-69%），v4 與 v5 cht 均全對（92-98%）；計數器類 v4 4/5、v5 en 5/5 但 v5 en 會插空格。合成字型基準（Hershey 短詞）未能暴露此弱點，實戰驗證才是準繩。`custom_models/` 維持 v4 不變，本次無發行物變更。
 - **遷移至 Python 3.13 與 uv 管理**（commit `a6fcac6`）：`pyproject.toml` 改 `requires-python = ">=3.13,<3.14"` 並整合依賴宣告，`uv.lock` 為鎖定檔，`requirements.txt` 退役刪除。開發依賴由全域 `uv` 管理，先 `uv sync --dev`，日常命令（build / pytest / ruff）一律 `uv run ...` 執行；`build.py`、`release.ps1`、`run.bat` 同步改用 uv 啟動。
 - **修正 run.bat 啟動**（commit `f767d4a`）：改用 `uv run python gui/06_gui_main.py --debug`，並在 `build.py` 隱藏導入 `logging.handlers` 補足 PyInstaller 靜態分析遺漏。
 
