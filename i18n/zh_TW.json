@@ -16,7 +16,6 @@
   "settings.auto_update.tooltip": "每次開啟程式時，自動到 GitHub 看看有沒有新版本。",
   "settings.notify_resource_warn": "CPU/記憶體高負載時彈出通知",
   "settings.notify_resource_warn.tooltip": "取消勾選僅停止彈出通知氣泡；狀態列的負載標記仍會照常顯示",
-
   "settings.language": "語言:",
   "settings.default_mouse_button": "預設滑鼠按鈕:",
   "settings.default_mouse_button.tooltip": "點擊預設用哪個鍵。大多數遊戲左鍵即可。",
@@ -348,8 +347,8 @@
   "about.author": "<p>作者: {author}</p>",
   "about.project": "<p>專案: <a href='{url}'>{url}</a></p>",
   "about.guide": "<p>新手教學: <a href='{url}'>{url}</a></p>",
-  "fps.idle": "掃描:--/s | CPU:--% | MEM:--MB | 點擊:--/s",
-  "fps.active": "掃描:{fps}/s | CPU:{cpu}% | MEM:{mem}MB | 點擊:{click_rate}/s",
+  "fps.idle": "掃描:--/s | CPU:--% | 系統:--% | MEM:--MB | 點擊:--/s",
+  "fps.active": "掃描:{fps}/s | CPU:{cpu}% | 系統:{sys}% | MEM:{mem}MB | 點擊:{click_rate}/s",
   "fps.tooltip": "每秒掃描/偵測次數，非遊戲幀率；受「掃描間隔」設定影響",
   "format.task_info": "▸ 任務資訊",
   "format.task_rules": "任務「{name}」— {count} 條規則",

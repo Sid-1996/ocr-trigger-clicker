@@ -1763,7 +1763,7 @@ class MainLoop:
             self.on_error(msg)
 
     def _on_cpu_warn(self, pct: float):
-        msg = f"CPU 使用率過高 ({pct:.0f}%)，請注意系統負載"
+        msg = f"工具 CPU 使用率過高 ({pct:.0f}%)，建議框選偵測區域或開啟省電模式"
         self._log(msg)
         if self.on_resource_warning:
             self.on_resource_warning(msg)

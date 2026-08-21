@@ -1,4 +1,5 @@
 import ctypes
+import os
 import threading
 import time
 from collections import deque
@@ -123,6 +124,7 @@ class PerformanceMonitor:
         self._max_cps = max_cps
 
         self._cpu_samples: deque = deque(maxlen=_CPU_SAMPLES)
+        self._sys_cpu_samples: deque = deque(maxlen=_CPU_SAMPLES)
         self._fps_history: deque = deque(maxlen=_FPS_WINDOW)
         self._click_timestamps: deque = deque(maxlen=_CLICK_WINDOW)
         self._ocr_latency_samples: deque = deque(maxlen=_LATENCY_WINDOW)
@@ -148,6 +150,11 @@ class PerformanceMonitor:
         self._prev_kernel = _FILETIME()
         self._prev_user = _FILETIME()
         self._cpu_initialized = False
+
+        self._prev_proc_kernel = 0
+        self._prev_proc_user = 0
+        self._prev_proc_wall = 0
+        self._proc_cpu_initialized = False
 
         self._process_handle = _GetCurrentProcess()
 
@@ -180,6 +187,38 @@ class PerformanceMonitor:
             return None
         pct = (total_delta - idle_delta) / total_delta * 100.0
         return pct
+
+    def _sample_process_cpu(self) -> Optional[float]:
+        """本工具行程的 CPU 使用率（對齊工作管理員語意：除以邏輯核心數）。
+
+        警告以此為準——系統整體 CPU 高（如遊戲本身吃滿）不該歸咎工具。
+        """
+        creation = _FILETIME()
+        exit_ft = _FILETIME()
+        kernel = _FILETIME()
+        user = _FILETIME()
+        if not _GetProcessTimes(
+            self._process_handle,
+            ctypes.byref(creation),
+            ctypes.byref(exit_ft),
+            ctypes.byref(kernel),
+            ctypes.byref(user),
+        ):
+            return None
+        wall = _filetime_now()
+        k = _ft_to_int(kernel)
+        u = _ft_to_int(user)
+        if not self._proc_cpu_initialized:
+            self._prev_proc_kernel, self._prev_proc_user, self._prev_proc_wall = k, u, wall
+            self._proc_cpu_initialized = True
+            return 0.0
+        wall_delta = wall - self._prev_proc_wall
+        proc_delta = (k - self._prev_proc_kernel) + (u - self._prev_proc_user)
+        self._prev_proc_kernel, self._prev_proc_user, self._prev_proc_wall = k, u, wall
+        if wall_delta <= 0:
+            return None
+        cores = os.cpu_count() or 1
+        return proc_delta / wall_delta / cores * 100.0
 
     # ── 記憶體取樣 ──
 
@@ -282,10 +321,13 @@ class PerformanceMonitor:
 
     def _poll_loop(self):
         while not self._stop_event.is_set():
-            cpu = self._sample_cpu()
+            cpu = self._sample_process_cpu()
+            sys_cpu = self._sample_cpu()
             with self._lock:
                 if cpu is not None:
                     self._cpu_samples.append(cpu)
+                if sys_cpu is not None:
+                    self._sys_cpu_samples.append(sys_cpu)
                 self._memory_mb = self._sample_memory()
             self._stop_event.wait(_CPU_INTERVAL)
 
@@ -326,6 +368,11 @@ class PerformanceMonitor:
                 "fps": self._fps_cached,
                 "cpu_pct": cpu_avg,
                 "cpu_max": cpu_max,
+                "sys_cpu_pct": (
+                    sum(self._sys_cpu_samples) / len(self._sys_cpu_samples)
+                    if self._sys_cpu_samples
+                    else 0.0
+                ),
                 "memory_mb": self._memory_mb,
                 "memory_peak_mb": self._memory_peak_mb,
                 "ocr_avg_ms": ocr_avg,

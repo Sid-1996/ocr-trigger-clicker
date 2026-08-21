@@ -16,7 +16,6 @@
   "settings.auto_update.tooltip": "プログラム起動のたびに GitHub の新バージョンを自動確認します。",
   "settings.notify_resource_warn": "高負荷（CPU/メモリ）時に通知",
   "settings.notify_resource_warn.tooltip": "チェックを外すとポップアップ通知のみ停止し、ステータスバーの負荷表示は表示されたままになります",
-
   "settings.language": "言語:",
   "settings.default_mouse_button": "既定のマウスボタン:",
   "settings.default_mouse_button.tooltip": "クリックに使う既定のマウスボタン。ほとんどのゲームでは左クリックが適しています。",
@@ -348,8 +347,8 @@
   "about.author": "<p>作者: {author}</p>",
   "about.project": "<p>プロジェクト: <a href='{url}'>{url}</a></p>",
   "about.guide": "<p>ガイド: <a href='{url}'>{url}</a></p>",
-  "fps.idle": "スキャン:--/s | CPU:--% | MEM:--MB | クリック:--/s",
-  "fps.active": "スキャン:{fps}/s | CPU:{cpu}% | MEM:{mem}MB | クリック:{click_rate}/s",
+  "fps.idle": "スキャン:--/s | CPU:--% | SYS:--% | MEM:--MB | クリック:--/s",
+  "fps.active": "スキャン:{fps}/s | CPU:{cpu}% | SYS:{sys}% | MEM:{mem}MB | クリック:{click_rate}/s",
   "fps.tooltip": "1 秒あたりのスキャン/検出回数です（ゲームのフレームレートではありません）。スキャン間隔設定の影響を受けます",
   "format.task_info": "▸ タスク情報",
   "format.task_rules": "タスク「{name}」 — {count} ルール",

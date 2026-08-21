@@ -3950,6 +3950,7 @@ class MainWindow(QMainWindow):
                 "fps.active",
                 fps="--",
                 cpu=f"{stats['cpu_pct']:.0f}",
+                sys=f"{stats['sys_cpu_pct']:.0f}",
                 mem=f"{stats['memory_mb']:.0f}",
                 click_rate="--",
             )
@@ -3965,6 +3966,7 @@ class MainWindow(QMainWindow):
             "fps.active",
             fps=f"{fps:.1f}",
             cpu=f"{cpu:.0f}",
+            sys=f"{stats.get('sys_cpu_pct', 0.0):.0f}",
             mem=f"{mem:.0f}",
             click_rate=f"{click_rate:.0f}",
         )

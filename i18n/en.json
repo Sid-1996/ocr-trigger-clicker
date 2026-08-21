@@ -16,7 +16,6 @@
   "settings.auto_update.tooltip": "Automatically check GitHub for new versions every time the program starts.",
   "settings.notify_resource_warn": "Notify on high CPU/memory load",
   "settings.notify_resource_warn.tooltip": "Unchecking only stops the pop-up notification bubble; status-bar load indicators still show",
-
   "settings.language": "Language:",
   "settings.default_mouse_button": "Default mouse button:",
   "settings.default_mouse_button.tooltip": "Default mouse button for clicks. Left is suitable for most games.",
@@ -348,8 +347,8 @@
   "about.author": "<p>Author: {author}</p>",
   "about.project": "<p>Project: <a href='{url}'>{url}</a></p>",
   "about.guide": "<p>Guide: <a href='{url}'>{url}</a></p>",
-  "fps.idle": "Scan:--/s | CPU:--% | MEM:--MB | Clicks:--/s",
-  "fps.active": "Scan:{fps}/s | CPU:{cpu}% | MEM:{mem}MB | Clicks:{click_rate}/s",
+  "fps.idle": "Scan:--/s | CPU:--% | SYS:--% | MEM:--MB | Clicks:--/s",
+  "fps.active": "Scan:{fps}/s | CPU:{cpu}% | SYS:{sys}% | MEM:{mem}MB | Clicks:{click_rate}/s",
   "fps.tooltip": "Scans/detections per second, not the game's frame rate; affected by the scan-interval setting",
   "format.task_info": "▸ Task Info",
   "format.task_rules": "Task \"{name}\" — {count} rules",
