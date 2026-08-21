@@ -411,6 +411,7 @@
   "dialog.black_admin": "Background capture keeps coming back all black. This game does not support background capture (not a tool issue). Foreground mode is recommended.",
   "dialog.black_status": "Background capture still black; stop and switch to foreground mode",
   "dialog.admin_cancelled": "Administrator authorization was not granted",
+  "hotkey.taken": "The {key} hotkey is taken by another app; use the main window button instead",
   "step_form.capture_region": "Capture Region",
   "step_form.compare_image": "Compare Image",
   "step_form.trim_template": "Trim Template",

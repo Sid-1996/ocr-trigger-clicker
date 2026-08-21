@@ -3430,7 +3430,12 @@ class MainWindow(QMainWindow):
         self._tray.show()
 
         # ── Global hotkeys ──
-        _hk_register(int(self.winId()))
+        hk_results = _hk_register(int(self.winId()))
+        # 註冊失敗（熱鍵被其他程式占用）不可沉默：使用者按 F8 沒反應會誤以為工具壞了
+        hk_names = {1: "F8", 2: "F9"}
+        for hid, ok in hk_results.items():
+            if not ok:
+                self._notif_stack.push(T("hotkey.taken", key=hk_names.get(hid, str(hid))))
 
     def _load_config(self) -> dict:
         return self._rule_config_ctrl.load_config(self)
