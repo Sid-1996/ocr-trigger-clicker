@@ -412,6 +412,8 @@
   "dialog.black_status": "Background capture still black; stop and switch to foreground mode",
   "dialog.admin_cancelled": "Administrator authorization was not granted",
   "hotkey.taken": "The {key} hotkey is taken by another app; use the main window button instead",
+  "main.window_lost_guidance": "Target window lost; detection paused. Restart the game — detection will resume automatically once the window reappears",
+  "main.window_recovered": "Target window is back; detection resumed automatically",
   "step_form.capture_region": "Capture Region",
   "step_form.compare_image": "Compare Image",
   "step_form.trim_template": "Trim Template",

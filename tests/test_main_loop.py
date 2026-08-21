@@ -1317,11 +1317,12 @@ def test_log_sliding_window_rate_limit():
 
 
 def test_wait_window_recover_resets_hwnd(monkeypatch):
-
     ml = _make_ml()
     ml._window_hwnd = 99999  # 模擬 stale hwnd（遊戲重啟前的舊 handle）
     lost = []
+    recovered = []
     ml.on_window_lost = lambda: lost.append(True)
+    ml.on_window_recovered = lambda: recovered.append(1)
     rects = iter([None, {"x": 0, "y": 0, "w": 100, "h": 100}])
     monkeypatch.setattr(_ml_mod, "get_window_rect", lambda title: next(rects))
     monkeypatch.setattr(_ml_mod.time, "sleep", lambda s: None)
@@ -1329,11 +1330,14 @@ def test_wait_window_recover_resets_hwnd(monkeypatch):
     # 進入輪詢前即重置，恢復後由 _loop 延遲解析取得新 hwnd
     assert ml._window_hwnd is None
     assert lost == [True], "應通知 GUI 視窗遺失"
+    assert recovered == [1], "偵測到視窗重現應通知恢復"
     assert not ml._pause_event.is_set(), "偵測到視窗重現後應清除暫停"
 
 
 def test_wait_window_recover_stops_on_stop_event(monkeypatch):
     ml = _make_ml()
+    recovered = []
+    ml.on_window_recovered = lambda: recovered.append(1)
     ml._stop_event.set()  # 已在停止流程，不應進入輪詢
     calls = []
 
@@ -1345,6 +1349,7 @@ def test_wait_window_recover_stops_on_stop_event(monkeypatch):
     ml._wait_window_recover("測試視窗")
     assert calls == [], "stop 已設時不應再輪詢視窗"
     assert ml._window_hwnd is None
+    assert recovered == [], "未恢復不應通知"
 
 
 # ── _check_black_frame（後台全黑偵測）──

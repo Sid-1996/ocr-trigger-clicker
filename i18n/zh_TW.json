@@ -412,6 +412,8 @@
   "dialog.black_status": "後台截圖仍全黑中；可停止後切換為前景模式",
   "dialog.admin_cancelled": "未取得系統管理員授權",
   "hotkey.taken": "{key} 熱鍵被其他程式占用，開始/停止請改用主視窗按鈕",
+  "main.window_lost_guidance": "目標視窗已遺失，偵測已暫停。請重新啟動遊戲——偵測到視窗後會自動繼續",
+  "main.window_recovered": "目標視窗已重新出現，已自動恢復偵測",
   "step_form.capture_region": "截取區域",
   "step_form.compare_image": "圖片比對",
   "step_form.trim_template": "修剪模板",

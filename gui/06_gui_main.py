@@ -2831,6 +2831,7 @@ class WorkerSignals(QObject):
     emergency_signal = pyqtSignal()
     bg_fail_signal = pyqtSignal()
     black_fail_signal = pyqtSignal()
+    window_recovered_signal = pyqtSignal()
     test_done_signal = pyqtSignal(dict)
     finished = pyqtSignal(bool, str)
 
@@ -2872,6 +2873,7 @@ class InitWorker(QThread):
             loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
             loop.on_bg_fail = lambda: self._signals.bg_fail_signal.emit()
             loop.on_black_fail = lambda: self._signals.black_fail_signal.emit()
+            loop.on_window_recovered = lambda: self._signals.window_recovered_signal.emit()
             loop.on_resource_warning = lambda msg: self._signals.resource_warning_signal.emit(msg)
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
@@ -3877,6 +3879,7 @@ class MainWindow(QMainWindow):
         self._signals.resource_warning_signal.connect(self._on_resource_warning)
         self._signals.bg_fail_signal.connect(self._on_bg_fail)
         self._signals.black_fail_signal.connect(self._on_black_fail)
+        self._signals.window_recovered_signal.connect(self._on_window_recovered)
         self._signals.error_signal.connect(
             lambda msg: QMessageBox.warning(self, T("dialog.engine_error"), msg)
         )
@@ -6241,6 +6244,17 @@ class MainWindow(QMainWindow):
     def _on_window_lost_from_thread(self):
         self._window_lost = True
         self._btn_toggle.setText(T("main.continue"))
+        # 兩段式引導（上）：遺失當下明確告知下一步——重啟遊戲；恢復時另有通知。
+        # 已知行為：輪詢期間手動暫停再恢復可能重複推送，低頻可接受
+        self._notif_stack.push(T("main.window_lost_guidance"))
+
+    def _on_window_recovered(self):
+        """自動恢復後同步 GUI 狀態：loop 已在跑，按鈕應顯示「停止」而非「繼續」，
+        否則使用者按「繼續」會經 _window_lost 分支誤停剛恢復的循環。"""
+        self._window_lost = False
+        if self._loop is not None and self._loop.is_running:
+            self._btn_toggle.setText(T("main.stop"))
+        self._notif_stack.push(T("main.window_recovered"))
 
     # === Emergency & OCR Health ===
     def _emergency_stop(self):

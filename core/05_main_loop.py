@@ -224,6 +224,8 @@ class MainLoop:
         self.on_resource_warning: Optional[Callable[[str], None]] = None
         self.on_info: Optional[Callable[[str], None]] = None
         self.on_window_lost: Optional[Callable[[], None]] = None
+        # 自動恢復完成通知：GUI 需同步按鈕狀態並告知使用者「已恢復」
+        self.on_window_recovered: Optional[Callable[[], None]] = None
         self.on_emergency: Optional[Callable[[], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
 
@@ -1538,6 +1540,8 @@ class MainLoop:
             if get_window_rect(title) is not None:
                 self._pause_event.clear()
                 self._log("視窗已重新出現，恢復偵測")
+                if self.on_window_recovered:
+                    self.on_window_recovered()
                 break
             time.sleep(0.5)
 

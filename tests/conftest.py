@@ -75,6 +75,7 @@ def make_main_loop():
     ml.on_black_fail = None
     ml.on_info = None
     ml.on_window_lost = None
+    ml.on_window_recovered = None
     ml.on_emergency = None
     ml._send_click = lambda *a, **k: True
     ml._send_key = lambda *a, **k: True
