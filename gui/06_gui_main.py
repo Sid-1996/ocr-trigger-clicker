@@ -6414,6 +6414,9 @@ class MainWindow(QMainWindow):
     def _open_settings(self):
         SettingsDialog(self).exec()
         self._rule_config_ctrl._config_cache = None
+        if self._loop:
+            # 主循環持有獨立的 controller 快取，一併失效才能讓 scan_interval 等設定即時生效
+            self._loop._rule_config_ctrl._config_cache = None
         self._update_interaction_mode_label()
 
     def closeEvent(self, event):
