@@ -5486,12 +5486,10 @@ class MainWindow(QMainWindow):
         )
         if self._loop:
             with self._loop._rules_lock:
-                save_task(self._current_task, self._rules)
-                save_groups(self._groups, task_path)
+                save_task_with_groups(self._rules, self._groups, task_path)
                 self._loop._load_rules()
         else:
-            save_task(self._current_task, self._rules)
-            save_groups(self._groups, task_path)
+            save_task_with_groups(self._rules, self._groups, task_path)
 
     def _flush_save(self) -> None:
         bg_ids = [r.id for r in self._rules if r.background]
