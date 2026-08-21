@@ -2829,6 +2829,7 @@ class WorkerSignals(QObject):
     info_signal = pyqtSignal(str)
     window_lost_signal = pyqtSignal()
     emergency_signal = pyqtSignal()
+    bg_fail_signal = pyqtSignal()
     test_done_signal = pyqtSignal(dict)
     finished = pyqtSignal(bool, str)
 
@@ -2868,6 +2869,7 @@ class InitWorker(QThread):
                 loop.set_active_groups(self._active_group_ids)
             loop.on_error = lambda msg: self._signals.error_signal.emit(msg)
             loop.on_warning = lambda msg: self._signals.warning_signal.emit(msg)
+            loop.on_bg_fail = lambda: self._signals.bg_fail_signal.emit()
             loop.on_resource_warning = lambda msg: self._signals.resource_warning_signal.emit(msg)
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
@@ -3866,6 +3868,7 @@ class MainWindow(QMainWindow):
         )
         self._signals.warning_signal.connect(self._notif_stack.push)
         self._signals.resource_warning_signal.connect(self._on_resource_warning)
+        self._signals.bg_fail_signal.connect(self._on_bg_fail)
         self._signals.error_signal.connect(
             lambda msg: QMessageBox.warning(self, T("dialog.engine_error"), msg)
         )
@@ -5970,8 +5973,9 @@ class MainWindow(QMainWindow):
         else:
             self._start_loop()
 
-    def _start_loop(self):
+    def _start_loop(self, group_ids: Optional[list[str]] = None):
         self._window_lost = False
+        self._bg_fail_dialog_shown = False
         title = self._window_combo.currentText()
         if not title:
             QMessageBox.warning(self, T("dialog.warning"), T("status.no_window"))
@@ -5996,9 +6000,10 @@ class MainWindow(QMainWindow):
                 T("notif.steps_empty", names=names, suffix=suffix),
             )
             return
-        group_ids = self._show_group_selection_dialog()
         if group_ids is None:
-            return
+            group_ids = self._show_group_selection_dialog()
+            if group_ids is None:
+                return
         if not group_ids:
             QMessageBox.warning(self, T("dialog.warning"), T("status.at_least_one_group"))
             return
@@ -6110,6 +6115,60 @@ class MainWindow(QMainWindow):
     def _on_loop_finished(self, success: bool, msg: str):
         if self._loop is not None:
             self._stop_loop()
+
+    def _on_bg_fail(self):
+        """後台注入失敗：本輪執行第一次彈「診斷＋行動」對話框，之後降級為狀態列訊息。"""
+        if getattr(self, "_bg_fail_dialog_shown", False):
+            self._status_bar.showMessage(f"⚠ {T('dialog.bg_fail_status')}", 5000)
+            return
+        self._bg_fail_dialog_shown = True
+        box = QMessageBox(QMessageBox.Icon.Warning, T("dialog.bg_fail_title"), "", parent=self)
+        admin_btn = None
+        if not is_admin():
+            box.setText(T("dialog.bg_fail_not_admin"))
+            if getattr(sys, "frozen", False):
+                admin_btn = box.addButton(
+                    T("dialog.bg_fail_relaunch_admin"), QMessageBox.ButtonRole.ActionRole
+                )
+        else:
+            box.setText(T("dialog.bg_fail_admin"))
+        switch_btn = box.addButton(T("dialog.bg_fail_switch_fg"), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(T("dialog.bg_fail_keep_bg"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if admin_btn is not None and clicked is admin_btn:
+            self._relaunch_as_admin()
+        elif clicked is switch_btn:
+            self._switch_to_fg_and_restart()
+
+    def _switch_to_fg_and_restart(self):
+        """切回前景模式並以剩餘群組重新開始。
+
+        截圖源與輸入法綁定在 MainLoop 內，切模式必須重建 loop——once/repeat 群組
+        進度會歸零重跑，這是架構上限，文案已如實標示「重新開始」。
+        """
+        ids = self._loop.get_active_group_ids() if self._loop else []
+        self._stop_loop()
+        self._rule_config_ctrl.set_setting(self, "interaction_mode", "pynput")
+        if self._current_task:
+            task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+            set_task_interaction_mode(task_path, "pynput")
+        self._update_interaction_mode_label()
+        if not ids:
+            self._status_bar.showMessage(T("dialog.bg_fail_no_groups"), 5000)
+            return
+        # 延遲啟動：讓舊 loop 排入佇列的 finished 先被處理（此時 _loop=None，no-op），
+        # 否則遺言訊號會把剛建立的新 loop 誤殺（_on_loop_finished 無身份檢查）
+        QTimer.singleShot(0, lambda: self._start_loop(group_ids=ids))
+
+    def _relaunch_as_admin(self):
+        """以系統管理員重新啟動（僅打包版按鈕可達）；UAC 取消則不動作。"""
+        import ctypes
+
+        ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, None, None, 1)
+        if ret > 32:
+            self._stop_loop()
+            QApplication.quit()
 
     def _on_exec_log_toggle(self):
         visible = not self._exec_log_widget.isVisible()
