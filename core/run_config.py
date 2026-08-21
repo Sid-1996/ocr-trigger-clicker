@@ -144,16 +144,30 @@ def set_task_interaction_mode(path: str, mode: str) -> bool:
         return False
 
 
+_capture_size_cache: dict[str, tuple[tuple[int, int], list[int] | None]] = {}
+# ponytail: 主循環熱路徑每幀讀取（_handle_match_image/_run_parallel_group）；
+# mtime+size 未變直接回快取，寫入走 _replace_file 產生新 mtime 自然失效
+
+
 def get_capture_size(path: str) -> list | None:
+    try:
+        st = os.stat(path)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        _capture_size_cache.pop(path, None)
+        return None
+    hit = _capture_size_cache.get(path)
+    if hit and hit[0] == sig:
+        return list(hit[1]) if hit[1] else None
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         cs = data.get("capture_size")
-        if isinstance(cs, list) and len(cs) == 2:
-            return [int(cs[0]), int(cs[1])]
-    except (OSError, json.JSONDecodeError, TypeError):
-        pass
-    return None
+        val = [int(cs[0]), int(cs[1])] if isinstance(cs, list) and len(cs) == 2 else None
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        val = None
+    _capture_size_cache[path] = (sig, val)
+    return list(val) if val else None
 
 
 def set_capture_size(path: str, w: int, h: int) -> bool:
