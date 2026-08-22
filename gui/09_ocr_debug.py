@@ -507,6 +507,7 @@ class OcrDebugPanel(QWidget):
             else:
                 bg = QColor(255, 220, 220)
             item.setBackground(bg)
+            item.setForeground(QColor(30, 30, 30))
             self._result_table.setItem(i, 2, item)
         self._result_table.blockSignals(False)
 
