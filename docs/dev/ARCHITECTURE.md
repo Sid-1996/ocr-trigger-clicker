@@ -407,7 +407,7 @@ debug panel 建立規則         視窗相對          ÷ client_size → 比例
 
 ### 混合：hybrid（後台偵測＋前景物理輸入）
 
-`core/19_hybrid_input.py` 提供 `focus_guard(title, activate_fn)` context manager：進入時記錄使用者前景視窗 hwnd 與游標位置 → 激活目標遊戲視窗 → 動作以 pynput 物理輸入送出（走前景路徑）→ 離開時復原使用者原本的前景視窗與滑鼠位置。截圖／辨識仍走後台 PrintWindow（零干擾），只有動作瞬間短暫搶焦點。適合 Frida 注入也無效的遊戲；代價是每次操作短暫搶焦點，適合低頻動作任務。主循環側（`05_main_loop.py`）：hybrid 的輸入走前景物理路徑，`_is_tool_foreground` 前景保護對 hybrid 放行（與 frida 同），動作前經 `focus_guard` 確保目標在前景。
+`core/19_hybrid_input.py` 提供 `focus_guard(title, activate_fn)` context manager：進入時記錄使用者前景視窗 hwnd 與游標位置 → 激活目標遊戲視窗 → 動作以 pynput 物理輸入送出（走前景路徑）→ 離開時復原使用者原本的前景視窗與滑鼠位置。截圖／辨識仍走後台 PrintWindow（零干擾），只有動作瞬間短暫搶焦點。典型場景：遊戲僅支援前景操控（多數 Unity 遊戲）且正在自動戰鬥爬主線，只有過關時需手動點「下一關」——寫好規則後掛機去做別的事，偵測到「下一關」時工具自動切回前景點擊並復原使用者狀態。適合低頻動作任務；高頻動作下頻繁搶焦點反而干擾，應用一般前景模式。主循環側（`05_main_loop.py`）：hybrid 的輸入走前景物理路徑，`_is_tool_foreground` 前景保護對 hybrid 放行（與 frida 同），動作前經 `focus_guard` 確保目標在前景。
 
 ### 按鍵對應
 
