@@ -50,6 +50,8 @@ def make_main_loop():
     ml._ocr_cache_hits = 0
     ml._xframe_ocr_cache = OrderedDict()
     ml._xframe_ocr_cache_max = 64
+    ml._tmpl_cache = OrderedDict()
+    ml._tmpl_cache_max = 64
     ml._logger = logging.getLogger("main_loop_test")
     ml._stop_event = threading.Event()
     ml._pause_event = threading.Event()

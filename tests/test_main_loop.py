@@ -190,6 +190,83 @@ def test_ocr_region_cache_hit_marker():
         _ml_mod.recognize = orig
 
 
+def test_ocr_region_full_frame_cross_frame_cache():
+    """全窗 OCR 跨幀快取：相同畫面跨幀不重跑 recognize，畫面一變立即失效。"""
+    from collections import OrderedDict
+
+    ml = _make_ml()
+    ml._frame_ocr_cache = {}
+    ml._xframe_ocr_cache = OrderedDict()
+    calls = []
+
+    def fake(img, **kw):
+        calls.append(1)
+        return [_ml_mod.OcrResult(text="t", x=0, y=0, w=1, h=1, confidence=0.9)]
+
+    orig = _ml_mod.recognize
+    _ml_mod.recognize = fake
+    try:
+        img = np.zeros((50, 50, 3), dtype=np.uint8)
+        ml._ocr_region(img, None)
+        assert len(calls) == 1, "first frame must run recognize"
+        ml._frame_ocr_cache.clear()  # 模擬下一幀
+        ml._ocr_region(img, None)
+        assert len(calls) == 1, "identical frame must hit cross-frame cache"
+        img2 = img.copy()
+        img2[0, 0, 0] = 255
+        ml._frame_ocr_cache.clear()
+        ml._ocr_region(img2, None)
+        assert len(calls) == 2, "changed frame must invalidate cache"
+    finally:
+        _ml_mod.recognize = orig
+
+
+def test_match_image_search_region_cross_frame_cache():
+    """match_image 搜尋區跨幀快取：同區＋同模板＋同參數不重跑；模板/參數/區域變了要重算。"""
+    from collections import OrderedDict
+
+    ml = _make_ml()
+    ml._tmpl_cache = OrderedDict()
+    calls = []
+
+    def fake_match_template(img, template_path, roi, threshold, **kw):
+        calls.append((template_path, threshold))
+        return ([_ml_mod.OcrResult(text="m", x=1, y=1, w=2, h=2, confidence=0.9)], -1.0)
+
+    orig = _ml_mod.match_template
+    _ml_mod.match_template = fake_match_template
+    try:
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        params = {
+            "template": "t.png",
+            "roi": {"x": 10, "y": 10, "w": 40, "h": 40},
+            "threshold": 0.8,
+        }
+        rule = Rule(id="r1", name="r1", enabled=True, steps=[])
+
+        ctx = StepContext(img=img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+        r1 = ml._handle_match_image(dict(params), ctx, rule)
+        assert r1.action == "continue" and len(calls) == 1
+
+        ctx2 = StepContext(img=img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+        ml._handle_match_image(dict(params), ctx2, rule)
+        assert len(calls) == 1, "same region+template+params must hit cache"
+
+        ml._handle_match_image({**params, "template": "t2.png"}, ctx2, rule)
+        assert len(calls) == 2, "different template must recompute"
+
+        ml._handle_match_image({**params, "threshold": 0.9}, ctx2, rule)
+        assert len(calls) == 3, "different threshold must recompute"
+
+        img3 = img.copy()
+        img3[20, 20, 0] = 255
+        ctx3 = StepContext(img=img3, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+        ml._handle_match_image(dict(params), ctx3, rule)
+        assert len(calls) == 4, "changed region pixels must recompute"
+    finally:
+        _ml_mod.match_template = orig
+
+
 # ── _handle_click without matched_text ──
 
 

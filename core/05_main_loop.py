@@ -187,6 +187,11 @@ class MainLoop:
         self._xframe_ocr_cache: OrderedDict = OrderedDict()
         self._xframe_ocr_cache_max = 64
 
+        # ponytail: match_image 搜尋區跨幀快取——搜尋區像素＋模板＋參數皆同 → 比對結果必同
+        # （matchTemplate deterministic），直接複用。key 詳見 _handle_match_image。
+        self._tmpl_cache: OrderedDict = OrderedDict()
+        self._tmpl_cache_max = 64
+
         self._rule_pointer: int = 0
         self._groups: list[RuleGroup] = load_groups(rules_path)
         self._active_group_ids: list[str] = []
@@ -319,6 +324,7 @@ class MainLoop:
             self._match_image_warn_counter.clear()
             self._detect_warn_counter.clear()
             self._xframe_ocr_cache.clear()
+            self._tmpl_cache.clear()
             self._fail_since.clear()
             self._last_active_rule_id = None
             self._update_has_detect()
@@ -432,8 +438,19 @@ class MainLoop:
             if cached is not None:
                 self._ocr_cache_hits += 1
                 return cached
+            # 跨幀快取：靜止畫面（逐位元相同）免重跑全窗 det+rec
+            ch = _crop_hash(img)
+            entry = self._xframe_ocr_cache.get(cache_key)
+            if entry is not None and entry[0] == ch:
+                self._ocr_cache_hits += 1
+                self._frame_ocr_cache[cache_key] = entry[1]
+                return entry[1]
             results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
             self._frame_ocr_cache[cache_key] = results
+            self._xframe_ocr_cache[cache_key] = (ch, results)
+            self._xframe_ocr_cache.move_to_end(cache_key)
+            while len(self._xframe_ocr_cache) > self._xframe_ocr_cache_max:
+                self._xframe_ocr_cache.popitem(last=False)
             return results
 
         h, w = img.shape[:2]
@@ -638,21 +655,48 @@ class MainLoop:
             results, best_below = ctx.prematch[0]
             ctx.prematch = None
         else:
-            results = match_template(
-                ctx.img,
-                template_path,
-                roi,
+            # 跨幀快取：搜尋區像素＋模板＋比對參數皆同 → 結果必同（matchTemplate deterministic）
+            h_img, w_img = ctx.img.shape[:2]
+            if any(roi.get(k, 0) != 0 for k in ("w", "h")):
+                rx1, ry1 = max(0, int(roi["x"])), max(0, int(roi["y"]))
+                rx2 = min(w_img, int(roi["x"]) + int(roi["w"]))
+                ry2 = min(h_img, int(roi["y"]) + int(roi["h"]))
+                region = ctx.img[ry1:ry2, rx1:rx2] if rx2 > rx1 and ry2 > ry1 else ctx.img
+            else:
+                region = ctx.img
+            cache_key = (
+                "mi",
+                _crop_hash(region),
+                template_data or template_path,
                 threshold,
-                template_data=template_data or None,
-                capture_size=capture_size,
-                current_size=current_size,
-                match_color=match_color,
-                color_tolerance=color_tolerance,
-                return_best=True,
+                match_color,
+                color_tolerance,
             )
-            best_below = -1.0
-            if isinstance(results, tuple):
-                results, best_below = results
+            cached = self._tmpl_cache.get(cache_key)
+            if cached is not None:
+                self._tmpl_cache.move_to_end(cache_key)
+                self._ocr_cache_hits += 1
+                results, best_below = cached
+            else:
+                results = match_template(
+                    ctx.img,
+                    template_path,
+                    roi,
+                    threshold,
+                    template_data=template_data or None,
+                    capture_size=capture_size,
+                    current_size=current_size,
+                    match_color=match_color,
+                    color_tolerance=color_tolerance,
+                    return_best=True,
+                )
+                best_below = -1.0
+                if isinstance(results, tuple):
+                    results, best_below = results
+                self._tmpl_cache[cache_key] = (results, best_below)
+                self._tmpl_cache.move_to_end(cache_key)
+                while len(self._tmpl_cache) > self._tmpl_cache_max:
+                    self._tmpl_cache.popitem(last=False)
         if not results:
             ctx.best_confidence = best_below
             return self._handle_on_fail(params, ctx, rule)
@@ -1858,6 +1902,10 @@ if __name__ == "__main__":
     ml._has_detect_rules = False
     ml._frame_ocr_cache = {}
     ml._ocr_cache_hits = 0
+    ml._xframe_ocr_cache = OrderedDict()
+    ml._xframe_ocr_cache_max = 64
+    ml._tmpl_cache = OrderedDict()
+    ml._tmpl_cache_max = 64
     ml._execution_log = deque(maxlen=10)
     ml._last_exec_log = {}
     ml._rule_completed = set()
