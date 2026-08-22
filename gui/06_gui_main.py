@@ -10,7 +10,7 @@ import threading
 import time
 from copy import deepcopy
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
@@ -6169,8 +6169,17 @@ class MainWindow(QMainWindow):
             text = T("dialog.black_admin")
         self._show_bg_recover_dialog("dialog.black_title", text)
 
-    def _show_bg_recover_dialog(self, title_key: str, text: str) -> None:
-        """後台故障共通對話框：依管理員狀態給管理員重啟／前景切換建議，使用者保留選擇權。"""
+    def _show_bg_recover_dialog(
+        self,
+        title_key: str,
+        text: str,
+        switch_btn_key: str = "dialog.bg_fail_switch_fg",
+        on_switch: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """後台故障共通對話框：依管理員狀態給管理員重啟／前景切換建議，使用者保留選擇權。
+
+        on_switch 可指定前景切換行為（診斷面板傳入不重啟任務的版本）。
+        """
         box = QMessageBox(QMessageBox.Icon.Warning, T(title_key), "", parent=self)
         admin_btn = None
         if not is_admin() and getattr(sys, "frozen", False):
@@ -6178,28 +6187,42 @@ class MainWindow(QMainWindow):
                 T("dialog.bg_fail_relaunch_admin"), QMessageBox.ButtonRole.ActionRole
             )
         box.setText(text)
-        switch_btn = box.addButton(T("dialog.bg_fail_switch_fg"), QMessageBox.ButtonRole.ActionRole)
+        switch_btn = box.addButton(switch_btn_key, QMessageBox.ButtonRole.ActionRole)
         box.addButton(T("dialog.bg_fail_keep_bg"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if admin_btn is not None and clicked is admin_btn:
             self._relaunch_as_admin()
         elif clicked is switch_btn:
-            self._switch_to_fg_and_restart()
+            if on_switch is not None:
+                on_switch()
+            else:
+                self._switch_to_fg_and_restart()
 
     def _on_debug_bg_fail(self):
-        """診斷面板點擊/按鍵測試後台失敗：提供與執行中一致的服務對話框。
+        """診斷面板點擊/按鍵測試後台失敗：專屬對話框（測試語境，切前景不動執行中任務）。
 
         測試是反覆操作，每 App 生命週期只彈一次；之後由面板紅色橫幅持續提供細節。
         """
         if getattr(self, "_debug_bg_fail_shown", False):
             return
         self._debug_bg_fail_shown = True
-        if not is_admin():
-            text = T("dialog.bg_fail_not_admin")
-        else:
-            text = T("dialog.bg_fail_admin")
-        self._show_bg_recover_dialog("dialog.bg_fail_title", text)
+        text = T("dialog.debug_bg_fail_admin" if is_admin() else "dialog.debug_bg_fail_not_admin")
+        self._show_bg_recover_dialog(
+            "dialog.debug_bg_fail_title",
+            text,
+            switch_btn_key="dialog.debug_bg_fail_switch_fg",
+            on_switch=self._switch_to_fg_only,
+        )
+
+    def _switch_to_fg_only(self):
+        """診斷面板用：只切換前景設定，不停止/重啟執行中的任務。"""
+        self._rule_config_ctrl.set_setting(self, "interaction_mode", "pynput")
+        if self._current_task:
+            task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+            set_task_interaction_mode(task_path, "pynput")
+        self._update_interaction_mode_label()
+        self._status_bar.showMessage(T("dialog.debug_switched_fg"), 5000)
 
     def _switch_to_fg_and_restart(self):
         """切回前景模式並以剩餘群組重新開始。

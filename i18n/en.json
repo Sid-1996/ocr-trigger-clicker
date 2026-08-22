@@ -732,5 +732,10 @@
   "log_viewer.search_placeholder": "Search keywords…",
   "log_viewer.open_dir": "Open Folder",
   "settings.power_save": "Power-saving mode (lower CPU usage)",
-  "settings.power_save.tooltip": "Limits OCR threads to greatly reduce CPU usage — useful on weaker CPUs or while multitasking during farming. Trade-off: slightly slower recognition. Applied immediately."
+  "settings.power_save.tooltip": "Limits OCR threads to greatly reduce CPU usage — useful on weaker CPUs or while multitasking during farming. Trade-off: slightly slower recognition. Applied immediately.",
+  "dialog.debug_bg_fail_title": "Background Injection Failed (Diagnostic Test)",
+  "dialog.debug_bg_fail_not_admin": "The click/key test failed to inject in background mode — tasks would fail the same way in this state.\nThe game may require administrator privileges (if it runs as admin but this tool does not), or may not support background injection (anti-cheat or engine limitations). (Relaunching as admin will show a UAC prompt.)\nNote: if a task is running, after switching to foreground mode you must stop and restart it to apply.",
+  "dialog.debug_bg_fail_admin": "The click/key test failed to inject in background mode — tasks would fail the same way in this state.\nStill failing as administrator: this game most likely does not support background injection (anti-cheat or engine limitations, not a tool issue). Foreground mode is recommended.\nNote: if a task is running, after switching to foreground mode you must stop and restart it to apply.",
+  "dialog.debug_bg_fail_switch_fg": "Switch to foreground mode",
+  "dialog.debug_switched_fg": "Switched to foreground mode. Subsequent tests and runs will use foreground."
 }
