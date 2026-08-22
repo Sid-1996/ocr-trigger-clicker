@@ -88,7 +88,7 @@ def set_run_mode(path: str, mode: str, repeat_times: int = 1, between_rounds_sec
         return False
 
 
-_VALID_INTERACTION_MODES = frozenset({"pynput", "frida"})
+_VALID_INTERACTION_MODES = frozenset({"pynput", "frida", "hybrid"})
 
 
 def get_config_power_save() -> bool:

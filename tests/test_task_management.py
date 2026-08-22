@@ -177,6 +177,28 @@ def test_import_task_preserves_window_and_mode(tmp_tasks_dir, tmp_path):
     assert loaded["interaction_mode"] == "frida"
 
 
+def test_import_task_preserves_hybrid_mode(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "imp1",
+                "name": "Imported",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 200}}],
+            }
+        ],
+        "window_title": "GameWin",
+        "interaction_mode": "hybrid",
+    }
+    src = tmp_path / "preserve_hybrid.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=False)
+    assert result == "preserve_hybrid"
+    loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    assert loaded["interaction_mode"] == "hybrid"
+
+
 def test_import_task_drops_invalid_mode_and_empty_title(tmp_tasks_dir, tmp_path):
     src_data = {
         "rules": [

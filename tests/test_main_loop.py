@@ -288,7 +288,7 @@ def test_handle_click_cursor_bg():
     ml = _make_ml()
     ml._window_hwnd = 12345
     ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "dxcam"}
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
     )()
     captured = {}
     ml._send_click = lambda x, y, button="left", hold_ms=0: (
@@ -470,6 +470,55 @@ def test_send_click_frida_dispatch(monkeypatch):
         _bg.set_method("pynput")
     assert ok
     assert captured == {"hwnd": 12345, "x": 150, "y": 250, "button": "left", "hold_ms": 0}
+
+
+def test_send_click_hybrid_dispatch(monkeypatch):
+    """hybrid 模式：點擊走 pynput 物理路徑，絕不可觸碰 bg_input（set_method 會炸）。"""
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "hybrid"}
+    )()
+    _bg = load_sibling("bg_input", "core/16_bg_input.py")
+    _input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
+    calls = []
+
+    def _boom(*a, **k):
+        raise AssertionError("hybrid 不得呼叫 bg_input")
+
+    monkeypatch.setattr(_bg, "click", _boom)
+    monkeypatch.setattr(_bg, "set_method", _boom)
+    monkeypatch.setattr(
+        _input_mod,
+        "send_click",
+        lambda x, y, button="left", hold_ms=0: calls.append((x, y)) or True,
+    )
+    ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
+    assert ok
+    assert calls == [(150, 250)]
+
+
+def test_is_tool_foreground_hybrid_keeps_protection():
+    """hybrid 依賴前景物理輸入：工具在前景的保護必須保留（僅 frida 跳過）。"""
+    import ctypes
+
+    ml = _make_ml()
+    ml._tool_hwnd = 999
+
+    def _make(mode):
+        return type(
+            "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": mode}
+        )()
+
+    orig = ctypes.windll.user32.GetForegroundWindow
+    try:
+        ctypes.windll.user32.GetForegroundWindow = lambda: 999  # 模擬工具在前景
+        ml._rule_config_ctrl = _make("frida")
+        assert _ml_mod.MainLoop._is_tool_foreground(ml) is False  # frida 跳過保護
+        ml._rule_config_ctrl = _make("hybrid")
+        assert _ml_mod.MainLoop._is_tool_foreground(ml) is True  # hybrid 保留保護
+    finally:
+        ctypes.windll.user32.GetForegroundWindow = orig
 
 
 # ── _handle_on_fail (stop/key) ──

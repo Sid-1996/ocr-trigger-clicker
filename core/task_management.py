@@ -190,7 +190,7 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
         raw_data["groups"] = valid_groups
     if isinstance(data.get("window_title"), str) and data["window_title"]:
         raw_data["window_title"] = data["window_title"]
-    if data.get("interaction_mode") in ("pynput", "frida"):
+    if data.get("interaction_mode") in ("pynput", "frida", "hybrid"):
         raw_data["interaction_mode"] = data["interaction_mode"]
     cs = data.get("capture_size")
     if isinstance(cs, list) and len(cs) == 2:

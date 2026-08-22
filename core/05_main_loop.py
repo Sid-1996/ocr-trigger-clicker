@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import logging
 import os
@@ -25,6 +26,7 @@ _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _bg_input = load_sibling("bg_input", "core/16_bg_input.py")
+_hybrid = load_sibling("hybrid_input", "core/19_hybrid_input.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
@@ -344,7 +346,7 @@ class MainLoop:
 
     def _send_click(self, x: int, y: int, button: str, hold_ms: int = 0) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        if mode and mode != "pynput" and self._window_hwnd:
+        if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
             import ctypes
 
@@ -356,14 +358,14 @@ class MainLoop:
 
     def _send_key(self, key: str) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        if mode and mode != "pynput" and self._window_hwnd:
+        if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
             return _bg_input.send_key(self._window_hwnd, key)
         return _input_mod.send_key(key)
 
     def _send_scroll(self, direction: str) -> bool:
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        if mode and mode != "pynput" and self._window_hwnd:
+        if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
             # 後台 scroll(): 正值 = 上/右，負值 = 下/左（見 bg_input.scroll docstring）
             horizontal = direction in ("WheelLeft", "WheelRight")
@@ -378,8 +380,17 @@ class MainLoop:
         """Activate window using the appropriate method based on interaction mode."""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         if mode and mode != "pynput":
+            if self._window_hwnd and is_window_foreground(self._window_hwnd):
+                return True  # 已在前景（如 hybrid focus_guard 激活過），免重複激活
             return _screenshot.activate_window_bg(self._window_title)
         return _screenshot.activate_window(self._window_title)
+
+    def _focus_guard(self):
+        """hybrid 模式動作區間：存/還原使用者前景＋滑鼠；其他模式 no-op。"""
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if mode == "hybrid":
+            return _hybrid.focus_guard(self._window_title, _screenshot.activate_window)
+        return contextlib.nullcontext(False)
 
     def _report_bg_failure(self) -> None:
         """後台（frida）輸入失敗的統一回報：30s 節流 + 寫 log + 通知 GUI。
@@ -923,7 +934,7 @@ class MainLoop:
             matched_text = ""
         elif target == "cursor":
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-            if mode and mode != "pynput" and self._window_hwnd and ctx.rect:
+            if mode == "frida" and self._window_hwnd and ctx.rect:
                 cx = ctx.rect["w"] // 2
                 cy = ctx.rect["h"] // 2
             else:
@@ -945,16 +956,16 @@ class MainLoop:
         button = params.get("button", "left")
         if target == "cursor":
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-            if mode and mode != "pynput" and self._window_hwnd and ctx.rect:
+            if mode == "frida" and self._window_hwnd and ctx.rect:
                 sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
             else:
                 sx, sy = cx, cy
         else:
             sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
 
-        self._activate_window()
-
-        ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
+        with self._focus_guard():
+            self._activate_window()
+            ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
         if ok:
             self._perf.record_click()
             ctx.triggered = True
@@ -977,18 +988,19 @@ class MainLoop:
         if self._is_tool_foreground():
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
-        self._activate_window()
+        with self._focus_guard():
+            self._activate_window()
 
-        hold_ms = params.get("hold_ms", 0)
-        if hold_ms > 0:
-            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-            if mode and mode != "pynput" and self._window_hwnd:
-                _bg_input.set_method(mode)
-                ok = _bg_input.send_hold_key(self._window_hwnd, key, hold_ms)
+            hold_ms = params.get("hold_ms", 0)
+            if hold_ms > 0:
+                mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                if mode == "frida" and self._window_hwnd:
+                    _bg_input.set_method(mode)
+                    ok = _bg_input.send_hold_key(self._window_hwnd, key, hold_ms)
+                else:
+                    ok = _input_mod.send_hold_key(key, hold_ms)
             else:
-                ok = _input_mod.send_hold_key(key, hold_ms)
-        else:
-            ok = self._send_key(key)
+                ok = self._send_key(key)
         if ok:
             self._perf.record_click()
             ctx.triggered = True
@@ -1027,20 +1039,21 @@ class MainLoop:
         ssx, ssy = self._to_screen_coords(ctx.rect, sx, sy)
         sex, sey = self._to_screen_coords(ctx.rect, sx + dx, sy + dy)
 
-        self._activate_window()
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        if mode and mode != "pynput" and self._window_hwnd:
-            _bg_input.set_method(mode)
-            import ctypes
+        with self._focus_guard():
+            self._activate_window()
+            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            if mode == "frida" and self._window_hwnd:
+                _bg_input.set_method(mode)
+                import ctypes
 
-            user32 = ctypes.windll.user32
-            pt1 = wintypes.POINT(ssx, ssy)
-            user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt1))
-            pt2 = wintypes.POINT(sex, sey)
-            user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt2))
-            ok = _bg_input.drag(self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button)
-        else:
-            ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
+                user32 = ctypes.windll.user32
+                pt1 = wintypes.POINT(ssx, ssy)
+                user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt1))
+                pt2 = wintypes.POINT(sex, sey)
+                user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt2))
+                ok = _bg_input.drag(self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button)
+            else:
+                ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
         if not ok:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
@@ -1061,14 +1074,15 @@ class MainLoop:
         amount = params.get("amount", 1)
         delay_ms = params.get("delay_ms", 30)
 
-        self._activate_window()
-        for _ in range(amount):
-            ok = self._send_scroll(direction)
-            if not ok:
-                return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
-            if delay_ms > 0:
-                if self._stop_event.wait(timeout=delay_ms / 1000.0):
-                    return StepResult("stop", detail=T("exec_log.detail.interrupted"))
+        with self._focus_guard():
+            self._activate_window()
+            for _ in range(amount):
+                ok = self._send_scroll(direction)
+                if not ok:
+                    return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
+                if delay_ms > 0:
+                    if self._stop_event.wait(timeout=delay_ms / 1000.0):
+                        return StepResult("stop", detail=T("exec_log.detail.interrupted"))
 
         self._perf.record_click()
         ctx.triggered = True
@@ -1778,9 +1792,10 @@ class MainLoop:
         try:
             import ctypes
 
-            # 後台模式（frida）不依賴前景焦點，工具在前景不影響操作，不需此保護
+            # 後台模式（frida）不依賴前景焦點，工具在前景不影響操作，不需此保護；
+            # hybrid 依賴前景物理輸入，必須保留保護（避免使用者操作本工具時被搶焦點）
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-            if mode and mode != "pynput":
+            if mode == "frida":
                 return False
             return ctypes.windll.user32.GetForegroundWindow() == self._tool_hwnd
         except Exception:

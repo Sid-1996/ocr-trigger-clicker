@@ -22,6 +22,9 @@ def test_get_config_interaction_mode_reads_appdata(tmp_path, monkeypatch):
     cfg.write_text(json.dumps({"interaction_mode": "frida"}), encoding="utf-8")
     assert get_config_interaction_mode() == "frida"
 
+    cfg.write_text(json.dumps({"interaction_mode": "hybrid"}), encoding="utf-8")
+    assert get_config_interaction_mode() == "hybrid"
+
 
 def test_get_config_interaction_mode_defaults_and_validation(tmp_path, monkeypatch):
     monkeypatch.setenv("OCR_TRIGGER_DATA", str(tmp_path))
@@ -41,6 +44,9 @@ def test_set_get_task_interaction_mode_round_trip(tmp_path):
 
     assert set_task_interaction_mode(str(task_file), "frida")
     assert get_task_interaction_mode(str(task_file)) == "frida"
+
+    assert set_task_interaction_mode(str(task_file), "hybrid")
+    assert get_task_interaction_mode(str(task_file)) == "hybrid"
 
     assert set_task_interaction_mode(str(task_file), "pynput")
     assert get_task_interaction_mode(str(task_file)) == "pynput"
