@@ -80,7 +80,7 @@ Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
 - **底層原因（科普）**：
   - **輸入**：後台 PostMessage 是把視窗訊息塞進目標視窗的 Win32 舊式訊息佇列；Unity 的輸入多走 **Raw Input / 低階注入** 與自家輸入系統，不接受這條路徑 → 點了沒反應；且 Unity 讀取 OS 游標位置而非 lParam，不移動游標就無法精準點擊。因此後台 PostMessage 模式已移除
   - **渲染**：PrintWindow 要求目標以「相容繪圖」把自己畫出來；Unity 用 GPU（DXGI / Direct3D）直接渲染，不公開這條 PrintWindow 路徑 → 截不到畫面內容
-- **結論**：這是遊戲引擎的平台／底層設計，工具無法逾越，**不是工具缺陷**。此類遊戲請改用**前景模式（pynput）**，或使用**後台模式（Frida 注入）**——透過注入遊戲行程 hook `GetCursorPos`/`ScreenToClient` 假造游標座標、hook `GetKeyState`/`GetAsyncKeyState`/`GetKeyboardState` 假造按鍵狀態，讓 Unity 通過輸入驗證，達成零閃爍後台點擊與按鍵（有防作弊偵測風險，滾輪/拖曳不保證可用；遊戲若要求視窗聚焦仍無效）
+- **結論**：這是遊戲引擎的平台／底層設計，工具無法逾越，**不是工具缺陷**。此類遊戲請改用**前景模式（pynput）**、**後台模式（Frida 注入）**——透過注入遊戲行程 hook `GetCursorPos`/`ScreenToClient` 假造游標座標、hook `GetKeyState`/`GetAsyncKeyState`/`GetKeyboardState` 假造按鍵狀態，讓 Unity 通過輸入驗證，達成零閃爍後台點擊與按鍵（有防作弊偵測風險，滾輪/拖曳不保證可用；遊戲若要求視窗聚焦仍無效）——或**混合模式（hybrid）**：後台 PrintWindow 截圖偵測（零干擾），動作時短暫激活遊戲做 pynput 物理輸入後復原使用者前景與滑鼠（`core/19_hybrid_input.py` 的 `focus_guard`）；適合 Frida 也無效的遊戲，代價是每次操作短暫搶焦點，適合低頻動作
 - **實證案例（BrownDust II）**：後台滑鼠點擊可（hook 游標即通過）、後台鍵盤被擋——遊戲鍵盤輸入仍要求視窗焦點，hook 鍵盤狀態無法繞過。可作為「滑鼠可、鍵盤未必可」的基準案例：後台滑鼠與鍵盤需分開驗證。
 
 ### 後台截圖全黑 — 試試系統管理員 👑

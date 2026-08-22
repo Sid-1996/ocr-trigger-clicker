@@ -4,6 +4,7 @@
 
 ### 給使用者
 
+- **新增「混合模式」**：設定 → 一般 → 互動方法 → 混合模式（後台偵測＋前景操作）。平時以後台截圖辨識、零干擾；偵測到需要操作時，短暫把遊戲帶到前景做物理點擊/按鍵，完成後自動復原你原本的前景視窗與滑鼠位置。適合不支援後台注入（Frida）的遊戲；因每次操作會短暫搶焦點，較適合低頻動作的任務。
 - **CPU 警告不再誤報**：警告原本量測「整台電腦」的 CPU（遊戲本身吃滿 80% 時工具會被連坐誤報），改為只量測本工具自身的使用率；狀態列同時顯示「工具 CPU」與「系統 CPU」兩個數字，一眼看出負載來源。
 - **靜止畫面大幅省電**：畫面完全沒變時，文字辨識與圖示比對直接沿用上次結果（先前只有框選過偵測區的規則有此優化，現在未框選的全窗掃描與圖示比對也適用）。辨識結果與即時計算完全一致。
 - **新增「省電模式」**：設定 → 一般 → 省電模式。限制 OCR 執行緒數以大幅降低 CPU 占用率，適合 CPU 較弱或需邊掛機邊使用電腦的情境；代價是單次辨識速度略慢。變更後立即生效（自動重置 OCR 引擎，免重啟）。
@@ -11,6 +12,7 @@
 
 ### 給開發者
 
+- **混合模式（`interaction_mode: "hybrid"`）**：新增 `core/19_hybrid_input.py`（`focus_guard` context manager：save 前景 hwnd＋游標 → 激活 → 動作 → restore，模組鎖序列化並發）。主循環所有輸入分派條件由 `mode != "pynput"` 收斂為 `== "frida"`（hybrid 截圖走背景、輸入走前景物理），`_is_tool_foreground` 保護對 hybrid 保留（僅 frida 跳過）；`_activate_window` 加已前景 early-exit。任務匯入白名單（task_management/run_config）同步加入 hybrid。診斷面板點擊測試 hybrid 走 ClientToScreen 物理路徑＋focus_guard，驗證重拍放寬為非 pynput 皆可。
 - **en rec 模型試升級 v5 後回滾至 v4**：曾換入 RapidAI 轉換的 `en_PP-OCRv5_rec_mobile.onnx`（合成測試快 30%、命中 200/200），但實戰遊戲畫面（hololive-Dreams，1413×825）三模型對照顯示 v5 en 對含標點/空格的長句嚴重退化——`'1 result(s) available to claim.'` 讀成 `'1reul(vaiabl '`（67-69%），v4 與 v5 cht 均全對（92-98%）；計數器類 v4 4/5、v5 en 5/5 但 v5 en 會插空格。合成字型基準（Hershey 短詞）未能暴露此弱點，實戰驗證才是準繩。`custom_models/` 維持 v4 不變，本次無發行物變更。
 - **遷移至 Python 3.13 與 uv 管理**（commit `a6fcac6`）：`pyproject.toml` 改 `requires-python = ">=3.13,<3.14"` 並整合依賴宣告，`uv.lock` 為鎖定檔，`requirements.txt` 退役刪除。開發依賴由全域 `uv` 管理，先 `uv sync --dev`，日常命令（build / pytest / ruff）一律 `uv run ...` 執行；`build.py`、`release.ps1`、`run.bat` 同步改用 uv 啟動。
 - **修正 run.bat 啟動**（commit `f767d4a`）：改用 `uv run python gui/06_gui_main.py --debug`，並在 `build.py` 隱藏導入 `logging.handlers` 補足 PyInstaller 靜態分析遺漏。
