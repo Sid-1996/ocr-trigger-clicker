@@ -41,7 +41,7 @@
 - No Python runtime required for end users
 - Dependencies: PyQt6, rapidocr-onnxruntime, opencv-python, mss, pynput, dxcam, numpy, pygetwindow, pywin32, frida
 - Optional GPU acceleration: DirectML via DirectX 12
-- Foreground input via pynput (SendInput); background mode via Frida inject for background clicks (may not work on most Unity games — engine limitation, verify per window); no standalone PostMessage mode
+- Foreground input via pynput (SendInput); background mode via Frida inject for background clicks (may not work on most Unity games — engine limitation, verify per window); hybrid mode via PrintWindow capture + foreground pynput input with focus guard (for games where Frida also fails, at the cost of briefly stealing focus per action); no standalone PostMessage mode
 - Developer dependencies are managed by global `uv`; run `uv sync --dev` before local development
 
 ```powershell
