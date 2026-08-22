@@ -91,6 +91,21 @@ def set_run_mode(path: str, mode: str, repeat_times: int = 1, between_rounds_sec
 _VALID_INTERACTION_MODES = frozenset({"pynput", "frida"})
 
 
+def get_config_power_save() -> bool:
+    """Read power_save_mode from config.json (app-level). Defaults to False.
+
+    True 時 OCR 引擎限制 intra-op 執行緒數，降低 CPU 占用（代價：單次辨識稍慢）。
+    """
+    try:
+        from core._paths import get_data_path
+
+        p = Path(get_data_path("config.json"))
+        with open(p, encoding="utf-8") as f:
+            return bool(json.load(f).get("power_save_mode", False))
+    except Exception:
+        return False
+
+
 def get_config_interaction_mode() -> str:
     """Read interaction_mode from config.json (app-level). Defaults to "pynput".
 

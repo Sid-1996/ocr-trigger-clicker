@@ -2976,6 +2976,11 @@ class SettingsDialog(QDialog):
         self._notify_resource_warn.setToolTip(T("settings.notify_resource_warn.tooltip"))
         form.addRow("", self._notify_resource_warn)
 
+        self._power_save = QCheckBox(T("settings.power_save"))
+        self._power_save.setChecked(self._ctrl.get_setting(win, "power_save_mode", False))
+        self._power_save.setToolTip(T("settings.power_save.tooltip"))
+        form.addRow("", self._power_save)
+
         self._auto_update = QCheckBox(T("settings.auto_update"))
         self._auto_update.setChecked(not self._ctrl.get_setting(win, "skip_update_check"))
         self._auto_update.setToolTip(T("settings.auto_update.tooltip"))
@@ -3087,6 +3092,7 @@ class SettingsDialog(QDialog):
         self._ctrl.set_setting(
             self._win, "notify_resource_warn", self._notify_resource_warn.isChecked()
         )
+        self._ctrl.set_setting(self._win, "power_save_mode", self._power_save.isChecked())
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
         if getattr(self._win, "_current_task", ""):

@@ -730,5 +730,7 @@
   "log_viewer.clear": "清除日誌",
   "log_viewer.clear_confirm": "確定要清空日誌檔（app.log / startup_error.log）嗎？此操作無法復原。",
   "log_viewer.search_placeholder": "搜尋關鍵字…",
-  "log_viewer.open_dir": "開啟資料夾"
+  "log_viewer.open_dir": "開啟資料夾",
+  "settings.power_save": "省電模式（降低 CPU 占用）",
+  "settings.power_save.tooltip": "限制 OCR 執行緒數以大幅降低 CPU 占用率，適合 CPU 較弱或需邊掛機邊使用電腦的情境；代價是單次辨識速度略慢。變更後重啟程式生效。"
 }

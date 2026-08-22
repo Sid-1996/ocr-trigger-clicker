@@ -730,5 +730,7 @@
   "log_viewer.clear": "ログをクリア",
   "log_viewer.clear_confirm": "ログファイル（app.log / startup_error.log）をクリアしますか？この操作は取り消せません。",
   "log_viewer.search_placeholder": "キーワードを検索…",
-  "log_viewer.open_dir": "フォルダを開く"
+  "log_viewer.open_dir": "フォルダを開く",
+  "settings.power_save": "省電モード（CPU 使用率を低減）",
+  "settings.power_save.tooltip": "OCR スレッド数を制限して CPU 使用率を大幅に下げます。CPU が弱い環境や、放置中に他作業をする場合に有効。代わりに認識速度が少し遅くなります。変更の反映には再起動が必要です。"
 }

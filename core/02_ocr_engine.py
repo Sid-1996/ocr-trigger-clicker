@@ -89,6 +89,30 @@ def _box_to_rect(box) -> tuple[int, int, int, int]:
     return int(x), int(y), int(w), int(h)
 
 
+def _apply_power_save_thread_limit(limit: int = 2) -> None:
+    """讓 rapidocr 之後建立的所有 ONNX session 預設帶 intra-op 執行緒上限。
+
+    取代法：子類化 onnxruntime SessionOptions，建構時即設上限；
+    OrtInferSession._init_sess_opts 對 config 值 -1（預設）不覆寫，故保留此設定。
+    """
+    from rapidocr_onnxruntime.utils import infer_engine
+
+    if getattr(infer_engine.SessionOptions, "_power_save_patched", False):
+        return
+
+    _orig = infer_engine.SessionOptions
+
+    class _LimitedSessionOptions(_orig):
+        _power_save_patched = True
+
+        def __init__(self):
+            super().__init__()
+            self.intra_op_num_threads = limit
+
+    _LimitedSessionOptions.__name__ = "SessionOptions"
+    infer_engine.SessionOptions = _LimitedSessionOptions
+
+
 def init_engine() -> None:
     global _engine
     with _engine_lock:
@@ -121,6 +145,21 @@ def init_engine() -> None:
         )
         if dict_path.exists():
             kwargs["rec_keys_path"] = str(dict_path)
+
+        # 省電模式：限制 ONNX intra-op 執行緒，降低 CPU 占用（代價：單次辨識稍慢）。
+        # rapidocr 1.4.4 的 kwargs 路由白名單不含執行緒參數（remove_prefix 只剝
+        # model_path/use_cuda/use_dml），公開 API 無法設定，故在 session 建立前
+        # patch 該模組的 SessionOptions 類別，讓新建 session 預設帶執行緒上限。
+        try:
+            from core.run_config import get_config_power_save
+
+            if get_config_power_save():
+                _apply_power_save_thread_limit(2)
+                logging.info("省電模式已啟用：OCR 執行緒限制為 2")
+        except Exception:
+            logging.warning("讀取省電模式設定失敗，依預設（不限制）啟動", exc_info=True)
+
+        _engine = RapidOCR(**kwargs)
 
         _engine = RapidOCR(**kwargs)
 

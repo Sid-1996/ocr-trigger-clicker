@@ -730,5 +730,7 @@
   "log_viewer.clear": "Clear Log",
   "log_viewer.clear_confirm": "Clear the log files (app.log / startup_error.log)? This cannot be undone.",
   "log_viewer.search_placeholder": "Search keywords…",
-  "log_viewer.open_dir": "Open Folder"
+  "log_viewer.open_dir": "Open Folder",
+  "settings.power_save": "Power-saving mode (lower CPU usage)",
+  "settings.power_save.tooltip": "Limits OCR threads to greatly reduce CPU usage — useful on weaker CPUs or while multitasking during farming. Trade-off: slightly slower recognition. Takes effect after restart."
 }
