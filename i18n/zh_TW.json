@@ -49,7 +49,7 @@
   "combo.interaction_fg": "前景模式（pynput）",
   "combo.interaction_bg_frida": "後台模式（Frida 注入）",
   "settings.interaction_mode": "互動方法:",
-  "settings.interaction_mode.tooltip": "選擇點擊和鍵盤操作的方式。\n前景模式最穩定，需視窗在前景；後台（Frida 注入）可在其他視窗操作時嘗試控制遊戲（零閃爍），但多數 Unity 遊戲因底層限制不支援後台，實際效果以該遊戲視窗自行測試為準，且有防作弊偵測風險。\n若遊戲不響應按鍵，屬遊戲限制（部分遊戲需視窗焦點才能接收鍵盤輸入），非工具問題。",
+  "settings.interaction_mode.tooltip": "選擇點擊和鍵盤操作的方式。\n前景模式最穩定，需視窗在前景；後台（Frida 注入）可在其他視窗操作時嘗試控制遊戲（零閃爍），但多數 Unity 遊戲因底層限制不支援後台，實際效果以該遊戲視窗自行測試為準，且有防作弊偵測風險。\n混合模式：後台截圖辨識（零干擾），需要操作時短暫把遊戲帶到前景做物理點擊後復原你的視窗與滑鼠——適合不支援後台注入的遊戲，但每次操作會短暫搶焦點，適合低頻動作。\n若遊戲不響應按鍵，屬遊戲限制（部分遊戲需視窗焦點才能接收鍵盤輸入），非工具問題。",
   "template_helper.insert": "快速插入：",
   "template_helper.digit": "數字",
   "template_helper.letter": "英文",
@@ -737,5 +737,6 @@
   "dialog.debug_bg_fail_not_admin": "測試的後台注入失敗，執行任務也會同樣失敗。\n可能需以系統管理員啟動本工具，或此遊戲不支援後台注入（防作弊限制）。",
   "dialog.debug_bg_fail_admin": "已是系統管理員仍注入失敗，多為此遊戲不支援後台注入，建議改用前景模式。",
   "dialog.debug_bg_fail_switch_fg": "切換到前景模式",
-  "dialog.debug_switched_fg": "已切換為前景模式，之後的測試與執行都會使用前景。"
+  "dialog.debug_switched_fg": "已切換為前景模式，之後的測試與執行都會使用前景。",
+  "combo.interaction_hybrid": "混合模式（後台偵測＋前景操作）"
 }

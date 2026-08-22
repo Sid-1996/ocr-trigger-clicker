@@ -2994,6 +2994,7 @@ class SettingsDialog(QDialog):
         self._interaction_mode = QComboBox()
         self._interaction_mode.addItem(T("combo.interaction_fg"), "pynput")
         self._interaction_mode.addItem(T("combo.interaction_bg_frida"), "frida")
+        self._interaction_mode.addItem(T("combo.interaction_hybrid"), "hybrid")
         idx = self._interaction_mode.findData(self._ctrl.get_setting(win, "interaction_mode"))
         self._interaction_mode.setCurrentIndex(max(0, idx))
         self._interaction_mode.setToolTip(T("settings.interaction_mode.tooltip"))
@@ -3999,6 +4000,7 @@ class MainWindow(QMainWindow):
         mode_map = {
             "pynput": f"🟢 {T('combo.interaction_fg')}",
             "frida": f"🟣 {T('combo.interaction_bg_frida')}",
+            "hybrid": f"🟠 {T('combo.interaction_hybrid')}",
         }
         text = mode_map.get(mode, f"🟢 {T('combo.interaction_fg')}")
         self._interaction_mode_label.setText(text)

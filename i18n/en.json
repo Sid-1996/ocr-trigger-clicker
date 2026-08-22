@@ -49,7 +49,7 @@
   "combo.interaction_fg": "Foreground (pynput)",
   "combo.interaction_bg_frida": "Background (Frida inject)",
   "settings.interaction_mode": "Interaction method:",
-  "settings.interaction_mode.tooltip": "How to send clicks and keyboard input.\nForeground is most stable and requires the window to be in front. Background (Frida inject) lets you try controlling the game while you work on another window (no flicker), but most Unity games don't support background mode due to engine limitations — verify on your actual game window. It also carries an anti-cheat detection risk.\nIf the game does not respond to keys, it is a game limitation (some games only accept keyboard input while focused), not a tool issue.",
+  "settings.interaction_mode.tooltip": "Choose how clicks and keys are sent.\nForeground is the most reliable but needs the window in front; Background (Frida injection) can try to control the game while you use other windows (zero flicker), though most Unity games cannot be controlled in background due to engine limits — test with your own game. Anti-cheat detection risk applies.\nHybrid: screenshots and detection run in background (zero disturbance); when an action is needed the game is briefly brought to front for a physical click, then your previous window and mouse position are restored — good for games that reject background injection, but each action briefly steals focus, best for low-frequency actions.\nIf the game ignores keys, that is a game limitation (some games require window focus for keyboard input), not a tool issue.",
   "template_helper.insert": "Insert:",
   "template_helper.digit": "Digit",
   "template_helper.letter": "Letter",
@@ -737,5 +737,6 @@
   "dialog.debug_bg_fail_not_admin": "Background injection failed during the test — tasks would fail the same way.\nTry running this tool as administrator, or the game may not support background injection (anti-cheat).",
   "dialog.debug_bg_fail_admin": "Still failing as administrator: this game most likely does not support background injection. Foreground mode is recommended.",
   "dialog.debug_bg_fail_switch_fg": "Switch to foreground mode",
-  "dialog.debug_switched_fg": "Switched to foreground mode. Subsequent tests and runs will use foreground."
+  "dialog.debug_switched_fg": "Switched to foreground mode. Subsequent tests and runs will use foreground.",
+  "combo.interaction_hybrid": "Hybrid (background detect + foreground input)"
 }

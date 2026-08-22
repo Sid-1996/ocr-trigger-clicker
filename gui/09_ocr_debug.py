@@ -32,6 +32,8 @@ from i18n import T
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _bg_input = load_sibling("bg_input", "core/16_bg_input.py")
+_hybrid = load_sibling("hybrid_input", "core/19_hybrid_input.py")
+_pynput_input = load_sibling("pynput_input", "core/03_pynput_input.py")
 _capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
 capture_frame = _capture_pipeline.capture_frame
 _pw_mod = load_sibling("print_window", "core/15_print_window.py")
@@ -763,7 +765,7 @@ class OcrDebugPanel(QWidget):
         # Check if background mode is active
         mode = _get_interaction_mode()
 
-        if mode != "pynput":
+        if mode == "frida":
             # Background mode: use bg_input.click with client coordinates
             hwnd_val = _screenshot.get_window_hwnd(self._window_title)
             if not hwnd_val:
@@ -785,6 +787,25 @@ class OcrDebugPanel(QWidget):
             _bg_input.set_method(mode)
             click_ok = _bg_input.click(hwnd_val, client_x, client_y)
             cx, cy = client_x, client_y
+        elif mode == "hybrid":
+            # 混合模式：PrintWindow 截圖座標為 client 系，物理點擊需 ClientToScreen；
+            # 激活與使用者狀態還原交給 focus_guard
+            hwnd_val = _screenshot.get_window_hwnd(self._window_title)
+            if not hwnd_val:
+                self._status_bar.showMessage(
+                    T("ocr_debug.window_coords_failed", title=self._window_title)
+                )
+                return
+            import ctypes
+            from ctypes import wintypes as _wt
+
+            pt = _wt.POINT()
+            pt.x, pt.y = 0, 0
+            ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
+            cx = pt.x + ocr_center_x
+            cy = pt.y + ocr_center_y
+            with _hybrid.focus_guard(self._window_title, activate_window):
+                click_ok = _input.send_click(cx, cy)
         else:
             # Foreground mode: use existing pynput logic
             _screenshot.activate_window(self._window_title)
@@ -874,7 +895,7 @@ class OcrDebugPanel(QWidget):
             )
         )
 
-        if click_ok and mode == "frida":
+        if click_ok and mode != "pynput":
             self._start_click_verify(r, cx, cy)
 
     def _start_click_verify(self, r, sx: int, sy: int):
@@ -910,7 +931,7 @@ class OcrDebugPanel(QWidget):
             mode = _get_interaction_mode()
             hwnd = _screenshot.get_window_hwnd(self._window_title)
             t0 = time.monotonic()
-            if mode != "frida" or not hwnd:
+            if mode == "pynput" or not hwnd:
                 return
             img = capture_frame(mode, self._window_title, hwnd=hwnd)
             if img is None or is_black_capture(img):
@@ -980,7 +1001,7 @@ class OcrDebugPanel(QWidget):
         guidance = T(f"ocr_debug.click_verify.{key}", text=text)
         dev = T(
             "ocr_debug.click_verify.dev_info",
-            mode="frida",
+            mode=_get_interaction_mode(),
             source=self._capture_source or "?",
             text=text,
             sx=sx,
@@ -1055,8 +1076,12 @@ class OcrDebugPanel(QWidget):
             if before is None or is_black_capture(before):
                 emit("black")
                 return
-            _bg_input.set_method(mode)
-            sent = _bg_input.send_key(hwnd, key)
+            if mode == "hybrid":
+                with _hybrid.focus_guard(self._window_title, activate_window):
+                    sent = _pynput_input.send_key(key)
+            else:
+                _bg_input.set_method(mode)
+                sent = _bg_input.send_key(hwnd, key)
             ms = (time.monotonic() - t0) * 1000
             if not sent:
                 emit("fail", err=_bg_input.last_error() or "", ms=ms)
@@ -1105,7 +1130,7 @@ class OcrDebugPanel(QWidget):
         )
         dev = T(
             "ocr_debug.key_test.dev_info",
-            mode="frida",
+            mode=_get_interaction_mode(),
             source=self._capture_source or "?",
             key=test_key,
             sim=sim,
