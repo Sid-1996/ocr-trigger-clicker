@@ -88,6 +88,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
 | `core/16_bg_input.py` | 後台互動（pynput / frida 切換，底層 PostMessage primitive 供 frida） | `set_method()`, `click()`, `send_key()`, `send_hold_key()`, `drag()`, `scroll()`, `detach()` |
 | `core/18_frida_bg.py` | Frida 行程注入（後台點擊＋鍵盤；多數 Unity 遊戲因底層限制不支援，以遊戲視窗自行測試為準） | `ensure_attached()`, `click()`, `key()`, `detach()`, `last_error()` |
+| `core/19_hybrid_input.py` | 混合模式輸入（後台 PrintWindow 偵測＋動作時短暫激活遊戲做 pynput 物理輸入，完成後復原使用者前景與滑鼠） | `focus_guard(title, activate_fn)` context manager |
 | `core/19_recorder.py` | 滑鼠示範錄製器（全域攔截＋動作前截圖＋前景重送） | `Recorder` class（`start(title, hwnd, session_dir)` / `stop()`）、session 輸出 `recordings/session-*` |
 | `core/20_recorder_convert.py` | 錄製 session → 規則轉換器（離線後處理） | `convert_sessions()`, `merge_rule_entries()`（OCR 錨點 / 模板錨點 / wait+click 三層） |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
@@ -158,7 +159,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
-| `notify` | 提示訊息彈窗（設 `ctx.triggered = True`） | `message` |
+| `notify` | 右下角疊加通知提示（經 `on_warning` → GUI `_NotificationStack` 顯示；回 `continue`，不設 `ctx.triggered`，不影響規則流程） | `message` |
 | `scroll` | 滑鼠滾輪（設 `ctx.triggered = True） | `direction`, `amount`, `delay_ms`, `after_delay_ms` |
 | `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`, `dx`, `dy`, `button`, `after_delay_ms` |
 
@@ -376,9 +377,9 @@ debug panel 建立規則         視窗相對          ÷ client_size → 比例
 - `_resolve_roi(roi_dict, img_width, img_height)` → `(x, y, w, h)` 像素整數，用於影像裁切
 - `_resolve_point(point_dict, win_width, win_height)` → `(x, y)` 像素整數，加上視窗偏移後送 `send_click()`
 
-## 輸入模擬（前景 pynput / 後台 Frida）
+## 輸入模擬（前景 pynput / 後台 Frida / 混合 hybrid）
 
-互動方法由 `interaction_mode` 決定（`pynput` / `frida`），`MainLoop._send_click` / `_send_key` / `_send_drag` / `_send_scroll` 依模式分派到對應輸入模組（後台一律走 `core/16_bg_input.py`，由該模組再委派到 frida）。後台 PostMessage 模式已移除。
+互動方法由 `interaction_mode` 決定（`pynput` / `frida` / `hybrid`），`MainLoop._send_click` / `_send_key` / `_send_drag` / `_send_scroll` 依模式分派到對應輸入模組。分派規則：截圖／黑幕類分支用 `mode != "pynput"`，輸入分派與工具前景保護用 `mode == "frida"`（hybrid 輸入走前景物理路徑）。後台一律走 `core/16_bg_input.py`，由該模組再委派到 frida。後台 PostMessage 模式已移除。
 
 ### 前景：pynput（SendInput）
 
@@ -403,6 +404,10 @@ debug panel 建立規則         視窗相對          ÷ client_size → 比例
 - spoof 為暫時性：游標 update 後約 400ms 自動還原（pass-through 真實游標）；按鍵 down 後約 10s 寬限自動清除（up 未送達的保險），up 送達即時還原
 - `detach()`：`MainLoop.stop()` 時釋放，還原遊戲
 - v1 限制：滾輪/拖曳僅 PostMessage（多數遊戲下可能無效）；多數 Unity 遊戲因底層限制（GPU 渲染不公開 PrintWindow 路徑、輸入走自家低階系統）不支援後台操控，需以遊戲視窗自行測試為準；遊戲若要求視窗聚焦（`Application.isFocused`）仍無效；EAC/BattlEye 等防作弊會封鎖 Frida（有防作弊偵測風險）
+
+### 混合：hybrid（後台偵測＋前景物理輸入）
+
+`core/19_hybrid_input.py` 提供 `focus_guard(title, activate_fn)` context manager：進入時記錄使用者前景視窗 hwnd 與游標位置 → 激活目標遊戲視窗 → 動作以 pynput 物理輸入送出（走前景路徑）→ 離開時復原使用者原本的前景視窗與滑鼠位置。截圖／辨識仍走後台 PrintWindow（零干擾），只有動作瞬間短暫搶焦點。適合 Frida 注入也無效的遊戲；代價是每次操作短暫搶焦點，適合低頻動作任務。主循環側（`05_main_loop.py`）：hybrid 的輸入走前景物理路徑，`_is_tool_foreground` 前景保護對 hybrid 放行（與 frida 同），動作前經 `focus_guard` 確保目標在前景。
 
 ### 按鍵對應
 
