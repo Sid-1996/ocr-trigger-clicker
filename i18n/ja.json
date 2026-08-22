@@ -559,7 +559,6 @@
   "ocr_debug.window_coords_failed": "「{title}」のウィンドウ座標を取得できません",
   "ocr_debug.click_success": "成功",
   "ocr_debug.click_failed": "失敗",
-  "ocr_debug.click_error.copy_hint": "クリックエラーの詳細（選択してコピー可）— 完全なログはメインウィンドウの「ログ」ビューアで確認できます",
   "ocr_debug.verifying": "検証中…",
   "ocr_debug.click_verify.success": "バックグラウンドクリックは機能しています: クリック後、「{text}」が画面から消えました。バックグラウンドモードを安心して使えます。",
   "ocr_debug.click_verify.no_response": "クリックは送信されましたが、「{text}」がまだ画面にあります — 多くの場合、バックグラウンドクリックがゲームに届いていません。\n設定で操作方法を「フォアグラウンドモード」に切り替えて再テストし、バックグラウンドの問題かゲームの座標/状態の問題かを切り分けてください。",

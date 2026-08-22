@@ -559,7 +559,6 @@
   "ocr_debug.window_coords_failed": "Cannot get window coordinates for \"{title}\"",
   "ocr_debug.click_success": "Success",
   "ocr_debug.click_failed": "Failed",
-  "ocr_debug.click_error.copy_hint": "Detailed click error (selectable to copy) — full log in the main window's 'log' viewer",
   "ocr_debug.verifying": "Verifying…",
   "ocr_debug.click_verify.success": "Background click works: \"{text}\" disappeared from screen after the click. Safe to use background mode.",
   "ocr_debug.click_verify.no_response": "Click sent, but \"{text}\" is still on screen — in most cases the background click was not received by the game.\nTry switching the interaction method to \"Foreground mode\" in Settings and retest, to tell whether it's a background issue or a game coordinate/state issue.",

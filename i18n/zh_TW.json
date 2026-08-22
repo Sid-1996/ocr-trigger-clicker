@@ -559,7 +559,6 @@
   "ocr_debug.window_coords_failed": "無法取得視窗「{title}」的座標",
   "ocr_debug.click_success": "成功",
   "ocr_debug.click_failed": "失敗",
-  "ocr_debug.click_error.copy_hint": "失敗詳細錯誤（可選取複製）— 完整記錄請看主視窗「log」按鈕開啟的執行日誌",
   "ocr_debug.verifying": "驗證中…",
   "ocr_debug.click_verify.success": "✓ 後台點擊有效：「{text}」在點擊後已從畫面消失。可放心使用後台模式。",
   "ocr_debug.click_verify.no_response": "點擊已送出，但「{text}」仍在畫面上，多數情況代表後台點擊沒有被遊戲接收。\n建議：先到「設定」將互動方式切換為「前景模式」重試一次，用以分辨是後台問題，還是遊戲座標/狀態問題。",
