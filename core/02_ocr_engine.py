@@ -113,6 +113,16 @@ def _apply_power_save_thread_limit(limit: int = 2) -> None:
     infer_engine.SessionOptions = _LimitedSessionOptions
 
 
+def reset_engine() -> None:
+    """丟棄現有引擎，下一次辨識時依最新設定（省電模式、語系）懶載入重建。
+
+    執行緒安全：_run_engine 在 _engine_lock 內檢查 None 後觸發 init_engine。
+    """
+    global _engine
+    with _engine_lock:
+        _engine = None
+
+
 def init_engine() -> None:
     global _engine
     with _engine_lock:

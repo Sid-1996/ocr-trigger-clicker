@@ -3082,6 +3082,7 @@ class SettingsDialog(QDialog):
 
     def _on_accept(self):
         old_lang = get_language()
+        old_power_save = self._ctrl.get_setting(self._win, "power_save_mode", False)
         self._ctrl.set_setting(self._win, "max_cps", self._max_cps.value())
         self._ctrl.set_setting(self._win, "scan_interval_ms", self._scan_interval.value())
         self._ctrl.set_setting(self._win, "default_match_mode", self._match_mode.currentData())
@@ -3093,6 +3094,12 @@ class SettingsDialog(QDialog):
             self._win, "notify_resource_warn", self._notify_resource_warn.isChecked()
         )
         self._ctrl.set_setting(self._win, "power_save_mode", self._power_save.isChecked())
+        if bool(old_power_save) != self._power_save.isChecked():
+            # 省電模式變更：即時丟棄 OCR 引擎，下一次辨識依新設定懶載入重建（免重啟）
+            from _loader import load_sibling
+
+            _ocr_mod = load_sibling("_ocr_engine", "core/02_ocr_engine.py")
+            _ocr_mod.reset_engine()
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
         if getattr(self._win, "_current_task", ""):
