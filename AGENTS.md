@@ -186,13 +186,11 @@ pwsh -Command "
 
 ## 可用工具
 
-### ripgrep（`rg`）
-搜尋程式碼時**一律用 `rg`，不用 `grep` 或 `findstr`**。
+### 程式碼搜尋
+**內建 Grep 工具優先**，速度快、省 token，且不需經過 shell 組指令（避免路徑含空格、pwsh 語法等問題）。
+只有內建 Grep 無法滿足時（例如需要計算符合數量、或其他 rg 專屬旗標），才 fallback 用 `rg`，一律不用 `grep` 或 `findstr`。
 
 ```powershell
-# 搜尋關鍵字
-rg "pattern" "C:\Code play first\ocr-trigger-clicker"
-
 # 只搜尋 Python 檔
 rg "pattern" -t py
 
