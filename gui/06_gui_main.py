@@ -6187,7 +6187,7 @@ class MainWindow(QMainWindow):
                 T("dialog.bg_fail_relaunch_admin"), QMessageBox.ButtonRole.ActionRole
             )
         box.setText(text)
-        switch_btn = box.addButton(switch_btn_key, QMessageBox.ButtonRole.ActionRole)
+        switch_btn = box.addButton(T(switch_btn_key), QMessageBox.ButtonRole.ActionRole)
         box.addButton(T("dialog.bg_fail_keep_bg"), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
