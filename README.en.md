@@ -5,7 +5,7 @@
 <h1 align="center">OCR Trigger Clicker</h1>
 
 <p align="center">
-  <em>A no-code game automation tool for everyday players — double-click on-screen text to build a rule, or record once and it auto-converts into a script</em><br>
+  <em>A no-code game automation tool for everyday players — spot on-screen text, build a rule in two clicks; or record once and it auto-converts into a script</em><br>
   Traditional Chinese / English / Japanese UI · Author: Sid
 </p>
 
@@ -39,7 +39,7 @@
 
 <p align="center">
   <img src="docs/images/ocr-diagnostic.png" alt="OCR Diagnostic Panel" width="880"><br>
-  <em>OCR diagnostic — real-time text recognition, double-click to create rules</em>
+  <em>OCR diagnostic — real-time text recognition; pick a target, one click to create its rule</em>
 </p>
 
 <br>
@@ -59,10 +59,10 @@
 | 🔗 | **Chain multiple steps** | Detect → click → wait → drag… runs all the way through like a recorded macro |
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |
 | 📐 | **Resolution-proof (same aspect ratio)** | Coordinates are stored as window ratios — switch between same-aspect-ratio (16:9, e.g. 1080p↔900p) resolutions with no reconfiguring; different aspect ratios need re-framing |
-| 👁️ | **Set up rules visually** | OCR diagnostic panel lists every text on screen — double-click to create a rule |
+| 👁️ | **Set up rules visually** | OCR diagnostic panel lists every readable text on screen — pick your target and hit "Create as new text rule" to fill in detection conditions automatically |
 | 🎮 | **Background (daemon) mode** | PrintWindow capture + Frida-injected clicks & keys — the window can be covered by other windows (but **not minimized**), zero cursor disturbance, without stealing focus (most Unity games don't support background mode — that's a game-engine limitation, not a tool issue) |
 | 🔀 | **Hybrid mode** | For games that only accept foreground input (like most Unity games): detection runs on background captures with zero disturbance, and only when an action is needed does the tool briefly bring the game to the foreground, click, then restore your previous window and mouse position. Ideal for low-frequency actions — e.g. the game is auto-battling through the story and you only need to tap "Next" after each stage: set up a rule once, then go do something else |
-| ⌨️ | **F8 global hotkey** | Start / pause / stop any time with F8 — no need to switch back to the tool |
+| ⌨️ | **F8 global hotkey** | Start / stop any time with F8 — no need to switch back to the tool (if paused, F8 resumes) |
 | 🎬 | **Record actions** | Press F9 to record, click through the game once as a demo, then convert it into rules automatically — no manual setup (only mouse clicks are recorded; aiming at text or icons gives the best result) |
 | 🔄 | **Auto-update** | Checks for new versions on launch; delta updates download only changed files (90%+ less traffic), one-click upgrade via the built-in updater |
 | 🌐 | **Multilingual UI** | Traditional Chinese / English / Japanese, switch anytime |
@@ -90,7 +90,7 @@ Your saved tasks aren't just for you — share them:
 <kbd>2</kbd> Post it in the [Task file sharing category](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB) with the JSON attached (mention the source resolution)<br><br>
 <kbd>3</kbd> Others download it, click "Import Task", and it loads instantly — coordinates auto-adapt between same-aspect-ratio (16:9) resolutions; different aspect ratios need re-framing
 
-> Task JSON is a plain-text file; exporting never includes any personal settings or data.
+> Task JSON is a plain-text file containing only the rules themselves plus task info like the target window title and interaction mode — never secrets like accounts or credentials.
 
 ---
 

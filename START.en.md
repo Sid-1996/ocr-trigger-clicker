@@ -56,13 +56,13 @@ Same as above — [download ZIP](https://github.com/Sid-1996/ocr-trigger-clicker
 
 ### ③ Create your first rule
 
-1. Right-click → New Group (name it "test")
-2. Right-click the group → New Rule
+1. Click "**+ Group**" in the toolbar to add a group (name it "test")
+2. Inside the group, click "**+ Rule**" to add a rule
 3. Add a step: choose "**detect**" → enter the text to find
 4. Add another step: choose "**click**" → pick where to click
 5. Hit "▶Test" to verify it works
 
-> 💡 **Fastest way:** open "OCR Diagnostic" to see every text found on screen, find your target, click "Create as new rule" — detection text and position are filled in automatically. You only need to add the action.
+> 💡 **Fastest way:** open "OCR Diagnostic" to see every text found on screen, find your target, click "Create as new text rule" — detection text and position are filled in automatically. You only need to add the action.
 
 ### ④ Start
 
@@ -83,7 +83,7 @@ Don't want to set up rules one by one? Record once and the tool converts it into
 1. Select the target window
 2. Click the "**Record actions**" button (or press **F9**) to start recording
 
-> Recording doesn't steal focus — keep using the game window normally while recording.
+> Clicking "Record actions" automatically brings the game to the foreground first; once recording starts it stays out of your way — keep using the game window normally.
 
 ### ② Demonstrate once
 
@@ -109,7 +109,7 @@ Once you've built and tested a task, share it with others:
 
 Click **Export Task** in the toolbar → save as JSON → post it in the [Task file sharing category](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/categories/%E4%BB%BB%E5%8B%99%E6%AA%94%E6%A1%88%E5%88%86%E4%BA%AB) (mention the source resolution). Others download it, click **Import Task**, and it loads instantly — coordinates auto-adapt between same-aspect-ratio (16:9) resolutions.
 
-> The exported JSON is a plain-text file and contains no personal settings or data.
+> The exported JSON is a plain-text file containing only the rules themselves plus task info like the target window title and interaction mode — never secrets like accounts or credentials.
 
 ---
 
