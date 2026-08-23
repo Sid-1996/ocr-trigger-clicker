@@ -3985,10 +3985,10 @@ class MainWindow(QMainWindow):
             click_rate=f"{click_rate:.0f}",
         )
         if cpu > 80:
-            text += " ⚠CPU"
+            text += " " + T("fps.warn_cpu")
             self._perf_label.setStyleSheet("color: #e67e22; font-size: 11px; padding-right: 8px;")
         elif mem > 500:
-            text += " ⚠MEM"
+            text += " " + T("fps.warn_mem")
             self._perf_label.setStyleSheet("color: #e67e22; font-size: 11px; padding-right: 8px;")
         else:
             self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
