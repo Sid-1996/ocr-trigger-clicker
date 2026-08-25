@@ -3514,6 +3514,12 @@ class MainWindow(QMainWindow):
                     ),
                 )
 
+            # 清掃上次更新遺留的 TEMP 暫存（updater.exe 自身影像鎖會留下 ~450MB 殘骸）
+            try:
+                _updater_mod.clean_stale_temp_dirs()
+            except Exception:
+                logging.debug("clean_stale_temp_dirs failed", exc_info=True)
+
             QTimer.singleShot(3000, lambda: self._check_version(force=False))
 
             QTimer.singleShot(100, self._init_input_async)

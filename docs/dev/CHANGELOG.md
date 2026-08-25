@@ -13,6 +13,7 @@
 
 ### 給開發者
 
+- **TEMP 暫存清掃**：`_clean_stale_temp_dirs` 改公開名 `clean_stale_temp_dirs`，並於主程式啟動（`_deferred_init`）呼叫——updater.exe 以 staging 內的自身影像執行、Phase 3 清暫存時檔案被鎖會殘留 ~450MB 的 `ocr_update_*` 目錄，改由新版主程式首次啟動兜底清掉。
 - **updater.exe 安全中止與逾時**：備份策略改為「無法 rename 備份＝安全中止」（`_backup_existing_target`，updater_main.py）——先預清上次殘留的 `<安裝名>_old`（rename 失敗常見根因）、重試 6 次×0.5s 吸收防毒瞬態鎖；最終失敗彈 MessageBoxW 後 exit(3)，舊安裝原封不動（移除原本「備份失敗就刪除取代」的破壞性路徑——沒有備份就複製，複製一失敗即無法回滾）。`wait_for_pid_exit` 加 30 秒上限（原 `INFINITE` 可能永久滯留），update 與 relaunch 兩模式同受惠。測試新增 `tests/test_updater_process.py` 6 項。
 - **資產可達性探測**（`core/12_updater.py` `_asset_reachable`）：`check_for_update` 在提供 UpdateInfo 前先探測整包 URL，404/403 → 回 None（Draft 發布窗口期不再出現假更新與必敗下載）；delta 資產缺席但整包在線 → 捨棄 `delta_url` 保留整包。探測用 GET + `Range: bytes=0-0` 不拉 body（S3 presigned 轉址綁 verb，不用 HEAD）；非 HTTP 回應的網路異常一律 fail-open。測試 `tests/test_updater_delta.py` +3（URL 分流 fake urlopen）。
 - **「選擇現有圖片」**：`core/task_management.py` 新增 `collect_templates(live_rules, live_task_name, exclude)`——掃描全部任務 JSON 的 match_image 步驟內嵌 `template_data`；傳入 `live_rules` + `live_task_name` 時以記憶體規則取代該任務的磁碟版（未存檔截圖可挑、不重複列出）；`exclude=(rule_id, step_idx)` 排除自身；b64 只做 stdlib 結構驗證，影像解碼由 GUI 層過濾。新增 `gui/16_template_picker.py`（`pick_template_dialog()`：左清單縮圖＋右預覽，雙擊確認）。`_MatchImageStepForm` 按鈕列插入入口，回寫照 `_trim_template` 模式並額外 pop 過時的 `template_source`。測試 `tests/test_task_management.py` 新增 4 項。

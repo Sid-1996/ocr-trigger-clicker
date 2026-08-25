@@ -637,7 +637,7 @@ download_delta_update()
 
 **信任邊界**：delta 與整包同樣來自自有 GitHub 官方 URL，完整性靠 manifest sha256（staging 驗證過才交換），authenticity 與現況相同（HTTPS + 無簽章）。rollback 由 updater.exe 既有備份機制涵蓋。
 
-**updater.exe 安全策略**：備份採「rename 失敗＝安全中止」——預清殘留 `<安裝名>_old` → 重試 rename（防毒瞬態鎖）→ 最終失敗彈窗 exit(3)，絕不刪除未備份的舊安裝；`wait-pid` 等待有 30 秒上限，逾時放行後若目標仍被鎖會自然落入安全中止路徑。
+**updater.exe 安全策略**：備份採「rename 失敗＝安全中止」——預清殘留 `<安裝名>_old` → 重試 rename（防毒瞬態鎖）→ 最終失敗彈窗 exit(3)，絕不刪除未備份的舊安裝；`wait-pid` 等待有 30 秒上限，逾時放行後若目標仍被鎖會自然落入安全中止路徑。updater.exe 以 staging 內自身影像執行、清暫存時檔案鎖會殘留 `ocr_update_*` 目錄，由新版主程式啟動時呼叫 `clean_stale_temp_dirs()` 兜底清掃。
 
 ## 日誌架構（三通道）
 

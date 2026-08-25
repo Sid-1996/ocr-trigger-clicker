@@ -153,7 +153,7 @@ def check_for_update(current_version: str) -> UpdateInfo | None:
     return info
 
 
-def _clean_stale_temp_dirs():
+def clean_stale_temp_dirs():
     for d in Path(tempfile.gettempdir()).glob("ocr_update_*"):
         if d.is_dir():
             shutil.rmtree(d, ignore_errors=True)
@@ -182,7 +182,7 @@ def download_update(
     progress_cb=None,
     cancel_event=None,
 ) -> Path:
-    _clean_stale_temp_dirs()
+    clean_stale_temp_dirs()
     tmp_dir = Path(tempfile.mkdtemp(prefix="ocr_update_"))
     zip_path = tmp_dir / ASSET_NAME
 
@@ -340,7 +340,7 @@ def download_delta_update(
     if not info.delta_url:
         return download_update(info, progress_cb, cancel_event)
 
-    _clean_stale_temp_dirs()
+    clean_stale_temp_dirs()
     tmp_dir = Path(tempfile.mkdtemp(prefix="ocr_update_"))
     try:
         zip_path = tmp_dir / DELTA_ASSET_NAME
