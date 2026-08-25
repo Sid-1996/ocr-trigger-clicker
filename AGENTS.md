@@ -259,7 +259,7 @@ uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔
 
 **發版後：**
 - Release 建立為 **Draft** 狀態 → 從 GitHub Releases 頁面下載 EXE 再次測試
-- 確認無誤 → 按「Publish release」公開
+- 確認無誤 → 按「Publish release」公開；Draft 測試期間一般使用者檢查更新會顯示「暫無更新」（資產探測兜底），**不需趕著 Publish**
 - 有問題 → 刪除 Draft + `-Force` 重發，或修復後再發
 
 ### 差異更新（Delta Update）
@@ -267,7 +267,8 @@ uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔
 每個版本除整包 ZIP 外，另產「只含變更檔案」的 delta。用戶端判定規則：
 
 - 檢查更新時抓 `delta_info.json`，**`base_version == 本機目前版本`**（`__version__`）才提供 delta 下載
-- delta 套用 = 複製目前安裝樹 → staging → 覆蓋變更檔（逐檔驗 sha256）→ 刪除 `removed` 清單 → **整棵樹驗 manifest** → 沿用 updater.exe 備份／rollback
+- 檢查更新時客戶端會**探測 release 資產可達性**（GET+Range）：Release 尚為 Draft 時資產 URL 404，用戶端視為「暫無更新」——僅 404/403 沉默，網路異常 fail-open 照常提供；delta 資產缺席但整包在線 → 自動捨棄 delta 改整包
+- delta 套用 = 複製目前安裝樹 → staging → 覆蓋變更檔（逐檔驗 sha256）→ 刪除 `removed` 清單 → **整棵樹驗 manifest** → 沿用 updater.exe 備份／rollback（備份 rename 失敗＝**安全中止 exit(3)**，預清殘留 `_old`＋重試後仍失敗即彈窗放棄，舊安裝不動）
 - 任何 delta 驗證失敗 → **自動退回整包下載**（安全網，不降級信任）
 - 第一次發版（無前一版 manifest）、跳過多版更新、delta 過大（> 整包 40%）→ 不產 delta，用戶端自動走整包
 - 使用者自訂檔案（manifest 未列出者）一律保留，不會被更新刪除

@@ -754,7 +754,7 @@ uv run python -m pytest                # 含覆蓋報告
 ### 注意
 
 - 整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 `custom_models/chinese_cht_rec_mobile.onnx` 才真正執行，無 model 環境自動 skip。
-- 後台模式（`16_bg_input` / `15_print_window` / `17_capture_pipeline`）、`box_utils`、updater、GUI 層依賴 Win32 畫面，僅以 `__main__` self-check 涵蓋，無 pytest。
+- 後台模式（`16_bg_input` / `15_print_window` / `17_capture_pipeline`）、`box_utils`、GUI 層依賴 Win32 畫面，僅以 `__main__` self-check 涵蓋；updater 的純邏輯另有 pytest（delta 函式＋資產探測＝`test_updater_delta.py`、備份策略＋PID 逾時＝`test_updater_process.py`）。
 
 ## 開發注意事項
 
