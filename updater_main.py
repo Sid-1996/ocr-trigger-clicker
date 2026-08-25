@@ -23,15 +23,55 @@ class _UpdaterParser(argparse.ArgumentParser):
         sys.exit(2)
 
 
-def wait_for_pid_exit(pid: int) -> None:
+def wait_for_pid_exit(pid: int, timeout_s: float = 30.0) -> None:
+    """等 PID 結束。OpenProcess 失敗（無法同步）立即返回；逾時放行不永久滯留。"""
     PROCESS_SYNCHRONIZE = 0x00100000
-    INFINITE = 0xFFFFFFFF
+    WAIT_TIMEOUT = 0x00000102
     kernel32 = ctypes.windll.kernel32
     handle = kernel32.OpenProcess(PROCESS_SYNCHRONIZE, False, pid)
     if not handle:
         return
-    kernel32.WaitForSingleObject(handle, INFINITE)
-    kernel32.CloseHandle(handle)
+    try:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            rc = kernel32.WaitForSingleObject(handle, 500)
+            if rc != WAIT_TIMEOUT:
+                return
+        print(f"update: wait-pid {pid} 逾時 {timeout_s}s，繼續更新流程")
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _backup_existing_target(
+    target_dir: Path,
+    old_backup: Path,
+    retries: int = 6,
+    delay: float = 0.5,
+) -> bool:
+    """把現有安裝目錄 rename 成 *_old 備份。
+
+    回傳是否可安全繼續：True = 已備份成功，或目標本來不存在（首次安裝）；
+    False = 目標存在卻始終無法 rename —— 呼叫端必須安全中止，
+    絕不可刪除目標目錄（沒有備份就複製，複製一失敗即無法回滾）。
+
+    先清掉上次失敗殘留的 *_old 再重試 rename（防毒/索引鎖多為瞬態）；
+    `<安裝名>_old` 視為 updater 專屬備份命名空間。
+    """
+    try:
+        if old_backup.exists():
+            shutil.rmtree(str(old_backup), ignore_errors=True)
+    except OSError:
+        pass
+    for attempt in range(1, retries + 1):
+        if not target_dir.exists():
+            return True
+        try:
+            os.rename(str(target_dir), str(old_backup))
+            return True
+        except OSError as e:
+            print(f"update: 備份舊目錄失敗 attempt {attempt}/{retries}: {e}")
+            time.sleep(delay)
+    return False
 
 
 def main():
@@ -93,16 +133,19 @@ def main():
     if args.wait_pid:
         wait_for_pid_exit(args.wait_pid)
 
-    # Phase 1: 備份（rename，同磁碟瞬間完成）
+    # Phase 1: 備份（rename，同磁碟瞬間完成）；無法備份＝安全中止，絕不破壞舊安裝
     old_backup = target_dir.parent / (target_dir.name + "_old")
-    have_backup = False
-    if target_dir.exists():
-        try:
-            os.rename(str(target_dir), str(old_backup))
-            have_backup = True
-        except OSError:
-            print("update: 無法備份舊目錄，直接刪除取代")
-            shutil.rmtree(str(target_dir), ignore_errors=True)
+    if not _backup_existing_target(target_dir, old_backup):
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"無法備份現有安裝目錄：\n{target_dir}\n\n"
+            "可能原因：防毒軟體鎖定、資料夾權限不足、程式仍在執行中。\n"
+            "你的舊安裝未被更動。請關閉相關程式後再執行一次更新。",
+            "更新已安全中止",
+            0,
+        )
+        sys.exit(3)
+    have_backup = old_backup.exists()
 
     # Phase 2: 逐檔複製（每檔 retry 3 次，整包 retry 3 次）
     def _robust_copy(src, dst):
@@ -172,14 +215,43 @@ def demo():
     (target / "old.txt").write_text("old")
 
     old_backup = target.parent / (target.name + "_old")
-    try:
-        os.rename(str(target), str(old_backup))
-    except OSError:
-        pass
+    assert _backup_existing_target(target, old_backup), "正常情況應備份成功"
+    assert old_backup.is_dir() and (old_backup / "old.txt").is_file(), "rename 備份"
+    assert not target.exists()
     shutil.copytree(str(staging), str(target), copy_function=shutil.copy2, dirs_exist_ok=True)
     assert (target / "_internal" / "test.dll").is_file(), "取代後應有 test.dll"
     assert not (target / "old.txt").exists(), "取代後不應有 old.txt"
-    shutil.rmtree(tmp)
+
+    # 殘留 *_old 預清：上一次失敗留下的舊備份不該擋住這次備份
+    stale_target = tmp / "t2"
+    stale_target.mkdir()
+    (stale_target / "x.txt").write_text("x")
+    stale_old = tmp / "t2_old"
+    stale_old.mkdir()
+    (stale_old / "junk.txt").write_text("junk")
+    assert _backup_existing_target(stale_target, stale_old)
+    assert (stale_old / "x.txt").is_file() and not (stale_old / "junk.txt").exists()
+
+    # 硬失敗（rename 恆錯）：目標必須原封不動
+    stale_target.mkdir()
+    (stale_target / "x.txt").write_text("x")
+    orig_rename = os.rename
+
+    def _boom(a, b):
+        raise OSError("simulated lock")
+
+    os.rename = _boom
+    try:
+        ok = _backup_existing_target(stale_target, stale_old, retries=2, delay=0.01)
+    finally:
+        os.rename = orig_rename
+    assert not ok, "rename 恆錯應回 False"
+    assert stale_target.is_dir() and (stale_target / "x.txt").is_file(), "硬失敗不得破壞目標"
+
+    # 無效 PID：OpenProcess 失敗立即返回，不掛起
+    wait_for_pid_exit(999999999, timeout_s=0.5)
+
+    shutil.rmtree(tmp, ignore_errors=True)
     print("✓ update simulation passed")
 
 
