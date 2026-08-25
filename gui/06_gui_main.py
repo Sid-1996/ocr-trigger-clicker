@@ -1157,6 +1157,9 @@ class _MatchImageStepForm(QWidget):
         self._tmpl_label = QLabel(label_text)
         self._capture_btn = QPushButton(T("step_form.capture_region"))
         self._capture_btn.clicked.connect(self._capture_template)
+        self._pick_btn = QPushButton(T("step_form.pick_existing_image"))
+        self._pick_btn.setToolTip(T("step_form.pick_existing_image.tooltip"))
+        self._pick_btn.clicked.connect(self._pick_existing_template)
         self._trim_btn = QPushButton(T("step_form.trim_template"))
         self._trim_btn.clicked.connect(self._trim_template)
         self._img_compare_btn = QPushButton(T("step_form.compare_image"))
@@ -1164,6 +1167,7 @@ class _MatchImageStepForm(QWidget):
         self._img_compare_result = QLabel("")
         tmpl_layout.addWidget(self._tmpl_label, 1)
         tmpl_layout.addWidget(self._capture_btn)
+        tmpl_layout.addWidget(self._pick_btn)
         tmpl_layout.addWidget(self._trim_btn)
         tmpl_layout.addWidget(self._img_compare_btn)
         tmpl_layout.addWidget(self._img_compare_result)
@@ -1574,6 +1578,27 @@ class _MatchImageStepForm(QWidget):
             return
         self._step.params["template_data"] = result
         self._step.params.pop("template", None)
+        self._tmpl_label.setText(T("format.embedded_image"))
+        self._update_thumbnail()
+        self._list.steps_changed.emit()
+
+    def _pick_existing_template(self):
+        task_name = ""
+        if self._task_path_cb:
+            task_path = self._task_path_cb()
+            if task_path:
+                task_name = Path(task_path).stem
+        result = pick_template_dialog(
+            self,
+            live_rules=self._rules_provider() if self._rules_provider else None,
+            live_task_name=task_name,
+            exclude=(self._exclude_rule_id, self._idx),
+        )
+        if not result:
+            return
+        self._step.params["template_data"] = result
+        self._step.params.pop("template", None)
+        self._step.params.pop("template_source", None)
         self._tmpl_label.setText(T("format.embedded_image"))
         self._update_thumbnail()
         self._list.steps_changed.emit()
@@ -2766,6 +2791,9 @@ _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 
 _template_crop_mod = load_sibling("template_crop", "gui/15_template_crop.py")
 trim_template_dialog = _template_crop_mod.trim_template_dialog
+
+_template_picker_mod = load_sibling("template_picker", "gui/16_template_picker.py")
+pick_template_dialog = _template_picker_mod.pick_template_dialog
 
 _updater_mod = load_sibling("updater", "core/12_updater.py")
 

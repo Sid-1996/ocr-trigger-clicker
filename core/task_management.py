@@ -1,3 +1,4 @@
+import base64
 import json
 import sys
 import uuid
@@ -245,3 +246,108 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
         return dest.stem
     except OSError:
         return None
+
+
+def collect_templates(
+    live_rules: Optional[list] = None,
+    live_task_name: str = "",
+    exclude: Optional[tuple] = None,
+) -> list[dict]:
+    """收集所有任務裡 match_image 步驟的內嵌圖片（供「選擇現有圖片」挑選）。
+
+    回傳 [{"task", "rule_id", "rule_name", "step_idx", "b64"}]，任務名排序、
+    檔內規則順序；b64 僅做 base64 結構驗證，能否解碼成影像由呼叫端判斷。
+
+    live_rules + live_task_name：以記憶體中的規則取代該任務的磁碟版本，
+    讓尚未存檔的截圖也能被挑選；exclude=(rule_id, step_idx) 排除自身步驟。
+    """
+    found: list[dict] = []
+
+    def _scan(rules, task_name):
+        for r in rules or []:
+            for i, s in enumerate(getattr(r, "steps", None) or []):
+                if getattr(s, "type", "") != "match_image":
+                    continue
+                b64 = (getattr(s, "params", None) or {}).get("template_data", "")
+                if not isinstance(b64, str) or not b64.strip():
+                    continue
+                try:
+                    base64.b64decode(b64, validate=True)
+                except (ValueError, TypeError):
+                    continue
+                if exclude and exclude == (getattr(r, "id", ""), i):
+                    continue
+                found.append(
+                    {
+                        "task": task_name,
+                        "rule_id": getattr(r, "id", ""),
+                        "rule_name": getattr(r, "name", ""),
+                        "step_idx": i,
+                        "b64": b64,
+                    }
+                )
+
+    has_live = live_rules is not None and bool(live_task_name)
+    for name in list_tasks():
+        if has_live and name == live_task_name:
+            continue
+        try:
+            _scan(load_task(name), name)
+        except Exception:
+            continue
+    if has_live:
+        _scan(live_rules, live_task_name)
+    return found
+
+
+if __name__ == "__main__":
+    # self-check：收集／live 覆蓋磁碟版／排除自身／壞 b64 略過
+    import tempfile
+
+    tmp = Path(tempfile.mkdtemp(prefix="otc_collect_tmpl_"))
+    get_tasks_dir = lambda: (  # noqa: E731
+        (tmp / "tasks").mkdir(parents=True, exist_ok=True) or (tmp / "tasks")
+    )
+
+    _B64_PNG_1PX = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+        "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+    Step = _models.Step
+    _mk_mi = lambda b64: Step(type="match_image", params={"template_data": b64})  # noqa: E731
+
+    save_task("t1", [Rule(id="a1", name="A1", enabled=True, steps=[_mk_mi(_B64_PNG_1PX)])])
+    save_task(
+        "t2",
+        [
+            Rule(
+                id="b1",
+                name="B1",
+                enabled=True,
+                steps=[
+                    Step(type="wait", params={"ms": 100}),
+                    _mk_mi("not-valid-b64!!!"),
+                    _mk_mi(_B64_PNG_1PX),
+                ],
+            )
+        ],
+    )
+
+    items = collect_templates()
+    assert len(items) == 2, items
+    assert items[0]["task"] == "t1" and items[1]["task"] == "t2", items
+    assert items[0]["step_idx"] == 0 and items[1]["step_idx"] == 2
+
+    got = collect_templates(exclude=("b1", 2))
+    assert len(got) == 1 and got[0]["rule_id"] == "a1"
+
+    live = [Rule(id="c1", name="C1", enabled=True, steps=[_mk_mi(_B64_PNG_1PX)])]
+    merged = collect_templates(live_rules=live, live_task_name="t1")
+    # t1 磁碟版被 live 取代，其他任務照常收集
+    assert [(m["task"], m["rule_id"]) for m in merged] == [
+        ("t2", "b1"),
+        ("t1", "c1"),
+    ], merged
+    assert all(it["rule_id"] != "a1" for it in merged), "live 應取代 t1 的磁碟版"
+
+    print("✓ task_management collect_templates: 全部通過")

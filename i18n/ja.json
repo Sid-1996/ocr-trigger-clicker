@@ -739,5 +739,9 @@
   "dialog.debug_bg_fail_admin": "管理者権限でも失敗が続く場合、多くはこのゲームがバックグラウンド注入に非対応です。フォアグラウンドモードを推奨します。",
   "dialog.debug_bg_fail_switch_fg": "フォアグラウンドモードへ切替",
   "dialog.debug_switched_fg": "フォアグラウンドモードに切り替えました。以降のテストと実行はフォアグラウンドを使用します。",
-  "combo.interaction_hybrid": "ハイブリッド（バックグラウンド検出＋フォアグラウンド操作）"
+  "combo.interaction_hybrid": "ハイブリッド（バックグラウンド検出＋フォアグラウンド操作）",
+  "step_form.pick_existing_image": "既存の画像を選択",
+  "step_form.pick_existing_image.tooltip": "他の画像マッチステップでキャプチャした画像を再利用します（保存前の現在タスクも含む）",
+  "picker.title": "既存の画像を選択",
+  "picker.empty": "キャプチャ済みの画像がありません。先に画像マッチステップで「範囲をキャプチャ」してください。"
 }

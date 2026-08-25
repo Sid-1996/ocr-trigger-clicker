@@ -79,7 +79,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/rule_models.py` | 資料模型（dataclass） | `Rule`, `RuleGroup`, `Step`, `ImportPreview` |
 | `core/rule_migration.py` | 舊格式遷移 + 步驟正規化 | `_migrate_v1_to_v2()`, `migrate_v2_to_v3()`, `_normalize_step_params()` |
 | `core/rule_serialization.py` | 規則/群組 JSON 序列化 | `load_rules()`, `save_rules()`, `load_groups()`, `save_groups()` |
-| `core/task_management.py` | 任務檔案 CRUD | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()` |
+| `core/task_management.py` | 任務檔案 CRUD ＋ `collect_templates()` 掃描全部任務（含 live 規則）的內嵌圖片 | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()`, `collect_templates()` |
 | `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()` |
 | `core/group_selection.py` | 啟動群組選擇（記憶上次勾選／skip 旗標） | `should_skip()`, `build_entry()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
@@ -99,6 +99,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/09_ocr_debug.py` | OCR 除錯面板（即時截圖＋標註） | `OcrDebugPanel` |
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
 | `gui/15_template_crop.py` | 模板修剪對話框（四邊空間化向內剪＋精確數值） | `trim_template_dialog()` |
+| `gui/16_template_picker.py` | 「選擇現有圖片」對話框（跨任務重用 match_image 內嵌圖片；含目前編輯中規則） | `pick_template_dialog()` |
 | `core/12_updater.py` | 自動更新核心邏輯（版本檢查、差異/整包下載、解壓、staging 驗證、套用更新） | `check_for_update()`, `download_update()`, `download_delta_update()`, `build_manifest()`, `diff_manifests()`, `apply_delta_to_staging()`, `verify_tree()`, `apply_update()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |

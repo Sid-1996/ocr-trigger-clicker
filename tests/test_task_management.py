@@ -360,3 +360,67 @@ def test_import_task_rejects_non_dict_params(tmp_tasks_dir, tmp_path):
     result = _tm.import_task(str(src), regenerate_uuids=True)
     assert result is None
     assert (tmp_tasks_dir / "bad_params.json").exists() is False
+
+
+# ── collect_templates ──
+
+_B64_PNG_1PX = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+    "AAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+_B64_PNG_1PX_B = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+)
+
+
+def _mi_rule(rule_id, b64, prefix_steps=()):
+    steps = [Step(type="wait", params={"ms": 50}) for _ in prefix_steps]
+    steps.append(Step(type="match_image", params={"template_data": b64}))
+    return Rule(id=rule_id, name=f"R-{rule_id}", enabled=True, steps=steps)
+
+
+def test_collect_templates_basic(tmp_tasks_dir):
+    _tm.save_task("t1", [_mi_rule("a1", _B64_PNG_1PX)])
+    _tm.save_task(
+        "t2",
+        [
+            Rule(
+                id="b1",
+                name="B1",
+                enabled=True,
+                steps=[
+                    Step(type="detect", params={"text": "x"}),
+                    Step(type="match_image", params={"template_data": "!!!bad!!!"}),
+                    Step(type="match_image", params={}),  # 無 template_data
+                    Step(type="match_image", params={"template_data": _B64_PNG_1PX}),
+                ],
+            )
+        ],
+    )
+    items = _tm.collect_templates()
+    assert [(i["task"], i["rule_id"], i["step_idx"]) for i in items] == [
+        ("t1", "a1", 0),
+        ("t2", "b1", 3),
+    ]
+    assert items[0]["b64"] == _B64_PNG_1PX
+    assert items[0]["rule_name"] == "R-a1"
+
+
+def test_collect_templates_exclude_self(tmp_tasks_dir):
+    _tm.save_task("t1", [_mi_rule("a1", _B64_PNG_1PX)])
+    got = _tm.collect_templates(exclude=("a1", 0))
+    assert got == []
+
+
+def test_collect_templates_live_replaces_disk(tmp_tasks_dir):
+    # t1 磁碟上有舊圖；live 規則帶新截圖（尚未存檔）
+    _tm.save_task("t1", [_mi_rule("a1", _B64_PNG_1PX)])
+    _tm.save_task("t2", [_mi_rule("b1", _B64_PNG_1PX)])
+    live = [_mi_rule("a1", _B64_PNG_1PX_B)]
+    items = _tm.collect_templates(live_rules=live, live_task_name="t1")
+    assert [(i["task"], i["rule_id"]) for i in items] == [("t2", "b1"), ("t1", "a1")]
+    assert items[1]["b64"] == _B64_PNG_1PX_B, "應為 live 版本而非磁碟版"
+
+
+def test_collect_templates_empty(tmp_tasks_dir):
+    assert _tm.collect_templates() == []
