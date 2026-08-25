@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OCR Trigger Clicker — 免寫程式遊戲自動化工具 | 給一般玩家的自動點擊</title>
-<meta name="description" content="OCR Trigger Clicker 是給一般玩家的免寫程式遊戲自動化工具：看畫面文字點兩下就建好規則，或用 OCR 文字／圖像比對偵測畫面自動點擊與按鍵，錄製一遍即可轉成規則。支援繁中 / English / 日本語介面、前景/後台/混合三種互動方式、跨解析度、任務分享，Windows 10/11 綠色免安裝。">
+<meta name="description" content="OCR Trigger Clicker 是給一般玩家的免寫程式遊戲自動化工具：看畫面文字點兩下就建好規則，或用 OCR 文字／圖片比對偵測畫面自動點擊與按鍵，錄製一遍即可轉成規則。支援繁中 / English / 日本語介面、前景/後台/混合三種互動方式、跨解析度、任務分享，Windows 10/11 綠色免安裝。">
 <meta name="keywords" content="OCR,文字辨識,自動點擊,螢幕偵測,繁體中文,Windows工具,綠色軟體,RapidOCR,遊戲腳本工具,遊戲自動化,按鍵精靈,遊戲輔助,每日任務自動化,PC遊戲輔助,免寫程式,game script tool,星之救援者,StarSavior">
 <meta name="robots" content="index, follow">
 <meta name="google-site-verification" content="4lWoqckzqXNbwUlyytkGLkFIFjTNKmb8Tr4jADOWXOY" />
@@ -270,7 +270,7 @@
   <div class="container">
     <div class="subtitle">Windows 10/11 · 綠色免安裝 · 開源 AGPLv3 · <span id="hero-version">v0.3.0</span></div>
     <h1>OCR Trigger Clicker</h1>
-    <p>給一般玩家的免寫程式遊戲自動化工具 — 看畫面文字點兩下就建好規則，或錄製一遍操作自動轉成腳本，自動完成每日任務與重複操作。支援繁中 / English / 日本語介面、圖像比對、前景／後台／混合三種互動方式。</p>
+    <p>給一般玩家的免寫程式遊戲自動化工具 — 看畫面文字點兩下就建好規則，或錄製一遍操作自動轉成腳本，自動完成每日任務與重複操作。支援繁中 / English / 日本語介面、圖片比對、前景／後台／混合三種互動方式。</p>
     <div class="actions">
       <a href="#download" class="btn btn-primary">下載最新版本</a>
       <a href="starsavior.html" class="btn btn-primary" style="background:var(--accent-orange);">⭐ StarSavior 任務</a>
@@ -293,7 +293,7 @@
       <button class="path-card" type="button" data-target="tools">
         <span class="tag">工具操作</span>
         <strong>我要學怎麼用工具</strong>
-        <span>OCR 診斷、ROI 框選、點擊選取、圖像比對、乾跑測試。</span>
+        <span>OCR 診斷、ROI 框選、點擊選取、圖片比對、乾跑測試。</span>
       </button>
       <button class="path-card" type="button" data-target="patterns">
         <span class="tag">設計腳本</span>
@@ -303,7 +303,7 @@
       <button class="path-card" type="button" data-target="examples">
         <span class="tag">看範例</span>
         <strong>我想看完整的腳本</strong>
-        <span>4 個完整範例：循環任務、錯誤攔截、數值監控、圖示比對。</span>
+        <span>4 個完整範例：循環任務、錯誤攔截、數值監控、圖片比對。</span>
       </button>
       <button class="path-card" type="button" data-target="gametasks">
         <span class="tag">現成任務</span>
@@ -325,7 +325,7 @@
 <section id="features">
   <div class="container">
     <h2>核心功能</h2>
-    <p class="section-desc">一套工具涵蓋文字偵測、圖像比對、流程編排與多任務管理。</p>
+    <p class="section-desc">一套工具涵蓋文字偵測、圖片比對、流程編排與多任務管理。</p>
     <div class="features-grid">
       <div class="feature-card" data-target="tool-ocr">
         <div class="icon">🔍</div>
@@ -334,13 +334,13 @@
       </div>
       <div class="feature-card" data-target="tool-matchimage">
         <div class="icon">🖼️</div>
-        <h3>圖像模板比對</h3>
-      <p>以圖找圖，支援多尺度搜尋與 NMS 篩選。適合無文字的按鈕或圖示辨識。</p>
+        <h3>圖片比對</h3>
+      <p>以圖找圖，支援多尺度搜尋與 NMS 篩選。適合無文字的按鈕或圖示。</p>
       </div>
       <div class="feature-card" data-target="patterns">
         <div class="icon">🔗</div>
         <h3>多步驟流程</h3>
-        <p>每條規則由有序步驟組成：偵測、點擊、按鍵、等待、跳轉、數值比對、圖像比對、提示訊息、滾輪、拖曳。</p>
+        <p>每條規則由有序步驟組成：偵測、點擊、按鍵、等待、跳轉、數值比對、圖片比對、提示訊息、滾輪、拖曳。</p>
       </div>
       <div class="feature-card" data-target="gametasks">
         <div class="icon">📂</div>
@@ -386,8 +386,8 @@
       <figcaption>OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
     </figure>
     <figure>
-      <img class="screenshot" src="images/gui2.png" alt="圖示模板比對步驟設定" loading="lazy">
-      <figcaption>圖示比對步驟：截取範本、設定搜尋區域與相似度門檻</figcaption>
+      <img class="screenshot" src="images/gui2.png" alt="圖片比對步驟設定" loading="lazy">
+      <figcaption>圖片比對步驟：截取圖片、設定搜尋區域與相似度門檻</figcaption>
     </figure>
   </div>
 </section>
@@ -431,7 +431,7 @@
       <li><strong>加等待</strong>：在動作步驟之間加「等待（wait）」，讓畫面有時間變化。</li>
       <li><strong>用 jump 跳轉</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
       <li><strong>用 compare 做數值判斷</strong>：對 ROI 內的數字做大於／小於／等於判斷。</li>
-      <li><strong>用 match_image 比對圖示</strong>：載入範本圖片後框選偵測 ROI，適合無文字的按鈕辨識。</li>
+      <li><strong>用 match_image 圖片比對</strong>：截取圖片後框選偵測 ROI，適合無文字的按鈕辨識。</li>
       <li><strong>善用常駐監控</strong>：勾選「常駐監控」讓規則每幀都跑，適合做錯誤攔截。</li>
       <li><strong>用錄製當起點</strong>：複雜流程先錄一遍生成規則，再微調偵測文字與點擊位置，比從零開始快很多（點在 UI 文字或圖示上，轉換品質最好）。</li>
     </ul>
@@ -480,11 +480,11 @@
     </div>
 
     <div class="pattern-card" id="tool-matchimage">
-      <h4>🖼️ match_image 圖像比對</h4>
+      <h4>🖼️ match_image 圖片比對</h4>
       <p>以圖找圖，不受背景文字干擾。無文字可辨識的按鈕或圖示建議優先選用。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
-        <li>在步驟中選擇「match_image（圖像比對）」。</li>
-        <li>按「截取區域」從遊戲畫面截取範本；必要時用「修剪模板」把範圍剪到最準。</li>
+        <li>在步驟中選擇「match_image（圖片比對）」。</li>
+        <li>按「截取區域」從遊戲畫面截取圖片；必要時用「修剪圖片」把範圍剪到最準。</li>
         <li>按「框選搜尋區域」框選搜尋範圍。</li>
         <li>調整「相似度門檻」：預設 0.85，越高越嚴格。</li>
         <li>按「測試比對」確認是否命中。</li>
@@ -514,10 +514,10 @@
       <p style="color:var(--text-secondary);font-size:0.9rem;margin-top:8px;"><strong>錄製小技巧：點在「有東西」的地方，轉換品質更好</strong></p>
       <ul style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;">
         <li>✅ 點在 <strong>UI 文字上方</strong> → 自動轉成「等文字出現再點擊」，畫面縮放／同長寬比換解析度都不怕，最穩定。</li>
-        <li>✅ 點在 <strong>圖示／按鈕</strong>（無文字但有特徵）→ 自動轉成圖示比對（match_image）後點擊。</li>
+        <li>✅ 點在 <strong>圖示／按鈕</strong>（無文字但有特徵）→ 自動轉成圖片比對（match_image）後點擊。</li>
         <li>❌ 點在 <strong>空白處</strong> → 只能轉成固定等待後點擊（純計時播放），換解析度或畫面位移後容易點錯位置。</li>
       </ul>
-      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖示比對後點擊；空白處 → 固定等待後點擊。座標一律存為視窗比例，<strong>相同長寬比（16:9）</strong>換螢幕／換解析度不用重設。</p>
+      <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖片比對後點擊；空白處 → 固定等待後點擊。座標一律存為視窗比例，<strong>相同長寬比（16:9）</strong>換螢幕／換解析度不用重設。</p>
       <p style="margin-top:10px;">▶ <a href="#video">看示範影片</a> — 一鏡到底示範錄製與轉換。</p>
     </div>
   </div>
@@ -591,10 +591,10 @@
     </div>
 
     <div class="pattern-card">
-      <h4>模式四：圖示比對</h4>
+      <h4>模式四：圖片比對</h4>
       <p>無文字時用圖片比對偵測按鈕或圖示。</p>
       <div class="step-flow">
-        match_image（範本圖）<span class="arrow">→</span> click（匹配位置）
+        match_image（圖片）<span class="arrow">→</span> click（匹配位置）
       </div>
       <p style="color:var(--text-muted);font-size:0.85rem;">適用：遊戲介面按鈕辨識、無文字的 UI 元素。</p>
     </div>
@@ -646,7 +646,7 @@
       <h4>範例四：偵測圖示按鈕自動點擊</h4>
       <p>遊戲中出現特定圖示（例如寶箱），自動點擊拾取。</p>
       <div class="step-flow">
-        步驟 1: match_image（範本: 寶箱截圖）<span class="arrow">→</span><br>
+        步驟 1: match_image（圖片: 寶箱截圖）<span class="arrow">→</span><br>
         步驟 2: click（匹配位置）
       </div>
       <p style="color:var(--text-muted);font-size:0.85rem;">相似度門檻從 0.7 開始調。先用「測試比對」確認命中率再正式啟動。</p>
@@ -699,7 +699,7 @@
 
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">可以比對圖示或按鈕圖片嗎？</button>
-      <div class="faq-answer">可以。步驟類型選擇 <code>match_image</code>（圖像比對），載入範本圖片並設定相似度門檻即可。</div>
+      <div class="faq-answer">可以。步驟類型選擇 <code>match_image</code>（圖片比對），截取圖片並設定相似度門檻即可。</div>
     </div>
 
     <div class="faq-item">
@@ -710,7 +710,7 @@
 
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">錄製轉出來的規則為什麼有些是「等文字出現」有些是固定等待？</button>
-      <div class="faq-answer">轉換時會自動判斷每次點擊：點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，較穩定）；點在無文字的圖示上 → 嘗試轉成圖示比對（match_image）後點擊；點在空白處或找不到特徵 → 轉成固定等待後點擊。三種都自動處理，不需要手動挑。<br><br>
+      <div class="faq-answer">轉換時會自動判斷每次點擊：點在文字上 → 轉成「偵測該文字後點擊」（等畫面出現再點，較穩定）；點在無文字的圖示上 → 嘗試轉成圖片比對（match_image）後點擊；點在空白處或找不到特徵 → 轉成固定等待後點擊。三種都自動處理，不需要手動挑。<br><br>
       💡 <b>錄製小技巧</b>：點擊時盡量瞄準 UI 文字或圖示等「有特徵」的位置，轉換品質最好；避免點空白處，否則只能變固定等待、換解析度後容易點偏。</div>
     </div>
 
@@ -755,7 +755,7 @@
       <div class="faq-answer">
         座標一律存為視窗比例，<strong>只要遊戲視窗長寬比不變</strong>（遊戲通常會鎖定比例），同長寬比解析度間可自動通用——例如 1920×1080 與 1600×900 互換不用重設。<br><br>
         ⚠️ <strong>長寬比不同</strong>時遊戲 UI 布局會重排，ROI／點擊位置偏移，需重新框選調整。<br>
-        ⚠️ <strong>圖像比對有限制</strong>：match_image 的模板縮放範圍約 0.5~2 倍，解析度差距過大時可能找不到；文字偵測（OCR）不受此限。<br>
+        ⚠️ <strong>圖片比對有限制</strong>：match_image 的縮放搜尋範圍約 0.5~2 倍，解析度差距過大時可能找不到；文字偵測（OCR）不受此限。<br>
         💡 通用性以任務<strong>來源解析度</strong>為基準：用自己解析度建立的任務最穩定；匯入他人分享的任務前，確認來源解析度長寬比與自己一致（分享時請註明來源解析度）。Windows 系統顯示縮放建議與建立任務時一致。
       </div>
     </div>

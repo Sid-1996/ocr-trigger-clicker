@@ -121,7 +121,7 @@ First check: is the right window selected? Is the tool actually running? If both
 
 ### My resolution isn't 1920×1080?
 
-Ratio coordinates auto-adapt between same-aspect-ratio (16:9) resolutions — for example 1920×1080 and 1600×900 work interchangeably with no re-configuring. A different aspect ratio re-layouts the game UI, shifting ROI / click positions, so re-frame them. Image matching (match_image) only scales templates within about 0.5–2×, so very large resolution gaps may fail; text detection (OCR) has no such limit. Use "OCR Diagnostic" to confirm text is being detected.
+Ratio coordinates auto-adapt between same-aspect-ratio (16:9) resolutions — for example 1920×1080 and 1600×900 work interchangeably with no re-configuring. A different aspect ratio re-layouts the game UI, shifting ROI / click positions, so re-frame them. Image matching (match_image) only searches within about 0.5–2× scale, so very large resolution gaps may fail; text detection (OCR) has no such limit. Use "OCR Diagnostic" to confirm text is being detected.
 
 ### Where are task files stored?
 
