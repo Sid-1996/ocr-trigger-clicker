@@ -9,6 +9,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 log = logging.getLogger(__name__)
@@ -78,6 +79,27 @@ def current_exe_path() -> Path:
     return Path(sys.executable).resolve()
 
 
+def _asset_reachable(url: str) -> bool:
+    """探測 release 資產是否已公開可下載。
+
+    發行流程先推 latest_version.txt、Release 仍為 Draft——此時資產 URL 回
+    404/403，應視為「尚未發布」而非錯誤。用 GET + Range 只取狀態不拉 body
+    （GitHub 轉址到 S3 presigned URL 綁定 verb，HEAD 不保險）。
+    僅「確定 404/403」回 False；其餘網路異常 fail-open（True），讓下載
+    階段呈現真實錯誤，避免弱網使用者永遠收不到更新。
+    """
+    req = Request(url, headers={"User-Agent": _USER_AGENT, "Range": "bytes=0-0"})
+    try:
+        with urlopen(req, timeout=10) as resp:
+            return resp.status < 300
+    except HTTPError as e:
+        if e.code in (403, 404):
+            return False
+        return True
+    except Exception:
+        return True
+
+
 def check_for_update(current_version: str) -> UpdateInfo | None:
     with urlopen(RAW_VERSION_URL, timeout=10) as resp:
         latest = _parse_version(resp.read().decode("utf-8"))
@@ -117,6 +139,16 @@ def check_for_update(current_version: str) -> UpdateInfo | None:
             log.info("v%s 提供差異更新（base=%s）", version_str, info.delta_base_version)
     except Exception:
         log.info("delta_info 取得失敗，v%s 改用完整更新", version_str)
+
+    # 發行端先推版本檔、Release 可能還在 Draft：資產未公開前不出現假更新提示。
+    if not _asset_reachable(info.download_url):
+        log.info("v%s 資產尚未發布（404），本次不提示更新", version_str)
+        return None
+    if info.delta_url and not _asset_reachable(info.delta_url):
+        log.info("v%s 差異更新資產缺席，改用整包", version_str)
+        info.delta_url = None
+        info.delta_base_version = None
+        info.delta_bytes = 0
 
     return info
 

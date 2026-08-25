@@ -4,6 +4,7 @@
 
 ### 給使用者
 
+- **更新提示更可靠**：新版發布後的短短準備期間（安裝包尚未完全上架），檢查更新不再出現「有新版」卻下載失敗的窘境——會直接視為暫無更新，稍後再查即可。
 - **圖片比對新增「選擇現有圖片」**：截過的小圖不用再重截——在圖片比對步驟按「選擇現有圖片」，可從**所有任務**（含目前任務尚未存檔的規則）已截取的圖片中挑一張直接套用，同一顆按鈕／圖示要跨規則、跨任務重複使用時不必重新框選。挑選視窗左側列表（標註來源：任務 › 規則 › 步驟）、右側大圖預覽；只帶走圖片本身，門檻與搜尋區域維持新步驟自己的設定。
 - **介面術語統一為「圖片比對」**：原本同一個功能混用「模板比對／範本圖片／圖示辨識」多種說法，現全面統一——步驟類型叫「**圖片比對**」（match_image）、截下來的小圖就叫「圖片」、「修剪模板」按鈕更名「**修剪圖片**」。英日文同步（Template→Image、テンプレート→画像）。文字偵測裡的進階比對模式由「模板比對」更名「**文字樣式比對**」，不再與圖片比對撞名。功能行為完全不變；技術上它是以截圖特徵做相似度匹配，不是死板的像素全等比較。
 - **修正 OCR 診斷信心度顯示**：結果列表的信心度欄位改為固定深色文字配淺色底，修正深色系統佈景下白字壓淡色背景、數值完全看不清楚的問題。
@@ -12,6 +13,7 @@
 
 ### 給開發者
 
+- **資產可達性探測**（`core/12_updater.py` `_asset_reachable`）：`check_for_update` 在提供 UpdateInfo 前先探測整包 URL，404/403 → 回 None（Draft 發布窗口期不再出現假更新與必敗下載）；delta 資產缺席但整包在線 → 捨棄 `delta_url` 保留整包。探測用 GET + `Range: bytes=0-0` 不拉 body（S3 presigned 轉址綁 verb，不用 HEAD）；非 HTTP 回應的網路異常一律 fail-open。測試 `tests/test_updater_delta.py` +3（URL 分流 fake urlopen）。
 - **「選擇現有圖片」**：`core/task_management.py` 新增 `collect_templates(live_rules, live_task_name, exclude)`——掃描全部任務 JSON 的 match_image 步驟內嵌 `template_data`；傳入 `live_rules` + `live_task_name` 時以記憶體規則取代該任務的磁碟版（未存檔截圖可挑、不重複列出）；`exclude=(rule_id, step_idx)` 排除自身；b64 只做 stdlib 結構驗證，影像解碼由 GUI 層過濾。新增 `gui/16_template_picker.py`（`pick_template_dialog()`：左清單縮圖＋右預覽，雙擊確認）。`_MatchImageStepForm` 按鈕列插入入口，回寫照 `_trim_template` 模式並額外 pop 過時的 `template_source`。測試 `tests/test_task_management.py` 新增 4 項。
 
 ## [v0.3.0] - 2026-08-23

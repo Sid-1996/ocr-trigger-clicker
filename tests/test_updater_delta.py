@@ -112,3 +112,101 @@ def test_safe_extract_rejects_traversal(tmp_path):
         assert False, "應拒絕路徑穿越"
     except _u.DeltaUpdateError:
         pass
+
+
+# ── 資產可達性探測（發布窗口期防護）──
+
+import json  # noqa: E402
+from urllib.error import HTTPError  # noqa: E402
+
+
+class _Resp:
+    status = 200
+
+    def __init__(self, body=b""):
+        self._body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return self._body
+
+
+def _fake_urlopen_by_url(routes):
+    """routes: list[(predicate(url)->bool, callable(url))]，依序比對。"""
+
+    def fake(req, timeout=0):
+        url = getattr(req, "full_url", req)
+        for pred, action in routes:
+            if pred(url):
+                return action(url)
+        raise AssertionError(f"未預期的 URL: {url}")
+
+    return fake
+
+
+def test_check_for_update_skips_when_asset_404(monkeypatch):
+    probes = []
+
+    def probe(url):
+        probes.append(url)
+        raise HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+
+    monkeypatch.setattr(
+        _u,
+        "urlopen",
+        _fake_urlopen_by_url(
+            [
+                (lambda u: u == _u.RAW_VERSION_URL, lambda u: _Resp(b"9.9.9\n")),
+                (lambda u: u == _u.RAW_DELTA_URL, lambda u: HTTPError(u, 404, "nf", None, None)),
+                (lambda u: True, probe),
+            ]
+        ),
+    )
+    assert _u.check_for_update("0.1.0") is None
+    assert any(_u.ASSET_NAME in u for u in probes), "整包資產應被探測"
+
+
+def test_check_for_update_drops_missing_delta_asset(monkeypatch):
+    delta_info = json.dumps(
+        {
+            "version": "9.9.9",
+            "base_version": "0.1.0",
+            "asset": _u.DELTA_ASSET_NAME,
+            "delta_bytes": 123,
+        }
+    ).encode()
+    monkeypatch.setattr(
+        _u,
+        "urlopen",
+        _fake_urlopen_by_url(
+            [
+                (lambda u: u == _u.RAW_VERSION_URL, lambda u: _Resp(b"9.9.9\n")),
+                (lambda u: u == _u.RAW_DELTA_URL, lambda u: _Resp(delta_info)),
+                (lambda u: _u.DELTA_ASSET_NAME in u, lambda u: HTTPError(u, 404, "nf", None, None)),
+                (lambda u: True, lambda u: _Resp()),
+            ]
+        ),
+    )
+    info = _u.check_for_update("0.1.0")
+    assert info is not None and info.version == "9.9.9"
+    assert info.delta_url is None and info.delta_bytes == 0, "delta 資產缺席應捨棄、保留整包"
+
+
+def test_check_for_update_fail_open_on_network_error(monkeypatch):
+    monkeypatch.setattr(
+        _u,
+        "urlopen",
+        _fake_urlopen_by_url(
+            [
+                (lambda u: u == _u.RAW_VERSION_URL, lambda u: _Resp(b"9.9.9\n")),
+                (lambda u: True, lambda u: (_ for _ in ()).throw(OSError("network down"))),
+            ]
+        ),
+    )
+    info = _u.check_for_update("0.1.0")
+    assert info is not None and info.version == "9.9.9", "網路異常應 fail-open 照常提供更新"

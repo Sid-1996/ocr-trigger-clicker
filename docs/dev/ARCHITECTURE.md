@@ -612,9 +612,14 @@ MainLoop.emergency_stop()
 ```
 check_for_update()
   └─ 抓 latest_version.txt + delta_info.json（後者失敗不阻擋，退回整包）
-     └─ delta_info.version == 最新 且 delta_info.base_version == __version__
-        → UpdateInfo.delta_url 填入 → GUI 走 download_delta_update()
-        └─ 否則 → 整包 download_update()
+     ├─ 資產可達性探測 _asset_reachable()：發行流程先推版本檔、Release 仍為
+     │  Draft，此時資產 URL 回 404 → 本次不提示更新（避免下載必敗的假更新）。
+     │  僅 HTTP 404/403 判「未公開」；其餘網路異常 fail-open 照常提供更新。
+     │  探測用 GET + Range: bytes=0-0（S3 presigned 轉址綁 verb，不用 HEAD）。
+     ├─ delta_info.version == 最新 且 delta_info.base_version == __version__
+     │  → UpdateInfo.delta_url 填入 → GUI 走 download_delta_update()
+     │  （delta 資產缺席但整包存在 → 捨棄 delta_url 改整包）
+     └─ 否則 → 整包 download_update()
 
 download_delta_update()
   1. 下載 delta.zip → safe-extract（拒絕 ../ 與絕對路徑）
