@@ -1,6 +1,6 @@
 {
- "version": "0.3.0",
- "base_version": "0.2.9",
+ "version": "0.3.1",
+ "base_version": "0.3.0",
  "asset": "ocr-trigger-clicker-delta.zip",
- "delta_bytes": 53744316
+ "delta_bytes": 20139498
 }

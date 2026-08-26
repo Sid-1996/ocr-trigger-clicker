@@ -1,6 +1,6 @@
 [project]
 name = "ocr-trigger-clicker"
-version = "0.3.0"
+version = "0.3.1"
 description = "Windows OCR and template-triggered automation tool."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
@@ -46,4 +46,5 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short --cov --cov-report=term-missing"
+
 
