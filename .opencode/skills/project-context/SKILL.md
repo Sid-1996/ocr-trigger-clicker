@@ -26,7 +26,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `05_main_loop.py` | 主偵測迴圈 | 2224 行，整個應用的心臟（見規則執行引擎） |
 | `10_performance_monitor.py` | 效能監控 | FPS/CPU/記憶體、速率限制、`get_total_clicks()` |
 | `11_template_matching.py` | 模板比對 | OpenCV matchTemplate + NMS |
-| `12_updater.py` | 自動更新 | 版本比對＋資產可達性探測、差異/整包下載、staging 驗證 |
+| `12_updater.py` | 自動更新 | Velopack 薄封裝：feed 讀取（烘入制）、檢查、下載並套用 |
 | `15_print_window.py` | PrintWindow 截圖（後台） | `capture_print_window` / `is_admin` / `is_black_capture` |
 | `16_bg_input.py` | 後台輸入 | pynput / frida 雙模。frida 支援點擊＋鍵盤（`18_frida_bg.py` 假造游標/鍵盤狀態 + PostMessage）；滾輪/拖曳回退 PostMessage primitive（Unity 下可能無效） |
 | `17_capture_pipeline.py` | 統一截圖管線 | `capture_frame()` 前景 mss / 後台 PrintWindow 單一入口 |
@@ -324,21 +324,17 @@ v0.1.8 新增 key：`main.toggle_all_on`、`main.toggle_all_off`、`tooltip.togg
 
 語言切換（`gui/06_gui_main.py` near line 2891）→ 寫入 config.json → `subprocess.Popen(updater_main.py --mode=relaunch --wait-pid=<pid>)` → 等待舊 process 結束 → 啟動新 process。覆蓋範圍：~570+ T() 呼叫（`gui/06_gui_main.py` 內 571 次，加上各 controller/selectors），僅限 gui/ 層。`core/` 層無 i18n。
 
-### B. 自動更新機制（commit `56ba94d`、`295b677`；delta `v0.2.8`；探測/安全中止 `cda3825`、`e5d9272`、`3c5360a`）
+### B. 自動更新機制——Velopack（v0.4.0 起，ADR `docs/adr/0001-adopt-velopack.md`）
 
-五階段流程：
-1. **版本檢查**（`core/12_updater.py:check_for_update`）：GitHub raw `latest_version.txt` 比對 `__version__`；抓 `delta_info.json` 判定 delta 資格（`base_version == __version__`，抓取失敗不阻擋）；**資產可達性探測 `_asset_reachable()`**——GET + `Range: bytes=0-0` 探測 release 資產 URL（S3 presigned 轉址綁 verb，不用 HEAD），HTTP 404/403（＝Release 還在 Draft 的發布窗口）→ 回 None 不提示更新，其餘網路異常 fail-open；delta 資產缺席但整包在線 → 捨棄 `delta_url` 改整包
-2. **更新對話框**（`gui/06_gui_main.py` `_UpdateInfoDialog`）：釋出 notes + 自動更新/前往 Release/取消
-3. **下載**：有 `delta_url` 走 `download_delta_update()`——`_safe_extract`（拒絕路徑穿越）→ `base_version` 二次核對 → copytree 目前安裝樹到 staging（使用者自加檔案保留）→ 覆蓋 payload 逐檔驗 sha256 → 刪 `removed` 清單 → `verify_tree()` 整樹驗證 → 任一失敗（`DeltaUpdateError`）自動退回整包；無 delta 走 `download_update()`（64KB chunks，ZIP 解壓至 `%TEMP%/ocr_update_RANDOM/staging/`，要求 `_internal/`＋`updater.exe`＋主程式 MZ header）
-4. **套用**（`apply_update` 從 staging 啟動**新版** `updater.exe --mode=update`，DETACHED＋BREAKAWAY_FROM_JOB）：
-   - `_backup_existing_target()`：先預清上次殘留的 `<安裝名>_old`（rename 失敗常見根因）→ rename 備份重試 6×0.5s（防毒瞬態鎖）
-   - **備份失敗＝安全中止**：MessageBoxW + `exit(3)`，舊安裝原封不動（舊版「備份失敗就刪除取代」的破壞性路徑已移除——沒有備份就複製，複製一失敗即無法回滾）
-   - 成功備份 → `shutil.copytree(staging→target)` 逐檔複製（每檔 retry 3x，整包 retry 3x）；複製失敗 → rollback 還原備份
-   - 成功 → `rmtree(target_old)` + 清理 `%TEMP%/ocr_update_*` → 啟動新 process
-   - `wait_for_pid_exit(pid, timeout_s=30)`：逾時放行（原 `INFINITE` 可能永久滯留）；逾時後目標仍被鎖會自然落入安全中止路徑
-5. **收尾**：新版主程式啟動 `_deferred_init` 讀 config `just_updated` 彈「已更新至 vX」通知；並呼叫 `clean_stale_temp_dirs()` 兜底清掃 updater.exe 以 staging 自身影像執行、Phase 清暫存時檔案鎖造成的殘留
+v0.4.0 起由 **Velopack** 框架接管，自製 updater.exe／manifest-delta 協定已拆除：
 
-主程式 `--onedir`、updater.exe `--onefile`。`--mode=relaunch` 共用於語言切換重啟。`updater_main.py` 含 `demo()` self-check（`--demo` 模式）。pytest：`tests/test_updater_delta.py`（delta 純函式＋資產探測 URL 分流）、`tests/test_updater_process.py`（備份策略／PID 逾時放行）。
+- 安裝形態：Setup.exe → `%LocalAppData%\OCRTriggerClicker\current\`；框架 `Update.exe` 在 app 目錄**之外**，換目錄不可能自我鎖定
+- feed：GitHub Releases 的 `releases.win.json`；位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`，打包後防呆驗證。`test` = 公開沙箱庫 `ocr-trigger-clicker-release-test`（`release.ps1 -FeedTest` 直接發布打靶）
+- 用戶端：main() 最頂端 `velopack App().set_auto_apply_on_startup(True).run()`；`core/12_updater.py:check_for_update()`／`download_and_apply()` 薄封裝；GUI `_start_download` 套用成功即 quit+`os._exit(0)` 讓框架重啟
+- delta：`release.ps1` 先 `vpk download github` 取前版，`vpk pack` 自動產生（實測 0.4.0→0.4.1 約 0.55 MB）；失敗自動退回 full
+- **單一實例防護**：`CreateMutexW("Local\\OCRTriggerClicker.SingleInstance")`，第二份提示退出——雙開鎖安裝目錄曾致舊 updater rename 必敗（v0.3.1 兩度撤回根因）
+- **relaunch 內建化**：語言切換重啟改 app 自帶 `--wait-exit-pid=N` 參數（`_wait_exit_pid_arg()` 於 main 最早執行），不再借道外部 exe，與 mutex 不互撞
+- `latest_version.txt` 凍結於 0.3.0（舊客戶端斷糧顯示暫無更新）；`clean_stale_temp_dirs()` 保留於啟動清掃，兜底清舊制殘留的 `%TEMP%\ocr_update_*`
 
 ### C. 任務目錄統一 APPDATA（commit `2e7895e`）
 
@@ -430,8 +426,8 @@ Release notes 必須分兩層，先一般使用者後技術細節，中間用 `-
 - 畫面變化檢測 AND 條件 — 確認 `core/05_main_loop.py:1265` 為 `change_ratio < 0.02 and not self._should_process_static_frame()`。
 - GUI／MainLoop write-write race 與其修復（commit `7974267` + `eda47c2`）— 根因定位、修改內容、`git show` diff、真實併發壓力測試結果，皆直接讀取原始碼與執行測試腳本第一手確認。
 - 全域熱鍵 — `core/00_global_hotkey.py` 註冊 F8（hid=1，對應 `MainWindow._on_hotkey()` → `_restore_window()`+`_toggle_start()`）與 F9（hid=2，→ `_on_record_clicked()`）。
-- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，雙語言 JSON 各 701 keys 經 `i18n/check.py` 驗證一致性。語言切換重啟流程經 `updater_main.py --mode=relaunch` 確認。
-- 自動更新 — `core/12_updater.py:check_for_update` 比對 GitHub raw `latest_version.txt` ＋ `delta_info.json`，並以 `_asset_reachable` 探測資產（Draft 發布窗口期 404 → 視為暫無更新，僅 404/403 沉默、網路異常 fail-open）；delta 走 staging 複製＋逐檔 sha256＋整樹驗證、失敗自動退回整包；`apply_update` 啟動 `updater.exe --mode=update`（備份 rename 失敗＝安全中止 exit(3)、wait-pid 30 秒上限）。主程式啟動時 `clean_stale_temp_dirs()` 兜底清殘留暫存。pytest：`tests/test_updater_delta.py`、`tests/test_updater_process.py`。
+- i18n 系統 — `T()` 實作於 `i18n/__init__.py`，三語言 JSON 經 `tests/test_i18n.py` 驗證一致性。語言切換重啟為 app 內建 relaunch（`--wait-exit-pid` 參數）。
+- 自動更新 — Velopack 框架接管（見上「B. 自動更新機制」）：`core/12_updater.py` 薄封裝 `check_for_update()`／`download_and_apply()`，feed 由 `build.py --feed prod|test` 烘入 `_update_feed.py`；單一實例 CreateMutex 防護；`latest_version.txt` 凍結 0.3.0 斷糧舊客戶端。
 - 路徑集中 — `core/_paths.py` 5 函式，取代 10+ 檔案內聯路徑。`build.py` glob `rglob("*.py")` 取代手動 py_datas。
 - 截圖 — `core/17_capture_pipeline.py:48` `capture_frame(mode, title, hwnd)` 為統一管線：前景 `_capture_foreground`（mss 三層備援）、後台 `_capture_background`（PrintWindow）。`core/15_print_window.py:25` `is_black_capture()` 全黑偵測。
 - `_log_exec` 去重 — `core/05_main_loop.py:224` 兩層抑制：同 key 去重 + completed 1 秒節流。
