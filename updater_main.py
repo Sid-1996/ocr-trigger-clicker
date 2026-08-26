@@ -123,6 +123,10 @@ def main():
         sys.exit(0)
 
     # onedir update 模式：暫存 → 逐檔複製取代 + rollback
+    # 防禦：本程序繼承自主程序的 CWD 常是安裝資料夾本身，而 Windows 不允許
+    # rename「任何程序的正當 CWD」——不移出去，Phase 1 備份 rename 必敗。
+    # 以下全部使用絕對路徑操作，chdir 不影響行為。
+    os.chdir(tempfile.gettempdir())
     staging = Path(args.new_dir)
     target_dir = Path(args.target_dir)
 

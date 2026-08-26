@@ -412,6 +412,9 @@ def apply_update(new_path: Path) -> None:
                         f"--new-dir={new_path}",
                         f"--target-dir={target_dir}",
                     ],
+                    cwd=str(
+                        new_path.parent
+                    ),  # 別讓 updater 繼承安裝目錄當 CWD（rename 會被自己鎖死）
                     creationflags=flags,
                     close_fds=True,
                 )
