@@ -1,6 +1,6 @@
 {
- "version": "0.3.1",
- "base_version": "0.3.0",
+ "version": "0.3.0",
+ "base_version": "0.2.9",
  "files": {
   "_internal/_asyncio.pyd": {
    "size": 58880,
@@ -64,7 +64,7 @@
   },
   "_internal/base_library.zip": {
    "size": 1409329,
-   "sha256": "c3d2715e5c3bf6a30db3a762e3c7005c491768029277c91fc80583f5015c9b98"
+   "sha256": "1940b305b650791d7d255a3ee4f56511e7e47040e7c475c7ecc04d2dc5301a54"
   },
   "_internal/comtypes/__init__.py": {
    "size": 9701,
@@ -739,8 +739,8 @@
    "sha256": "12bfc90abaab843120cfe32d570846e0ecbcaaeb556780f89ff474df668e7cfb"
   },
   "_internal/core/12_updater.py": {
-   "size": 19024,
-   "sha256": "f44c99c93c27fb13b55c6bbdeee16814d5736a535cd828f9b2a24e9df4b3275c"
+   "size": 17628,
+   "sha256": "4d8d056ff446c25ef504c9a29c4c4357e470b7ef995612f76fb606a393c3dbdf"
   },
   "_internal/core/15_print_window.py": {
    "size": 6141,
@@ -779,8 +779,8 @@
    "sha256": "a56c4f768dcded3655fb7c1139a688003c1389e5deffba810b6435c07eacbb38"
   },
   "_internal/core/group_selection.py": {
-   "size": 2216,
-   "sha256": "fe87dbd451fff217e4c6a208016423efa9c7343f578e72d8582135e86b969fa7"
+   "size": 914,
+   "sha256": "4e89c2f1d166fe38b49878333955e5220157ba414481f1ab346e7c5a9248b717"
   },
   "_internal/core/rule_migration.py": {
    "size": 14244,
@@ -799,8 +799,8 @@
    "sha256": "a4eba01e5525b56a2d5338f6a69195625efb29e3cc7479fb45931c40f2926505"
   },
   "_internal/core/task_management.py": {
-   "size": 12191,
-   "sha256": "b4010ebbb41a8da1a446e6f495fcb634eff3959e9d9a12d5fbda8403f8ac5b39"
+   "size": 8254,
+   "sha256": "c3172694b8d29386490aaff831c07dff08a55d070708907093c90917427f6302"
   },
   "_internal/custom_models/chinese_cht_dict.txt": {
    "size": 74012,
@@ -1163,16 +1163,16 @@
    "sha256": "85d5e2600eb95b0333b066bb9b9855ea7bb271090c58b077a84abd686a297d70"
   },
   "_internal/gui/06_gui_main.py": {
-   "size": 283966,
-   "sha256": "a0852f93ce9af4bf16df3c4534cfb653884cd9dde19d9057fbf9105714cb2170"
+   "size": 281764,
+   "sha256": "bd1b03462e3e0d1059d995f7eb94fb105af7ee9f4e1c02f46c2140afa3e5b6d4"
   },
   "_internal/gui/07_gui_roi.py": {
    "size": 6278,
    "sha256": "f3e21ed2edb8857596582419918e55100fae63c00d68eed896c02ee49929df0c"
   },
   "_internal/gui/09_ocr_debug.py": {
-   "size": 53570,
-   "sha256": "4d63b7f57345a772df156c6c4c68e67e7cfa5ffe3e48d58c5a45f79530d455e1"
+   "size": 53518,
+   "sha256": "f4acb34301c33ec48eaa63aacb60a69acecc929ef3539fda3f7b0722a84890b4"
   },
   "_internal/gui/12_log_viewer.py": {
    "size": 3963,
@@ -1189,10 +1189,6 @@
   "_internal/gui/15_template_crop.py": {
    "size": 12059,
    "sha256": "af8a553957e541fc5034c1cab3080152789b142404043c2b6d6abc167c261111"
-  },
-  "_internal/gui/16_template_picker.py": {
-   "size": 5251,
-   "sha256": "e160d426f98972bbe9ab08dd41234bd380a2e33ca87ed84c708952b328728650"
   },
   "_internal/gui/group_settings_controller.py": {
    "size": 4803,
@@ -1215,16 +1211,16 @@
    "sha256": "e4e7aab831ec6cb002525f603c7d058bae0bbf6a5c85fd7ce22761250231e4f1"
   },
   "_internal/i18n/en.json": {
-   "size": 51784,
-   "sha256": "b2a0dea8483edc77473316b9f99485ff7e481eab824b9b28069de3a1a6efba4b"
+   "size": 51116,
+   "sha256": "0815df6cc480ceb620cba84e8aea90daaae9a19e9ea664193d0e1b8165dfc713"
   },
   "_internal/i18n/ja.json": {
-   "size": 64731,
-   "sha256": "6d24bec4d7d9de5e8037c6c15e5c79be967550934e0654be35a6f002d8c38e28"
+   "size": 64003,
+   "sha256": "082a67392f149c72ea663ab26116c9cecedd64d6202035dfe0efa74df3b5e1ad"
   },
   "_internal/i18n/zh_TW.json": {
-   "size": 51982,
-   "sha256": "3db4f841f1c1cafe4c5b0a98e55ddc63097af658c62526c945fef17908d7f4ef"
+   "size": 51196,
+   "sha256": "4462eb60d3a7c20612e286d51764104a27e08a5cbca7a71ae21010999f101927"
   },
   "_internal/libcrypto-3-x64.dll": {
    "size": 7981568,
@@ -5899,13 +5895,169 @@
    "sha256": "8a747bb4bb166b3caf53c5ee91931eb1317cc3ad617f18dcd12dd8c181ced226"
   },
   "ocr-trigger-clicker.exe": {
-   "size": 12387033,
-   "sha256": "39399fecb7b538bdbf75a8c8f6ca47a6fb9ce5408f73ce28c1a26f106aea32e1"
+   "size": 12385067,
+   "sha256": "c437329812055ca72b08d80689d8b675624cffc1d240f6cd369d81c872b166ab"
   },
   "updater.exe": {
-   "size": 7509117,
-   "sha256": "c90f904717eba93d05d1fda3bf0ba76637672b0a4858833f7b496e6ec06886fc"
+   "size": 7506964,
+   "sha256": "e63054185cc2b1abdf2a067ff1065adc2e13a01a8ba761ca98036a3b4d7f144a"
   }
  },
- "removed": []
+ "removed": [
+  "_internal/_cffi_backend.cp312-win_amd64.pyd",
+  "_internal/ada92cb5d92a588d1b93__mypyc.cp312-win_amd64.pyd",
+  "_internal/charset_normalizer/cd.cp312-win_amd64.pyd",
+  "_internal/charset_normalizer/md.cp312-win_amd64.pyd",
+  "_internal/core/box_utils.py",
+  "_internal/cv2/bgsegm/__init__.pyi",
+  "_internal/cv2/bioinspired/__init__.pyi",
+  "_internal/cv2/colored_kinfu/__init__.pyi",
+  "_internal/cv2/datasets/__init__.pyi",
+  "_internal/cv2/dnn_superres/__init__.pyi",
+  "_internal/cv2/dpm/__init__.pyi",
+  "_internal/cv2/dynafu/__init__.pyi",
+  "_internal/cv2/face/__init__.pyi",
+  "_internal/cv2/ft/__init__.pyi",
+  "_internal/cv2/hfs/__init__.pyi",
+  "_internal/cv2/img_hash/__init__.pyi",
+  "_internal/cv2/intensity_transform/__init__.pyi",
+  "_internal/cv2/kinfu/__init__.pyi",
+  "_internal/cv2/kinfu/detail/__init__.pyi",
+  "_internal/cv2/large_kinfu/__init__.pyi",
+  "_internal/cv2/legacy/__init__.pyi",
+  "_internal/cv2/line_descriptor/__init__.pyi",
+  "_internal/cv2/linemod/__init__.pyi",
+  "_internal/cv2/motempl/__init__.pyi",
+  "_internal/cv2/multicalib/__init__.pyi",
+  "_internal/cv2/omnidir/__init__.pyi",
+  "_internal/cv2/optflow/__init__.pyi",
+  "_internal/cv2/phase_unwrapping/__init__.pyi",
+  "_internal/cv2/plot/__init__.pyi",
+  "_internal/cv2/ppf_match_3d/__init__.pyi",
+  "_internal/cv2/quality/__init__.pyi",
+  "_internal/cv2/rapid/__init__.pyi",
+  "_internal/cv2/reg/__init__.pyi",
+  "_internal/cv2/rgbd/__init__.pyi",
+  "_internal/cv2/saliency/__init__.pyi",
+  "_internal/cv2/signal/__init__.pyi",
+  "_internal/cv2/stereo/__init__.pyi",
+  "_internal/cv2/structured_light/__init__.pyi",
+  "_internal/cv2/text/__init__.pyi",
+  "_internal/cv2/videostab/__init__.pyi",
+  "_internal/cv2/wechat_qrcode/__init__.pyi",
+  "_internal/cv2/xfeatures2d/__init__.pyi",
+  "_internal/cv2/ximgproc/__init__.pyi",
+  "_internal/cv2/ximgproc/segmentation/__init__.pyi",
+  "_internal/cv2/xphoto/__init__.pyi",
+  "_internal/dxcam/processor/_numpy_kernels.cp312-win_amd64.pyd",
+  "_internal/libcrypto-3.dll",
+  "_internal/libssl-3.dll",
+  "_internal/numpy/_core/_multiarray_tests.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_multiarray_tests.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/_multiarray_umath.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_multiarray_umath.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/_operand_flag_tests.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_operand_flag_tests.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/_rational_tests.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_rational_tests.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/_simd.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_simd.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/_struct_ufunc_tests.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_struct_ufunc_tests.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/_umath_tests.cp312-win_amd64.lib",
+  "_internal/numpy/_core/_umath_tests.cp312-win_amd64.pyd",
+  "_internal/numpy/_core/lib/npy-pkg-config/mlib.ini",
+  "_internal/numpy/_core/lib/npy-pkg-config/npymath.ini",
+  "_internal/numpy/_core/tests/examples/limited_api/limited_api1.c",
+  "_internal/numpy/_core/tests/examples/limited_api/limited_api2.pyx",
+  "_internal/numpy/_core/tests/examples/limited_api/limited_api_latest.c",
+  "_internal/numpy/_utils/_convertions.py",
+  "_internal/numpy/_utils/_convertions.pyi",
+  "_internal/numpy/f2py/_backends/_distutils.py",
+  "_internal/numpy/f2py/_backends/_distutils.pyi",
+  "_internal/numpy/fft/_pocketfft_umath.cp312-win_amd64.lib",
+  "_internal/numpy/fft/_pocketfft_umath.cp312-win_amd64.pyd",
+  "_internal/numpy/linalg/_umath_linalg.cp312-win_amd64.lib",
+  "_internal/numpy/linalg/_umath_linalg.cp312-win_amd64.pyd",
+  "_internal/numpy/linalg/lapack_lite.cp312-win_amd64.lib",
+  "_internal/numpy/linalg/lapack_lite.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_bounded_integers.cp312-win_amd64.lib",
+  "_internal/numpy/random/_bounded_integers.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_common.cp312-win_amd64.lib",
+  "_internal/numpy/random/_common.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_generator.cp312-win_amd64.lib",
+  "_internal/numpy/random/_generator.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_mt19937.cp312-win_amd64.lib",
+  "_internal/numpy/random/_mt19937.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_pcg64.cp312-win_amd64.lib",
+  "_internal/numpy/random/_pcg64.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_philox.cp312-win_amd64.lib",
+  "_internal/numpy/random/_philox.cp312-win_amd64.pyd",
+  "_internal/numpy/random/_sfc64.cp312-win_amd64.lib",
+  "_internal/numpy/random/_sfc64.cp312-win_amd64.pyd",
+  "_internal/numpy/random/bit_generator.cp312-win_amd64.lib",
+  "_internal/numpy/random/bit_generator.cp312-win_amd64.pyd",
+  "_internal/numpy/random/mtrand.cp312-win_amd64.lib",
+  "_internal/numpy/random/mtrand.cp312-win_amd64.pyd",
+  "_internal/numpy-2.4.6.dist-info/DELVEWHEEL",
+  "_internal/numpy-2.4.6.dist-info/entry_points.txt",
+  "_internal/numpy-2.4.6.dist-info/INSTALLER",
+  "_internal/numpy-2.4.6.dist-info/licenses/LICENSE.txt",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/_core/src/highway/LICENSE",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/ma/LICENSE",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/src/distributions/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/src/philox/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md",
+  "_internal/numpy-2.4.6.dist-info/METADATA",
+  "_internal/numpy-2.4.6.dist-info/RECORD",
+  "_internal/numpy-2.4.6.dist-info/REQUESTED",
+  "_internal/numpy-2.4.6.dist-info/WHEEL",
+  "_internal/numpy.libs/libscipy_openblas64_-63c857e738469261263c764a36be9436.dll",
+  "_internal/onnxruntime/capi/DirectML.dll",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/INSTALLER",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/LICENSE-3RD-PARTY.txt",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/LICENSE.txt",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/METADATA",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/RECORD",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/top_level.txt",
+  "_internal/opencv_contrib_python-4.10.0.84.dist-info/WHEEL",
+  "_internal/PIL/_imaging.cp312-win_amd64.pyd",
+  "_internal/PIL/_imagingcms.cp312-win_amd64.pyd",
+  "_internal/PIL/_imagingft.cp312-win_amd64.pyd",
+  "_internal/PIL/_imagingmath.cp312-win_amd64.pyd",
+  "_internal/PIL/_imagingtk.cp312-win_amd64.pyd",
+  "_internal/PIL/_webp.cp312-win_amd64.pyd",
+  "_internal/pyclipper/_pyclipper.cp312-win_amd64.pyd",
+  "_internal/PyQt6/sip.cp312-win_amd64.pyd",
+  "_internal/pyreadline3-3.5.4.dist-info/INSTALLER",
+  "_internal/pyreadline3-3.5.4.dist-info/LICENSE.md",
+  "_internal/pyreadline3-3.5.4.dist-info/METADATA",
+  "_internal/pyreadline3-3.5.4.dist-info/RECORD",
+  "_internal/pyreadline3-3.5.4.dist-info/top_level.txt",
+  "_internal/pyreadline3-3.5.4.dist-info/WHEEL",
+  "_internal/python312.dll",
+  "_internal/pywin32_system32/pywintypes312.dll",
+  "_internal/shapely/_geometry_helpers.cp312-win_amd64.pyd",
+  "_internal/shapely/_geos.cp312-win_amd64.pyd",
+  "_internal/shapely/lib.cp312-win_amd64.pyd",
+  "_internal/tqdm-4.68.2.dist-info/entry_points.txt",
+  "_internal/tqdm-4.68.2.dist-info/INSTALLER",
+  "_internal/tqdm-4.68.2.dist-info/licenses/LICENCE",
+  "_internal/tqdm-4.68.2.dist-info/METADATA",
+  "_internal/tqdm-4.68.2.dist-info/RECORD",
+  "_internal/tqdm-4.68.2.dist-info/top_level.txt",
+  "_internal/tqdm-4.68.2.dist-info/WHEEL",
+  "_internal/yaml/_yaml.cp312-win_amd64.pyd"
+ ]
 }
