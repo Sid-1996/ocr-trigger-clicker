@@ -1,0 +1,1 @@
+refactor: 移除自製更新器本體——updater_main/make_delta/manifest 協定與對應測試退役，latest_version.txt 凍結 0.3.0 斷糧舊客戶端
