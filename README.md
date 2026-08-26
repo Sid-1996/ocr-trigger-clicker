@@ -130,6 +130,22 @@
 
 ---
 
+## 致謝
+
+本工具站在以下開源專案的肩膀上：
+
+- [Velopack](https://github.com/velopack/velopack) (MIT) — 安裝與自動更新框架
+- [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) (GPL) — GUI 框架
+- [RapidOCR](https://github.com/RapidAI/RapidOCR) (Apache-2.0) — OCR 引擎
+- [OpenCV](https://opencv.org/) (Apache-2.0) — 影像處理
+- [Frida](https://frida.re) (wxWindows) — 後台注入
+- [mss](https://github.com/BoboTiG/python-mss) (MIT) — 螢幕截圖
+- [pynput](https://github.com/moses-palmer/pynput) (LGPL) — 輸入模擬
+
+完整依賴見 [pyproject.toml](./pyproject.toml)。
+
+---
+
 ## 贊助開發者
 
 <a href="https://p.ecpay.com.tw/E0E3A"><img src="https://img.shields.io/badge/ECPAY-請喝咖啡-238636?style=for-the-badge" alt="ECPAY"></a>
