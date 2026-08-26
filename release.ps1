@@ -126,6 +126,12 @@ Write-Output "成功讀取發行說明 ($($noteLines.Count) 行)"
 # ---- 更新版本號 ----
 # 注意：latest_version.txt 凍結於 0.3.0、刻意不再更新——
 # 讓仍使用自製更新器的舊客戶端永遠顯示「暫無更新」（斷糧，避免觸碰已拆除的更新路徑）
+# -FeedTest 模式：版本檔僅暫改不提交，流程結束自動還原（不污染正式庫歷史）
+
+if ($FeedTest) {
+    $savedVersionPy = Get-Content _version.py -Raw -Encoding utf8
+    $savedPyproject = Get-Content pyproject.toml -Raw -Encoding utf8
+}
 
 "__version__ = `"$Version`"" | Set-Content _version.py -Encoding utf8
 "__author__ = `"Sid`"" | Add-Content _version.py -Encoding utf8
@@ -154,26 +160,30 @@ if ($FeedTest) {
 }
 if ($LASTEXITCODE -ne 0) { throw "build.py 失敗" }
 
-# ---- commit 版號與 CHANGELOG（本地，還不 push） ----
+# ---- commit 版號與 CHANGELOG（本地，還不 push；測試模式跳過） ----
 
-git add _version.py pyproject.toml docs/dev/CHANGELOG.md
-git commit -m "chore: bump to v$Version"
+if (-not $FeedTest) {
+    git add _version.py pyproject.toml docs/dev/CHANGELOG.md
+    git commit -m "chore: bump to v$Version"
+}
 
-# ---- 清理既有 tag / release（-Force 模式） ----
+# ---- 清理既有 tag / release（-Force 模式，僅正式庫） ----
 
-if ($Force) {
+if ($Force -and -not $FeedTest) {
     Write-Output "清理既有 tag 與 release: $tagName"
     git push origin --delete $tagName 2>$null
     gh release delete $tagName -R $ghRepo --yes 2>$null
 }
 
-# ---- push commit + tag ----
+# ---- push commit + tag（測試模式跳過） ----
 
-git tag $tagName
-git push origin master
-if ($LASTEXITCODE -ne 0) { git tag -d $tagName; throw "Failed to push master" }
-git push origin $tagName
-if ($LASTEXITCODE -ne 0) { git tag -d $tagName; throw "Failed to push tag" }
+if (-not $FeedTest) {
+    git tag $tagName
+    git push origin master
+    if ($LASTEXITCODE -ne 0) { git tag -d $tagName; throw "Failed to push master" }
+    git push origin $tagName
+    if ($LASTEXITCODE -ne 0) { git tag -d $tagName; throw "Failed to push tag" }
+}
 
 # ---- 上傳 Velopack 資產到 GitHub Releases ----
 
@@ -186,8 +196,9 @@ $uploadArgs = @(
     "--releaseName", $tagName
 )
 if ($FeedTest) {
-    # 測試庫直接公開——沙箱裡沒有使用者，E2E 才測得到真實下載路徑
-    $uploadArgs += "--publish"
+    # 測試庫直接公開——沙箱裡沒有使用者，E2E 才測得到真實下載路徑；
+    # --merge 允許同版號反覆覆蓋上傳（沙箱迭代用）
+    $uploadArgs += "--publish", "--merge"
 } else {
     # 正式庫維持 draft：人工冒煙測試後再到 GitHub 頁面 Publish
 }
@@ -201,6 +212,14 @@ $releaseNote | Set-Content -Path $notesFile -Encoding utf8
 gh release edit $tagName -R $ghRepo --title $tagName --notes-file $notesFile
 if ($LASTEXITCODE -ne 0) { throw "gh release edit 失敗" }
 Remove-Item $notesFile -ErrorAction SilentlyContinue
+
+# ---- 測試模式收尾：還原版本檔，保持工作樹乾淨 ----
+
+if ($FeedTest) {
+    Set-Content _version.py -Value $savedVersionPy -Encoding utf8 -NoNewline
+    Set-Content pyproject.toml -Value $savedPyproject -Encoding utf8 -NoNewline
+    git checkout -- pyproject.toml 2>$null
+}
 
 if ($FeedTest) {
     Write-Output ""
