@@ -16,6 +16,7 @@ dependencies = [
     "dxcam>=0.3",
     "pywin32>=306",
     "frida>=16",
+    "velopack==1.2.0",
 ]
 
 [dependency-groups]

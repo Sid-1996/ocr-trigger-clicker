@@ -165,6 +165,7 @@ dependencies = [
     { name = "pyqt6" },
     { name = "pywin32" },
     { name = "rapidocr-onnxruntime" },
+    { name = "velopack" },
 ]
 
 [package.dev-dependencies]
@@ -187,6 +188,7 @@ requires-dist = [
     { name = "pyqt6", specifier = ">=6.6" },
     { name = "pywin32", specifier = ">=306" },
     { name = "rapidocr-onnxruntime", specifier = ">=1.4" },
+    { name = "velopack", specifier = "==1.2.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -681,4 +683,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/21/3b/6c24bec5be5e743ffd99576daa5cc077722fc7d5bbc00bd133fa0c698dc6/tqdm-4.70.0.tar.gz", hash = "sha256:55b0b0dbd97462d06ebee91e4dac24ed4d4702be82b24f07e6c1d27e08cea220", size = 795438, upload-time = "2026-07-27T11:33:15.271Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl", hash = "sha256:7f585706bfddbdebf89daac705b2dfcc16890130727d3197ca62c732b4310953", size = 80184, upload-time = "2026-07-27T11:33:13.167Z" },
+]
+
+[[package]]
+name = "velopack"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/28/be/2fd3634075bf22ca45ebf968d069c80ac3e254a48b46441daa5ddd065fd3/velopack-1.2.0.tar.gz", hash = "sha256:800cb0bd27eed7bf82269e41e4d84c4131b93b21996724443b8f7a7e71238104", size = 118270, upload-time = "2026-06-03T23:40:47.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/e6/05cca06ceaee9c4231052da8f1779877d58b7b9d6339391b591193e72559/velopack-1.2.0-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:9504094cdcc33ecec9abb92ef5ecd6d1ef5b48d8f3935b23ed0e91ec18a51f89", size = 1490134, upload-time = "2026-06-03T23:40:26.82Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/02/ea9a1b9af4a526b019af2f92a796606021a8ef162aa2f36d0a0462a14b03/velopack-1.2.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:12654ba825092dc6066b6c29558c6e6b65a8d87824c9c7d4db13f506d9e4e601", size = 1470503, upload-time = "2026-06-03T23:40:28.396Z" },
+    { url = "https://files.pythonhosted.org/packages/36/7d/1fad003c37541884bba1db5062aa8e5669fc24ccabf1dde96974fdc2d0c7/velopack-1.2.0-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a0469702bc8d42b02753bdb450a9439929cf20ad6d4ebc7f981cd941d5c2ced5", size = 1634569, upload-time = "2026-06-03T23:40:29.795Z" },
+    { url = "https://files.pythonhosted.org/packages/87/e9/91358d43f54e8cd0fb96116ad481be14a2b6a708246a3a2ac391c28a1120/velopack-1.2.0-cp37-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:96f5cb8c35d53e8b8e255e1e3ad81499416afad31e40079e200afc5592a8510d", size = 1330863, upload-time = "2026-06-03T23:40:31.159Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/40/5e1d067bb727264f1521d5207f68762f708bddf0cb5a6b97bad130a2283f/velopack-1.2.0-cp37-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:a078d6c7a46d4a0f6eb9b9cff8a35d06aaf32b7e4de55f740ff27564059c67a6", size = 1432190, upload-time = "2026-06-03T23:40:32.306Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/7e/4203cc7a85bf66dc57792797e05aa3b274aa71a858b22efddc3704303a7e/velopack-1.2.0-cp37-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:04a394aa08e070f4d79d80e079ec598f11bb70b06817ce6f40f7201b31e0aa51", size = 1421236, upload-time = "2026-06-03T23:40:33.613Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/56/325fc52173bf31467e3ff7a313a9f9f6de70fa6ca42bc1e0fd847b633e4e/velopack-1.2.0-cp37-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:1c39f84c33e3780cf0f653e6df01dc0295073414a70543c542de32ec87d73693", size = 1327403, upload-time = "2026-06-03T23:40:34.97Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/42/ef12667e6a66ac9716c02c7dda80a246e614a5e5554ac22915b9bc024e59/velopack-1.2.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4fc0556b04c7a432199230cb207e87bb8287e0152a5f4cfd71fabc4e34884152", size = 1579447, upload-time = "2026-06-03T23:40:36.347Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/07/f1971ca37c571a293caeb27e76464c32a05c0743a7f3b0c77fcd52fa847a/velopack-1.2.0-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:6edf973d6fa7f719cced2c7a30b470e65216fc85200e61fb2bf29ec210051c0f", size = 1804179, upload-time = "2026-06-03T23:40:37.705Z" },
+    { url = "https://files.pythonhosted.org/packages/09/83/bd06c08a5b10ebf1be366ce348049b75db89d1c3c74ed772ad9d13457548/velopack-1.2.0-cp37-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:ca42269100a99a1bb0ba263bcb696fd30b2b8f29399a1f4f8373359a8e28d5a3", size = 1602836, upload-time = "2026-06-03T23:40:38.904Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/ac/fac3361516eb197d180e39076101240a73957248b48e64e467e71ffe05b7/velopack-1.2.0-cp37-abi3-musllinux_1_2_i686.whl", hash = "sha256:d6ab140f19e420c720881ba996c7ae7cbd242d63811c7abd128fbf7cd0b78ce9", size = 1607114, upload-time = "2026-06-03T23:40:40.246Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/e0/35782d66610970f43981921b5122759a342a53334677872e826327ed1823/velopack-1.2.0-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:dc00c20f604db1572a2430dd4093fcf643ce2ac9157cafaa4bedd1b063831e5c", size = 1796176, upload-time = "2026-06-03T23:40:41.919Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/e1/731ec5a82f62a38f35a7f61f5657a2fa46260038b45cd2f7b7119f812778/velopack-1.2.0-cp37-abi3-win32.whl", hash = "sha256:af4a7095a63163e482b3df63786d0a81308442c11b8ef26dfa021942ca758959", size = 1080814, upload-time = "2026-06-03T23:40:43.159Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/ef/83679fbc849f3589055218b5759afe03dac9281a171d977c24b9b3e7a5e3/velopack-1.2.0-cp37-abi3-win_amd64.whl", hash = "sha256:5b0238d2b1266b018e0ed2e02697e47fa0d8d83d0a5dac622f301ca2bb6e751e", size = 1354163, upload-time = "2026-06-03T23:40:44.443Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/72/a93992f8243d9539c91ac042a09f092c4fdb47391dec58ccbabd467ff93e/velopack-1.2.0-cp37-abi3-win_arm64.whl", hash = "sha256:86f0c0b8cae2257dd0404df7261f1048c20aa8a03b0e8c2ddb85857ce7fecde5", size = 1280206, upload-time = "2026-06-03T23:40:45.725Z" },
 ]
