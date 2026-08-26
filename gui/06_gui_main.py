@@ -5937,14 +5937,18 @@ class MainWindow(QMainWindow):
         enabled = [g for g in self._groups if g.enabled]
         if len(enabled) <= 1:
             return [g.id for g in enabled] if enabled else []
-        # 記憶的上次選擇（只保留仍存在且啟用的群組）；skip 為真時直接沿用，不再詢問
+        # 記憶的上次選擇（只保留仍存在且啟用的群組）；skip 為真時直接沿用，不再詢問。
+        # 但任務群組結構變動（刪除/重建/新增）時記憶失效 → 忽略 skip 重新詢問，
+        # 否則重建的群組會被永久排除在執行外且毫無提示。
         saved = self._load_group_selection_saved()
         saved_ids = [
             gid
             for gid in saved.get("group_ids", [])
             if any(g.id == gid and g.enabled for g in self._groups)
         ]
-        if _group_sel.should_skip(saved, saved_ids):
+        all_ids = {g.id for g in self._groups}
+        stale = _group_sel.selection_stale(saved, all_ids, {g.id for g in enabled})
+        if not stale and _group_sel.should_skip(saved, saved_ids):
             return saved_ids
         dialog = QDialog(self)
         dialog.setWindowTitle(T("dialog.group_selection"))
@@ -5952,7 +5956,12 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(8)
 
-        hint = QLabel(T("ui.select_group_hint", count=len(enabled)))
+        hint = QLabel(
+            T(
+                "ui.select_group_hint_changed" if stale else "ui.select_group_hint",
+                count=len(enabled),
+            )
+        )
         layout.addWidget(hint)
 
         checks = []
@@ -5997,10 +6006,13 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
         selected = [cb.property("gid") for cb in checks if cb.isChecked()]
-        # 只有勾「下次直接使用」才記憶本次選擇；否則清空 → 下次照常詢問且預設全勾
+        # 只有勾「下次直接使用」才記憶本次選擇；否則清空 → 下次照常詢問且預設全勾。
+        # 附帶當下全部群組 id 快照，供下次啟動偵測結構變動（刪除/重建/新增）。
         cfg = self._load_config()
         cfg.setdefault("group_selection", {})[self._current_task] = _group_sel.build_entry(
-            selected, remember_cb.isChecked()
+            selected,
+            remember_cb.isChecked(),
+            known_group_ids=[g.id for g in self._groups],
         )
         self._save_config(cfg)
         return selected
