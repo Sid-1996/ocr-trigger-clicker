@@ -3156,52 +3156,19 @@ class SettingsDialog(QDialog):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if answer == QMessageBox.StandardButton.Yes:
-                _is_frozen = getattr(sys, "frozen", False)
-                if _is_frozen:
-                    _launch_exe = sys.executable
+                if getattr(sys, "frozen", False):
                     _launch_args: list[str] = []
                     _launch_cwd = str(Path(sys.executable).parent)
-                    _relaunch_cmd = [
-                        str(Path(sys.executable).parent / "updater.exe"),
-                    ]
                 else:
-                    _launch_exe = sys.executable
                     _launch_args = ["gui/06_gui_main.py"]
                     if "--debug" in sys.argv:
                         _launch_args.append("--debug")
                     _launch_cwd = str(Path(__file__).resolve().parent.parent)
-                    _relaunch_cmd = [
-                        sys.executable,
-                        str(Path(__file__).resolve().parent.parent / "updater_main.py"),
-                    ]
-                _relaunch_args = _relaunch_cmd + [
-                    "--mode=relaunch",
-                    f"--wait-pid={os.getpid()}",
-                    f"--launch-exe={_launch_exe}",
-                    *[f"--launch-arg={a}" for a in _launch_args],
-                    f"--launch-cwd={_launch_cwd}",
-                ]
-                # 與主程序脫離（console/job 關閉時不會連帶結束 updater），
-                # 比照 core/12_updater.py::apply_update 的 detach 旗標。
-                _flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-                try:
-                    subprocess.Popen(
-                        _relaunch_args,
-                        creationflags=_flags
-                        | getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000),
-                        close_fds=True,
-                    )
-                except OSError:
-                    try:
-                        subprocess.Popen(
-                            _relaunch_args,
-                            creationflags=_flags,
-                            close_fds=True,
-                        )
-                    except OSError:
-                        logging.exception("無法啟動 relauncher，將退出供使用者手動重啟")
+                # 內建 relaunch：新程序等本程序退出後才初始化，不再經過 updater.exe
+                if not _relaunch_detached(_launch_args, _launch_cwd):
+                    logging.error("無法啟動重啟程序，將退出供使用者手動重啟")
                 # watchdog：萬一 _quit_app 卡住（如 _rules_lock），3 秒後強制結束，
-                # 保證 updater 的 --wait-pid 能繼續重啟。
+                # 保證新程序的 --wait-exit-pid 能繼續。
                 threading.Thread(
                     target=lambda: (time.sleep(3), os._exit(1)),
                     daemon=True,
@@ -3212,7 +3179,7 @@ class SettingsDialog(QDialog):
                 except Exception:
                     logging.exception("語言切換退出時例外")
                 # os._exit 跳過直譯器 shutdown（可能被非 daemon 執行緒卡住），
-                # 確保舊程序結束、新程序由 updater 接管啟動。
+                # 確保舊程序結束、新程序接手啟動。
                 os._exit(0)
         self.accept()
 
@@ -6760,6 +6727,56 @@ class _UpdateInfoDialog(QDialog):
         self.reject()
 
 
+def _wait_exit_pid_arg(timeout_s: float = 20.0) -> None:
+    """啟動參數含 --wait-exit-pid=N 時，等該 PID 退出後才繼續（內建 relaunch）。
+
+    取代已移除的 updater.exe --mode=relaunch：新舊程序不重疊，
+    單一實例防護才不會把重啟的新程序誤擋下。
+    """
+    import ctypes
+
+    keep: list[str] = []
+    pid: int | None = None
+    for a in sys.argv[1:]:
+        if a.startswith("--wait-exit-pid="):
+            try:
+                pid = int(a.split("=", 1)[1])
+            except ValueError:
+                pid = None
+        else:
+            keep.append(a)
+    sys.argv[1:] = keep
+    if pid is None:
+        return
+    process_synchronize = 0x00100000
+    wait_timeout = 0x00000102
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(process_synchronize, False, pid)
+    if not handle:
+        return
+    try:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            if kernel32.WaitForSingleObject(handle, 500) != wait_timeout:
+                break
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _relaunch_detached(launch_args: list[str], cwd: str | None) -> bool:
+    """分離程序重啟自己；新程序等本程序退出後才初始化（見 _wait_exit_pid_arg）。"""
+    cmd = [sys.executable, *launch_args, f"--wait-exit-pid={os.getpid()}"]
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    breakaway = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+    for extra in (breakaway, 0):
+        try:
+            subprocess.Popen(cmd, creationflags=flags | extra, close_fds=True, cwd=cwd)
+            return True
+        except OSError:
+            continue
+    return False
+
+
 if __name__ == "__main__":
     import sys
     import traceback
@@ -6774,6 +6791,8 @@ if __name__ == "__main__":
     _log_cfg.get_logger("gui")  # ensure root handler is set up
     if "--debug" in sys.argv:
         _log_cfg.enable_debug()
+    # 內建 relaunch：帶 --wait-exit-pid=N 時先等舊程序退出並從 argv 移除
+    _wait_exit_pid_arg()
     _log_cfg.cleanup_stale_logs()
 
     # 防禦：原生崩潰（access violation 等）與未捕獲例外都留下可讀痕跡，
