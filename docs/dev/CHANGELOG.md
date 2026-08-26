@@ -1,9 +1,10 @@
 
 
-## [Unreleased]
+## [v0.3.1]
 
 ### 給使用者
 
+- **修復：重建的群組不再被默默跳過**——若曾勾選「下次直接使用這些群組」，之後刪除／重建或新增群組時，新群組會被永久排除在執行外且毫無提示（例如「清理跳臉公告」整組不執行）。現在任務群組結構變動時會重新彈出選擇視窗讓你確認，未變動則照樣沿用記憶、不再打擾。
 - **更新提示更可靠**：新版發布後的短短準備期間（安裝包尚未完全上架），檢查更新不再出現「有新版」卻下載失敗的窘境——會直接視為暫無更新，稍後再查即可。
 - **圖片比對新增「選擇現有圖片」**：截過的小圖不用再重截——在圖片比對步驟按「選擇現有圖片」，可從**所有任務**（含目前任務尚未存檔的規則）已截取的圖片中挑一張直接套用，同一顆按鈕／圖示要跨規則、跨任務重複使用時不必重新框選。挑選視窗左側列表（標註來源：任務 › 規則 › 步驟）、右側大圖預覽；只帶走圖片本身，門檻與搜尋區域維持新步驟自己的設定。
 - **介面術語統一為「圖片比對」**：原本同一個功能混用「模板比對／範本圖片／圖示辨識」多種說法，現全面統一——步驟類型叫「**圖片比對**」（match_image）、截下來的小圖就叫「圖片」、「修剪模板」按鈕更名「**修剪圖片**」。英日文同步（Template→Image、テンプレート→画像）。文字偵測裡的進階比對模式由「模板比對」更名「**文字樣式比對**」，不再與圖片比對撞名。功能行為完全不變；技術上它是以截圖特徵做相似度匹配，不是死板的像素全等比較。
@@ -13,6 +14,7 @@
 
 ### 給開發者
 
+- **群組選取記憶結構變動偵測**：`core/group_selection.py` 新增 `selection_stale(entry, current_all_ids, current_enabled_ids)`——`build_entry()` 擴充第三參數 `known_group_ids`（當下全部群組 id 快照，含停用者，避免停用↕啟用誤判為新增）；GUI 啟動路徑在 `should_skip()` 前先查 stale，變動即忽略 skip 重新彈窗（hint 改用新 key `ui.select_group_hint_changed`）。舊格式條目（無快照欄位）視為 stale 一次性重問治癒。刻意排除的子集選擇不受影響。測試 `tests/test_group_selection.py` +5。
 - **TEMP 暫存清掃**：`_clean_stale_temp_dirs` 改公開名 `clean_stale_temp_dirs`，並於主程式啟動（`_deferred_init`）呼叫——updater.exe 以 staging 內的自身影像執行、Phase 3 清暫存時檔案被鎖會殘留 ~450MB 的 `ocr_update_*` 目錄，改由新版主程式首次啟動兜底清掉。
 - **updater.exe 安全中止與逾時**：備份策略改為「無法 rename 備份＝安全中止」（`_backup_existing_target`，updater_main.py）——先預清上次殘留的 `<安裝名>_old`（rename 失敗常見根因）、重試 6 次×0.5s 吸收防毒瞬態鎖；最終失敗彈 MessageBoxW 後 exit(3)，舊安裝原封不動（移除原本「備份失敗就刪除取代」的破壞性路徑——沒有備份就複製，複製一失敗即無法回滾）。`wait_for_pid_exit` 加 30 秒上限（原 `INFINITE` 可能永久滯留），update 與 relaunch 兩模式同受惠。測試新增 `tests/test_updater_process.py` 6 項。
 - **資產可達性探測**（`core/12_updater.py` `_asset_reachable`）：`check_for_update` 在提供 UpdateInfo 前先探測整包 URL，404/403 → 回 None（Draft 發布窗口期不再出現假更新與必敗下載）；delta 資產缺席但整包在線 → 捨棄 `delta_url` 保留整包。探測用 GET + `Range: bytes=0-0` 不拉 body（S3 presigned 轉址綁 verb，不用 HEAD）；非 HTTP 回應的網路異常一律 fail-open。測試 `tests/test_updater_delta.py` +3（URL 分流 fake urlopen）。
