@@ -1,5 +1,21 @@
 
 
+## [v0.4.0] - 2026-08-26
+
+### 給使用者
+
+- **全新安裝與更新體驗（改用安裝版）**：本版起改採業界標準的 Velopack 更新框架。請到 Release 頁面下載 **Setup.exe** 安裝一次（安裝至 `%LocalAppData%\OCRTriggerClicker`，附開始選單捷徑），此後新版本會自動背景下載、自動套用並重啟，不再需要手動下載整包。
+- ⚠️ **舊版（v0.3.x 免安裝版）使用者請手動下載本版 Setup.exe 完成最後一次升級**——免安裝版的自動更新通道已退役；安裝版不影響你原有的任務與設定（皆存放於 %APPDATA%，自動沿用）。
+- 本版同時包含 v0.3.1（未正式發布）的全部變更：群組選取記憶修復、「選擇現有圖片」、介面術語統一為「圖片比對」、狀態列負載數字改良等，詳見下方 v0.3.1 區塊。
+
+### 給開發者
+
+- **自動更新遷移至 Velopack**：自製 updater.exe／manifest-delta 協定全數拆除（`updater_main.py`、`make_delta.py`、`manifest.json`、`delta_info.json` 退役），`core/12_updater.py` 改為薄封裝（GithubSource 檢查＋download_and_apply）。feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py` 並於打包後防呆驗證。
+- **雙庫發行制**：新增公開測試庫 `ocr-trigger-clicker-release-test` 作為發版沙箱——`release.ps1 -FeedTest` 直接公開上傳供 E2E 打靶，驗證通過才走正式庫 draft 流程，不再打擾真實使用者。
+- **單一實例防護**：CreateMutex 防雙開（第二份啟動即提示退出）——雙開曾鎖死安裝目錄導致自製更新器備份 rename 必敗（v0.3.1 兩度撤回的根因）。
+- **語言切換重啟內建化**：原本借道 updater.exe 的 relaunch 模式改為 app 自帶 `--wait-exit-pid` 參數，新舊程序零重疊。
+- `latest_version.txt` 凍結於 0.3.0：舊客戶端檢查更新永遠顯示「暫無更新」（斷糧設計，避免誤觸已拆除的更新路徑）。
+
 ## [v0.3.1] - 2026-08-26
 
 ### 給使用者
