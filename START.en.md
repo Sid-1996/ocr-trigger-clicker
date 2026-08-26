@@ -46,7 +46,7 @@ Want to build your own automation from scratch? Four steps:
 
 ### ① Download the tool
 
-Same as above — [download ZIP](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → extract → run exe
+Same as above — [download Setup.exe](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → install and launch (Portable.zip also available)
 
 ### ② Meet the UI
 

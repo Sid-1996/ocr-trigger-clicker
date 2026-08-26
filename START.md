@@ -46,7 +46,7 @@
 
 ### ① 下載工具
 
-同上，[下載 ZIP](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → 解壓縮 → 執行 exe
+同上，[下載 Setup.exe](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → 執行安裝後啟動工具（亦提供 Portable.zip 可攜版）
 
 ### ② 認識主介面
 
