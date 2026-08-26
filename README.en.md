@@ -130,6 +130,22 @@ This tool is intended for personal automation of repetitive operations. Before u
 
 ---
 
+## Acknowledgements
+
+This tool stands on the shoulders of these open-source projects:
+
+- [Velopack](https://github.com/velopack/velopack) (MIT) — Installer & auto-update framework
+- [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) (GPL) — GUI framework
+- [RapidOCR](https://github.com/RapidAI/RapidOCR) (Apache-2.0) — OCR engine
+- [OpenCV](https://opencv.org/) (Apache-2.0) — Image processing
+- [Frida](https://frida.re) (wxWindows) — Background injection
+- [mss](https://github.com/BoboTiG/python-mss) (MIT) — Screen capture
+- [pynput](https://github.com/moses-palmer/pynput) (LGPL) — Input simulation
+
+See [pyproject.toml](./pyproject.toml) for the full dependency list.
+
+---
+
 ## Sponsor
 
 <a href="https://p.ecpay.com.tw/E0E3A"><img src="https://img.shields.io/badge/ECPAY-Buy_me_a_coffee-238636?style=for-the-badge" alt="ECPAY"></a>
