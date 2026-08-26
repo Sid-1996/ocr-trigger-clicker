@@ -291,6 +291,7 @@ v0.3.0 及更早的免安裝版不在 Velopack 版鏈上，對其永不產生 de
 docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 格式：`## [v$x.y.z] - YYYY-MM-DD`（日期由 `release.ps1` 自動補填）。
 每次發版前手動新增該版本區塊；`release.ps1` 解析後寫入 GitHub release。
+「給使用者」區塊格式：頂部先標「請下載 XXX（檔名）」，再列變更條目（新功能在前、修復在後）。
 
 ## 任務 JSON 同步（GitHub Pages）
 

@@ -10,37 +10,29 @@
 
 ### 給使用者
 
-- **全新安裝與更新體驗（改用安裝版）**：本版起改採業界標準的 Velopack 更新框架。請到 Release 頁面下載 **Setup.exe** 安裝一次（安裝至 `%LocalAppData%\OCRTriggerClicker`，附開始選單捷徑），此後新版本會自動背景下載、自動套用並重啟，不再需要手動下載整包。
-- ⚠️ **舊版（v0.3.x 免安裝版）使用者請手動下載本版 Setup.exe 完成最後一次升級**——免安裝版的自動更新通道已退役；安裝版不影響你原有的任務與設定（皆存放於 %APPDATA%，自動沿用）。
-- 本版同時包含 v0.3.1（未正式發布）的全部變更：群組選取記憶修復、「選擇現有圖片」、介面術語統一為「圖片比對」、狀態列負載數字改良等，詳見下方 v0.3.1 區塊。
+**請下載 OCRTriggerClicker-win-Setup.exe**（本版起僅提供安裝版，不再有免安裝 ZIP）：
+- 全新安裝：下載後直接執行，安裝至 `%LocalAppData%\OCRTriggerClicker`，附桌面捷徑，此後自動更新。
+- 從 v0.3.0 升級：任務與設定存於 %APPDATA%，安裝新版後自動沿用；免安裝版的自動更新通道已退役，請手動下載一次完成升級。
+
+#### 新增與修正
+
+- **改用 Velopack 自動更新框架**：自動背景下載、套用並重啟，更新更可靠（取代舊版 updater.exe）
+- **單一實例防護**：程式已在執行時會提示，避免雙開鎖死安裝目錄
+- **群組選取記憶修復**：若曾勾選「下次直接使用這些群組」，刪除／重建或新增群組時不再被默默跳過
+- **圖片比對新增「選擇現有圖片」**：截過的小圖不用再重截，可從所有任務已截取的圖片中挑一張直接套用
+- **介面術語統一為「圖片比對」**：原本混用的「模板比對／範本圖片／圖示辨識」全面統一（英日文同步）
+- **狀態列負載數字改良**：「CPU／系統」→「工具CPU／電腦CPU」，一眼分清哪個是本工具
+- **OCR 診斷信心度修正**：深色佈景下數值不再看不清楚
+- **定位文案對齊**：「後台掛機」→「後台操控」，更貼近實際使用場景
+- **畫面擷取失敗次數減少與執行日誌減少無意義警告**
 
 ### 給開發者
 
 - **自動更新遷移至 Velopack**：自製 updater.exe／manifest-delta 協定全數拆除（`updater_main.py`、`make_delta.py`、`manifest.json`、`delta_info.json` 退役），`core/12_updater.py` 改為薄封裝（GithubSource 檢查＋download_and_apply）。feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py` 並於打包後防呆驗證。
 - **雙庫發行制**：新增公開測試庫 `ocr-trigger-clicker-release-test` 作為發版沙箱——`release.ps1 -FeedTest` 直接公開上傳供 E2E 打靶，驗證通過才走正式庫 draft 流程，不再打擾真實使用者。
-- **單一實例防護**：CreateMutex 防雙開（第二份啟動即提示退出）——雙開曾鎖死安裝目錄導致自製更新器備份 rename 必敗（v0.3.1 兩度撤回的根因）。
+- **單一實例防護**：CreateMutex 防雙開（第二份啟動即提示退出）——自製更新器曾因雙開鎖目錄導致備份 rename 必敗，本版從架構上消除。
 - **語言切換重啟內建化**：原本借道 updater.exe 的 relaunch 模式改為 app 自帶 `--wait-exit-pid` 參數，新舊程序零重疊。
 - `latest_version.txt` 凍結於 0.3.0：舊客戶端檢查更新永遠顯示「暫無更新」（斷糧設計，避免誤觸已拆除的更新路徑）。
-
-## [v0.3.1] - 2026-08-26
-
-### 給使用者
-
-- **修復：重建的群組不再被默默跳過**——若曾勾選「下次直接使用這些群組」，之後刪除／重建或新增群組時，新群組會被永久排除在執行外且毫無提示（例如「清理跳臉公告」整組不執行）。現在任務群組結構變動時會重新彈出選擇視窗讓你確認，未變動則照樣沿用記憶、不再打擾。
-- **更新提示更可靠**：新版發布後的短短準備期間（安裝包尚未完全上架），檢查更新不再出現「有新版」卻下載失敗的窘境——會直接視為暫無更新，稍後再查即可。
-- **圖片比對新增「選擇現有圖片」**：截過的小圖不用再重截——在圖片比對步驟按「選擇現有圖片」，可從**所有任務**（含目前任務尚未存檔的規則）已截取的圖片中挑一張直接套用，同一顆按鈕／圖示要跨規則、跨任務重複使用時不必重新框選。挑選視窗左側列表（標註來源：任務 › 規則 › 步驟）、右側大圖預覽；只帶走圖片本身，門檻與搜尋區域維持新步驟自己的設定。
-- **介面術語統一為「圖片比對」**：原本同一個功能混用「模板比對／範本圖片／圖示辨識」多種說法，現全面統一——步驟類型叫「**圖片比對**」（match_image）、截下來的小圖就叫「圖片」、「修剪模板」按鈕更名「**修剪圖片**」。英日文同步（Template→Image、テンプレート→画像）。文字偵測裡的進階比對模式由「模板比對」更名「**文字樣式比對**」，不再與圖片比對撞名。功能行為完全不變；技術上它是以截圖特徵做相似度匹配，不是死板的像素全等比較。
-- **修正 OCR 診斷信心度顯示**：結果列表的信心度欄位改為固定深色文字配淺色底，修正深色系統佈景下白字壓淡色背景、數值完全看不清楚的問題。
-- **定位文案對齊實際使用場景**：工具的甜蜜點是「快速設定的小任務與重複操作代勞」，文件與介面文案同步調整——「後台掛機」改為「後台操控」、「三種掛機模式」改為「三種互動方式」、混合模式描述改以「低頻動作任務」呈現、群組循環模式說明改為「適合重複執行的流程」（不再暗示長時間無人值守）、省電模式說明改為「工具運作時還需要同時使用電腦」。功能本身不變；理論上仍可長時間執行，但需要較完整的規則涵蓋。
-- **狀態列負載數字更好懂**：「CPU／系統」改為「**工具CPU**／**電腦CPU**」，一眼分清楚哪個是本工具、哪個是整台電腦（遊戲吃滿 CPU 不會算進工具）；「MEM」改為「記憶體」；滑鼠懸停說明同步補齊三個欄位的定義；高負載警告改為完整文字（如「⚠工具CPU偏高」），並支援英日介面。
-
-### 給開發者
-
-- **群組選取記憶結構變動偵測**：`core/group_selection.py` 新增 `selection_stale(entry, current_all_ids, current_enabled_ids)`——`build_entry()` 擴充第三參數 `known_group_ids`（當下全部群組 id 快照，含停用者，避免停用↕啟用誤判為新增）；GUI 啟動路徑在 `should_skip()` 前先查 stale，變動即忽略 skip 重新彈窗（hint 改用新 key `ui.select_group_hint_changed`）。舊格式條目（無快照欄位）視為 stale 一次性重問治癒。刻意排除的子集選擇不受影響。測試 `tests/test_group_selection.py` +5。
-- **TEMP 暫存清掃**：`_clean_stale_temp_dirs` 改公開名 `clean_stale_temp_dirs`，並於主程式啟動（`_deferred_init`）呼叫——updater.exe 以 staging 內的自身影像執行、Phase 3 清暫存時檔案被鎖會殘留 ~450MB 的 `ocr_update_*` 目錄，改由新版主程式首次啟動兜底清掉。
-- **updater.exe 安全中止與逾時**：備份策略改為「無法 rename 備份＝安全中止」（`_backup_existing_target`，updater_main.py）——先預清上次殘留的 `<安裝名>_old`（rename 失敗常見根因）、重試 6 次×0.5s 吸收防毒瞬態鎖；最終失敗彈 MessageBoxW 後 exit(3)，舊安裝原封不動（移除原本「備份失敗就刪除取代」的破壞性路徑——沒有備份就複製，複製一失敗即無法回滾）。`wait_for_pid_exit` 加 30 秒上限（原 `INFINITE` 可能永久滯留），update 與 relaunch 兩模式同受惠。測試新增 `tests/test_updater_process.py` 6 項。
-- **資產可達性探測**（`core/12_updater.py` `_asset_reachable`）：`check_for_update` 在提供 UpdateInfo 前先探測整包 URL，404/403 → 回 None（Draft 發布窗口期不再出現假更新與必敗下載）；delta 資產缺席但整包在線 → 捨棄 `delta_url` 保留整包。探測用 GET + `Range: bytes=0-0` 不拉 body（S3 presigned 轉址綁 verb，不用 HEAD）；非 HTTP 回應的網路異常一律 fail-open。測試 `tests/test_updater_delta.py` +3（URL 分流 fake urlopen）。
-- **「選擇現有圖片」**：`core/task_management.py` 新增 `collect_templates(live_rules, live_task_name, exclude)`——掃描全部任務 JSON 的 match_image 步驟內嵌 `template_data`；傳入 `live_rules` + `live_task_name` 時以記憶體規則取代該任務的磁碟版（未存檔截圖可挑、不重複列出）；`exclude=(rule_id, step_idx)` 排除自身；b64 只做 stdlib 結構驗證，影像解碼由 GUI 層過濾。新增 `gui/16_template_picker.py`（`pick_template_dialog()`：左清單縮圖＋右預覽，雙擊確認）。`_MatchImageStepForm` 按鈕列插入入口，回寫照 `_trim_template` 模式並額外 pop 過時的 `template_source`。測試 `tests/test_task_management.py` 新增 4 項。
 
 ## [v0.3.0] - 2026-08-23
 
