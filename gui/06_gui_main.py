@@ -3395,7 +3395,6 @@ class MainWindow(QMainWindow):
             self._notif_stack = _NotificationStack()
             self._updating = False
             self._downloading = False
-            self._update_cancel = None
             self._pending_update_ver = ""
 
             self._group_settings_ctrl = GroupSettingsController()
@@ -6408,7 +6407,6 @@ class MainWindow(QMainWindow):
                 return
 
         self._updating = True
-        self._update_cancel = threading.Event()
         self._status_bar.showMessage(T("status.checking_update"))
 
         class _CheckWorker(QThread):
@@ -6422,12 +6420,7 @@ class MainWindow(QMainWindow):
             def run(self):
                 try:
                     info = _updater_mod.check_for_update(__version__)
-                    notes = None
-                    if info:
-                        try:
-                            notes = _updater_mod.fetch_release_notes(info.version)
-                        except Exception:
-                            notes = None
+                    notes = info.release_notes if info else None
                     self.result.emit(info, notes)
                 except Exception as e:
                     self.error.emit(str(e), self.forced)
@@ -6445,8 +6438,6 @@ class MainWindow(QMainWindow):
 
         self._status_bar.showMessage(T("status.update_found", version=info.version), 0)
         self._pending_update_ver = info.version
-        self._pending_update_info = info
-        self._pending_update_notes = notes
         orig_press = self._status_bar.mousePressEvent
 
         def _on_click(e):
@@ -6473,103 +6464,49 @@ class MainWindow(QMainWindow):
         if self._downloading:
             return
         self._downloading = True
-        self._update_cancel = threading.Event()
 
-        self._progress = QProgressDialog(T("update.downloading"), T("ui.cancel"), 0, 100, self)
+        # Velopack 下載不支援中途取消：進度窗僅回報，不提供取消
+        self._progress = QProgressDialog(T("update.downloading"), "", 0, 0, self)
+        self._progress.setCancelButton(None)
         self._progress.setWindowTitle(T("update.download_version", version=info.version))
         self._progress.setWindowModality(Qt.WindowModality.WindowModal)
         self._progress.setMinimumDuration(0)
-        self._progress.setValue(0)
-        self._progress.canceled.connect(self._cancel_download)
 
-        class _DownloadWorker(QThread):
-            finished = pyqtSignal(object)
+        class _ApplyWorker(QThread):
+            finished = pyqtSignal()
             error = pyqtSignal(str)
-            progress = pyqtSignal(int, int)
-            fallback = pyqtSignal()
+            progress = pyqtSignal(object)
 
             def run(self):
                 try:
-                    kwargs = dict(
-                        progress_cb=lambda d, t: self.progress.emit(d, t),
-                        cancel_event=self.parent()._update_cancel
-                        if hasattr(self.parent(), "_update_cancel")
-                        else None,
+                    _updater_mod.download_and_apply(
+                        info,
+                        progress_cb=lambda *a: self.progress.emit(a[0] if a else None),
                     )
-                    if info.delta_url:
-                        exe_path = _updater_mod.download_delta_update(
-                            info,
-                            fallback_cb=lambda: self.fallback.emit(),
-                            **kwargs,
-                        )
-                    else:
-                        exe_path = _updater_mod.download_update(info, **kwargs)
-                    self.finished.emit(exe_path)
+                    self.finished.emit()
                 except Exception as e:
                     self.error.emit(str(e))
 
-        self._dl_worker = _DownloadWorker()
+        self._dl_worker = _ApplyWorker()
         self._dl_worker.setParent(self)
         self._dl_worker.progress.connect(self._on_download_progress)
         self._dl_worker.finished.connect(self._on_download_finished)
         self._dl_worker.error.connect(self._on_download_error)
-        self._dl_worker.fallback.connect(self._on_download_fallback)
         self._dl_worker.start()
 
-    def _on_download_progress(self, downloaded, total):
-        if total > 0:
-            pct = int(downloaded * 100 / total)
-            self._progress.setValue(pct)
-            self._progress.setLabelText(
-                T(
-                    "update.downloading_progress",
-                    downloaded=downloaded // 1024,
-                    total=total // 1024,
-                    pct=pct,
-                )
-            )
-        else:
-            self._progress.setLabelText(
-                T("update.downloading_unknown", downloaded=downloaded // 1024)
-            )
+    def _on_download_progress(self, value):
+        # 框架進度值格式不承諾：是 0~100 整數就顯示百分比，其餘維持脈動視窗
+        if isinstance(value, int) and not isinstance(value, bool) and 0 < value <= 100:
+            self._progress.setLabelText(f"{T('update.downloading')} {value}%")
 
-    def _on_download_fallback(self):
-        self._progress.setLabelText(T("update.fallback_full"))
-
-    def _cancel_download(self):
-        if self._update_cancel:
-            self._update_cancel.set()
-        self._progress.close()
-        self._downloading = False
-        self._status_bar.showMessage(T("dialog.download_cancelled"), 3000)
-
-    def _on_download_finished(self, exe_path):
-        self._progress.close()
-        self._downloading = False
-
+    def _on_download_finished(self):
+        # download_and_apply 已排定 Update.exe 換目錄並重啟：立刻讓位退出
         config = self._load_config()
-        config["just_updated"] = self._pending_update_ver
+        config["just_updated"] = getattr(self, "_pending_update_ver", "")
         self._save_config(config)
-
-        btn = QMessageBox.question(
-            self,
-            T("dialog.update_complete"),
-            T("update.apply_prompt", version=self._pending_update_ver),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if btn == QMessageBox.StandardButton.Yes:
-            try:
-                _updater_mod.apply_update(exe_path)
-                QApplication.quit()
-                os._exit(0)
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    T("dialog.update_failed"),
-                    T("update.apply_failed", error=e),
-                )
-        else:
-            shutil.rmtree(exe_path.parent, ignore_errors=True)
+        self._downloading = False
+        QApplication.quit()
+        os._exit(0)
 
     def _on_download_error(self, msg):
         self._progress.close()
@@ -6691,12 +6628,6 @@ class _UpdateInfoDialog(QDialog):
         header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 8px;")
         layout.addWidget(header)
 
-        if info.delta_url and info.delta_bytes > 0:
-            mb = max(1, round(info.delta_bytes / 1024 / 1024))
-            delta_hint = QLabel(T("update.delta_size", mb=mb))
-            delta_hint.setStyleSheet("color: #2d8a5f; margin-bottom: 4px;")
-            layout.addWidget(delta_hint)
-
         browser = QTextBrowser()
         browser.setOpenExternalLinks(True)
         if notes:
@@ -6793,6 +6724,15 @@ if __name__ == "__main__":
         _log_cfg.enable_debug()
     # 內建 relaunch：帶 --wait-exit-pid=N 時先等舊程序退出並從 argv 移除
     _wait_exit_pid_arg()
+
+    # Velopack 安裝／更新 hook：必須在任何 UI 建立前執行（開發模式為 no-op）
+    try:
+        from velopack import App
+
+        App().set_auto_apply_on_startup(True).run()
+    except Exception:
+        logging.debug("velopack App.run 不可用（開發模式）", exc_info=True)
+
     _log_cfg.cleanup_stale_logs()
 
     # 防禦：原生崩潰（access violation 等）與未捕獲例外都留下可讀痕跡，
@@ -6841,6 +6781,20 @@ if __name__ == "__main__":
         set_language(_app_cfg.get("language") or _detected_lang)
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         set_language(_detected_lang)
+
+    # 單一實例防護：第二份程式提示後退出（雙開會鎖死安裝目錄、妨礙日後更新）
+    import ctypes
+
+    _single_instance_mutex = ctypes.windll.kernel32.CreateMutexW(
+        None, False, "Local\\OCRTriggerClicker.SingleInstance"
+    )
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        QMessageBox(
+            QMessageBox.Icon.Warning,
+            T("dialog.already_running.title"),
+            T("dialog.already_running.msg"),
+        ).exec()
+        sys.exit(0)
 
     try:
         app = QApplication(sys.argv)
