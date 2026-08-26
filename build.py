@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -27,6 +28,21 @@ def main():
         sys.exit(1)
 
     here = Path(__file__).parent
+
+    # 更新 feed 選擇：--feed test 烘入測試庫，預設正式庫（用戶端據此檢查更新）
+    feeds = {
+        "prod": "https://github.com/Sid-1996/ocr-trigger-clicker",
+        "test": "https://github.com/Sid-1996/ocr-trigger-clicker-release-test",
+    }
+    feed = "prod"
+    if "--feed" in sys.argv:
+        i = sys.argv.index("--feed")
+        feed = sys.argv[i + 1]
+    if feed not in feeds:
+        print(f"❌ 不支援的 --feed 值: {feed}（可選 prod/test）")
+        sys.exit(1)
+    feed_url = feeds[feed]
+    print(f"更新 feed: {feed} → {feed_url}")
 
     print("搜尋 RapidOCR 模型檔案...")
     try:
@@ -81,6 +97,11 @@ def main():
         if f.exists():
             datas.append((str(f), dest))
 
+    # 烘入更新 feed 位址（用戶端 core/12_updater.py 執行時讀取）
+    feed_py = here / "_update_feed.py"
+    feed_py.write_text(f'FEED_REPO_URL = "{feed_url}"\n', encoding="utf-8")
+    datas.append((str(feed_py), "."))
+
     # 被 _loader.py 動態載入的模組（PyInstaller 靜態分析無法追蹤）
     # 以及 transitive deps（PyInstaller 無法自動追蹤的內部依賴）
     hidden = [
@@ -105,6 +126,8 @@ def main():
         "frida",
         # stdlib submodule imported from _loader-loaded data files; PyInstaller can miss it.
         "logging.handlers",
+        # velopack: 更新框架，lazy-imported（core/12_updater.py 函式內 import）
+        "velopack",
     ]
 
     exclude = [
@@ -231,6 +254,7 @@ def main():
     print()
 
     PyInstaller.__main__.run(args)
+    feed_py.unlink(missing_ok=True)
 
     exe = here / "dist" / "ocr-trigger-clicker" / "ocr-trigger-clicker.exe"
     if exe.exists():
@@ -240,7 +264,8 @@ def main():
 
         shutil.rmtree(here / "build", ignore_errors=True)
         slim_dist()
-        build_updater()
+        verify_feed(feed_url)
+        pack_velopack()
     else:
         print("\n打包失敗")
 
@@ -265,30 +290,51 @@ def slim_dist():
         print(f"瘦身: 共釋出 {removed / 1048576:.1f} MB")
 
 
-def build_updater():
-    import PyInstaller.__main__
+def verify_feed(expected_url: str):
+    """防呆：確認烘進包裡的 feed 位址與本次目標一致，防止拿錯包上架。"""
+    f = Path(__file__).parent / "dist" / "ocr-trigger-clicker" / "_internal" / "_update_feed.py"
+    if not f.exists():
+        sys.exit("❌ 防呆失敗：dist 內找不到 _update_feed.py")
+    got = f.read_text(encoding="utf-8")
+    if expected_url not in got:
+        sys.exit(f"❌ 防呆失敗：烘入的 feed 與目標不符\n期望: {expected_url}\n實際: {got}")
+    print(f"✓ feed 防呆通過: {expected_url}")
+
+
+def _read_version(here: Path) -> str:
+    m = re.search(
+        r'__version__\s*=\s*"([^"]+)"', (here / "_version.py").read_text(encoding="utf-8")
+    )
+    if not m:
+        sys.exit("❌ 無法從 _version.py 讀取版號")
+    return m.group(1)
+
+
+def pack_velopack():
+    """Velopack 打包：產生 Setup.exe／full.nupkg／delta（若有前版）至 Releases/。"""
+    import subprocess
 
     here = Path(__file__).parent
-    args = [
-        "--onefile",
-        "--windowed",
-        "--name=updater",
-        "--distpath=" + str(here / "dist" / "ocr-trigger-clicker"),
-        "--workpath=" + str(here / "build_updater"),
-        "--specpath=" + str(here),
-        "--noconfirm",
-        str(here / "updater_main.py"),
+    version = _read_version(here)
+    cmd = [
+        "vpk",
+        "pack",
+        "--packId",
+        "OCRTriggerClicker",
+        "--packVersion",
+        version,
+        "--packDir",
+        str(here / "dist" / "ocr-trigger-clicker"),
+        "--mainExe",
+        "ocr-trigger-clicker.exe",
+        "--outputDir",
+        str(here / "Releases"),
     ]
-    print("\n=== 打包獨立 updater.exe ===")
-    PyInstaller.__main__.run(args)
-    updater_exe = here / "dist" / "ocr-trigger-clicker" / "updater.exe"
-    if updater_exe.exists():
-        print(f"updater 打包成功: {updater_exe}")
-        import shutil
-
-        shutil.rmtree(here / "build_updater", ignore_errors=True)
-    else:
-        print("updater 打包失敗")
+    print("\n=== Velopack 打包（vpk pack）===")
+    print(" ".join(cmd))
+    r = subprocess.run(cmd, cwd=str(here))
+    if r.returncode != 0:
+        sys.exit(r.returncode)
 
 
 if __name__ == "__main__":

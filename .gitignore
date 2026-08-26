@@ -5,6 +5,8 @@ __pycache__/
 .coverage
 dist/
 build/
+Releases/
+_update_feed.py
 *.spec
 test_*.png
 *.log
