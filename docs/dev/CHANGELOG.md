@@ -10,9 +10,9 @@
 
 ### 給使用者
 
-> **🌐 English**: Download **OCRTriggerClicker-win-Setup.exe** below. After installation, updates are automatic.
+> **🌐 English**: If you are using v0.3.x, the old auto-updater no longer works — **download OCRTriggerClicker-win-Setup.exe** below to upgrade. After installation, future updates will be automatic.
 >
-> **🌐 日本語**: 下記の **OCRTriggerClicker-win-Setup.exe** をダウンロードしてください。インストール後は自動更新されます。
+> **🌐 日本語**: v0.3.x を使用している場合、旧自動更新は動作しません。下記の **OCRTriggerClicker-win-Setup.exe** をダウンロードしてアップグレードしてください。インストール後は自動更新されます。
 
 **請下載 OCRTriggerClicker-win-Setup.exe**（本版起僅提供安裝版，不再有免安裝 ZIP）：
 - 全新安裝：下載後直接執行，安裝至 `%LocalAppData%\OCRTriggerClicker`，附桌面捷徑，此後自動更新。
