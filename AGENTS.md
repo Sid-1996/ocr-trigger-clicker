@@ -226,73 +226,67 @@ uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔
 
 ## 版本管理與發行流程
 
+### 更新架構（Velopack）
+
+自動更新由 **Velopack** 框架接管（v0.4.0 起，自製 updater 已拆除）：
+- 用戶端 `core/12_updater.py` 只是薄封裝；檢查／下載／換目錄／重啟全由框架處理
+- feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`（防呆：打包後自動驗證內容）
+  - `prod` = 本庫（正式使用者）；`test` = `ocr-trigger-clicker-release-test`（發版沙箱，直接公開、隨便打靶）
+- 安裝模式：使用者跑 Setup.exe → 安裝至 `%LocalAppData%\OCRTriggerClicker`，此後更新全自動
+- 單一實例防護：雙開會鎖死安裝目錄，第二份啟動即提示退出
+- `latest_version.txt` **凍結於 0.3.0、刻意不動**——舊客戶端讀它永遠顯示「暫無更新」（斷糧），請勿刪除或更新
+
 ### 版本資訊
 - `_version.py` — 單一事實來源（`__version__` / `__author__` / `__github__`）
-- `latest_version.txt` — 給客戶端版本檢查用（純文字，一行版本號）
-- `manifest.json` — 本版完整檔案清單（rel 路徑 + size + sha256），每版覆寫；下一版發版時作為差異更新基準
-- `delta_info.json` — 差異更新判定資料（`version` / `base_version` / `asset` / `delta_bytes`），用戶端 raw 讀取
+- `latest_version.txt` — 凍結的歷史檔，僅供 v0.3.x 舊客戶端靜默斷糧用
 
 ### 發版流程
 
 **手動準備階段：**
-1. 更新 `docs/dev/CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（內容 = 從上一個版本至今的所有變更，格式參照 Keep a Changelog，既有區塊可當範本）
-2. `uv run python build.py` 打包 → `dist\ocr-trigger-clicker\ocr-trigger-clicker.exe`
-3. 手動測試該 EXE，功能確認無誤
-4. 測試失敗 → 修復 → 回到步驟 2
+1. 更新 `docs/dev/CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（Keep a Changelog 格式）
+2. 測試庫打靶（不打擾使用者）：`.\release.ps1 -Version "x.y.z" -FeedTest`
+   - 自動 build → vpk pack → 上傳測試庫並**直接公開**
+3. E2E 驗證：安裝測試庫 Setup.exe → 觸發更新 → delta／重啟／雙開防護全綠
+4. 失敗 → 修復 → 回到步驟 2
 
-**自動發版：**
+**正式發版：**
 ```powershell
-.\release.ps1 -Version "0.1.2"
+.\release.ps1 -Version "x.y.z"
 ```
 
 腳本自動完成：
-1. Pre-flight 檢查（uv / gh / git 乾淨度 / tag 衝突）
-2. 從 docs/dev/CHANGELOG.md 解析 `## [v$x.y.z]` 區塊作為 release notes
-   - 找不到該版本 → 報錯
-   - 缺日期 → 自動填入當天
-3. 更新 `_version.py` + `latest_version.txt`（base_version = 更新前的舊版本號）
-4. `uv run python build.py` 打包 + 壓整包 ZIP
-5. `uv run python make_delta.py` 產生差異更新：`dist/ocr-trigger-clicker-delta.zip` + 覆寫 repo 根 `manifest.json` / `delta_info.json`
-6. git commit（含 docs/dev/CHANGELOG.md / _version.py / latest_version.txt / manifest.json / delta_info.json）
-7. git tag + push commit + tag 到遠端
-8. `gh release create --draft --prerelease` 附**兩個 asset**（整包 ZIP + delta ZIP），Release notes = CHANGELOG 內容
+1. Pre-flight（uv / gh / **vpk** / git 乾淨度 / tag 衝突）
+2. 解析 CHANGELOG `## [v$x.y.z]` 區塊作為 release notes（缺日期自動補）
+3. 更新 `_version.py` + pyproject version（**不動 latest_version.txt**）
+4. `vpk download github` 取回前版資產（供 delta 計算；首次無前版屬正常）
+5. `uv run python build.py`（PyInstaller + feed 烘入 + 防呆驗證 + `vpk pack`）
+6. git commit（_version.py / pyproject.toml / CHANGELOG）+ tag + push
+7. `vpk upload github` 上傳 Setup.exe／nupkg／releases.win.json 為 **Draft**，再以 `gh release edit` 補 notes
 
 **發版後：**
-- Release 建立為 **Draft** 狀態 → 從 GitHub Releases 頁面下載 EXE 再次測試
-- 確認無誤 → 按「Publish release」公開；Draft 測試期間一般使用者檢查更新會顯示「暫無更新」（資產探測兜底），**不需趕著 Publish**
-- 有問題 → 刪除 Draft + `-Force` 重發，或修復後再發
+- Draft 冒煙測試（下載 Setup.exe 安裝）→ GitHub 頁面按「Publish release」
+- Draft 期間 stable 使用者看不到任何東西；有問題 → `-Force` 重發
 
-### 差異更新（Delta Update）
+### Delta Update
 
-每個版本除整包 ZIP 外，另產「只含變更檔案」的 delta。用戶端判定規則：
-
-- 檢查更新時抓 `delta_info.json`，**`base_version == 本機目前版本`**（`__version__`）才提供 delta 下載
-- 檢查更新時客戶端會**探測 release 資產可達性**（GET+Range）：Release 尚為 Draft 時資產 URL 404，用戶端視為「暫無更新」——僅 404/403 沉默，網路異常 fail-open 照常提供；delta 資產缺席但整包在線 → 自動捨棄 delta 改整包
-- delta 套用 = 複製目前安裝樹 → staging → 覆蓋變更檔（逐檔驗 sha256）→ 刪除 `removed` 清單 → **整棵樹驗 manifest** → 沿用 updater.exe 備份／rollback（備份 rename 失敗＝**安全中止 exit(3)**，預清殘留 `_old`＋重試後仍失敗即彈窗放棄，舊安裝不動）
-- 任何 delta 驗證失敗 → **自動退回整包下載**（安全網，不降級信任）
-- 第一次發版（無前一版 manifest）、跳過多版更新、delta 過大（> 整包 40%）→ 不產 delta，用戶端自動走整包
-- 使用者自訂檔案（manifest 未列出者）一律保留，不會被更新刪除
+Velopack 內建處理：`vpk download github` 取回前版後，`vpk pack` 自動產生 delta nupkg；
+用戶端下載失敗或 delta 不適用時框架自動退回 full。無需人工維護 manifest 協定。
+v0.3.0 及更早的免安裝版不在 Velopack 版鏈上，對其永不產生 delta。
 
 ### 重發流程
 
-若發版後發現打包錯誤需要同版本重發，使用 `-Force` 參數：
-
 ```powershell
-.\release.ps1 -Version "0.1.4" -Force
+.\release.ps1 -Version "x.y.z" -Force            # 正式庫
+.\release.ps1 -Version "x.y.z" -Force -FeedTest  # 測試庫
 ```
 
-`-Force` 會自動：
-1. 刪除既有遠端 tag（如存在）
-2. 刪除既有 GitHub release（如存在）
-3. 然後正常建立新 tag + release（delta 會重新產生，無需額外步驟）
+`-Force` 自動刪除既有遠端 tag + release 後正常重發。
 
 ### CHANGELOG 維護
 
 docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 格式：`## [v$x.y.z] - YYYY-MM-DD`（日期由 `release.ps1` 自動補填）。
-
-每次發版前手動新增該版本區塊，內容涵蓋從上一個版本 tag 以來的所有變更。
-`release.ps1` 會自動解析該區塊作為 GitHub release notes。
+每次發版前手動新增該版本區塊；`release.ps1` 解析後寫入 GitHub release。
 
 ## 任務 JSON 同步（GitHub Pages）
 
