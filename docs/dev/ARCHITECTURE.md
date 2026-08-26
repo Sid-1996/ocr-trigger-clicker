@@ -100,7 +100,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/13_gui_click_picker.py` | 點擊座標選取器（全螢幕 overlay） | `pick_click_position()` |
 | `gui/15_template_crop.py` | 模板修剪對話框（四邊空間化向內剪＋精確數值） | `trim_template_dialog()` |
 | `gui/16_template_picker.py` | 「選擇現有圖片」對話框（跨任務重用 match_image 內嵌圖片；含目前編輯中規則） | `pick_template_dialog()` |
-| `core/12_updater.py` | 自動更新核心邏輯（版本檢查、差異/整包下載、解壓、staging 驗證、套用更新） | `check_for_update()`, `download_update()`, `download_delta_update()`, `build_manifest()`, `diff_manifests()`, `apply_delta_to_staging()`, `verify_tree()`, `apply_update()` |
+| `core/12_updater.py` | 自動更新薄封裝（Velopack）：feed 讀取、檢查、下載並套用 | `check_for_update()`, `download_and_apply()`, `clean_stale_temp_dirs()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊（啟動／停止；暫停中按 F8 為繼續）＋ F9 熱鍵註冊（錄製開始/停止） |
@@ -597,47 +597,39 @@ MainLoop.emergency_stop()
 | 座標驗證 | `03_pynput_input.py` `_validate_coords()` | 使用 `GetSystemMetrics(VIRTUALSCREEN)` 確保點擊不超出多螢幕範圍 |
 | 關閉行為設定 | `06_gui_main.py` `SettingsDialog` | 可選「縮小至托盤」或「直接關閉」，關閉前可跳出確認對話框 |
 
-## 自動更新（差異更新）
+## 自動更新（Velopack）
 
-每個版本除了整包 `ocr-trigger-clicker.zip`（~200 MB，v0.2.9 瘦身後），另發行只含變更檔案的 `ocr-trigger-clicker-delta.zip`（典型 1~20 MB）。安裝樹 ~458 MB 中絕大部分是幾乎不變的靜態二進位（frida / onnx 模型 / cv2 / Qt / numpy），應用程式自身程式碼僅 0.82 MB，故差異更新節省約 90% 下載量。
+v0.4.0 起自動更新由 [Velopack](https://velopack.io) 框架接管，自製 updater.exe／manifest-delta 協定已拆除。
 
-**產物**（`make_delta.py`，由 `release.ps1` 在 build 後呼叫）：
+**架構**：
 
-- `ocr-trigger-clicker-delta.zip` — `manifest.json`（本版完整檔案清單：rel 路徑 + size + sha256 + `removed`）＋ `files/<rel>`（變更／新增 payload）
-- repo 根 `manifest.json` — 每版覆寫成最新完整清單，下一版當差異基準
-- repo 根 `delta_info.json` — `{version, base_version, asset, delta_bytes}`，用戶端 raw 讀取判定
+- 安裝形態：使用者跑 Setup.exe → 安裝至 `%LocalAppData%\OCRTriggerClicker\current\`；
+  框架的 `Update.exe` 位於安裝根目錄（**在 app 目錄之外**，換目錄時不會鎖住自己——
+  舊自製 updater「抓著要改名的資料夾」的死穴從架構上不存在）
+- feed：GitHub Releases 的 `releases.win.json`；位址由 `build.py --feed prod|test`
+  烘入 `_update_feed.py`，打包後防呆驗證（防止拿錯包上架）
+- delta：`release.ps1` 先 `vpk download github` 取回前版，`vpk pack` 自動產生
+  delta nupkg（實測 0.4.0→0.4.1 約 0.55 MB vs 整包 194 MB）；框架下載失敗自動退回 full
 
-**用戶端流程**（`core/12_updater.py`）：
+**用戶端流程**：
 
 ```
-check_for_update()
-  └─ 抓 latest_version.txt + delta_info.json（後者失敗不阻擋，退回整包）
-     ├─ 資產可達性探測 _asset_reachable()：發行流程先推版本檔、Release 仍為
-     │  Draft，此時資產 URL 回 404 → 本次不提示更新（避免下載必敗的假更新）。
-     │  僅 HTTP 404/403 判「未公開」；其餘網路異常 fail-open 照常提供更新。
-     │  探測用 GET + Range: bytes=0-0（S3 presigned 轉址綁 verb，不用 HEAD）。
-     ├─ delta_info.version == 最新 且 delta_info.base_version == __version__
-     │  → UpdateInfo.delta_url 填入 → GUI 走 download_delta_update()
-     │  （delta 資產缺席但整包存在 → 捨棄 delta_url 改整包）
-     └─ 否則 → 整包 download_update()
+main() 最頂端（任何 UI 之前）
+  └─ velopack App().set_auto_apply_on_startup(True).run()   # 安裝/更新 hooks
 
-download_delta_update()
-  1. 下載 delta.zip → safe-extract（拒絕 ../ 與絕對路徑）
-  2. 驗證 manifest.base_version == delta_base_version
-  3. staging = 複製目前安裝樹（運行時唯讀，安全）
-  4. 覆蓋 files/ payload（逐檔驗 sha256）＋ 刪除 removed 清單
-  5. verify_tree() 整棵樹對 manifest 全檔驗證
-  6. 通過 → apply_update(staging)（沿用 updater.exe 備份/rollback/重啟）
-  7. DeltaUpdateError（基準不符/驗證失敗）→ 自動退回整包
+core/12_updater.py
+  check_for_update()      # GithubSource(FEED_REPO_URL) → UpdateInfo(version, notes)
+  download_and_apply()    # get_update_pending_restart() → 直接套用；
+                          # 否則 check_for_updates() → download_updates() → apply_updates_and_restart()
+gui/06_gui_main.py        # 啟動背景檢查 + tray/按鈕手動檢查 → 對話框 → 套用後 quit+_exit 讓位
 ```
 
-**判定基準用 `__version__`（build 時烘焙）**：用戶無論整包或 delta 升級到某版，只要版本相符即可用 delta，鏈式一致。使用者自訂檔案（manifest 未列出）一律保留。
+**單一實例防護**：`CreateMutexW("Local\\OCRTriggerClicker.SingleInstance")`，第二份啟動即提示退出。
+雙開曾鎖死安裝目錄導致舊 updater rename 必敗（v0.3.1 兩度撤回的根因）；relaunch 內建化後新程序以
+`--wait-exit-pid=N` 等舊程序退出才初始化，與 mutex 不互撞。
 
-**不產 delta 的情況**（用戶端自動走整包）：第一次發版（無前一版 manifest）、跳過多版更新（base_version 不符）、delta 過大（> 整包 40%）。
-
-**信任邊界**：delta 與整包同樣來自自有 GitHub 官方 URL，完整性靠 manifest sha256（staging 驗證過才交換），authenticity 與現況相同（HTTPS + 無簽章）。rollback 由 updater.exe 既有備份機制涵蓋。
-
-**updater.exe 安全策略**：備份採「rename 失敗＝安全中止」——預清殘留 `<安裝名>_old` → 重試 rename（防毒瞬態鎖）→ 最終失敗彈窗 exit(3)，絕不刪除未備份的舊安裝；`wait-pid` 等待有 30 秒上限，逾時放行後若目標仍被鎖會自然落入安全中止路徑。updater.exe 以 staging 內自身影像執行、清暫存時檔案鎖會殘留 `ocr_update_*` 目錄，由新版主程式啟動時呼叫 `clean_stale_temp_dirs()` 兜底清掃。
+**歷史相容**：`latest_version.txt` 凍結於 0.3.0——v0.3.x 舊客戶端讀它永遠顯示「暫無更新」（斷糧設計），
+升級到安裝版需手動下載 Setup.exe 一次；使用者任務／設定存於 %APPDATA%，跨形態沿用。
 
 ## 日誌架構（三通道）
 

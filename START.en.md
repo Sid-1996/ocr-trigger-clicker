@@ -10,9 +10,9 @@ Someone already made a task file (JSON). You just load it and run.
 
 ### ① Download the tool
 
-[GitHub Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → download `ocr-trigger-clicker.zip`
+[GitHub Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → download `OCRTriggerClicker-win-Setup.exe`
 
-Extract it, run `ocr-trigger-clicker.exe`
+Run the installer (it installs to `%LocalAppData%\OCRTriggerClicker` and creates desktop / Start-menu shortcuts), then launch the tool. Future versions update automatically — no more manual downloads.
 
 > Usually it works fine without admin rights. If nothing happens when the tool runs, try **right-click → Run as Administrator**.
 

@@ -64,7 +64,7 @@
 | 🔀 | **Hybrid mode** | For games that only accept foreground input (like most Unity games): detection runs on background captures with zero disturbance, and only when an action is needed does the tool briefly bring the game to the foreground, click, then restore your previous window and mouse position. Ideal for low-frequency actions — e.g. the game is auto-battling through the story and you only need to tap "Next" after each stage: set up a rule once, then go do something else |
 | ⌨️ | **F8 global hotkey** | Start / stop any time with F8 — no need to switch back to the tool (if paused, F8 resumes) |
 | 🎬 | **Record actions** | Press F9 to record, click through the game once as a demo, then convert it into rules automatically — no manual setup (only mouse clicks are recorded; aiming at text or icons gives the best result) |
-| 🔄 | **Auto-update** | Checks for new versions on launch; delta updates download only changed files (90%+ less traffic), one-click upgrade via the built-in updater |
+| 🔄 | **Auto-update** | Checks for new versions on launch, downloads and applies updates automatically with a restart; delta packages only fetch what changed (~0.6 MB in practice) |
 | 🌐 | **Multilingual UI** | Traditional Chinese / English / Japanese, switch anytime |
 
 ---
@@ -72,7 +72,7 @@
 ## Quick start
 
 <p>
-  <kbd>1</kbd> Download <code>ocr-trigger-clicker.zip</code> → extract → run the exe<br><br>
+  <kbd>1</kbd> Download <code>OCRTriggerClicker-win-Setup.exe</code> → install → launch<br><br>
   <kbd>2</kbd> Select your target window → click "Start"
 </p>
 
@@ -97,7 +97,7 @@ Your saved tasks aren't just for you — share them:
 ## System requirements & installation
 
 - **Windows 10 / 11** (64-bit)
-- No installation or Python needed — download the ZIP, extract, run
+- No Python needed: download Setup.exe, install once (into %LocalAppData%, with desktop & Start-menu shortcuts), and future versions update themselves
 - If nothing happens, or background capture comes back as a black screen, try **right-click → Run as Administrator**
 
 ---

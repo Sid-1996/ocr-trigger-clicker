@@ -10,9 +10,9 @@
 
 ### ① 下載工具
 
-[GitHub Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → 下載 `ocr-trigger-clicker.zip`
+[GitHub Releases](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → 下載 `OCRTriggerClicker-win-Setup.exe`
 
-解壓縮，執行 `ocr-trigger-clicker.exe`
+執行安裝程式（會裝到 `%LocalAppData%\OCRTriggerClicker`，並建立桌面／開始選單捷徑），完成後啟動工具。之後的新版本會自動更新，不必再手動下載。
 
 > 通常正常啟動就能用。如果遊戲沒反應，再試試**按右鍵 → 以系統管理員身分執行**。
 

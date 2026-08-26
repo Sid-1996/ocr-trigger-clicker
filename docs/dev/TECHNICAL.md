@@ -49,20 +49,19 @@
 uv run python build.py
 ```
 
-Output: `dist/ocr-trigger-clicker/` (onedir, includes `ocr-trigger-clicker.exe` + `updater.exe` + `_internal/`)
-Packaged as: `dist/ocr-trigger-clicker.zip` (includes updater and locale files)
+Output: `dist/ocr-trigger-clicker/` (onedir, includes `ocr-trigger-clicker.exe` + `_internal/`)
+Packaged by Velopack (`vpk pack`, invoked by `build.py`) into `Releases/`:
+`OCRTriggerClicker-win-Setup.exe`（安裝器）、`OCRTriggerClicker-x.y.z-full.nupkg`、delta nupkg（有前版時自動產生）、`releases.win.json`（更新 feed 索引）。
 
 ### 差異更新（Delta Update）
 
-發版時 `release.ps1` 會再跑 `uv run python make_delta.py <version> <base_version> dist\ocr-trigger-clicker dist`，額外產出：
+由 Velopack 框架處理，無自訂協定：`release.ps1` 先 `vpk download github` 取回前版資產，
+`vpk pack` 即自動產生 `OCRTriggerClicker-x.y.z-delta.nupkg`（實測 0.4.0→0.4.1 僅 ~0.55 MB，
+對比整包 ~194 MB）。用戶端 delta 不適用或下載失敗時框架自動退回 full。
+首次發版（feed 中無前版 full.nupkg）只有完整包，屬預期行為。
 
-- `dist/ocr-trigger-clicker-delta.zip` — 只含「上一版 → 本版」變更／新增檔案 + `manifest.json`（本版完整檔案清單：rel 路徑 + size + sha256 + `removed`）
-- repo 根 `manifest.json` — 本版完整清單，下一版當差異基準
-- repo 根 `delta_info.json` — `{version, base_version, asset, delta_bytes}`，用戶端 raw 讀取判定用
-
-典型大小比例：整包 ZIP ~200 MB（v0.2.9 瘦身後，此前 ~318 MB），而變更通常只有應用程式程式碼（core/gui/i18n 共 0.82 MB）+ 主 exe（12.8 MB，PyInstaller 把 PYZ 內嵌其中）→ 典型 delta 約 **1~20 MB**。大檔（frida.pyd、ONNX 模型、cv2.pyd、Qt/onnxruntime/numpy 等）幾乎不變，所以不需要進 delta。
-
-不產 delta 的情況（用戶端自動走整包）：第一次發版（無前一版 manifest）、跳過多版更新（`base_version` 不符）、delta 過大（> 整包 40%）。
+feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
+（prod = 正式庫；test = `ocr-trigger-clicker-release-test` 發版沙箱），打包後自動防呆驗證。
 
 ---
 
