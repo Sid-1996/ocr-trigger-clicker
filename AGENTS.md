@@ -246,7 +246,11 @@ uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔
 1. 更新 `docs/dev/CHANGELOG.md`，新增一個 `## [v$x.y.z]` 區塊（Keep a Changelog 格式）
 2. 測試庫打靶（不打擾使用者）：`.\release.ps1 -Version "x.y.z" -FeedTest`
    - 自動 build → vpk pack → 上傳測試庫並**直接公開**
-3. E2E 驗證：安裝測試庫 Setup.exe → 觸發更新 → delta／重啟／雙開防護全綠
+3. E2E 驗證（安裝測試庫 Setup.exe 後逐項點擊，2026-08-26 實測通過的清單）：
+   - 檢查更新 → 應找到沙箱上的新版
+   - 按自動更新 → 進度 → app 自動退出並重啟 → 狀態列顯示「已更新至 vX」
+   - 防雙開：再開一次程式 → 第二份應彈「程式已在執行中」後退出
+   - 切換介面語言 → 應自動重啟且語言生效
 4. 失敗 → 修復 → 回到步驟 2
 
 **正式發版：**
