@@ -1,12 +1,22 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
-    [switch]$Force
+    [switch]$Force,
+    # 發布到測試庫（ocr-trigger-clicker-release-test）：直接公開，供 E2E 驗證
+    [switch]$FeedTest
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
+
+if ($FeedTest) {
+    $repoUrl = "https://github.com/Sid-1996/ocr-trigger-clicker-release-test"
+} else {
+    $repoUrl = "https://github.com/Sid-1996/ocr-trigger-clicker"
+}
+$ghRepo = $repoUrl -replace "^https://github\.com/", ""
+$tagName = "v$Version"
 
 # ---- pre-flight 檢查 ----
 
@@ -33,10 +43,15 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
+    Write-Error "找不到 vpk，請先安裝：dotnet tool install --global vpk"
+    exit 1
+}
+
 if (-not $Force) {
-    $existing = git tag -l "v$Version"
+    $existing = git tag -l $tagName
     if ($existing) {
-        Write-Error "tag v$Version 已存在。若需重發，請加上 -Force 參數"
+        Write-Error "tag $tagName 已存在。若需重發，請加上 -Force 參數"
         exit 1
     }
 }
@@ -86,7 +101,6 @@ if ($nextSectionLine -ge 0) {
     $noteLines = $lines[($versionLine + 1)..($lines.Count - 1)]
 }
 
-# 去除前後空行
 $start = 0
 while ($start -lt $noteLines.Count -and [string]::IsNullOrWhiteSpace($noteLines[$start])) {
     $start++
@@ -110,77 +124,94 @@ $releaseNote = $noteLines -join "`n"
 Write-Output "成功讀取發行說明 ($($noteLines.Count) 行)"
 
 # ---- 更新版本號 ----
-
-# base_version = 上一版（差異更新要與「已發布的上一版」比對）
-$baseVersion = ""
-$latestFile = Join-Path $root "latest_version.txt"
-if (Test-Path $latestFile) {
-    $baseVersion = (Get-Content -Path $latestFile -Encoding utf8 | Select-Object -First 1).Trim()
-}
+# 注意：latest_version.txt 凍結於 0.3.0、刻意不再更新——
+# 讓仍使用自製更新器的舊客戶端永遠顯示「暫無更新」（斷糧，避免觸碰已拆除的更新路徑）
 
 "__version__ = `"$Version`"" | Set-Content _version.py -Encoding utf8
 "__author__ = `"Sid`"" | Add-Content _version.py -Encoding utf8
 '__github__ = "https://github.com/Sid-1996/ocr-trigger-clicker"' | Add-Content _version.py -Encoding utf8
-$Version | Set-Content latest_version.txt -Encoding utf8
 
 $pyprojectPath = Join-Path $root "pyproject.toml"
 $pyprojectText = Get-Content -Path $pyprojectPath -Raw -Encoding utf8
 $pyprojectText = [regex]::Replace($pyprojectText, '(?m)^version = ".*"$', "version = `"$Version`"")
 Set-Content -Path $pyprojectPath -Value $pyprojectText -Encoding utf8
 
-# ---- 打包 ----
+# ---- 取回前版資產（供 Velopack 計算 delta；首次發布無前版時允許失敗） ----
 
-Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
-uv run python build.py
-Compress-Archive -Path dist\ocr-trigger-clicker\* -DestinationPath dist\ocr-trigger-clicker.zip -CompressionLevel Optimal -Force
-
-# ---- 差異更新（delta） ----
-# 產出 dist\ocr-trigger-clicker-delta.zip + 更新 repo 根的 manifest.json / delta_info.json
-
-if ($baseVersion) {
-    uv run python make_delta.py $Version $baseVersion "dist\ocr-trigger-clicker" "dist"
-} else {
-    uv run python make_delta.py $Version "" "dist\ocr-trigger-clicker" "dist"
+Remove-Item -Path Releases -Recurse -Force -ErrorAction SilentlyContinue
+vpk download github --repoUrl $repoUrl
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "無法取得前版資產（首次發布屬正常），本版將只有完整包、無 delta"
 }
 
-# ---- commit（本地，還不 push；含 manifest / delta_info 供用戶端 raw 讀取） ----
+# ---- 打包（PyInstaller + vpk pack） ----
 
-git add _version.py latest_version.txt pyproject.toml docs/dev/CHANGELOG.md manifest.json delta_info.json
+Remove-Item -Path dist -Recurse -Force -ErrorAction SilentlyContinue
+if ($FeedTest) {
+    uv run python build.py --feed test
+} else {
+    uv run python build.py
+}
+if ($LASTEXITCODE -ne 0) { throw "build.py 失敗" }
+
+# ---- commit 版號與 CHANGELOG（本地，還不 push） ----
+
+git add _version.py pyproject.toml docs/dev/CHANGELOG.md
 git commit -m "chore: bump to v$Version"
 
 # ---- 清理既有 tag / release（-Force 模式） ----
 
 if ($Force) {
-    $tagName = "v$Version"
     Write-Output "清理既有 tag 與 release: $tagName"
     git push origin --delete $tagName 2>$null
-    gh release delete $tagName --yes 2>$null
+    gh release delete $tagName -R $ghRepo --yes 2>$null
 }
 
 # ---- push commit + tag ----
 
-git tag v$Version
+git tag $tagName
 git push origin master
-if ($LASTEXITCODE -ne 0) { git tag -d v$Version; throw "Failed to push master" }
-git push origin v$Version
-if ($LASTEXITCODE -ne 0) { git tag -d v$Version; throw "Failed to push tag" }
+if ($LASTEXITCODE -ne 0) { git tag -d $tagName; throw "Failed to push master" }
+git push origin $tagName
+if ($LASTEXITCODE -ne 0) { git tag -d $tagName; throw "Failed to push tag" }
 
-# ---- draft release ----
+# ---- 上傳 Velopack 資產到 GitHub Releases ----
 
-$title = "v$Version"
-$assets = @("dist/ocr-trigger-clicker.zip")
-if (Test-Path "dist\ocr-trigger-clicker-delta.zip") {
-    $assets += "dist\ocr-trigger-clicker-delta.zip"
-}
-$ghArgs = @(
-    "release", "create", "v$Version"
-) + $assets + @(
-    "--title", $title,
-    "--draft", "--prerelease",
-    "--notes", $releaseNote
+$token = (gh auth token).Trim()
+$uploadArgs = @(
+    "upload", "github",
+    "--repoUrl", $repoUrl,
+    "--token", $token,
+    "--tag", $tagName,
+    "--releaseName", $tagName
 )
-gh @ghArgs
+if ($FeedTest) {
+    # 測試庫直接公開——沙箱裡沒有使用者，E2E 才測得到真實下載路徑
+    $uploadArgs += "--publish"
+} else {
+    # 正式庫維持 draft：人工冒煙測試後再到 GitHub 頁面 Publish
+}
+& vpk @uploadArgs
+if ($LASTEXITCODE -ne 0) { throw "vpk upload github 失敗" }
 
-Write-Output "Draft release v$Version 建立完成: https://github.com/Sid-1996/ocr-trigger-clicker/releases/tag/v$Version"
-Write-Output ""
-Write-Output "請先下載 dist\ocr-trigger-clicker\ocr-trigger-clicker.exe 測試，確認無誤後在 GitHub Releases 頁面按「Publish release」公開。"
+# ---- 補發行說明（vpk 不寫 body；draft 狀態也可編輯） ----
+
+$notesFile = Join-Path $env:TEMP "ocr_release_notes_$Version.md"
+$releaseNote | Set-Content -Path $notesFile -Encoding utf8
+gh release edit $tagName -R $ghRepo --title $tagName --notes-file $notesFile
+if ($LASTEXITCODE -ne 0) { throw "gh release edit 失敗" }
+Remove-Item $notesFile -ErrorAction SilentlyContinue
+
+if ($FeedTest) {
+    Write-Output ""
+    Write-Output "✅ 測試庫已公開發布 $tagName"
+    Write-Output "   https://github.com/$ghRepo/releases/tag/$tagName"
+    Write-Output "   可用 feed=test 的安裝包執行 E2E 更新驗證。"
+} else {
+    Write-Output ""
+    Write-Output "Draft release $tagName 建立完成（含 Setup.exe／nupkg／releases.win.json）:"
+    Write-Output "   https://github.com/$ghRepo/releases/tag/$tagName"
+    Write-Output ""
+    Write-Output "請下載 Releases\$tagName 目錄下的 Setup.exe 安裝冒煙測試，"
+    Write-Output "確認無誤後在 GitHub Releases 頁面按「Publish release」公開。"
+}
