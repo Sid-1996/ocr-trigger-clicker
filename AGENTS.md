@@ -292,6 +292,7 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 格式：`## [v$x.y.z] - YYYY-MM-DD`（日期由 `release.ps1` 自動補填）。
 每次發版前手動新增該版本區塊；`release.ps1` 解析後寫入 GitHub release。
 「給使用者」區塊格式：頂部先標「請下載 XXX（檔名）」，再列變更條目（新功能在前、修復在後）。
+主要改版（安裝方式變更等）的「給使用者」區塊頂部，以引用塊標註英日文下載提示（`> **🌐 English**: ...` ／ `> **🌐 日本語**: ...`），直接展開顯示，無需收合。
 
 ## 任務 JSON 同步（GitHub Pages）
 
