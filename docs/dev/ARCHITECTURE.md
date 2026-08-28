@@ -47,7 +47,7 @@ gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──�
                   │               └──→  gui/group_settings_controller
                   │               └──→  gui/screenshot_controller
                   │               └──→  gui/rule_config_controller
-                  │               └──→  gui/test_run_controller
+                  │               └──→  gui/run_controller
                   │               └──→  core/19_recorder        ──→  core/17_capture_pipeline
                   │               └──→  core/20_recorder_convert ──→  core/02_ocr_engine, core/11_template_matching
                   │               └──→  core/group_selection
@@ -107,7 +107,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/group_settings_controller.py` | 群組設定對話框控制器（v0.0.10 從 MainWindow 拆出） | `GroupSettingsController` |
 | `gui/screenshot_controller.py` | 截圖／模板控制器（v0.0.10 從 MainWindow 拆出） | `ScreenshotController` |
 | `gui/rule_config_controller.py` | 規則配置控制器（v0.0.10 從 MainWindow 拆出） | `RuleConfigController` |
-| `gui/test_run_controller.py` | 乾執行測試控制器（v0.0.10 從 MainWindow 拆出） | `TestRunController` |
+| `gui/run_controller.py` | 乾執行測試控制器（v0.0.10 從 MainWindow 拆出；原名 `test_run_controller.py`，v0.4.2 改名避免誤為測試檔） | `TestRunController` |
 | `gui/14_capture_region.py` | 區域截圖選取器（match_image 模板來源） | `capture_region()` |
 | `updater_main.py` | 獨立更新行程（以 `WaitForSingleObject` 等待母進程、重試複製、重新啟動、清理暫存） | **無對外匯出**，由 `apply_update()` 以 `subprocess.Popen` 啟動 |
 | `docs/` | GitHub Pages 專案網站（含 `index.html`、Google Search Console 驗證） | 由 `sid-1996.github.io/ocr-trigger-clicker/` 發布 |
