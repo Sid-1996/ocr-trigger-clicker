@@ -19,6 +19,7 @@
 <meta name="twitter:title" content="OCR Trigger Clicker — 免寫程式遊戲自動化工具">
 <meta name="twitter:description" content="給一般玩家的免寫程式遊戲自動化工具，看畫面文字點兩下建規則，或錄製一遍自動轉成腳本。">
 <meta name="theme-color" content="#0d1117">
+<link rel="icon" href="favicon.ico">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -43,13 +44,20 @@
     --accent-orange: #d29922;
     --text-primary: #e6edf3;
     --text-secondary: #8b949e;
-    --text-muted: #6e7681;
+    --text-muted: #9da7b3;
     --border: #30363d;
     --border-hover: #58a6ff;
     --gradient: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a2332 100%);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ── a11y：鍵盤焦點、錨點不被 sticky nav 遮擋、尊重動畫偏好 ── */
+  :focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; border-radius: 4px; }
+  section[id], .pattern-card[id] { scroll-margin-top: 70px; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
   html { scroll-behavior: smooth; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
@@ -857,7 +865,7 @@
 </footer>
 
 <!-- ════════════ Lightbox ════════════ -->
-<div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大檢視"></div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="放大檢視截圖" onclick="this.classList.remove('show')"><img src="" alt=""></div>
 
 <script>
 // ── Dynamic version ──
@@ -873,6 +881,12 @@ fetch('https://raw.githubusercontent.com/Sid-1996/ocr-trigger-clicker/master/_ve
     if (el2) el2.textContent = 'v' + ver;
   })
   .catch(function() {});
+
+// ── Lightbox：Esc 關閉 ──
+var lightbox = document.getElementById('lightbox');
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && lightbox.classList.contains('show')) lightbox.classList.remove('show');
+});
 
 // ── FAQ accordion ──
 document.querySelectorAll('.faq-question').forEach(function(btn) {

@@ -17,6 +17,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="星之救援者 StarSavior 自動化腳本 — OCR Trigger Clicker">
 <meta name="twitter:description" content="星之救援者 StarSavior 每日任務全自動 + 跑馬輔助腳本 (auto daily quest / racing assist)，匯入直接啟動。">
+<link rel="icon" href="favicon.ico">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -38,6 +39,12 @@
 </script>
 <style>
   * { box-sizing: border-box; }
+  /* ── a11y ── */
+  :focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; border-radius: 4px; }
+  [id] { scroll-margin-top: 16px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
   body { font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif; max-width: 840px; margin: 0 auto; padding: 0 20px 60px; line-height: 1.8; color: #c9d1d9; background: #0d1117; }
   h1 { border-bottom: 2px solid #30363d; padding-bottom: 10px; color: #e6edf3; font-size: 1.8em; }
   h2 { margin-top: 40px; color: #e6edf3; border-left: 4px solid #1f6feb; padding-left: 12px; }
@@ -195,12 +202,12 @@
 <hr>
 
 <footer>
-  <p style="max-width:720px;margin:0 auto 0.8rem;font-size:0.78rem;color:#6e7681;line-height:1.6;">⚠️ 免責聲明：本頁任務與工具僅供個人自動化重複操作使用。使用前請自行確認符合目標遊戲／軟體的服務條款與所在地法規；因使用而導致的帳號風險、損失或第三方爭議，作者與貢獻者概不負責。</p>
+  <p style="max-width:720px;margin:0 auto 0.8rem;font-size:0.78rem;color:#9da7b3;line-height:1.6;">⚠️ 免責聲明：本頁任務與工具僅供個人自動化重複操作使用。使用前請自行確認符合目標遊戲／軟體的服務條款與所在地法規；因使用而導致的帳號風險、損失或第三方爭議，作者與貢獻者概不負責。</p>
   <p><a href="index.html">← 回到 OCR Trigger Clicker 首頁</a></p>
   <p>作者: Sid &nbsp;|&nbsp; <a href="https://github.com/Sid-1996/ocr-trigger-clicker">GitHub 專案</a> &nbsp;|&nbsp; 以 AGPLv3 授權釋出</p>
 </footer>
 
-<div id="lightbox" onclick="this.classList.remove('show')"><img src="" alt="放大檢視"></div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="放大檢視截圖" onclick="this.classList.remove('show')"><img src="" alt=""></div>
 <script>
 document.querySelectorAll('.screenshot').forEach(function(img) {
   img.onclick = function() {
@@ -208,6 +215,9 @@ document.querySelectorAll('.screenshot').forEach(function(img) {
     lb.querySelector('img').src = this.src;
     lb.classList.add('show');
   };
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('show');
 });
 </script>
 </body>
