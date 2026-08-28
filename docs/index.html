@@ -248,8 +248,14 @@
   .hero-shot { margin: 2.5rem auto 0; max-width: 860px; }
   .hero-shot img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 
+
+  /* ── 文件清單（原內聯 style 收攏） ── */
+  .doc-list { padding-left: 1.2rem; color: var(--text-secondary); line-height: 2; text-align: left; }
+  .doc-list.compact { font-size: 0.9rem; line-height: 1.8; margin-top: 6px; }
+
   /* ── Responsive ── */
   @media (max-width: 640px) {
+    .nav-hide-sm { display: none; }
     .hero h1 { font-size: 1.7rem; }
     .hero p { font-size: 0.95rem; }
     nav ul { gap: 0.6rem; }
@@ -285,11 +291,11 @@
     <ul>
       <li><a href="#features">功能</a></li>
       <li><a href="#screenshots">截圖</a></li>
-      <li><a href="#video">影片</a></li>
+      <li class="nav-hide-sm"><a href="#video">影片</a></li>
       <li><a href="#guide">使用</a></li>
-      <li><a href="#tools">工具</a></li>
-      <li><a href="#recording">錄製</a></li>
-      <li><a href="#patterns">模式</a></li>
+      <li class="nav-hide-sm"><a href="#tools">工具</a></li>
+      <li class="nav-hide-sm"><a href="#recording">錄製</a></li>
+      <li class="nav-hide-sm"><a href="#patterns">模式</a></li>
       <li><a href="#faq">FAQ</a></li>
       <li><a href="#gametasks">遊戲任務</a></li>
       <li><a href="#download">下載</a></li>
@@ -442,7 +448,7 @@
     <p class="section-desc">從下載到啟動，最快 3 分鐘。</p>
 
     <h3 style="margin-top:0;">快速入門</h3>
-    <ol style="padding-left:1.2rem;color:var(--text-secondary);line-height:2;">
+    <ol class="doc-listline-height:2;">>
       <li><strong>下載安裝</strong>：從 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases">GitHub Releases</a> 下載 <code>OCRTriggerClicker-win-Setup.exe</code>，執行安裝後啟動工具（之後新版本會自動更新）。</li>
       <li><strong>選目標視窗</strong>：在工具列選取你要操控的視窗（遊戲、ERP 系統、瀏覽器等）。</li>
       <li><strong>建立群組</strong>：按工具列的「+ 群組」按鈕新增群組。預設是「執行一次」+「依序執行」。</li>
@@ -454,7 +460,7 @@
     </ol>
 
     <h3 style="margin-top:1.5rem;">進階技巧</h3>
-    <ul style="padding-left:1.2rem;color:var(--text-secondary);line-height:2;">
+    <ul class="doc-listline-height:2;">>
       <li><strong>縮小 ROI</strong>：偵測區域越小，OCR 速度越快。建議只框選包含目標文字的最小範圍。</li>
       <li><strong>加等待</strong>：在動作步驟之間加「等待（wait）」，讓畫面有時間變化。</li>
       <li><strong>用 jump 跳轉</strong>：在規則間跳轉（限同群組內），可實現條件分支流程。</li>
@@ -475,7 +481,7 @@
     <div class="pattern-card" id="tool-ocr">
       <h4><svg class="ico"><use href="#i-search"/></svg> OCR 診斷面板</h4>
       <p>即時顯示目標視窗中所有可辨識的文字、位置與信心度。</p>
-      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+      <ol class="doc-listfont-size:0.9rem;line-height:1.8;margin-top:6px;">>
         <li>按主介面上的「OCR 診斷」按鈕。</li>
         <li>面板開啟後，即時掃描目標視窗，列出所有辨識到的文字。</li>
         <li>點選任一筆文字，可以看到它的位置（ROI）和信心度。</li>
@@ -486,7 +492,7 @@
     <div class="pattern-card">
       <h4><svg class="ico"><use href="#i-cross"/></svg> ROI 框選</h4>
       <p>ROI（Region of Interest）就是你要偵測的畫面範圍。範圍越小，速度越快、準確度越高。</p>
-      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+      <ol class="doc-listfont-size:0.9rem;line-height:1.8;margin-top:6px;">>
         <li>在偵測步驟中，按「框選偵測區域」按鈕。</li>
         <li>主視窗自動最小化，目標視窗跳到前景。</li>
         <li>在目標視窗上拖曳滑鼠，框選你要偵測的區域。</li>
@@ -497,7 +503,7 @@
     <div class="pattern-card">
       <h4><svg class="ico"><use href="#i-mouse"/></svg> Click Picker（點擊座標選取）</h4>
       <p>選取你要點擊的精確位置。</p>
-      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+      <ol class="doc-listfont-size:0.9rem;line-height:1.8;margin-top:6px;">>
         <li>在點擊步驟中，按「選取點擊座標」按鈕。</li>
         <li>主視窗最小化，目標視窗跳到前景。</li>
         <li>在目標視窗上單擊你要點擊的位置。</li>
@@ -508,7 +514,7 @@
     <div class="pattern-card" id="tool-matchimage">
       <h4><svg class="ico"><use href="#i-image"/></svg> match_image 圖片比對</h4>
       <p>以圖找圖，不受背景文字干擾。無文字可辨識的按鈕或圖示建議優先選用。</p>
-      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+      <ol class="doc-listfont-size:0.9rem;line-height:1.8;margin-top:6px;">>
         <li>在步驟中選擇「match_image（圖片比對）」。</li>
         <li>按「截取區域」從遊戲畫面截取圖片；必要時用「修剪圖片」把範圍剪到最準。</li>
         <li>按「框選搜尋區域」框選搜尋範圍。</li>
@@ -520,7 +526,7 @@
     <div class="pattern-card">
       <h4><svg class="ico"><use href="#i-flask"/></svg> 乾跑測試（Dry-run）</h4>
       <p>不實際執行動作，先看規則會發生什麼事。</p>
-      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+      <ol class="doc-listfont-size:0.9rem;line-height:1.8;margin-top:6px;">>
         <li>選取你要測試的規則。</li>
         <li>按「▶測試」按鈕。偵測步驟會實際截圖辨識，但點擊／按鍵不會真的執行。</li>
         <li>查看結果，根據結果調整參數再測一次。</li>
@@ -530,7 +536,7 @@
     <div class="pattern-card" id="recording">
       <h4><svg class="ico"><use href="#i-clap"/></svg> 錄製操作（示範錄製）</h4>
       <p>不知道怎麼設定規則？直接錄一遍，工具自動轉成規則——不用一條條手動設定。</p>
-      <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
+      <ol class="doc-listfont-size:0.9rem;line-height:1.8;margin-top:6px;">>
         <li>選取目標視窗，按「錄製操作」按鈕（或按 <kbd>F9</kbd>）開始錄製。</li>
         <li>在遊戲裡正常點擊要做的事情，錄製期間不搶焦點，可照常操作。</li>
         <li>再按一次 <kbd>F9</kbd>（或按「停止」）結束錄製。</li>
@@ -538,7 +544,7 @@
       </ol>
       <p style="color:var(--text-muted);font-size:0.85rem;margin-top:8px;">⚠️ 本模式<b>只記錄滑鼠點擊</b>（左鍵／右鍵／中鍵）。鍵盤按鍵、拖曳、滾輪不會被錄製——錄製時想「等一下再點」就直接放慢手速，不要按鍵盤。</p>
       <p style="color:var(--text-secondary);font-size:0.9rem;margin-top:8px;"><strong>錄製小技巧：點在「有東西」的地方，轉換品質更好</strong></p>
-      <ul style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;">
+      <ul class="doc-list compact">
         <li>✅ 點在 <strong>UI 文字上方</strong> → 自動轉成「等文字出現再點擊」，畫面縮放／同長寬比換解析度都不怕，最穩定。</li>
         <li>✅ 點在 <strong>圖示／按鈕</strong>（無文字但有特徵）→ 自動轉成圖片比對（match_image）後點擊。</li>
         <li>❌ 點在 <strong>空白處</strong> → 只能轉成固定等待後點擊（純計時播放），換解析度或畫面位移後容易點錯位置。</li>
