@@ -2783,7 +2783,7 @@ ScreenshotController = _screenshot_mod.ScreenshotController
 _rule_config_mod = load_sibling("rule_config_controller", "gui/rule_config_controller.py")
 RuleConfigController = _rule_config_mod.RuleConfigController
 
-_test_run_mod = load_sibling("test_run_controller", "gui/test_run_controller.py")
+_test_run_mod = load_sibling("run_controller", "gui/run_controller.py")
 TestRunController = _test_run_mod.TestRunController
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
