@@ -60,6 +60,36 @@ def test_to_screen_coords():
     assert sx == 150 and sy == 260
 
 
+# ── 刻意等待不觸發過慢誤報 ──
+
+
+def test_intentional_wait_accumulates_for_slow_loop_exclusion():
+    # wait 步驟與 after_delay 都算「刻意等待」，_loop 過慢判定需扣除
+    ml = _make_ml()
+    ml._frame_waited_ms = 0.0
+    rule = Rule(
+        id="rule_wait",
+        name="等待測試",
+        enabled=True,
+        steps=[
+            Step("wait", {"ms": 150}),
+            Step("click", {"target": "custom", "x": 10, "y": 10, "after_delay_ms": 100}),
+        ],
+    )
+    ml._send_click = lambda x, y, button="left", hold_ms=0: True
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    t0 = time.monotonic()
+    ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    real_ms = (time.monotonic() - t0) * 1000
+    waited = ml._frame_waited_ms
+    # 兩段刻意等待（150+100ms）都被計入
+    assert waited >= 200, f"刻意等待未被完整累加: {waited:.0f}ms / 實際 {real_ms:.0f}ms"
+    # 且不超過實際經過時間（不會把偵測時間也算成等待）
+    assert waited <= real_ms + 1
+
+
 # ── _run_step dispatcher ──
 
 

@@ -205,6 +205,9 @@ class MainLoop:
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
+        # 本幀「刻意等待」時間（wait 步驟＋動作後延遲），由 _loop 重置、_handle_wait/_run_rule 累加；
+        # 過慢判定需扣除，避免長等待被誤判為偵測過慢
+        self._frame_waited_ms: float = 0.0
         # 後台全黑偵測：連續黑幀計數，每次黑幕期只警告一次（見 _check_black_frame）
         self._black_streak: int = 0
         self._fail_since: dict[
@@ -1098,6 +1101,7 @@ class MainLoop:
             t0 = time.monotonic()
             interrupted = self._stop_event.wait(timeout=ms / 1000.0)
             elapsed = (time.monotonic() - t0) * 1000
+            self._frame_waited_ms += elapsed  # 刻意等待：過慢判定時扣除
             if interrupted:
                 self._log(f"規則「{rule.name}」等待中斷（stop_event），經過 {elapsed:.0f}ms")
                 return StepResult("stop", detail=T("exec_log.detail.interrupted"))
@@ -1177,6 +1181,7 @@ class MainLoop:
                 # 讓下一幀/下一規則以新畫面續接；中斷（暫停/停止）即止。
                 if self._stop_event.wait(timeout=ms / 1000.0):
                     return StepResult("stop", detail=T("exec_log.detail.interrupted"))
+                self._frame_waited_ms += ms  # 刻意等待：過慢判定時扣除
             if step.type == "wait" and result.action == "continue":
                 if not background:
                     self._log_exec(rule.name, i, "wait", "ok")
@@ -1677,6 +1682,7 @@ class MainLoop:
                         self._frame_diff_ratio = 1.0
 
                     t2 = time.monotonic()
+                    self._frame_waited_ms = 0.0
                     self._process_rules(img, rect)
                     t3 = time.monotonic()
 
@@ -1684,15 +1690,18 @@ class MainLoop:
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
 
-                    if loop_elapsed > 2000:
+                    # 過慢判定扣除刻意等待（wait 步驟／動作後延遲）——使用者本來就要等，
+                    # 不代表偵測變慢
+                    detect_elapsed = loop_elapsed - self._frame_waited_ms
+                    if detect_elapsed > 2000:
                         if not self._slow_loop_warned:
                             self._slow_loop_warned = True
                             self._log(
-                                f"執行循環過慢: {loop_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
+                                f"執行循環過慢: {detect_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
                             )
                             if self.on_warning:
                                 self.on_warning(
-                                    f"偵測執行太慢：本次花費 {loop_elapsed:.0f} 毫秒（超過 2 秒），"
+                                    f"偵測執行太慢：本次花費 {detect_elapsed:.0f} 毫秒（超過 2 秒），"
                                     "點擊反應會明顯延遲，建議縮小偵測範圍或減少偵測規則"
                                 )
                     else:
