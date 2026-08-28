@@ -129,7 +129,6 @@
   "dialog.export_task": "Export Task",
   "dialog.about": "About OCR Trigger Clicker",
   "dialog.group_selection": "Select Groups to Execute",
-  "dialog.group_selection.remember": "Use these groups next time without asking",
   "dialog.group_ok": "Start",
   "dialog.group_switch_to_bg": "Switch to Background Mode & Execute",
   "dialog.group_switch_to_fg": "Switch to Foreground Mode & Execute",
@@ -737,6 +736,5 @@
   "step_form.pick_existing_image": "Choose Existing Image",
   "step_form.pick_existing_image.tooltip": "Reuse an image captured by another image match step (including unsaved ones in the current task)",
   "picker.title": "Choose Existing Image",
-  "picker.empty": "No captured images yet. Use \"Capture Region\" in an image match step first.",
-  "ui.select_group_hint_changed": "Task groups have changed (added or rebuilt). Please re-confirm which groups to run."
+  "picker.empty": "No captured images yet. Use \"Capture Region\" in an image match step first."
 }

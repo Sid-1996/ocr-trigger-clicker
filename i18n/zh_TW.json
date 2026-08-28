@@ -129,7 +129,6 @@
   "dialog.export_task": "匯出任務",
   "dialog.about": "關於 OCR Trigger Clicker",
   "dialog.group_selection": "選擇要執行的群組",
-  "dialog.group_selection.remember": "下次直接使用這些群組，不再詢問",
   "dialog.group_ok": "開始執行",
   "dialog.group_switch_to_bg": "切換為後台模式並執行",
   "dialog.group_switch_to_fg": "切換為前景模式並執行",
@@ -737,6 +736,5 @@
   "step_form.pick_existing_image": "選擇現有圖片",
   "step_form.pick_existing_image.tooltip": "重用其他圖片比對步驟已截取的圖片（含目前任務尚未存檔者）",
   "picker.title": "選擇現有圖片",
-  "picker.empty": "還沒有任何已截取的圖片。先在圖片比對步驟按「截取區域」截一張。",
-  "ui.select_group_hint_changed": "任務群組已變動（新增或重建），請重新確認要執行的群組。"
+  "picker.empty": "還沒有任何已截取的圖片。先在圖片比對步驟按「截取區域」截一張。"
 }
