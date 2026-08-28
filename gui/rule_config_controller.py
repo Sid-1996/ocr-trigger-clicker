@@ -32,6 +32,7 @@ class RuleConfigController:
         "default_detect_after_delay_ms": 250,
         "language": "zh_TW",
         "notify_resource_warn": True,
+        "ask_group_selection": True,
     }
 
     def __init__(self):

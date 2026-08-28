@@ -3013,6 +3013,11 @@ class SettingsDialog(QDialog):
         self._auto_update.setToolTip(T("settings.auto_update.tooltip"))
         form.addRow("", self._auto_update)
 
+        self._ask_group = QCheckBox(T("settings.ask_group_selection"))
+        self._ask_group.setChecked(self._ctrl.get_setting(win, "ask_group_selection", True))
+        self._ask_group.setToolTip(T("settings.ask_group_selection.tooltip"))
+        form.addRow("", self._ask_group)
+
         # ── 自動化 / 辨識分頁 ──
         auto = QWidget()
         aform = QFormLayout(auto)
@@ -3129,6 +3134,7 @@ class SettingsDialog(QDialog):
             _ocr_mod = load_sibling("_ocr_engine", "core/02_ocr_engine.py")
             _ocr_mod.reset_engine()
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
+        self._ctrl.set_setting(self._win, "ask_group_selection", self._ask_group.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
         if getattr(self._win, "_current_task", ""):
             task_path = str(_rule_mod.get_tasks_dir() / f"{self._win._current_task}.json")
@@ -5895,7 +5901,11 @@ class MainWindow(QMainWindow):
         uncat_count = self._uncat_enabled_count()
         if len(enabled) <= 1:
             return [g.id for g in enabled] if enabled else []
-        # 每次啟動照常詢問、預設全部啟用群組打勾（記憶功能已移除）。
+        # 「不再詢問」：跳過群組確認窗，直接執行全部啟用群組。
+        # 重新開啟詢問：設定 → 一般 → 「啟動時詢問要執行的群組」。
+        if not self._rule_config_ctrl.get_setting(self, "ask_group_selection", True):
+            return [g.id for g in enabled]
+        # 沒有勾「不再詢問」→ 每次啟動照常詢問、預設全部啟用群組打勾。
         dialog = QDialog(self)
         dialog.setWindowTitle(T("dialog.group_selection"))
         layout = QVBoxLayout(dialog)
@@ -5946,6 +5956,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(toggle_all_btn)
         layout.addWidget(scroll)
 
+        # 不再詢問：勾選後從此 F8 / 開始按鈕啟動不再彈群組確認窗，直接執行全部啟用群組。
+        dont_ask_cb = QCheckBox(T("dialog.group_dont_ask"))
+        dont_ask_cb.setToolTip(T("dialog.group_dont_ask.tooltip"))
+        layout.addWidget(dont_ask_cb)
+
         # 便利按鈕：一鍵切換互動模式並執行（前景 ↔ 後台）
         if self._is_bg_mode():
             switch_text = T("dialog.group_switch_to_fg")
@@ -5975,6 +5990,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
+        if dont_ask_cb.isChecked():
+            self._rule_config_ctrl.set_setting(self, "ask_group_selection", False)
         selected = [cb.property("gid") for cb in checks if cb.isChecked()]
         return selected
 
