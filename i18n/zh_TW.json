@@ -132,6 +132,7 @@
   "dialog.group_ok": "開始執行",
   "dialog.group_toggle_all": "全選",
   "dialog.group_toggle_all_none": "全不選",
+  "dialog.uncat_skip_hint": "⚠ 未歸類有 {count} 條啟用中的規則不會執行（可拖曳到其他群組加入執行）",
   "dialog.group_switch_to_bg": "切換為後台模式並執行",
   "dialog.group_switch_to_fg": "切換為前景模式並執行",
   "dialog.test_result": "測試結果（視覺化）",

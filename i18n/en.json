@@ -132,6 +132,7 @@
   "dialog.group_ok": "Start",
   "dialog.group_toggle_all": "Select All",
   "dialog.group_toggle_all_none": "Deselect All",
+  "dialog.uncat_skip_hint": "⚠ {count} enabled rule(s) in Uncategorized will not run (drag them into a group to include them)",
   "dialog.group_switch_to_bg": "Switch to Background Mode & Execute",
   "dialog.group_switch_to_fg": "Switch to Foreground Mode & Execute",
   "dialog.test_result": "Test Result (Visualized)",

@@ -5164,7 +5164,8 @@ class MainWindow(QMainWindow):
                 if gid:
                     target_group = next((g for g in self._groups if g.id == gid), None)
         if target_group is None and self._groups:
-            target_group = self._groups[0]
+            # fallback 不得落入未歸類（該群組規則啟動時不會執行）
+            target_group = next((g for g in self._groups if g.id != "__uncategorized__"), None)
 
         import uuid
 
@@ -5737,7 +5738,8 @@ class MainWindow(QMainWindow):
                 if gid:
                     target_group = next((g for g in self._groups if g.id == gid), None)
         if target_group is None and self._groups:
-            target_group = self._groups[0]
+            # fallback 不得落入未歸類（該群組規則啟動時不會執行）
+            target_group = next((g for g in self._groups if g.id != "__uncategorized__"), None)
         if target_group:
             target_group.rule_ids.append(rule.id)
         self._flush_save()
@@ -5837,7 +5839,8 @@ class MainWindow(QMainWindow):
                 if gid:
                     target_group = next((g for g in self._groups if g.id == gid), None)
         if target_group is None and self._groups:
-            target_group = self._groups[0]
+            # fallback 不得落入未歸類（該群組規則啟動時不會執行）
+            target_group = next((g for g in self._groups if g.id != "__uncategorized__"), None)
         if target_group:
             target_group.rule_ids.append(rule.id)
         self._flush_save()
@@ -5879,8 +5882,17 @@ class MainWindow(QMainWindow):
         )
 
     # === Start / Pause ===
+    def _uncat_enabled_count(self) -> int:
+        """未歸類中「啟用中」的規則數（這些規則啟動時不會執行）。"""
+        uncat = next((g for g in self._groups if g.id == "__uncategorized__"), None)
+        if not uncat:
+            return 0
+        live = {r.id for r in self._rules if r.enabled}
+        return sum(1 for rid in uncat.rule_ids if rid in live)
+
     def _show_group_selection_dialog(self) -> Optional[list[str]]:
         enabled = [g for g in self._groups if g.enabled]
+        uncat_count = self._uncat_enabled_count()
         if len(enabled) <= 1:
             return [g.id for g in enabled] if enabled else []
         # 每次啟動照常詢問、預設全部啟用群組打勾（記憶功能已移除）。
@@ -5892,6 +5904,11 @@ class MainWindow(QMainWindow):
 
         hint = QLabel(T("ui.select_group_hint", count=len(enabled)))
         layout.addWidget(hint)
+        if uncat_count:
+            warn = QLabel(T("dialog.uncat_skip_hint", count=uncat_count))
+            warn.setStyleSheet("color: #b58900; font-size: 12px;")
+            warn.setWordWrap(True)
+            layout.addWidget(warn)
 
         # ── 核取清單：2 欄排列 + 捲動區域（群組多時彈窗不會過長）──
         body = QWidget()
@@ -6028,6 +6045,11 @@ class MainWindow(QMainWindow):
         if not group_ids:
             QMessageBox.warning(self, T("dialog.warning"), T("status.at_least_one_group"))
             return
+        # 單一啟用群組任務不彈群組確認窗 → 未歸類警告改走狀態列（非阻塞）
+        if len([g for g in self._groups if g.enabled]) <= 1:
+            uncat_count = self._uncat_enabled_count()
+            if uncat_count:
+                self._status_bar.showMessage(T("dialog.uncat_skip_hint", count=uncat_count), 8000)
         allowed_ids = {rid for g in self._groups if g.id in group_ids for rid in g.rule_ids}
         rules_by_id = {r.id: r for r in self._rules}
         # 防呆：檢查所選群組內的 detect 空文字 / 自訂點擊 (0,0)，執行前硬性攔截

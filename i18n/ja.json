@@ -132,6 +132,7 @@
   "dialog.group_ok": "開始",
   "dialog.group_toggle_all": "すべて選択",
   "dialog.group_toggle_all_none": "すべて解除",
+  "dialog.uncat_skip_hint": "⚠ 未分類に有効なルールが {count} 件ありますが実行されません（グループへドラッグして実行対象にできます）",
   "dialog.group_switch_to_bg": "バックグラウンドモードに切り替えて実行",
   "dialog.group_switch_to_fg": "フォアグラウンドモードに切り替えて実行",
   "dialog.test_result": "テスト結果（可視化）",
