@@ -139,8 +139,13 @@ if ($FeedTest) {
 
 $pyprojectPath = Join-Path $root "pyproject.toml"
 $pyprojectText = Get-Content -Path $pyprojectPath -Raw -Encoding utf8
-$pyprojectText = [regex]::Replace($pyprojectText, '(?m)^version = ".*"$', "version = `"$Version`"")
+# 注意：不用 `$` 端點——工作區是 CRLF，.NET 正則 `(?m)$` 對不上 `\r` 前的位置會靜默失敗
+$pyprojectText = [regex]::Replace($pyprojectText, '(?m)^version = "[^"]*"', "version = `"$Version`"")
 Set-Content -Path $pyprojectPath -Value $pyprojectText -Encoding utf8
+# 防呆：確認版本真的寫進去了，否則硬失敗（避免再次靜默跳過）
+if ((Get-Content -Path $pyprojectPath -Raw -Encoding utf8) -notmatch ('version = "' + [regex]::Escape($Version) + '"')) {
+    throw "pyproject.toml 版本同步失敗：找不到 version = `"$Version`""
+}
 
 # ---- 取回前版資產（供 Velopack 計算 delta；首次發布無前版時允許失敗） ----
 
