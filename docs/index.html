@@ -93,12 +93,6 @@
     position: relative;
     overflow: hidden;
   }
-  .hero::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 80px);
-    pointer-events: none;
-  }
   .hero .container { position: relative; z-index: 1; }
   .hero .subtitle {
     display: inline-block;
@@ -241,6 +235,19 @@
   .game-cta h4 { margin-bottom: 0.3rem; }
   .game-cta p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem; }
 
+
+  /* ── SVG icon 系統 ── */
+  .ico { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.22em; }
+  .ico-lg { width: 2rem; height: 2rem; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  h4 .ico { color: var(--accent); flex-shrink: 0; }
+  h2 .ico { color: var(--accent); }
+  .req-card .ico-lg { stroke: var(--accent-blue); }
+  section.alt { background: var(--bg-secondary); }
+  .btn-star { border-color: rgba(210,153,34,.6); color: var(--accent-orange); }
+  .btn-star:hover { border-color: var(--accent-orange); background: rgba(210,153,34,.12); color: #eac54f; }
+  .hero-shot { margin: 2.5rem auto 0; max-width: 860px; }
+  .hero-shot img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+
   /* ── Responsive ── */
   @media (max-width: 640px) {
     .hero h1 { font-size: 1.7rem; }
@@ -253,6 +260,24 @@
 </head>
 <body>
 
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-clap" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-cross" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-mouse" viewBox="0 0 24 24"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.787.562l-4.616-2.42a2.123 2.123 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.787-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
+  <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+</svg>
 <!-- ════════════ Nav ════════════ -->
 <nav>
   <div class="container">
@@ -281,10 +306,13 @@
     <p>給一般玩家的免寫程式遊戲自動化工具 — 看畫面文字點兩下就建好規則，或錄製一遍操作自動轉成腳本，自動完成每日任務與重複操作。支援繁中 / English / 日本語介面、圖片比對、前景／後台／混合三種互動方式。</p>
     <div class="actions">
       <a href="#download" class="btn btn-primary">下載最新版本</a>
-      <a href="starsavior.html" class="btn btn-primary" style="background:var(--accent-orange);">⭐ StarSavior 任務</a>
+      <a href="starsavior.html" class="btn btn-outline btn-star"><svg class="ico"><use href="#i-star"/></svg> StarSavior 任務</a>
       <a href="#guide" class="btn btn-outline">快速上手</a>
       <a href="https://github.com/Sid-1996/ocr-trigger-clicker" target="_blank" class="btn btn-outline">GitHub 原始碼</a>
     </div>
+    <figure class="hero-shot">
+      <img src="images/gui-main.png" alt="OCR Trigger Clicker 主介面截圖" width="1920" height="1080" fetchpriority="high">
+    </figure>
   </div>
 </section>
 
@@ -327,58 +355,54 @@
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Features ════════════ -->
-<section id="features">
+<section id="features" class="alt">
   <div class="container">
     <h2>核心功能</h2>
     <p class="section-desc">一套工具涵蓋文字偵測、圖片比對、流程編排與多任務管理。</p>
     <div class="features-grid">
       <div class="feature-card" data-target="tool-ocr">
-        <div class="icon">🔍</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-search"/></svg></div>
         <h3>OCR 文字辨識</h3>
         <p>基於 RapidOCR 引擎（PP-OCRv5 繁中模型，原生支援日文；English 語系自動改用英文專用模型，可選 DirectML GPU 加速）。可指定 ROI 精確比對，避免全螢幕干擾。</p>
       </div>
       <div class="feature-card" data-target="tool-matchimage">
-        <div class="icon">🖼️</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-image"/></svg></div>
         <h3>圖片比對</h3>
       <p>以圖找圖，支援多尺度搜尋與 NMS 篩選。適合無文字的按鈕或圖示。</p>
       </div>
       <div class="feature-card" data-target="patterns">
-        <div class="icon">🔗</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-link"/></svg></div>
         <h3>多步驟流程</h3>
         <p>每條規則由有序步驟組成：偵測、點擊、按鍵、等待、跳轉、數值比對、圖片比對、提示訊息、滾輪、拖曳。</p>
       </div>
       <div class="feature-card" data-target="gametasks">
-        <div class="icon">📂</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-folder"/></svg></div>
         <h3>多任務管理</h3>
         <p>不同場景（不同遊戲、不同表單）建立獨立任務，規則完全隔離，一鍵切換。</p>
       </div>
       <div class="feature-card" data-target="tool-ocr">
-        <div class="icon">👁️</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-eye"/></svg></div>
         <h3>OCR 即時診斷</h3>
         <p>即時顯示目前視窗內所有可辨識文字及其位置與信心度，選取目標後按「建立為新文字規則」一鍵填好偵測條件與位置。</p>
       </div>
       <div class="feature-card" data-target="faq">
-        <div class="icon">🛡️</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-shield"/></svg></div>
         <h3>安全與通知</h3>
         <p>前景保護、系統托盤常駐、on_fail 通知與自動停止群組，執行中更安心。</p>
       </div>
       <div class="feature-card" data-target="faq">
-        <div class="icon">🔀</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-repeat"/></svg></div>
         <h3>混合模式</h3>
         <p>遊戲只吃前景操控也能自動化——平時後台偵測零干擾，需要動作時才短暫切到前景點一下，隨即復原你的視窗與滑鼠。適合低頻動作任務。</p>
       </div>
       <div class="feature-card" data-target="recording">
-        <div class="icon">🎬</div>
+        <div class="icon"><svg class="ico-lg"><use href="#i-clap"/></svg></div>
         <h3>錄製操作</h3>
         <p>按 F9 開始錄製，在遊戲裡點擊示範一遍，停止後自動轉成規則——不用一條條手動設定。</p>
       </div>    </div>
   </div>
 </section>
-
-<hr>
 
 <!-- ════════════ Screenshots ════════════ -->
 <section id="screenshots">
@@ -386,34 +410,30 @@
     <h2>介面截圖</h2>
     <p class="section-desc">深色主題、中文介面，規則列表與步驟編輯一目瞭然。</p>
     <figure>
-      <img class="screenshot" src="images/gui-main.png" alt="OCR Trigger Clicker 工具主介面" loading="lazy">
+      <img class="screenshot" src="images/gui-main.png" alt="OCR Trigger Clicker 工具主介面" width="1920" height="1080" loading="lazy">
       <figcaption>主介面：視窗選擇、任務管理、規則編輯</figcaption>
     </figure>
     <figure>
-      <img class="screenshot" src="images/ocr-diagnostic.png" alt="OCR 即時診斷功能" loading="lazy">
+      <img class="screenshot" src="images/ocr-diagnostic.png" alt="OCR 即時診斷功能" width="1920" height="1080" loading="lazy">
       <figcaption>OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
     </figure>
     <figure>
-      <img class="screenshot" src="images/gui2.png" alt="圖片比對步驟設定" loading="lazy">
+      <img class="screenshot" src="images/gui2.png" alt="圖片比對步驟設定" width="1920" height="1080" loading="lazy">
       <figcaption>圖片比對步驟：截取圖片、設定搜尋區域與相似度門檻</figcaption>
     </figure>
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Video Demo ════════════ -->
-<section id="video">
+<section id="video" class="alt">
   <div class="container">
-    <h2>🎬 示範影片</h2>
+    <h2><svg class="ico"><use href="#i-clap"/></svg> 示範影片</h2>
     <p class="section-desc">一鏡到底看懂主要功能：錄製一遍自動轉規則、多步驟流程、前景／後台模式與任務分享。</p>
     <div class="video-wrap">
       <iframe src="https://www.dailymotion.com/embed/video/xaxgcfq" title="OCR Trigger Clicker 示範影片" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe>
     </div>
   </div>
 </section>
-
-<hr>
 
 <!-- ════════════ Guide ════════════ -->
 <section id="guide">
@@ -446,16 +466,14 @@
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Tools ════════════ -->
-<section id="tools">
+<section id="tools" class="alt">
   <div class="container">
     <h2>工具教學</h2>
     <p class="section-desc">每個工具都有專屬功能，搭配使用能大幅降低設定難度。</p>
 
     <div class="pattern-card" id="tool-ocr">
-      <h4>🔍 OCR 診斷面板</h4>
+      <h4><svg class="ico"><use href="#i-search"/></svg> OCR 診斷面板</h4>
       <p>即時顯示目標視窗中所有可辨識的文字、位置與信心度。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>按主介面上的「OCR 診斷」按鈕。</li>
@@ -466,7 +484,7 @@
     </div>
 
     <div class="pattern-card">
-      <h4>📐 ROI 框選</h4>
+      <h4><svg class="ico"><use href="#i-cross"/></svg> ROI 框選</h4>
       <p>ROI（Region of Interest）就是你要偵測的畫面範圍。範圍越小，速度越快、準確度越高。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>在偵測步驟中，按「框選偵測區域」按鈕。</li>
@@ -477,7 +495,7 @@
     </div>
 
     <div class="pattern-card">
-      <h4>🖱️ Click Picker（點擊座標選取）</h4>
+      <h4><svg class="ico"><use href="#i-mouse"/></svg> Click Picker（點擊座標選取）</h4>
       <p>選取你要點擊的精確位置。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>在點擊步驟中，按「選取點擊座標」按鈕。</li>
@@ -488,7 +506,7 @@
     </div>
 
     <div class="pattern-card" id="tool-matchimage">
-      <h4>🖼️ match_image 圖片比對</h4>
+      <h4><svg class="ico"><use href="#i-image"/></svg> match_image 圖片比對</h4>
       <p>以圖找圖，不受背景文字干擾。無文字可辨識的按鈕或圖示建議優先選用。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>在步驟中選擇「match_image（圖片比對）」。</li>
@@ -500,7 +518,7 @@
     </div>
 
     <div class="pattern-card">
-      <h4>🧪 乾跑測試（Dry-run）</h4>
+      <h4><svg class="ico"><use href="#i-flask"/></svg> 乾跑測試（Dry-run）</h4>
       <p>不實際執行動作，先看規則會發生什麼事。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>選取你要測試的規則。</li>
@@ -510,7 +528,7 @@
     </div>
 
     <div class="pattern-card" id="recording">
-      <h4>🎬 錄製操作（示範錄製）</h4>
+      <h4><svg class="ico"><use href="#i-clap"/></svg> 錄製操作（示範錄製）</h4>
       <p>不知道怎麼設定規則？直接錄一遍，工具自動轉成規則——不用一條條手動設定。</p>
       <ol style="padding-left:1.2rem;color:var(--text-secondary);font-size:0.9rem;line-height:1.8;margin-top:6px;">
         <li>選取目標視窗，按「錄製操作」按鈕（或按 <kbd>F9</kbd>）開始錄製。</li>
@@ -530,8 +548,6 @@
     </div>
   </div>
 </section>
-
-<hr>
 
 <!-- ════════════ Design Principles ════════════ -->
 <section id="principles">
@@ -563,10 +579,8 @@
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Patterns ════════════ -->
-<section id="patterns">
+<section id="patterns" class="alt">
   <div class="container">
     <h2>常見腳本模式</h2>
     <p class="section-desc">以下四種模式涵蓋 80% 的使用場景。</p>
@@ -608,8 +622,6 @@
     </div>
   </div>
 </section>
-
-<hr>
 
 <!-- ════════════ Examples ════════════ -->
 <section id="examples">
@@ -662,22 +674,18 @@
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Game Tasks ════════════ -->
-<section id="gametasks">
+<section id="gametasks" class="alt">
   <div class="container">
     <h2>遊戲任務展示</h2>
     <p class="section-desc">這套工具已經實際用於星之救援者 (StarSavior) 的每日任務自動化。</p>
     <div class="game-cta">
-      <h4>⭐ 星之救援者 StarSavior</h4>
+      <h4><svg class="ico"><use href="#i-star"/></svg> 星之救援者 StarSavior</h4>
       <p>完整的每日流程（掛機、派遣、探索、商店、好友、信件、PVP 等）與跑馬事件輔助。下載任務 JSON 匯入後即可使用，可自行啟停調整。</p>
       <a href="starsavior.html" class="btn btn-primary" style="font-size:0.9rem;padding:0.5rem 1.5rem;">查看完整介紹與下載 →</a>
     </div>
   </div>
 </section>
-
-<hr>
 
 <!-- ════════════ FAQ ════════════ -->
 <section id="faq">
@@ -787,34 +795,30 @@
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Requirements ════════════ -->
-<section id="requirements">
+<section id="requirements" class="alt">
   <div class="container">
     <h2>系統需求</h2>
     <p class="section-desc">幾乎什麼都不用準備。</p>
     <div class="req-grid">
       <div class="req-card">
-        <div class="req-icon">🖥️</div>
+        <div class="req-icon"><svg class="ico-lg"><use href="#i-monitor"/></svg></div>
         <h4>作業系統</h4>
         <p>Windows 10 / 11（64 位元）</p>
       </div>
       <div class="req-card">
-        <div class="req-icon">📦</div>
+        <div class="req-icon"><svg class="ico-lg"><use href="#i-package"/></svg></div>
         <h4>安裝</h4>
         <p>下載 Setup.exe 安裝，自動更新<br><span style="font-size:0.82em;color:var(--text-muted);">亦提供 Portable.zip 可攜版</span></p>
       </div>
       <div class="req-card">
-        <div class="req-icon">⚡</div>
+        <div class="req-icon"><svg class="ico-lg"><use href="#i-zap"/></svg></div>
         <h4>GPU（選用）</h4>
         <p>DirectX 12 可加速 OCR</p>
       </div>
     </div>
   </div>
 </section>
-
-<hr>
 
 <!-- ════════════ Download ════════════ -->
 <section id="download">
@@ -825,7 +829,7 @@
       <div class="version" id="dl-version">v0.4.0</div>
       <div class="meta">Windows 10/11 64-bit · 安裝版，自動更新 · 亦提供可攜版</div>
       <div class="actions">
-        <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" target="_blank" class="btn btn-primary">下載最新版本</a>
+        <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases/latest/download/OCRTriggerClicker-win-Setup.exe" target="_blank" class="btn btn-primary">下載最新版本</a>
         <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases" target="_blank" class="btn btn-outline">所有版本</a>
         <a href="https://github.com/Sid-1996/ocr-trigger-clicker/archive/refs/heads/master.zip" target="_blank" class="btn btn-outline">原始碼 ZIP</a>
       </div>
@@ -833,12 +837,10 @@
   </div>
 </section>
 
-<hr>
-
 <!-- ════════════ Support ════════════ -->
 <section id="support">
   <div class="container">
-    <h2>☕ 贊助</h2>
+    <h2><svg class="ico"><use href="#i-coffee"/></svg> 贊助</h2>
     <p class="section-desc">如果這個工具對你有幫助，歡迎用你喜歡的方式支持我。</p>
     <div style="text-align:center;">
       <a href="https://p.ecpay.com.tw/E0E3A" target="_blank" style="display:inline-block;margin:0.3rem;"><img src="https://img.shields.io/badge/ECPAY-請喝咖啡-238636?style=for-the-badge" alt="ECPAY"></a>
