@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -5892,13 +5893,41 @@ class MainWindow(QMainWindow):
         hint = QLabel(T("ui.select_group_hint", count=len(enabled)))
         layout.addWidget(hint)
 
+        # ── 核取清單：2 欄排列 + 捲動區域（群組多時彈窗不會過長）──
+        body = QWidget()
+        grid = QGridLayout(body)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(6)
         checks = []
-        for g in enabled:
+        per_col = (len(enabled) + 1) // 2
+        for i, g in enumerate(enabled):
             cb = QCheckBox(g.name)
             cb.setChecked(True)  # 每次開啟預設全部啟用群組打勾
             cb.setProperty("gid", g.id)
             checks.append(cb)
-            layout.addWidget(cb)
+            grid.addWidget(cb, i % per_col, i // per_col)
+
+        # 全選 / 全不選（依當前狀態切換）
+        toggle_all_btn = QPushButton(T("dialog.group_toggle_all_none"))
+
+        def _toggle_all():
+            target = not all(cb.isChecked() for cb in checks)
+            for cb in checks:
+                cb.setChecked(target)
+            toggle_all_btn.setText(
+                T("dialog.group_toggle_all_none" if not target else "dialog.group_toggle_all")
+            )
+
+        toggle_all_btn.clicked.connect(_toggle_all)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(body)
+        avail = QApplication.primaryScreen().availableGeometry().height()
+        scroll.setMaximumHeight(int(avail * 0.55))
+        layout.addWidget(toggle_all_btn)
+        layout.addWidget(scroll)
 
         # 便利按鈕：一鍵切換互動模式並執行（前景 ↔ 後台）
         if self._is_bg_mode():

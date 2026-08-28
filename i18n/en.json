@@ -130,6 +130,8 @@
   "dialog.about": "About OCR Trigger Clicker",
   "dialog.group_selection": "Select Groups to Execute",
   "dialog.group_ok": "Start",
+  "dialog.group_toggle_all": "Select All",
+  "dialog.group_toggle_all_none": "Deselect All",
   "dialog.group_switch_to_bg": "Switch to Background Mode & Execute",
   "dialog.group_switch_to_fg": "Switch to Foreground Mode & Execute",
   "dialog.test_result": "Test Result (Visualized)",

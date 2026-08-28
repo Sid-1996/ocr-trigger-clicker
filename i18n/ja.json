@@ -130,6 +130,8 @@
   "dialog.about": "OCR Trigger Clicker について",
   "dialog.group_selection": "実行するグループを選択",
   "dialog.group_ok": "開始",
+  "dialog.group_toggle_all": "すべて選択",
+  "dialog.group_toggle_all_none": "すべて解除",
   "dialog.group_switch_to_bg": "バックグラウンドモードに切り替えて実行",
   "dialog.group_switch_to_fg": "フォアグラウンドモードに切り替えて実行",
   "dialog.test_result": "テスト結果（可視化）",
