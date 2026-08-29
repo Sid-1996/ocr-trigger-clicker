@@ -150,6 +150,10 @@ def _rule_own_group_id(rule_id: str, groups_provider) -> Optional[str]:
     return None
 
 
+_group_models = load_sibling("rule_models", "core/rule_models.py")
+group_display_name = _group_models.group_display_name
+
+
 def _group_name_for_id(gid: str, groups_provider) -> str:
     """群組 id → 名稱（支援 dict 或 RuleGroup 物件）；找不到回原 id。"""
     if not gid or not groups_provider:
@@ -157,7 +161,7 @@ def _group_name_for_id(gid: str, groups_provider) -> str:
     for g in groups_provider() or []:
         g_id = g.get("id", "") if isinstance(g, dict) else g.id
         if g_id == gid:
-            return g.get("name", gid) if isinstance(g, dict) else g.name
+            return group_display_name(g) or gid
     return gid
 
 
@@ -205,7 +209,7 @@ class _StopGroupsPicker(QWidget):
         return [
             {
                 "id": g.get("id", "") if isinstance(g, dict) else g.id,
-                "name": g.get("name", "") if isinstance(g, dict) else g.name,
+                "name": group_display_name(g),
             }
             for g in raw
         ]
@@ -463,7 +467,7 @@ def _populate_rule_combo(combo, rules, groups=None, exclude_rule_id=""):
             r = rule_map.get(rid)
             if r is None or r.id == exclude_rule_id:
                 continue
-            combo.addItem(f"{g.name} › {r.name}", r.id)
+            combo.addItem(f"{group_display_name(g)} › {r.name}", r.id)
             seen.add(r.id)
     for r in rules:
         if r.id in seen or r.id == exclude_rule_id:
@@ -4588,9 +4592,9 @@ class MainWindow(QMainWindow):
             group_item = QTreeWidgetItem()
             if g.enabled:
                 order_tag = "∥" if g.order == "parallel" else ""
-                text = f"{order_tag} {g.name}".strip()
+                text = f"{order_tag} {group_display_name(g)}".strip()
             else:
-                text = g.name
+                text = group_display_name(g)
                 group_item.setForeground(0, QColor("#888888"))
             group_item.setText(0, text)
             group_item.setData(0, Qt.ItemDataRole.UserRole, ("group", g.id))
@@ -5379,7 +5383,7 @@ class MainWindow(QMainWindow):
             normal_groups = [g for g in self._groups if not g.id.startswith("__")]
             if normal_groups:
                 for g in normal_groups:
-                    group_act = copy_to_menu.addAction(g.name)
+                    group_act = copy_to_menu.addAction(group_display_name(g))
                     group_act.setData(g.id)
                     group_act.triggered.connect(
                         lambda checked, gid=g.id: self._duplicate_rule_to_group(gid)
@@ -5389,7 +5393,7 @@ class MainWindow(QMainWindow):
             move_to_menu = menu.addMenu(T("ui.move_to_group"))
             if normal_groups:
                 for g in normal_groups:
-                    group_act = move_to_menu.addAction(g.name)
+                    group_act = move_to_menu.addAction(group_display_name(g))
                     group_act.setData(g.id)
                     group_act.triggered.connect(
                         lambda checked, gid=g.id: self._move_rule_to_group(gid)
@@ -5522,7 +5526,12 @@ class MainWindow(QMainWindow):
         self._flush_save()
         self._refresh_rule_list()
         self._status_bar.showMessage(
-            T("notif.rule_moved", rule_name=src_rule.name, group_name=target_group.name), 4000
+            T(
+                "notif.rule_moved",
+                rule_name=src_rule.name,
+                group_name=group_display_name(target_group),
+            ),
+            4000,
         )
         if self._loop:
             self._loop.reload_rules()
@@ -5952,7 +5961,7 @@ class MainWindow(QMainWindow):
         checks = []
         per_col = (len(enabled) + 1) // 2
         for i, g in enumerate(enabled):
-            cb = QCheckBox(g.name)
+            cb = QCheckBox(group_display_name(g))
             cb.setChecked(True)  # 每次開啟預設全部啟用群組打勾
             cb.setProperty("gid", g.id)
             checks.append(cb)

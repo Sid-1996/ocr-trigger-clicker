@@ -28,6 +28,7 @@ _input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _bg_input = load_sibling("bg_input", "core/16_bg_input.py")
 _hybrid = load_sibling("hybrid_input", "core/19_hybrid_input.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
+group_display_name = load_sibling("rule_models", "core/rule_models.py").group_display_name
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
 _rule_config = load_sibling("rule_config_controller", "gui/rule_config_controller.py")
@@ -796,8 +797,7 @@ class MainLoop:
             for g in self._groups:
                 g_id = g.get("id", "") if isinstance(g, dict) else g.id
                 if g_id == gid:
-                    g_name = g.get("name", gid) if isinstance(g, dict) else g.name
-                    names.append(g_name)
+                    names.append(group_display_name(g) or gid)
                     break
             else:
                 names.append(gid)
