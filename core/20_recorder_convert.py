@@ -57,6 +57,10 @@ _MIN_OCR_CONF = 0.25
 _FUZZY_THRESHOLD = 0.8
 _FALLBACK_GAP_MS = (300, 5000)  # 無錨點規則的 wait 上下限
 _DEFAULT_FIRST_GAP_MS = 1000
+# 錄製轉換專屬延時預設（與全域「動作後延遲／偵測後延時」設定分離，穩定性優先）。
+# 呼叫端（GUI）未提供對應 key 時兜底；使用者明確設 0 仍尊重（不等待）。
+_RECORD_AFTER_DELAY_MS = 500
+_RECORD_DETECT_AFTER_DELAY_MS = 500
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -69,16 +73,16 @@ def _resolved(defaults: dict | None, key: str, fallback):
 
 
 def _with_after_delay(params: dict, defaults: dict | None) -> dict:
-    """動作後延遲預設（>0 才寫入，0/缺省＝不等待）。"""
-    ad = _resolved(defaults, "after_delay_ms", 0)
+    """動作後延遲（>0 才寫入，0＝不等待；缺 key 時用錄製專屬內建預設）。"""
+    ad = _resolved(defaults, "after_delay_ms", _RECORD_AFTER_DELAY_MS)
     if ad > 0:
         params["after_delay_ms"] = ad
     return params
 
 
 def _with_detect_after_delay(params: dict, defaults: dict | None) -> dict:
-    """偵測後延遲預設（>0 才寫入，0/缺省＝不等待）。套用於 detect / match_image 步驟。"""
-    ad = _resolved(defaults, "detect_after_delay_ms", 0)
+    """偵測後延遲（>0 才寫入，套用於 detect / match_image 步驟；缺 key 用錄製內建預設）。"""
+    ad = _resolved(defaults, "detect_after_delay_ms", _RECORD_DETECT_AFTER_DELAY_MS)
     if ad > 0:
         params["after_delay_ms"] = ad
     return params
@@ -367,7 +371,8 @@ def convert_sessions(session_dirs: list[Path], defaults: dict | None = None) -> 
 
     每個 session 一組群組（mode=once），群組名取錄製時間戳。
     defaults 為設定窗預設值 dict（fuzzy_threshold / template_threshold / color_tolerance /
-    random_offset / after_delay_ms），None 時用模組內建常數。
+    random_offset / after_delay_ms / detect_after_delay_ms——後兩者來自「錄製操作」專屬設定，
+    與全域延時預設分離），None 或缺 key 時用模組內建常數（延時＝穩定性優先 500ms）。
     回傳 {"rules": [...], "groups": [...], "stats": {...}}。
     """
     rules: list[Rule] = []

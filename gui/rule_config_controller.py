@@ -30,6 +30,9 @@ class RuleConfigController:
         "default_wait_ms": 500,
         "default_after_delay_ms": 250,
         "default_detect_after_delay_ms": 250,
+        # 錄製操作轉換專屬延時（與全域延時分離，穩定性優先；見 docs/adr/0002）
+        "record_after_delay_ms": 500,
+        "record_detect_after_delay_ms": 500,
         "language": "zh_TW",
         "notify_resource_warn": True,
         "ask_group_selection": True,

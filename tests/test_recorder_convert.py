@@ -178,23 +178,33 @@ def test_convert_detect_after_delay_applied():
     tr = _conv._build_template_rule(0, "b64data", roi, "left", defs)
     mt = [s for s in tr.steps if s.type == "match_image"][0]
     assert mt.params["after_delay_ms"] == 500
-    # 0 / 缺省 → 不寫入欄位
+    # 明確設 0 → 不寫入欄位
     ar0 = _conv._build_anchored_rule(0, "確定", roi, "left", {"detect_after_delay_ms": 0})
     d0 = [s for s in ar0.steps if s.type == "detect"][0]
     assert "after_delay_ms" not in d0.params
-    tr0 = _conv._build_template_rule(0, "b64data", roi, "left")
-    mt0 = [s for s in tr0.steps if s.type == "match_image"][0]
-    assert "after_delay_ms" not in mt0.params
 
 
 def test_convert_no_defaults_keeps_builtins(tmp_path):
-    """未傳 defaults 時維持內建常數（random_offset=0 for timing，不寫 after_delay_ms）。"""
+    """未傳 defaults 時：延時用錄製專屬內建 500ms（穩定性優先），random_offset 維持 0。"""
     sd = _blank_session(tmp_path)
     res = convert_sessions([sd])
     for rule in res["rules"]:
         click = [s for s in rule.steps if s.type == "click"][0]
-        assert "after_delay_ms" not in click.params
+        assert click.params["after_delay_ms"] == _conv._RECORD_AFTER_DELAY_MS
         assert click.params["random_offset"] == 0
+
+
+def test_convert_missing_delay_keys_fall_back_to_record_defaults(tmp_path):
+    """defaults 缺延時 key（例如舊設定檔）→ 兜底錄製專屬內建 500ms；明確 0 仍尊重。"""
+    sd = _blank_session(tmp_path)
+    res = convert_sessions([sd], {"random_offset": 2})
+    for rule in res["rules"]:
+        click = [s for s in rule.steps if s.type == "click"][0]
+        assert click.params["after_delay_ms"] == _conv._RECORD_AFTER_DELAY_MS
+    # 偵測步驟同樣兜底（detect / match_image）
+    ar = _conv._build_anchored_rule(0, "確定", {"x": 0, "y": 0, "w": 0.1, "h": 0.1}, "left", {})
+    d = [s for s in ar.steps if s.type == "detect"][0]
+    assert d.params["after_delay_ms"] == _conv._RECORD_DETECT_AFTER_DELAY_MS
 
 
 def test_build_template_rule_applies_threshold_and_color(tmp_path):

@@ -3076,6 +3076,25 @@ class SettingsDialog(QDialog):
         )
         aform.addRow(T("settings.default_detect_after_delay"), self._default_detect_after_delay)
 
+        # ── 錄製操作設定（與全域延時分離，穩定性優先；見 docs/adr/0002）──
+        self._record_after_delay = QSpinBox()
+        self._record_after_delay.setRange(0, 60000)
+        self._record_after_delay.setSingleStep(100)
+        self._record_after_delay.setSuffix(" ms")
+        self._record_after_delay.setValue(self._ctrl.get_setting(win, "record_after_delay_ms"))
+        self._record_after_delay.setToolTip(T("settings.record_after_delay.tooltip"))
+        aform.addRow(T("settings.record_after_delay"), self._record_after_delay)
+
+        self._record_detect_after_delay = QSpinBox()
+        self._record_detect_after_delay.setRange(0, 60000)
+        self._record_detect_after_delay.setSingleStep(100)
+        self._record_detect_after_delay.setSuffix(" ms")
+        self._record_detect_after_delay.setValue(
+            self._ctrl.get_setting(win, "record_detect_after_delay_ms")
+        )
+        self._record_detect_after_delay.setToolTip(T("settings.record_detect_after_delay.tooltip"))
+        aform.addRow(T("settings.record_detect_after_delay"), self._record_detect_after_delay)
+
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
         self._fuzzy_th.setSingleStep(0.05)
@@ -3147,6 +3166,10 @@ class SettingsDialog(QDialog):
         )
         self._ctrl.set_setting(
             self._win, "default_detect_after_delay_ms", self._default_detect_after_delay.value()
+        )
+        self._ctrl.set_setting(self._win, "record_after_delay_ms", self._record_after_delay.value())
+        self._ctrl.set_setting(
+            self._win, "record_detect_after_delay_ms", self._record_detect_after_delay.value()
         )
         self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
         self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
@@ -4250,9 +4273,10 @@ class MainWindow(QMainWindow):
             ),
             "color_tolerance": self._rule_config_ctrl.get_setting(self, "default_color_tolerance"),
             "random_offset": self._rule_config_ctrl.get_setting(self, "default_random_offset"),
-            "after_delay_ms": self._rule_config_ctrl.get_setting(self, "default_after_delay_ms", 0),
+            # 錄製轉換延時用「錄製操作」專屬設定，與全域延時預設分離（docs/adr/0002）
+            "after_delay_ms": self._rule_config_ctrl.get_setting(self, "record_after_delay_ms"),
             "detect_after_delay_ms": self._rule_config_ctrl.get_setting(
-                self, "default_detect_after_delay_ms", 0
+                self, "record_detect_after_delay_ms"
             ),
         }
         worker = RecordConvertWorker(sessions, defaults)
