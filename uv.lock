@@ -152,7 +152,7 @@ wheels = [
 
 [[package]]
 name = "ocr-trigger-clicker"
-version = "0.4.2"
+version = "0.4.3"
 source = { virtual = "." }
 dependencies = [
     { name = "dxcam" },
