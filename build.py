@@ -310,9 +310,32 @@ def _read_version(here: Path) -> str:
     return m.group(1)
 
 
+def read_release_notes(here: Path, version: str) -> str:
+    """從 docs/dev/CHANGELOG.md 取出 `## [v{version}]` 區塊（去除首尾空行）。
+
+    與 release.ps1 的解析規則一致；找不到區塊回空字串（release.ps1 會先擋掉，
+    這裡僅靜默帶空，vpk 就不嵌入 notes）。
+    """
+    text = (here / "docs" / "dev" / "CHANGELOG.md").read_text(encoding="utf-8")
+    m = re.search(
+        rf"^## \[v{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not m:
+        return ""
+    lines = m.group(1).splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
+
+
 def pack_velopack():
     """Velopack 打包：產生 Setup.exe／full.nupkg／delta（若有前版）至 Releases/。"""
     import subprocess
+    import tempfile
 
     here = Path(__file__).parent
     version = _read_version(here)
@@ -330,6 +353,15 @@ def pack_velopack():
         "--outputDir",
         str(here / "Releases"),
     ]
+    # 內嵌發行說明：用戶端 UpdateInfo.NotesMarkdown 來自 nupkg manifest，
+    # 沒帶這個參數，更新彈窗只會顯示「無法取得更新說明」（GitHub release body 不影響）
+    notes = read_release_notes(here, version)
+    if notes:
+        f = Path(tempfile.gettempdir()) / f"ocr_vpk_notes_{version}.md"
+        f.write_text(notes, encoding="utf-8")
+        cmd += ["--releaseNotes", str(f)]
+    else:
+        print("⚠️ CHANGELOG 無 v%s 區塊，vpk 不嵌入發行說明" % version)
     print("\n=== Velopack 打包（vpk pack）===")
     print(" ".join(cmd))
     r = subprocess.run(cmd, cwd=str(here))
@@ -339,6 +371,11 @@ def pack_velopack():
 
 if __name__ == "__main__":
     _build_here = Path(__file__).parent
+    # self-check：CHANGELOG 解析壞掉會讓更新彈窗空白，先抓出來
+    _notes = read_release_notes(_build_here, _read_version(_build_here))
+    assert _notes.strip(), "self-check 失敗：CHANGELOG 找不到當前版本的發行說明區塊"
+    assert "請下載" in _notes, "self-check 失敗：發行說明缺少「請下載」提示行"
+    print("✓ 發行說明 self-check 通過（%d 字）" % len(_notes))
     print("OCR Trigger Clicker - 打包工具")
     print(f"工作目錄: {Path.cwd()}")
     print(f"腳本目錄: {_build_here}")
