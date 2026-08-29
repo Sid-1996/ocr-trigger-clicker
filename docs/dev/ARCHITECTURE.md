@@ -90,7 +90,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/18_frida_bg.py` | Frida 行程注入（後台點擊＋鍵盤；多數 Unity 遊戲因底層限制不支援，以遊戲視窗自行測試為準） | `ensure_attached()`, `click()`, `key()`, `detach()`, `last_error()` |
 | `core/19_hybrid_input.py` | 混合模式輸入（後台 PrintWindow 偵測＋動作時短暫激活遊戲做 pynput 物理輸入，完成後復原使用者前景與滑鼠） | `focus_guard(title, activate_fn)` context manager |
 | `core/19_recorder.py` | 滑鼠示範錄製器（全域攔截＋動作前截圖＋前景重送） | `Recorder` class（`start(title, hwnd, session_dir)` / `stop()`）、session 輸出 `recordings/session-*` |
-| `core/20_recorder_convert.py` | 錄製 session → 規則轉換器（離線後處理） | `convert_sessions()`, `merge_rule_entries()`（OCR 錨點 / 模板錨點 / wait+click 三層） |
+| `core/20_recorder_convert.py` | 錄製 session → 規則轉換器（離線後處理） | `convert_sessions()`, `merge_rule_entries()`（OCR 錨點 / 模板錨點 / wait+click 三層）；延時預設來自「錄製操作」專屬設定（`record_*_after_delay_ms`，與全域延時分離，見 docs/adr/0002） |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
 | `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
 | `core/11_template_matching.py` | 圖示模板比對 + inline 模板 LRU 解碼快取 | `match_template()`, `nms_suppress()`, `MatchResult`, `clear_template_cache()` |
