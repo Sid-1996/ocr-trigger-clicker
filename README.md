@@ -72,7 +72,7 @@
 ## 快速開始
 
 <p>
-  <kbd>1</kbd> 下載 <code>OCRTriggerClicker-win-Setup.exe</code> → 安裝 → 啟動<br><br>
+  <kbd>1</kbd> 下載 <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases/latest"><code>OCRTriggerClicker-win-Setup.exe</code></a> → 安裝 → 啟動<br><br>
   <kbd>2</kbd> 選取目標視窗 → 按「啟動」
 </p>
 

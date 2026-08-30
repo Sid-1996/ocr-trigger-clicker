@@ -72,7 +72,7 @@
 ## Quick start
 
 <p>
-  <kbd>1</kbd> Download <code>OCRTriggerClicker-win-Setup.exe</code> → install → launch<br><br>
+  <kbd>1</kbd> Download <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases/latest"><code>OCRTriggerClicker-win-Setup.exe</code></a> → install → launch<br><br>
   <kbd>2</kbd> Select your target window → click "Start"
 </p>
 
