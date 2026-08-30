@@ -1,259 +1,4 @@
 {
-  "groups": [
-    {
-      "id": "__default__",
-      "name": "每日掛機獎勵",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "001933b9bbbe",
-        "47a842575788",
-        "8490106e862e",
-        "564ad8803ad0",
-        "a0dcf46dd969"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_266e1f8c",
-      "name": "每日重新派遣",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "38e067112269",
-        "5c6ec220a8c9",
-        "e78022cd87ba",
-        "ec2a396e3f90",
-        "3bb47d51514f"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_39a1b80d",
-      "name": "每日戰鬥探索",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "94278051661e",
-        "c9eb8dec407c",
-        "3fcda0b8d285",
-        "ec4875752fe4",
-        "953ba51f72e6",
-        "3802c47ad696",
-        "51015e19256f",
-        "10eb3f3de862",
-        "8280240ec5a5",
-        "d9d439d9e176",
-        "rule_6fc982fe",
-        "a068faa605e9",
-        "82cdad4adbfa",
-        "1e95387f6db1",
-        "rule_c6eef45d"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_a1d5b815",
-      "name": "從探索委託到廣場",
-      "enabled": true,
-      "mode": "loop",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "57dd91184d6e"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_fdab3a16",
-      "name": "每日帕萊斯立方",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "d8bf0ca1721a",
-        "facf97450178",
-        "4a1e250ad746"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_36068123",
-      "name": "從帕萊斯立方到廣場",
-      "enabled": true,
-      "mode": "loop",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "707548dbb394"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_261f6f66",
-      "name": "星際迴廊入口檢查",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "5932f9fab4d3"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_e8efb9ff",
-      "name": "每日星際迴廊掃蕩",
-      "enabled": true,
-      "mode": "loop",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "720dc1f43e20",
-        "146f3ccf6317",
-        "cfc78e798bc2",
-        "7558a681797e",
-        "ead7590ecdea",
-        "5bf5a0b5bcda"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_3c07d078",
-      "name": "星際迴廊收尾",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "5b74af43a8f0",
-        "91a58cbbee6c",
-        "4aa1303cbd07"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_40b2992f",
-      "name": "每日好友",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "37cf951c07ac",
-        "c0aefd01c029",
-        "87630b3e369d",
-        "5de071422245"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_8db83f5b",
-      "name": "每日付費商店",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "979651bc5b9d",
-        "4b2933370625",
-        "d5d5255f6903",
-        "60d551239410"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_53eec035",
-      "name": "每日啟示商店",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "f99b52ca2c9f",
-        "cf600a53e802",
-        "85aa8e26f293",
-        "48ee7af440ab",
-        "f1121c6b2c56",
-        "4d6e40e4fedc",
-        "c5901a000569",
-        "562cc3b393d5",
-        "4f319c41ecb8",
-        "a2a3c0b54933",
-        "8a4413951823",
-        "4b45d9d65eb9"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_f1d46de3",
-      "name": "檢查信件",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "rule_907d0b25",
-        "rule_bba3ecf2",
-        "rule_d1e14a0e",
-        "rule_985d1067"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_2f0c668c",
-      "name": "每日PVP一次",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "rule_298df4e4",
-        "rule_452d686c",
-        "rule_ee024608",
-        "rule_dec0e9ed",
-        "rule_5fdede7a",
-        "rule_a85bc879",
-        "rule_3b4adf6b",
-        "rule_e41e2118",
-        "rule_99561389",
-        "rule_e00b0a98"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "group_c7a80073",
-      "name": "領取任務獎勵",
-      "enabled": true,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [
-        "rule_a093ec7d",
-        "rule_7881dea9",
-        "rule_949c47f7",
-        "rule_86645ba4"
-      ],
-      "order": "sequential"
-    },
-    {
-      "id": "__uncategorized__",
-      "name": "未歸類",
-      "enabled": false,
-      "mode": "once",
-      "repeat_times": 1,
-      "between_rounds_sec": 0,
-      "rule_ids": [],
-      "order": "sequential"
-    }
-  ],
   "rules": [
     {
       "id": "001933b9bbbe",
@@ -3541,7 +3286,7 @@
     },
     {
       "id": "rule_a093ec7d",
-      "name": "點擊方塊列表 (2)",
+      "name": "點擊方塊列表",
       "enabled": true,
       "steps": [
         {
@@ -3715,7 +3460,7 @@
     },
     {
       "id": "fd3b58a1522f",
-      "name": "REWARD (Space)",
+      "name": "REWARD",
       "enabled": true,
       "steps": [
         {
@@ -3732,13 +3477,13 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop",
-            "after_delay_ms": 250
+            "after_delay_ms": 0
           }
         },
         {
           "type": "key",
           "params": {
-            "key": "Space",
+            "key": "Escape",
             "hold_ms": 0,
             "after_delay_ms": 250
           }
@@ -3766,20 +3511,15 @@
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop",
-            "after_delay_ms": 250
+            "after_delay_ms": 0
           }
         },
         {
-          "type": "click",
+          "type": "key",
           "params": {
-            "target": "custom",
-            "x": 0.578125,
-            "y": 0.6462962962962963,
-            "button": "left",
-            "random_offset": 3,
+            "key": "Space",
             "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
+            "after_delay_ms": 250
           }
         }
       ],
@@ -3846,44 +3586,6 @@
       "notes": ""
     },
     {
-      "id": "rule_bb3b4bd8",
-      "name": "點擊以繼續(Esc)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "點擊以繼續",
-            "roi": {
-              "x": 0.4546875,
-              "y": 0.8564814814814815,
-              "w": 0.08333333333333333,
-              "h": 0.06481481481481481,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": true,
-      "notes": ""
-    },
-    {
       "id": "rule_e00b0a98",
       "name": "對戰列表",
       "enabled": true,
@@ -3920,24 +3622,385 @@
       ],
       "background": false,
       "notes": ""
+    },
+    {
+      "id": "rule_0eeadfe2",
+      "name": "VICTORY",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "VICTORY",
+            "roi": {
+              "x": 0.42420461634435436,
+              "y": 0.27968923418423974,
+              "w": 0.14410480349344978,
+              "h": 0.10210876803551609,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 350
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Space",
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    },
+    {
+      "id": "rule_e5d72c3d",
+      "name": "DEFEAT",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "DEFEAT",
+            "roi": {
+              "x": 0.43231441048034935,
+              "y": 0.27524972253052166,
+              "w": 0.1272613849033063,
+              "h": 0.10876803551609324,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Space",
+            "hold_ms": 0,
+            "after_delay_ms": 250
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    },
+    {
+      "id": "rule_d35d51ae",
+      "name": "LEVELUP",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "LEVELUP",
+            "roi": {
+              "x": 0.4282147315855181,
+              "y": 0.2544052863436123,
+              "w": 0.1348314606741573,
+              "h": 0.09361233480176212,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "custom",
+            "x": 0.49191542288557216,
+            "y": 0.8799559471365639,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 250,
+            "roi_coord": "client"
+          }
+        }
+      ],
+      "background": true,
+      "notes": ""
+    }
+  ],
+  "groups": [
+    {
+      "id": "__default__",
+      "name": "每日掛機獎勵",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "001933b9bbbe",
+        "47a842575788",
+        "8490106e862e",
+        "564ad8803ad0",
+        "a0dcf46dd969"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_266e1f8c",
+      "name": "每日重新派遣",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "38e067112269",
+        "5c6ec220a8c9",
+        "e78022cd87ba",
+        "ec2a396e3f90",
+        "3bb47d51514f"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_39a1b80d",
+      "name": "每日戰鬥探索",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "94278051661e",
+        "c9eb8dec407c",
+        "3fcda0b8d285",
+        "ec4875752fe4",
+        "953ba51f72e6",
+        "3802c47ad696",
+        "51015e19256f",
+        "10eb3f3de862",
+        "8280240ec5a5",
+        "d9d439d9e176",
+        "rule_6fc982fe",
+        "a068faa605e9",
+        "82cdad4adbfa",
+        "1e95387f6db1",
+        "rule_c6eef45d"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_a1d5b815",
+      "name": "從探索委託到廣場",
+      "enabled": true,
+      "mode": "loop",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "57dd91184d6e"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_fdab3a16",
+      "name": "每日帕萊斯立方",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "d8bf0ca1721a",
+        "facf97450178",
+        "4a1e250ad746"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_36068123",
+      "name": "從帕萊斯立方到廣場",
+      "enabled": true,
+      "mode": "loop",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "707548dbb394"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_261f6f66",
+      "name": "星際迴廊入口檢查",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "5932f9fab4d3"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_e8efb9ff",
+      "name": "每日星際迴廊掃蕩",
+      "enabled": true,
+      "mode": "loop",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "720dc1f43e20",
+        "146f3ccf6317",
+        "cfc78e798bc2",
+        "7558a681797e",
+        "ead7590ecdea",
+        "5bf5a0b5bcda"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_3c07d078",
+      "name": "星際迴廊收尾",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "5b74af43a8f0",
+        "91a58cbbee6c",
+        "4aa1303cbd07"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_40b2992f",
+      "name": "每日好友",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "37cf951c07ac",
+        "c0aefd01c029",
+        "87630b3e369d",
+        "5de071422245"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_8db83f5b",
+      "name": "每日付費商店",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "979651bc5b9d",
+        "4b2933370625",
+        "d5d5255f6903",
+        "60d551239410"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_53eec035",
+      "name": "每日啟示商店",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "f99b52ca2c9f",
+        "cf600a53e802",
+        "85aa8e26f293",
+        "48ee7af440ab",
+        "f1121c6b2c56",
+        "4d6e40e4fedc",
+        "c5901a000569",
+        "562cc3b393d5",
+        "4f319c41ecb8",
+        "a2a3c0b54933",
+        "8a4413951823",
+        "4b45d9d65eb9"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_f1d46de3",
+      "name": "檢查信件",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "rule_907d0b25",
+        "rule_bba3ecf2",
+        "rule_d1e14a0e",
+        "rule_985d1067"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_2f0c668c",
+      "name": "每日PVP一次",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "rule_298df4e4",
+        "rule_452d686c",
+        "rule_ee024608",
+        "rule_dec0e9ed",
+        "rule_5fdede7a",
+        "rule_a85bc879",
+        "rule_3b4adf6b",
+        "rule_e41e2118",
+        "rule_99561389",
+        "rule_e00b0a98"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "group_c7a80073",
+      "name": "領取任務獎勵",
+      "enabled": true,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [
+        "rule_a093ec7d",
+        "rule_7881dea9",
+        "rule_949c47f7",
+        "rule_86645ba4"
+      ],
+      "order": "sequential"
+    },
+    {
+      "id": "__uncategorized__",
+      "name": "未歸類",
+      "enabled": false,
+      "mode": "once",
+      "repeat_times": 1,
+      "between_rounds_sec": 0,
+      "rule_ids": [],
+      "order": "sequential"
     }
   ],
   "_collapsed_groups": [
-    "__default__",
+    "group_40b2992f",
     "group_8db83f5b",
-    "group_53eec035",
-    "group_c7a80073",
-    "group_36068123",
+    "group_a1d5b815",
+    "group_e8efb9ff",
+    "group_3c07d078",
     "group_fdab3a16",
     "group_261f6f66",
-    "group_3c07d078",
-    "group_40b2992f",
-    "group_e8efb9ff",
-    "group_f1d46de3",
-    "group_266e1f8c",
     "group_2f0c668c",
+    "group_f1d46de3",
+    "__default__",
+    "group_36068123",
     "group_39a1b80d",
-    "group_a1d5b815"
+    "group_53eec035",
+    "group_266e1f8c"
   ],
   "capture_size": [
     1920,
