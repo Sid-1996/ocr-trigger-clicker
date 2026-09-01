@@ -1064,14 +1064,31 @@ class _StepListWidget(QWidget):
                 groups_provider=self._groups_provider,
             )
         if t == "click":
-            return _ClickStepForm(self, step, idx, self._click_pick_callback)
+            return _ClickStepForm(
+                self,
+                step,
+                idx,
+                self._click_pick_callback,
+                self._roi_callback,
+                self._capture_callback,
+                self._window_title_cb,
+                self._groups_provider,
+                self._rules_provider,
+                self._task_path_cb,
+                self._rule_id,
+            )
         if t == "key":
-            return _KeyStepForm(self, step, idx)
-        if t == "wait":
-            return _WaitStepForm(self, step, idx)
-        if t == "jump":
-            return _JumpStepForm(
-                self, step, idx, self._rules_provider, self._groups_provider, self._rule_id
+            return _KeyStepForm(
+                self,
+                step,
+                idx,
+                self._roi_callback,
+                self._capture_callback,
+                self._window_title_cb,
+                self._groups_provider,
+                self._rules_provider,
+                self._task_path_cb,
+                self._rule_id,
             )
         if t == "match_image":
             return _MatchImageStepForm(
@@ -1088,9 +1105,32 @@ class _StepListWidget(QWidget):
                 task_path_cb=self._task_path_cb,
             )
         if t == "drag":
-            return _DragStepForm(self, step, idx, self._click_pick_callback)
+            return _DragStepForm(
+                self,
+                step,
+                idx,
+                self._click_pick_callback,
+                self._roi_callback,
+                self._capture_callback,
+                self._window_title_cb,
+                self._groups_provider,
+                self._rules_provider,
+                self._task_path_cb,
+                self._rule_id,
+            )
         if t == "scroll":
-            return _ScrollStepForm(self, step, idx)
+            return _ScrollStepForm(
+                self,
+                step,
+                idx,
+                self._roi_callback,
+                self._capture_callback,
+                self._window_title_cb,
+                self._groups_provider,
+                self._rules_provider,
+                self._task_path_cb,
+                self._rule_id,
+            )
         if t == "compare":
             return _CompareStepForm(
                 self,
@@ -1227,6 +1267,18 @@ class _MatchImageStepForm(QWidget):
         self._after_delay.setValue(p.get("after_delay_ms", 0))
         self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
         form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
+        self._verify = _VerifyWidget(
+            self._list,
+            self._step,
+            roi_cb=self._roi_cb,
+            capture_cb=self._capture_cb,
+            window_title_cb=self._window_title_cb,
+            groups_provider=self._groups_provider,
+            rules_provider=self._rules_provider,
+            task_path_cb=self._task_path_cb,
+            exclude_rule_id=self._exclude_rule_id,
+        )
+        form.addRow(self._verify)
 
         # ── on_fail collapsible section ──
         self._on_fail_expanded = False
@@ -1642,6 +1694,10 @@ class _MatchImageStepForm(QWidget):
         p["match_color"] = self._match_color.isChecked()
         p["color_tolerance"] = self._color_tolerance.value()
         p["after_delay_ms"] = self._after_delay.value()
+        try:
+            self._verify.save()
+        except Exception:
+            pass
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":
@@ -1995,8 +2051,373 @@ class _DetectStepForm(QWidget):
             }
 
 
+class _VerifyWidget(QWidget):
+    """Minimal verify editor for action steps — JSON-only backend, folded by default."""
+
+    def __init__(
+        self,
+        parent_list,
+        step,
+        roi_cb=None,
+        capture_cb=None,
+        window_title_cb=None,
+        groups_provider=None,
+        rules_provider=None,
+        task_path_cb=None,
+        exclude_rule_id="",
+    ):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        self._roi_cb = roi_cb
+        self._capture_cb = capture_cb
+        self._window_title_cb = window_title_cb
+        self._groups_provider = groups_provider
+        self._rules_provider = rules_provider
+        self._task_path_cb = task_path_cb
+        self._exclude_rule_id = exclude_rule_id
+        p = step.params
+        v = p.get("verify") if isinstance(p.get("verify"), dict) else {}
+        outer = QFormLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self._enable = QCheckBox(T("verify.enable", default="動作後驗證（進階）"))
+        self._enable.setChecked(isinstance(p.get("verify"), dict))
+        self._enable.setToolTip(
+            T("verify.enable.tooltip", default="點擊後等待畫面切到預期狀態才算成功，否則走逾時處理")
+        )
+        outer.addRow(self._enable)
+        self._container = QWidget()
+        self._container.setVisible(self._enable.isChecked())
+        self._enable.toggled.connect(self._container.setVisible)
+        self._enable.toggled.connect(
+            lambda _: (
+                self._list.steps_changed.emit() if hasattr(self._list, "steps_changed") else None
+            )
+        )
+        outer.addRow(self._container)
+        form = QFormLayout(self._container)
+        form.setContentsMargins(0, 6, 0, 0)
+        # type
+        self._type = _NoWheelCombo()
+        self._type.addItem(T("verify.type_detect", default="文字"), "detect")
+        self._type.addItem(T("verify.type_image", default="圖片"), "match_image")
+        cur_type = v.get("type", "detect") if isinstance(v, dict) else "detect"
+        idx_t = self._type.findData(cur_type)
+        if idx_t >= 0:
+            self._type.setCurrentIndex(idx_t)
+        form.addRow(T("verify.type", default="驗證方式"), self._type)
+        # detect text
+        self._text = QLineEdit()
+        self._text.setPlaceholderText(T("verify.text.placeholder", default="例如：戰鬥"))
+        self._text.setText(v.get("text", "") if isinstance(v, dict) else "")
+        self._text_row = QWidget()
+        th = QHBoxLayout(self._text_row)
+        th.setContentsMargins(0, 0, 0, 0)
+        th.addWidget(self._text)
+        form.addRow(T("verify.text", default="目標文字"), self._text_row)
+        # template for match_image
+        self._thumb = QLabel()
+        self._thumb.setFixedSize(48, 48)
+        self._thumb.setStyleSheet("border:1px solid #888; border-radius:4px; background:#2a2a2a;")
+        self._thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._tmpl_label = QLabel(T("verify.no_template", default="(未設定)"))
+        self._cap_btn = QPushButton(T("verify.capture", default="截取"))
+        self._cap_btn.clicked.connect(self._capture_verify_template)
+        self._pick_btn = QPushButton(T("verify.pick", default="選擇現有"))
+        self._pick_btn.clicked.connect(self._pick_verify_template)
+        tmpl_row = QWidget()
+        tl = QHBoxLayout(tmpl_row)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.addWidget(self._thumb)
+        tl.addWidget(self._tmpl_label, 1)
+        tl.addWidget(self._cap_btn)
+        tl.addWidget(self._pick_btn)
+        self._tmpl_row = tmpl_row
+        form.addRow(T("verify.template", default="圖片"), self._tmpl_row)
+        self._threshold = _NoWheelDoubleSpin()
+        self._threshold.setRange(0.01, 1.0)
+        self._threshold.setDecimals(2)
+        self._threshold.setSingleStep(0.05)
+        self._threshold.setValue(v.get("threshold", 0.8) if isinstance(v, dict) else 0.8)
+        self._th_row = QWidget()
+        thl = QHBoxLayout(self._th_row)
+        thl.setContentsMargins(0, 0, 0, 0)
+        thl.addWidget(QLabel(T("verify.threshold", default="閾值")))
+        thl.addWidget(self._threshold)
+        thl.addStretch()
+        form.addRow("", self._th_row)
+        # roi
+        self._roi_label = QLabel()
+        self._roi_btn = QPushButton(T("verify.roi", default="框選區域"))
+        if roi_cb:
+            self._roi_btn.clicked.connect(self._pick_roi)
+        roi_row = QWidget()
+        rl = QHBoxLayout(roi_row)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.addWidget(self._roi_label)
+        rl.addWidget(self._roi_btn)
+        form.addRow(T("verify.roi_label", default="驗證區域"), roi_row)
+        self._update_roi_label()
+        # timing
+        self._timeout = _NoWheelSpin()
+        self._timeout.setRange(0, 30000)
+        self._timeout.setSingleStep(100)
+        self._timeout.setSuffix(" ms")
+        self._timeout.setValue(v.get("timeout_ms", 3000) if isinstance(v, dict) else 3000)
+        form.addRow(T("verify.timeout", default="逾時"), self._timeout)
+        self._poll = _NoWheelSpin()
+        self._poll.setRange(50, 2000)
+        self._poll.setSingleStep(50)
+        self._poll.setSuffix(" ms")
+        self._poll.setValue(v.get("poll_interval_ms", 300) if isinstance(v, dict) else 300)
+        form.addRow(T("verify.poll", default="輪詢"), self._poll)
+        self._delay = _NoWheelSpin()
+        self._delay.setRange(0, 5000)
+        self._delay.setSingleStep(100)
+        self._delay.setSuffix(" ms")
+        self._delay.setValue(v.get("delay_before_ms", 0) if isinstance(v, dict) else 0)
+        form.addRow(T("verify.delay", default="首輪等待"), self._delay)
+        # on_fail for verify (no stop)
+        self._on_fail = _NoWheelCombo()
+        self._on_fail.addItem(T("step_form.of_skip_rule", default="跳過此規則"), "advance")
+        self._on_fail.addItem(T("step_form.of_notify_stop", default="通知並停止"), "notify")
+        self._on_fail.addItem(T("step_form.of_jump_rule", default="跳轉規則"), "jump")
+        self._on_fail.addItem(T("step_form.of_key_continue", default="按鍵後繼續"), "key")
+        self._on_fail.addItem(T("step_form.of_jump_step", default="跳至步驟"), "skip")
+        raw_vf = v.get("on_fail") if isinstance(v, dict) else None
+        vf_act = raw_vf.get("action", "advance") if isinstance(raw_vf, dict) else "advance"
+        idx_vf = self._on_fail.findData(vf_act)
+        if idx_vf >= 0:
+            self._on_fail.setCurrentIndex(idx_vf)
+        form.addRow(T("verify.on_fail", default="逾時處理"), self._on_fail)
+        # notify extras for verify
+        self._vf_notify_msg = QLineEdit()
+        self._vf_notify_msg.setPlaceholderText(
+            T("verify.notify.placeholder", default="例如：點擊後未進入戰鬥")
+        )
+        if isinstance(raw_vf, dict) and raw_vf.get("action") == "notify":
+            self._vf_notify_msg.setText(raw_vf.get("message", ""))
+        form.addRow(T("verify.notify_msg", default="通知文字"), self._vf_notify_msg)
+        self._vf_notify_groups = _StopGroupsPicker(
+            groups_provider=groups_provider,
+            selected=raw_vf.get("stop_groups", []) if isinstance(raw_vf, dict) else [],
+        )
+        form.addRow(T("verify.notify_groups", default="停止群組"), self._vf_notify_groups)
+        self._vf_jump_combo = _NoWheelCombo()
+        _populate_rule_combo(
+            self._vf_jump_combo,
+            rules_provider() if rules_provider else [],
+            groups_provider() if groups_provider else [],
+            self._exclude_rule_id,
+        )
+        if isinstance(raw_vf, dict) and raw_vf.get("action") == "jump":
+            jid = raw_vf.get("rule_id", "")
+            jidx = self._vf_jump_combo.findData(jid)
+            if jidx >= 0:
+                self._vf_jump_combo.setCurrentIndex(jidx)
+        form.addRow(T("verify.jump", default="跳轉目標"), self._vf_jump_combo)
+        self._vf_key = _make_key_combo()
+        if isinstance(raw_vf, dict) and raw_vf.get("action") == "key":
+            kidx = self._vf_key.findData(raw_vf.get("key", ""))
+            if kidx >= 0:
+                self._vf_key.setCurrentIndex(kidx)
+        form.addRow(T("verify.key", default="按鍵"), self._vf_key)
+        self._vf_skip_combo = _NoWheelCombo()
+        self._vf_skip_combo.addItem(T("step_form.this_rule_end"), 9999)
+        form.addRow(T("verify.skip", default="跳至"), self._vf_skip_combo)
+        self._type.currentIndexChanged.connect(self._update_type_vis)
+        self._on_fail.currentIndexChanged.connect(self._update_vf_vis)
+        self._update_type_vis()
+        self._update_vf_vis()
+        self._update_thumb()
+
+    def _update_type_vis(self):
+        is_detect = self._type.currentData() == "detect"
+        self._text_row.setVisible(is_detect)
+        self._tmpl_row.setVisible(not is_detect)
+        self._th_row.setVisible(not is_detect)
+
+    def _update_vf_vis(self):
+        act = self._on_fail.currentData()
+        self._vf_notify_msg.setVisible(act == "notify")
+        self._vf_notify_groups.setVisible(act == "notify")
+        self._vf_jump_combo.setVisible(act == "jump")
+        self._vf_key.setVisible(act == "key")
+        self._vf_skip_combo.setVisible(act == "skip")
+
+    def _update_roi_label(self):
+        v = (
+            self._step.params.get("verify")
+            if isinstance(self._step.params.get("verify"), dict)
+            else {}
+        )
+        roi = v.get("roi", {}) if isinstance(v, dict) else {}
+        z = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        self._roi_label.setText(T("summary.whole_window") if z else _fmt_roi(roi))
+
+    def _update_thumb(self):
+        v = (
+            self._step.params.get("verify")
+            if isinstance(self._step.params.get("verify"), dict)
+            else {}
+        )
+        data = v.get("template_data", "") if isinstance(v, dict) else ""
+        if data.strip():
+            pix = QPixmap()
+            if pix.loadFromData(base64.b64decode(data)):
+                self._thumb.setPixmap(
+                    pix.scaled(
+                        48,
+                        48,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+                self._tmpl_label.setText(T("format.embedded_image"))
+                return
+        self._thumb.clear()
+        self._tmpl_label.setText(T("verify.no_template", default="(未設定)"))
+
+    def _pick_roi(self):
+        if not self._roi_cb:
+            return
+        res = self._roi_cb()
+        if res:
+            x, y, w, h = res
+            # need to store as ratio client? caller returns ratio already
+            # _select_roi returns ratio dict
+            if isinstance(res, dict):
+                roi = res
+            else:
+                roi = {"x": x, "y": y, "w": w, "h": h, "roi_coord": "client"}
+            # ensure verify dict exists in step for display
+            v = self._step.params.get("verify")
+            if not isinstance(v, dict):
+                v = {}
+                self._step.params["verify"] = v
+            v["roi"] = roi
+            self._update_roi_label()
+            self._list.steps_changed.emit()
+
+    def _capture_verify_template(self):
+        if not self._capture_cb:
+            return
+        data = self._capture_cb()
+        if isinstance(data, dict):
+            v = self._step.params.get("verify")
+            if not isinstance(v, dict):
+                v = {}
+                self._step.params["verify"] = v
+            v["template_data"] = data.get("b64", "")
+            v.pop("template", None)
+            self._update_thumb()
+            self._list.steps_changed.emit()
+        elif data:
+            v = self._step.params.get("verify")
+            if not isinstance(v, dict):
+                v = {}
+                self._step.params["verify"] = v
+            v["template_data"] = data
+            self._update_thumb()
+            self._list.steps_changed.emit()
+
+    def _pick_verify_template(self):
+        try:
+            _tp = load_sibling("template_picker", "gui/16_template_picker.py")
+            pick_template_dialog = _tp.pick_template_dialog
+        except Exception:
+            return
+        # collect templates from task Management
+        from core.task_management import collect_templates
+
+        templates = collect_templates()
+        # let picker choose
+        sel = pick_template_dialog(self, templates)
+        if sel and sel.get("template_data"):
+            v = self._step.params.get("verify")
+            if not isinstance(v, dict):
+                v = {}
+                self._step.params["verify"] = v
+            v["template_data"] = sel["template_data"]
+            v.pop("template", None)
+            self._update_thumb()
+            self._list.steps_changed.emit()
+
+    def save(self):
+        if not self._enable.isChecked():
+            self._step.params.pop("verify", None)
+            return
+        vtype = self._type.currentData()
+        roi = {}
+        # keep existing roi if any, else whole window
+        cur = self._step.params.get("verify")
+        if isinstance(cur, dict) and isinstance(cur.get("roi"), dict):
+            roi = cur.get("roi")
+        verify = {
+            "type": vtype,
+            "roi": roi,
+            "timeout_ms": int(self._timeout.value()),
+            "poll_interval_ms": int(self._poll.value()),
+            "delay_before_ms": int(self._delay.value()),
+        }
+        if vtype == "detect":
+            txt = self._text.text().strip()
+            if not txt:
+                self._step.params.pop("verify", None)
+                return
+            verify["text"] = txt
+        else:
+            cur2 = (
+                self._step.params.get("verify")
+                if isinstance(self._step.params.get("verify"), dict)
+                else {}
+            )
+            td = cur2.get("template_data", "") if isinstance(cur2, dict) else ""
+            if not td.strip():
+                self._step.params.pop("verify", None)
+                return
+            verify["template_data"] = td
+            verify["threshold"] = float(self._threshold.value())
+        act = self._on_fail.currentData()
+        if act == "advance":
+            verify["on_fail"] = {"action": "advance"}
+        elif act == "notify":
+            verify["on_fail"] = {
+                "action": "notify",
+                "message": self._vf_notify_msg.text().strip(),
+                "stop_groups": self._vf_notify_groups.selected_ids(),
+            }
+        elif act == "jump":
+            verify["on_fail"] = {
+                "action": "jump",
+                "rule_id": self._vf_jump_combo.currentData() or "",
+            }
+        elif act == "key":
+            verify["on_fail"] = {
+                "action": "key",
+                "key": self._vf_key.currentData() or self._vf_key.currentText(),
+            }
+        elif act == "skip":
+            # skip_to not easily known; use 9999 as end
+            verify["on_fail"] = {"action": "skip", "skip_to": 9999}
+        self._step.params["verify"] = verify
+
+
 class _ClickStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, pick_cb):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        pick_cb,
+        roi_cb=None,
+        capture_cb=None,
+        window_title_cb=None,
+        groups_provider=None,
+        rules_provider=None,
+        task_path_cb=None,
+        exclude_rule_id="",
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -2066,6 +2487,18 @@ class _ClickStepForm(QWidget):
         adv_form.addRow(T("step_form.after_delay_label"), self._after_delay)
 
         form.addRow(self._adv_container)
+        self._verify = _VerifyWidget(
+            self._list,
+            self._step,
+            roi_cb=roi_cb,
+            capture_cb=capture_cb,
+            window_title_cb=window_title_cb,
+            groups_provider=groups_provider,
+            rules_provider=rules_provider,
+            task_path_cb=task_path_cb,
+            exclude_rule_id=exclude_rule_id,
+        )
+        form.addRow(self._verify)
 
     def _on_target_changed(self, idx):
         t = self._target.currentData()
@@ -2089,10 +2522,27 @@ class _ClickStepForm(QWidget):
         self._step.params["random_offset"] = self._offset.value()
         self._step.params["hold_ms"] = self._hold_ms.value()
         self._step.params["after_delay_ms"] = self._after_delay.value()
+        try:
+            self._verify.save()
+        except Exception:
+            pass
 
 
 class _DragStepForm(QWidget):
-    def __init__(self, parent_list, step, idx, pick_cb):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        pick_cb,
+        roi_cb=None,
+        capture_cb=None,
+        window_title_cb=None,
+        groups_provider=None,
+        rules_provider=None,
+        task_path_cb=None,
+        exclude_rule_id="",
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -2152,6 +2602,18 @@ class _DragStepForm(QWidget):
         self._after_delay.setValue(p.get("after_delay_ms", 0))
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         form.addRow(T("step_form.after_delay_label"), self._after_delay)
+        self._verify = _VerifyWidget(
+            self._list,
+            self._step,
+            roi_cb=roi_cb,
+            capture_cb=capture_cb,
+            window_title_cb=window_title_cb,
+            groups_provider=groups_provider,
+            rules_provider=rules_provider,
+            task_path_cb=task_path_cb,
+            exclude_rule_id=exclude_rule_id,
+        )
+        form.addRow(self._verify)
 
     def _on_target_changed(self, idx):
         t = self._target.currentData()
@@ -2174,10 +2636,26 @@ class _DragStepForm(QWidget):
         self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
         self._step.params["after_delay_ms"] = self._after_delay.value()
+        try:
+            self._verify.save()
+        except Exception:
+            pass
 
 
 class _ScrollStepForm(QWidget):
-    def __init__(self, parent_list, step, idx):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        roi_cb=None,
+        capture_cb=None,
+        window_title_cb=None,
+        groups_provider=None,
+        rules_provider=None,
+        task_path_cb=None,
+        exclude_rule_id="",
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -2213,12 +2691,28 @@ class _ScrollStepForm(QWidget):
         self._after_delay.setValue(p.get("after_delay_ms", 0))
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         form.addRow(T("step_form.after_delay_label"), self._after_delay)
+        self._verify = _VerifyWidget(
+            self._list,
+            self._step,
+            roi_cb=roi_cb,
+            capture_cb=capture_cb,
+            window_title_cb=window_title_cb,
+            groups_provider=groups_provider,
+            rules_provider=rules_provider,
+            task_path_cb=task_path_cb,
+            exclude_rule_id=exclude_rule_id,
+        )
+        form.addRow(self._verify)
 
     def save(self):
         self._step.params["direction"] = self._direction.currentData()
         self._step.params["amount"] = self._amount.value()
         self._step.params["delay_ms"] = self._delay.value()
         self._step.params["after_delay_ms"] = self._after_delay.value()
+        try:
+            self._verify.save()
+        except Exception:
+            pass
 
 
 class _CompareStepForm(QWidget):
@@ -2536,7 +3030,19 @@ class _CompareStepForm(QWidget):
 
 
 class _KeyStepForm(QWidget):
-    def __init__(self, parent_list, step, idx):
+    def __init__(
+        self,
+        parent_list,
+        step,
+        idx,
+        roi_cb=None,
+        capture_cb=None,
+        window_title_cb=None,
+        groups_provider=None,
+        rules_provider=None,
+        task_path_cb=None,
+        exclude_rule_id="",
+    ):
         super().__init__()
         self._list = parent_list
         self._step = step
@@ -2563,11 +3069,27 @@ class _KeyStepForm(QWidget):
         self._after_delay.setValue(step.params.get("after_delay_ms", 0))
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         form.addRow(T("step_form.after_delay_label"), self._after_delay)
+        self._verify = _VerifyWidget(
+            self._list,
+            self._step,
+            roi_cb=roi_cb,
+            capture_cb=capture_cb,
+            window_title_cb=window_title_cb,
+            groups_provider=groups_provider,
+            rules_provider=rules_provider,
+            task_path_cb=task_path_cb,
+            exclude_rule_id=exclude_rule_id,
+        )
+        form.addRow(self._verify)
 
     def save(self):
         self._step.params["key"] = self._key.currentData() or self._key.currentText()
         self._step.params["hold_ms"] = self._hold_ms.value()
         self._step.params["after_delay_ms"] = self._after_delay.value()
+        try:
+            self._verify.save()
+        except Exception:
+            pass
 
 
 class _WaitStepForm(QWidget):
