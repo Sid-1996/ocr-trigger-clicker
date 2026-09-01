@@ -126,10 +126,85 @@ def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
     return str(raw) if str(raw) in ("key", "stop") else "stop"
 
 
+def _normalize_verify(raw: object) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    vtype = str(raw.get("type", "")).strip()
+    if vtype not in ("detect", "match_image"):
+        return None
+    timeout_ms = max(0, min(30000, _as_int(raw.get("timeout_ms", 3000), 3000)))
+    poll_ms = max(50, min(2000, _as_int(raw.get("poll_interval_ms", 300), 300)))
+    delay_ms = max(0, min(5000, _as_int(raw.get("delay_before_ms", 0), 0)))
+    roi = _sanitize_roi(raw.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}))
+    on_fail_raw = raw.get("on_fail", None)
+    # verify + stop is forbidden (would retry Action each loop) -> mark invalid
+    if isinstance(on_fail_raw, str) and on_fail_raw == "stop":
+        return None
+    if isinstance(on_fail_raw, dict) and str(on_fail_raw.get("action", "")) == "stop":
+        return None
+    on_fail = None
+    if on_fail_raw is not None:
+        on_fail = _normalize_on_fail(on_fail_raw, allow_skip=True)
+        # _normalize may coerce unknown to "stop" — treat that as invalid too
+        if on_fail == "stop" or (isinstance(on_fail, dict) and on_fail.get("action") == "stop"):
+            # if user explicitly passed stop-like value, reject
+            if isinstance(on_fail_raw, (str, dict)):
+                return None
+    result: dict = {
+        "type": vtype,
+        "roi": roi,
+        "timeout_ms": timeout_ms,
+        "poll_interval_ms": poll_ms,
+        "delay_before_ms": delay_ms,
+    }
+    if on_fail is not None:
+        result["on_fail"] = on_fail
+    if vtype == "detect":
+        result["text"] = str(raw.get("text", "")).strip()
+        result["match_mode"] = str(raw.get("match_mode", "fuzzy"))
+        result["fuzzy_threshold"] = max(
+            0.0, min(1.0, _as_float(raw.get("fuzzy_threshold", 0.8), 0.8))
+        )
+        if not result["text"]:
+            return None
+    else:  # match_image
+        result["template"] = str(raw.get("template", "")).strip()
+        result["template_data"] = str(raw.get("template_data", ""))
+        result["threshold"] = max(0.0, min(1.0, _as_float(raw.get("threshold", 0.8), 0.8)))
+        result["match_color"] = bool(raw.get("match_color", False))
+        result["color_tolerance"] = max(0, min(255, _as_int(raw.get("color_tolerance", 100), 100)))
+        if not result["template"].strip() and not result["template_data"].strip():
+            return None
+    return result
+
+
 def _normalize_step_params(step_type: str, params: dict | None) -> dict:
     base = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
     params = params if isinstance(params, dict) else {}
     base.update(params)
+
+    # verify is action-only optional; normalize after base merge
+    if step_type in ("click", "key", "drag", "scroll", "match_image"):
+        raw_verify = params.get("verify", None)
+        if raw_verify is not None:
+            v = _normalize_verify(raw_verify)
+            if v is None:
+                # invalid verify (e.g. verify+stop or missing text/template) -> drop with log
+                base.pop("verify", None)
+                try:
+                    import logging
+
+                    logging.getLogger("rule_migration").warning(
+                        "verify config invalid, dropped: %r", raw_verify
+                    )
+                except Exception:
+                    pass
+            else:
+                base["verify"] = v
+        elif "verify" in base:
+            base.pop("verify", None)
+    else:
+        base.pop("verify", None)
 
     if step_type == "detect":
         base["text"] = str(base.get("text", "")).strip()

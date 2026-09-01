@@ -747,5 +747,8 @@
   "step_form.pick_existing_image": "Choose Existing Image",
   "step_form.pick_existing_image.tooltip": "Reuse an image captured by another image match step (including unsaved ones in the current task)",
   "picker.title": "Choose Existing Image",
-  "picker.empty": "No captured images yet. Use \"Capture Region\" in an image match step first."
+  "picker.empty": "No captured images yet. Use \"Capture Region\" in an image match step first.",
+  "exec_log.detail.verification_timeout": "Verification timeout",
+  "exec_log.detail.verification_cancelled": "Verification cancelled",
+  "exec_log.detail.verification_invalid": "Verification config invalid"
 }

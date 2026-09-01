@@ -1206,6 +1206,126 @@ class MainLoop:
                 self.on_warning(msg)
         return StepResult("continue")
 
+    def _check_verify_condition(self, verify: dict, img: np.ndarray, rect: dict) -> bool:
+        """Single-frame verification check, reusing existing caches."""
+        vtype = verify.get("type", "")
+        if vtype == "detect":
+            text = str(verify.get("text", "")).strip()
+            if not text:
+                return False
+            roi = self._resolve_roi(verify.get("roi", {}), rect)
+            results = self._ocr_region(img, roi)
+            matches = find_text(
+                results, text, verify.get("match_mode", "fuzzy"), verify.get("fuzzy_threshold", 0.8)
+            )
+            return bool(matches)
+        if vtype == "match_image":
+            template_data = str(verify.get("template_data", ""))
+            template_path = str(verify.get("template", ""))
+            if not template_data.strip() and not template_path.strip():
+                return False
+            capture_size = get_capture_size(self._rules_path)
+            chrome = get_window_client_offset(self._window_title)
+            if chrome:
+                current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
+            else:
+                current_size = [rect["w"], rect["h"]]
+            roi = self._resolve_roi(verify.get("roi", {}), rect)
+            threshold = verify.get("threshold", 0.8)
+            match_color = verify.get("match_color", False)
+            color_tolerance = verify.get("color_tolerance", 100)
+            # Reuse _tmpl_cache path similar to _handle_match_image
+            h_img, w_img = img.shape[:2]
+            if any(roi.get(k, 0) != 0 for k in ("w", "h")):
+                rx1, ry1 = max(0, int(roi["x"])), max(0, int(roi["y"]))
+                rx2 = min(w_img, int(roi["x"]) + int(roi["w"]))
+                ry2 = min(h_img, int(roi["y"]) + int(roi["h"]))
+                region = img[ry1:ry2, rx1:rx2] if rx2 > rx1 and ry2 > ry1 else img
+            else:
+                region = img
+            cache_key = (
+                "mi",
+                _crop_hash(region),
+                template_data or template_path,
+                threshold,
+                match_color,
+                color_tolerance,
+            )
+            cached = self._tmpl_cache.get(cache_key)
+            if cached is not None:
+                self._tmpl_cache.move_to_end(cache_key)
+                self._ocr_cache_hits += 1
+                results, _ = cached
+            else:
+                results = match_template(
+                    img,
+                    template_path,
+                    roi,
+                    threshold,
+                    template_data=template_data or None,
+                    capture_size=capture_size,
+                    current_size=current_size,
+                    match_color=match_color,
+                    color_tolerance=color_tolerance,
+                    return_best=True,
+                )
+                best_below = -1.0
+                if isinstance(results, tuple):
+                    results, best_below = results
+                self._tmpl_cache[cache_key] = (results, best_below)
+                self._tmpl_cache.move_to_end(cache_key)
+                while len(self._tmpl_cache) > self._tmpl_cache_max:
+                    self._tmpl_cache.popitem(last=False)
+            return bool(results)
+        return False
+
+    def _poll_verify(self, verify: dict) -> str:
+        """Poll with fresh capture frames until success/timeout/cancelled."""
+        timeout_ms = verify.get("timeout_ms", 3000)
+        poll_ms = verify.get("poll_interval_ms", 300)
+        delay_ms = verify.get("delay_before_ms", 0)
+        if delay_ms > 0:
+            t0 = time.monotonic()
+            if (
+                self._stop_event.wait(timeout=delay_ms / 1000.0)
+                or self._emergency_event.is_set()
+                or self._pause_event.is_set()
+            ):
+                self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                return "cancelled"
+            self._frame_waited_ms += (time.monotonic() - t0) * 1000
+        deadline = time.monotonic() + timeout_ms / 1000.0
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        while time.monotonic() < deadline:
+            if (
+                self._stop_event.is_set()
+                or self._emergency_event.is_set()
+                or self._pause_event.is_set()
+            ):
+                return "cancelled"
+            # fresh capture, reuse pipeline
+            try:
+                fresh_rect = get_window_rect(self._window_title) or {"x": 0, "y": 0, "w": 0, "h": 0}
+            except Exception:
+                fresh_rect = {"x": 0, "y": 0, "w": 0, "h": 0}
+            img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
+            if img is not None and fresh_rect["w"] > 0:
+                # isolate per-poll frame cache to avoid stale superset from previous poll
+                self._frame_ocr_cache.clear()
+                if self._check_verify_condition(verify, img, fresh_rect):
+                    return "success"
+            # wait poll interval, interruptible
+            t0 = time.monotonic()
+            if (
+                self._stop_event.wait(timeout=poll_ms / 1000.0)
+                or self._emergency_event.is_set()
+                or self._pause_event.is_set()
+            ):
+                self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                return "cancelled"
+            self._frame_waited_ms += (time.monotonic() - t0) * 1000
+        return "timeout"
+
     def _run_step(self, step, ctx: StepContext, rule: Rule) -> StepResult:
         handlers = {
             "detect": self._handle_detect,
@@ -1256,6 +1376,64 @@ class MainLoop:
                 if self._stop_event.wait(timeout=ms / 1000.0):
                     return StepResult("stop", detail=T("exec_log.detail.interrupted"))
                 self._frame_waited_ms += ms  # 刻意等待：過慢判定時扣除
+            # Verify: optional post-condition on new frames (not ctx.img)
+            if (
+                step.type in ("click", "key", "drag", "scroll", "match_image")
+                and result.action == "continue"
+                and not ctx.on_fail_fired
+                and isinstance(step.params.get("verify"), dict)
+            ):
+                verify = step.params.get("verify")
+                # invalid verify (e.g. verify+stop) was dropped in normalize, so None here means skip
+                if verify:
+                    poll_res = self._poll_verify(verify)
+                    if poll_res == "success":
+                        pass  # keep continue → advance
+                    elif poll_res == "cancelled":
+                        ctx.triggered = False
+                        ctx.force_advance = False
+                        if not background:
+                            self._log_exec(
+                                rule.name,
+                                i,
+                                step.type,
+                                "stop",
+                                T("exec_log.detail.verification_cancelled"),
+                            )
+                        return StepResult(
+                            "stop", detail=T("exec_log.detail.verification_cancelled")
+                        )
+                    else:  # timeout
+                        v_on_fail = verify.get("on_fail", None)
+                        if v_on_fail is None:
+                            v_on_fail = step.params.get("on_fail", "stop")
+                        # verify+stop is forbidden → stay, log timeout, no on_fail action
+                        if v_on_fail == "stop" or (
+                            isinstance(v_on_fail, dict) and v_on_fail.get("action") == "stop"
+                        ):
+                            ctx.triggered = False
+                            ctx.force_advance = False
+                            if not background:
+                                self._log(
+                                    f"規則「{rule.name}」驗證逾時，但 on_fail=stop 已被禁止，停留"
+                                )
+                                self._log_exec(
+                                    rule.name,
+                                    i,
+                                    step.type,
+                                    "stop",
+                                    T("exec_log.detail.verification_timeout"),
+                                )
+                            return StepResult(
+                                "stop", detail=T("exec_log.detail.verification_timeout")
+                            )
+                        tmp_params = {"on_fail": v_on_fail}
+                        if not background:
+                            self._log(f"規則「{rule.name}」驗證逾時")
+                        res = self._handle_on_fail(tmp_params, ctx, rule)
+                        if res.action == "stop" and not res.detail:
+                            res.detail = T("exec_log.detail.verification_timeout")
+                        return res
             if step.type == "wait" and result.action == "continue":
                 if not background:
                     self._log_exec(rule.name, i, "wait", "ok")
