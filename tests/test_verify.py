@@ -213,3 +213,183 @@ def test_verify_gui_independent_roi_smoke():
     assert w._step.params["verify"]["roi"]["x"] == 0.3
     # toggle not emit
     assert counter[0] == 0
+    w.deleteLater()
+    QApplication.instance().processEvents()
+
+
+def test_pick_roi_callback_dict():
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841 - keep ref
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    _VerifyWidget = m._VerifyWidget
+
+    def roi_dict():
+        return {"x": 0.11, "y": 0.22, "w": 0.33, "h": 0.44, "roi_coord": "client"}
+
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    step = Step(type="click", params={})
+    w = _VerifyWidget(parent, step, roi_cb=roi_dict)
+    w._pick_roi()
+    assert w._step.params["verify"]["roi"]["x"] == 0.11
+    assert w._step.params["verify"]["roi"]["roi_coord"] == "client"
+    w.deleteLater()
+    from PyQt6.QtWidgets import QApplication as _QA
+
+    _QA.instance().processEvents()
+
+
+def test_pick_roi_callback_tuple():
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    _VerifyWidget = m._VerifyWidget
+
+    def roi_tuple():
+        return (0.2, 0.3, 0.1, 0.15)
+
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    step = Step(type="click", params={})
+    w = _VerifyWidget(parent, step, roi_cb=roi_tuple)
+    w._pick_roi()
+    assert abs(w._step.params["verify"]["roi"]["x"] - 0.2) < 1e-9
+    assert w._step.params["verify"]["roi"]["roi_coord"] == "client"
+    assert abs(w._step.params["verify"]["roi"]["h"] - 0.15) < 1e-9
+    w.deleteLater()
+    from PyQt6.QtWidgets import QApplication as _QA2
+
+    _QA2.instance().processEvents()
+
+
+def test_verify_match_mode_roundtrip():
+    v = {
+        "type": "detect",
+        "text": "hi",
+        "match_mode": "exact",
+        "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+    }
+    nv = RuleMig._normalize_verify(v)
+    assert nv["match_mode"] == "exact"
+    # via GUI save
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    _VerifyWidget = m._VerifyWidget
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    step = Step(
+        type="click",
+        params={
+            "verify": {
+                "type": "detect",
+                "text": "hi",
+                "match_mode": "exact",
+                "fuzzy_threshold": 0.8,
+            }
+        },
+    )
+    w = _VerifyWidget(parent, step)
+    w._enable.setChecked(True)
+    idx = w._vf_match_mode.findData("exact")
+    w._vf_match_mode.setCurrentIndex(idx)
+    w._text.setText("hi")
+    w.save()
+    assert w._step.params["verify"]["match_mode"] == "exact"
+    # normalize preserves
+    nv2 = RuleMig._normalize_verify(w._step.params["verify"])
+    assert nv2["match_mode"] == "exact"
+    w.deleteLater()
+    from PyQt6.QtWidgets import QApplication as _QA3
+
+    _QA3.instance().processEvents()
+
+
+def test_verify_fuzzy_threshold_roundtrip():
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    _VerifyWidget = m._VerifyWidget
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    step = Step(type="click", params={})
+    w = _VerifyWidget(parent, step)
+    w._enable.setChecked(True)
+    idx = w._vf_match_mode.findData("fuzzy")
+    w._vf_match_mode.setCurrentIndex(idx)
+    w._vf_fuzzy.setValue(0.65)
+    w._text.setText("hello")
+    w.save()
+    assert abs(w._step.params["verify"]["fuzzy_threshold"] - 0.65) < 1e-9
+    nv = RuleMig._normalize_verify(w._step.params["verify"])
+    assert abs(nv["fuzzy_threshold"] - 0.65) < 1e-9
+    w.deleteLater()
+    from PyQt6.QtWidgets import QApplication as _QA4
+
+    _QA4.instance().processEvents()
+
+
+def test_invalid_template_data_not_crash():
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    _VerifyWidget = m._VerifyWidget
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    # corrupted base64
+    step = Step(
+        type="click",
+        params={
+            "verify": {"type": "match_image", "template_data": "!!!not_base64!!!", "threshold": 0.8}
+        },
+    )
+    w = _VerifyWidget(parent, step)
+    # should not raise
+    try:
+        w._update_thumb()
+    except Exception as e:
+        assert False, f"_update_thumb crashed on invalid base64: {e}"
+    # should fallback to clear
+    assert w._thumb.pixmap() is None or w._thumb.pixmap().isNull()
+    w.deleteLater()
+    from PyQt6.QtWidgets import QApplication as _QA5
+
+    _QA5.instance().processEvents()
+
+
+def teardown_module(module):
+    try:
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+            # do not delete QApplication itself; let process exit handle it
+            # just ensure no pending deleteLater widgets remain
+    except Exception:
+        pass

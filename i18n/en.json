@@ -777,5 +777,7 @@
   "verify.skip": "Skip to",
   "verify.roi_hint": "Verify ROI can differ from the detection ROI — use it to confirm the new screen after the action.",
   "verify.advanced": "Advanced ▶",
-  "verify.advanced_expanded": "Advanced ▼"
+  "verify.advanced_expanded": "Advanced ▼",
+  "verify.match_mode": "Match mode",
+  "verify.fuzzy_threshold": "Fuzzy threshold"
 }

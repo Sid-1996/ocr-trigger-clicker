@@ -2196,6 +2196,37 @@ class _VerifyWidget(QWidget):
         self._delay.setSuffix(" ms")
         self._delay.setValue(v.get("delay_before_ms", 0) if isinstance(v, dict) else 0)
         adv_form.addRow(T("verify.delay", default="首輪等待"), self._delay)
+        # detect match_mode / fuzzy_threshold — also advanced, only for detect+fuzzy
+        self._vf_match_mode = _NoWheelCombo()
+        self._vf_match_mode.addItem(T("combo.fuzzy", default="近似比對"), "fuzzy")
+        self._vf_match_mode.addItem(T("combo.exact", default="完全符合"), "exact")
+        _vf_mm = v.get("match_mode", "fuzzy") if isinstance(v, dict) else "fuzzy"
+        if _vf_mm not in ("fuzzy", "exact"):
+            _vf_mm = "fuzzy"
+        idx_mm = self._vf_match_mode.findData(_vf_mm)
+        if idx_mm >= 0:
+            self._vf_match_mode.setCurrentIndex(idx_mm)
+        self._vf_match_row = QWidget()
+        _mml = QHBoxLayout(self._vf_match_row)
+        _mml.setContentsMargins(0, 0, 0, 0)
+        _mml.addWidget(QLabel(T("verify.match_mode", default="比對方式")))
+        _mml.addWidget(self._vf_match_mode)
+        _mml.addStretch()
+        adv_form.addRow("", self._vf_match_row)
+        self._vf_fuzzy = _NoWheelDoubleSpin()
+        self._vf_fuzzy.setRange(0.0, 1.0)
+        self._vf_fuzzy.setDecimals(2)
+        self._vf_fuzzy.setSingleStep(0.05)
+        self._vf_fuzzy.setValue(
+            float(v.get("fuzzy_threshold", 0.8)) if isinstance(v, dict) else 0.8
+        )
+        self._vf_fuzzy_row = QWidget()
+        _fl = QHBoxLayout(self._vf_fuzzy_row)
+        _fl.setContentsMargins(0, 0, 0, 0)
+        _fl.addWidget(QLabel(T("verify.fuzzy_threshold", default="相似度")))
+        _fl.addWidget(self._vf_fuzzy)
+        _fl.addStretch()
+        adv_form.addRow("", self._vf_fuzzy_row)
         self._th_row = QWidget()
         thl = QHBoxLayout(self._th_row)
         thl.setContentsMargins(0, 0, 0, 0)
@@ -2253,6 +2284,7 @@ class _VerifyWidget(QWidget):
         self._vf_skip_combo.addItem(T("step_form.this_rule_end"), 9999)
         form.addRow(T("verify.skip", default="跳至"), self._vf_skip_combo)
         self._type.currentIndexChanged.connect(self._update_type_vis)
+        self._vf_match_mode.currentIndexChanged.connect(self._update_type_vis)
         self._on_fail.currentIndexChanged.connect(self._update_vf_vis)
         self._update_type_vis()
         self._update_vf_vis()
@@ -2260,9 +2292,16 @@ class _VerifyWidget(QWidget):
 
     def _update_type_vis(self):
         is_detect = self._type.currentData() == "detect"
+        is_fuzzy = (
+            getattr(self, "_vf_match_mode", None) and self._vf_match_mode.currentData() == "fuzzy"
+        )
         self._text_row.setVisible(is_detect)
         self._tmpl_row.setVisible(not is_detect)
         self._th_row.setVisible(not is_detect)
+        if hasattr(self, "_vf_match_row"):
+            self._vf_match_row.setVisible(is_detect)
+        if hasattr(self, "_vf_fuzzy_row"):
+            self._vf_fuzzy_row.setVisible(is_detect and bool(is_fuzzy))
 
     def _update_vf_vis(self):
         act = self._on_fail.currentData()
@@ -2290,18 +2329,29 @@ class _VerifyWidget(QWidget):
         )
         data = v.get("template_data", "") if isinstance(v, dict) else ""
         if data.strip():
-            pix = QPixmap()
-            if pix.loadFromData(base64.b64decode(data)):
-                self._thumb.setPixmap(
-                    pix.scaled(
-                        48,
-                        48,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
+            try:
+                raw = base64.b64decode(data)
+            except Exception as e:
+                logging.getLogger("gui_main").warning("verify _update_thumb invalid base64: %s", e)
+                raw = None
+            if raw is not None:
+                try:
+                    pix = QPixmap()
+                    if pix.loadFromData(raw):
+                        self._thumb.setPixmap(
+                            pix.scaled(
+                                48,
+                                48,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation,
+                            )
+                        )
+                        self._tmpl_label.setText(T("format.embedded_image"))
+                        return
+                except Exception as e:
+                    logging.getLogger("gui_main").warning(
+                        "verify _update_thumb pix load failed: %s", e
                     )
-                )
-                self._tmpl_label.setText(T("format.embedded_image"))
-                return
         self._thumb.clear()
         self._tmpl_label.setText(T("verify.no_template", default="(未設定)"))
 
@@ -2309,21 +2359,34 @@ class _VerifyWidget(QWidget):
         if not self._roi_cb:
             return
         res = self._roi_cb()
-        if res:
-            x, y, w, h = res
-            # need to store as ratio client? caller returns ratio already
-            # _select_roi returns ratio dict
-            if isinstance(res, dict):
-                roi = res
-            else:
-                roi = {"x": x, "y": y, "w": w, "h": h, "roi_coord": "client"}
-            # ensure verify dict exists in step for display
-            v = self._step.params.get("verify")
-            if not isinstance(v, dict):
-                v = {}
-                self._step.params["verify"] = v
-            v["roi"] = roi
-            self._update_roi_label()
+        if not res:
+            return
+        if isinstance(res, dict):
+            roi = res
+            if "roi_coord" not in roi:
+                roi = {**roi, "roi_coord": "client"}
+        else:
+            try:
+                x, y, w, h = res
+            except Exception as e:
+                logging.getLogger("gui_main").warning(
+                    "_pick_roi unexpected ROI format: %r (%s)", res, e
+                )
+                return
+            roi = {
+                "x": float(x),
+                "y": float(y),
+                "w": float(w),
+                "h": float(h),
+                "roi_coord": "client",
+            }
+        # ensure verify dict exists in step for display
+        v = self._step.params.get("verify")
+        if not isinstance(v, dict):
+            v = {}
+            self._step.params["verify"] = v
+        v["roi"] = roi
+        self._update_roi_label()
 
     def _capture_verify_template(self):
         if not self._capture_cb:
@@ -2349,14 +2412,23 @@ class _VerifyWidget(QWidget):
         try:
             _tp = load_sibling("template_picker", "gui/16_template_picker.py")
             pick_template_dialog = _tp.pick_template_dialog
-        except Exception:
+        except Exception as e:
+            logging.getLogger("gui_main").warning("verify pick_template load failed: %s", e)
             return
         # collect templates from task Management
-        from core.task_management import collect_templates
+        try:
+            from core.task_management import collect_templates
 
-        templates = collect_templates()
+            templates = collect_templates()
+        except Exception as e:
+            logging.getLogger("gui_main").warning("verify collect_templates failed: %s", e)
+            templates = {}
         # let picker choose
-        sel = pick_template_dialog(self, templates)
+        try:
+            sel = pick_template_dialog(self, templates)
+        except Exception as e:
+            logging.getLogger("gui_main").warning("verify pick_template_dialog failed: %s", e)
+            return
         if sel and sel.get("template_data"):
             v = self._step.params.get("verify")
             if not isinstance(v, dict):
@@ -2395,6 +2467,10 @@ class _VerifyWidget(QWidget):
                 self._step.params.pop("verify", None)
                 return
             verify["text"] = txt
+            mm = self._vf_match_mode.currentData() or "fuzzy"
+            verify["match_mode"] = str(mm)
+            if mm == "fuzzy":
+                verify["fuzzy_threshold"] = float(self._vf_fuzzy.value())
         else:
             cur2 = (
                 self._step.params.get("verify")

@@ -777,5 +777,7 @@
   "verify.skip": "スキップ先",
   "verify.roi_hint": "検証範囲は検出範囲と異なっても構いません。動作後の新画面を確認するために使います。",
   "verify.advanced": "詳細設定 ▶",
-  "verify.advanced_expanded": "詳細設定 ▼"
+  "verify.advanced_expanded": "詳細設定 ▼",
+  "verify.match_mode": "照合方式",
+  "verify.fuzzy_threshold": "類似度"
 }
