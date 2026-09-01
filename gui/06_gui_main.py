@@ -2295,7 +2295,6 @@ class _VerifyWidget(QWidget):
                 self._step.params["verify"] = v
             v["roi"] = roi
             self._update_roi_label()
-            self._list.steps_changed.emit()
 
     def _capture_verify_template(self):
         if not self._capture_cb:
@@ -2309,7 +2308,6 @@ class _VerifyWidget(QWidget):
             v["template_data"] = data.get("b64", "")
             v.pop("template", None)
             self._update_thumb()
-            self._list.steps_changed.emit()
         elif data:
             v = self._step.params.get("verify")
             if not isinstance(v, dict):
@@ -2317,7 +2315,6 @@ class _VerifyWidget(QWidget):
                 self._step.params["verify"] = v
             v["template_data"] = data
             self._update_thumb()
-            self._list.steps_changed.emit()
 
     def _pick_verify_template(self):
         try:
@@ -2339,18 +2336,12 @@ class _VerifyWidget(QWidget):
             v["template_data"] = sel["template_data"]
             v.pop("template", None)
             self._update_thumb()
-            self._list.steps_changed.emit()
 
     def _on_verify_toggled(self, checked: bool):
-        # ensure a minimal verify dict exists so subsequent picks/saves have a target
+        # keep form open — do NOT emit steps_changed (would trigger _refresh_rule_list -> _show_rule_detail -> _rebuild collapse)
         if checked:
             if not isinstance(self._step.params.get("verify"), dict):
                 self._step.params["verify"] = {"type": self._type.currentData() or "detect"}
-        if hasattr(self._list, "steps_changed"):
-            try:
-                self._list.steps_changed.emit()
-            except Exception:
-                pass
 
     def save(self):
         if not self._enable.isChecked():
