@@ -774,5 +774,8 @@
   "verify.notify_groups": "停止群組",
   "verify.jump": "跳轉目標",
   "verify.key": "按鍵",
-  "verify.skip": "跳至"
+  "verify.skip": "跳至",
+  "verify.roi_hint": "驗證區域可與偵測區域不同，用來確認動作後的新畫面。",
+  "verify.advanced": "進階設定 ▶",
+  "verify.advanced_expanded": "進階設定 ▼"
 }

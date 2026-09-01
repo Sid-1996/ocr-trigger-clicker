@@ -774,5 +774,8 @@
   "verify.notify_groups": "Stop groups",
   "verify.jump": "Jump target",
   "verify.key": "Key",
-  "verify.skip": "Skip to"
+  "verify.skip": "Skip to",
+  "verify.roi_hint": "Verify ROI can differ from the detection ROI — use it to confirm the new screen after the action.",
+  "verify.advanced": "Advanced ▶",
+  "verify.advanced_expanded": "Advanced ▼"
 }

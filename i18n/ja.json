@@ -774,5 +774,8 @@
   "verify.notify_groups": "停止グループ",
   "verify.jump": "ジャンプ先",
   "verify.key": "キー",
-  "verify.skip": "スキップ先"
+  "verify.skip": "スキップ先",
+  "verify.roi_hint": "検証範囲は検出範囲と異なっても構いません。動作後の新画面を確認するために使います。",
+  "verify.advanced": "詳細設定 ▶",
+  "verify.advanced_expanded": "詳細設定 ▼"
 }

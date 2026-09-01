@@ -2137,14 +2137,7 @@ class _VerifyWidget(QWidget):
         self._threshold.setDecimals(2)
         self._threshold.setSingleStep(0.05)
         self._threshold.setValue(v.get("threshold", 0.8) if isinstance(v, dict) else 0.8)
-        self._th_row = QWidget()
-        thl = QHBoxLayout(self._th_row)
-        thl.setContentsMargins(0, 0, 0, 0)
-        thl.addWidget(QLabel(T("verify.threshold", default="閾值")))
-        thl.addWidget(self._threshold)
-        thl.addStretch()
-        form.addRow("", self._th_row)
-        # roi
+        # roi — independent from parent detect ROI
         self._roi_label = QLabel()
         self._roi_btn = QPushButton(T("verify.roi", default="框選區域"))
         if roi_cb:
@@ -2156,26 +2149,62 @@ class _VerifyWidget(QWidget):
         rl.addWidget(self._roi_btn)
         form.addRow(T("verify.roi_label", default="驗證區域"), roi_row)
         self._update_roi_label()
-        # timing
+        # hint: verify ROI independent from detect ROI
+        self._roi_hint = QLabel(
+            T(
+                "verify.roi_hint",
+                default="驗證區域可與偵測區域不同，用來確認動作後的新畫面。",
+            )
+        )
+        self._roi_hint.setWordWrap(True)
+        self._roi_hint.setStyleSheet("color:#888; font-size:11px;")
+        form.addRow("", self._roi_hint)
+        # timing — timeout visible, poll/delay hidden in advanced
         self._timeout = _NoWheelSpin()
         self._timeout.setRange(0, 30000)
         self._timeout.setSingleStep(100)
         self._timeout.setSuffix(" ms")
         self._timeout.setValue(v.get("timeout_ms", 3000) if isinstance(v, dict) else 3000)
         form.addRow(T("verify.timeout", default="逾時"), self._timeout)
+        # advanced: poll / delay / threshold (default collapsed, not for ordinary user)
+        self._vf_adv_btn = QPushButton(T("verify.advanced", default="進階設定 ▶"))
+        self._vf_adv_btn.setCheckable(True)
+        self._vf_adv_btn.setChecked(False)
+        self._vf_adv_btn.setStyleSheet("QPushButton { border:none; color:#888; text-align:left; }")
+        form.addRow(self._vf_adv_btn)
+        self._vf_adv_container = QWidget()
+        self._vf_adv_container.setVisible(False)
+        self._vf_adv_btn.toggled.connect(self._vf_adv_container.setVisible)
+        self._vf_adv_btn.toggled.connect(
+            lambda c: self._vf_adv_btn.setText(
+                T("verify.advanced_expanded", default="進階設定 ▼")
+                if c
+                else T("verify.advanced", default="進階設定 ▶")
+            )
+        )
+        adv_form = QFormLayout(self._vf_adv_container)
+        adv_form.setContentsMargins(0, 0, 0, 0)
         self._poll = _NoWheelSpin()
         self._poll.setRange(50, 2000)
         self._poll.setSingleStep(50)
         self._poll.setSuffix(" ms")
         self._poll.setValue(v.get("poll_interval_ms", 300) if isinstance(v, dict) else 300)
-        form.addRow(T("verify.poll", default="輪詢"), self._poll)
+        adv_form.addRow(T("verify.poll", default="輪詢"), self._poll)
         self._delay = _NoWheelSpin()
         self._delay.setRange(0, 5000)
         self._delay.setSingleStep(100)
         self._delay.setSuffix(" ms")
         self._delay.setValue(v.get("delay_before_ms", 0) if isinstance(v, dict) else 0)
-        form.addRow(T("verify.delay", default="首輪等待"), self._delay)
-        # on_fail for verify (no stop)
+        adv_form.addRow(T("verify.delay", default="首輪等待"), self._delay)
+        self._th_row = QWidget()
+        thl = QHBoxLayout(self._th_row)
+        thl.setContentsMargins(0, 0, 0, 0)
+        thl.addWidget(QLabel(T("verify.threshold", default="閾值")))
+        thl.addWidget(self._threshold)
+        thl.addStretch()
+        adv_form.addRow("", self._th_row)
+        form.addRow(self._vf_adv_container)
+        # on_fail for verify (no stop) — default notify
         self._on_fail = _NoWheelCombo()
         self._on_fail.addItem(T("step_form.of_skip_rule", default="跳過此規則"), "advance")
         self._on_fail.addItem(T("step_form.of_notify_stop", default="通知並停止"), "notify")
@@ -2183,7 +2212,7 @@ class _VerifyWidget(QWidget):
         self._on_fail.addItem(T("step_form.of_key_continue", default="按鍵後繼續"), "key")
         self._on_fail.addItem(T("step_form.of_jump_step", default="跳至步驟"), "skip")
         raw_vf = v.get("on_fail") if isinstance(v, dict) else None
-        vf_act = raw_vf.get("action", "advance") if isinstance(raw_vf, dict) else "advance"
+        vf_act = raw_vf.get("action", "notify") if isinstance(raw_vf, dict) else "notify"
         idx_vf = self._on_fail.findData(vf_act)
         if idx_vf >= 0:
             self._on_fail.setCurrentIndex(idx_vf)
