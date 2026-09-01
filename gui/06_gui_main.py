@@ -2307,7 +2307,7 @@ class _VerifyWidget(QWidget):
         if idx_vf >= 0:
             self._on_fail.setCurrentIndex(idx_vf)
         form.addRow(T("verify.on_fail", default="逾時處理"), self._on_fail)
-        # notify extras for verify
+        # notify extras for verify — main (2 主選常顯)
         self._vf_notify_msg = QLineEdit()
         self._vf_notify_msg.setPlaceholderText(
             T("verify.notify.placeholder", default="例如：點擊後未進入戰鬥")
@@ -2320,6 +2320,7 @@ class _VerifyWidget(QWidget):
             selected=raw_vf.get("stop_groups", []) if isinstance(raw_vf, dict) else [],
         )
         form.addRow(T("verify.notify_groups", default="停止群組"), self._vf_notify_groups)
+        # jump/key/skip — 進階才見（工具聰明、使用者簡單）
         self._vf_jump_combo = _NoWheelCombo()
         _populate_rule_combo(
             self._vf_jump_combo,
@@ -2332,16 +2333,16 @@ class _VerifyWidget(QWidget):
             jidx = self._vf_jump_combo.findData(jid)
             if jidx >= 0:
                 self._vf_jump_combo.setCurrentIndex(jidx)
-        form.addRow(T("verify.jump", default="跳轉目標"), self._vf_jump_combo)
+        adv_form.addRow(T("verify.jump", default="跳轉目標"), self._vf_jump_combo)
         self._vf_key = _make_key_combo()
         if isinstance(raw_vf, dict) and raw_vf.get("action") == "key":
             kidx = self._vf_key.findData(raw_vf.get("key", ""))
             if kidx >= 0:
                 self._vf_key.setCurrentIndex(kidx)
-        form.addRow(T("verify.key", default="按鍵"), self._vf_key)
+        adv_form.addRow(T("verify.key", default="按鍵"), self._vf_key)
         self._vf_skip_combo = _NoWheelCombo()
         self._vf_skip_combo.addItem(T("step_form.this_rule_end"), 9999)
-        form.addRow(T("verify.skip", default="跳至"), self._vf_skip_combo)
+        adv_form.addRow(T("verify.skip", default="跳至"), self._vf_skip_combo)
         self._type.currentIndexChanged.connect(self._update_type_vis)
         self._vf_match_mode.currentIndexChanged.connect(self._update_type_vis)
         self._on_fail.currentIndexChanged.connect(self._update_vf_vis)
@@ -2368,6 +2369,9 @@ class _VerifyWidget(QWidget):
         act = self._on_fail.currentData()
         self._vf_notify_msg.setVisible(act == "notify")
         self._vf_notify_groups.setVisible(act == "notify")
+        # 進階動作自動展開進階區，避免選了看不到目標
+        if act in ("jump", "key", "skip") and not self._vf_adv_container.isVisible():
+            self._vf_adv_btn.setChecked(True)
         self._vf_jump_combo.setVisible(act == "jump")
         self._vf_key.setVisible(act == "key")
         self._vf_skip_combo.setVisible(act == "skip")
