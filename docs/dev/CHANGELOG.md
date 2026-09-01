@@ -1,5 +1,12 @@
 
 
+## [v0.4.4] - 2026-09-02
+
+### 給開發者
+
+- **動作後驗證 `verify`（JSON-only）**：`click`/`key`/`drag`/`scroll`/`match_image` 可在 `params` 加 `verify:{type:"detect"|"match_image", timeout_ms, poll_ms, delay_before_ms, on_fail}`，以新 `capture_frame` 輪詢 post-condition；命中即 `advance`，逾時進既有 `on_fail`（`advance/notify/jump/key/skip`），`cancelled` 不觸 `on_fail`。復用既有 OCR/模板快取與 `observation` 轉譯，無新服務/狀態機/排程器。
+- **限制**：`verify.on_fail=stop` 不支援，`normalize` 階段移除並 `warning`，Action 仍執行但失去保護（避免 `click→verify→click` 無限重送）；請改用 `advance/notify/jump/key`。單次 verify 成本目前可接受（實測 immediate ~57ms）；多 verify 累積成本尚未以真實長任務充分量化，暫不擴張為 GUI/框架，先進入真實使用觀察（B 判定）。
+
 ## [v0.4.3] - 2026-08-30
 
 ### 給使用者

@@ -208,6 +208,64 @@ on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動�
 
 **實務原則**：跑馬（loop/parallel）刻意只用 `stop`+`key`，不碰 `advance`/`notify`；每日（once/sequential）才用 `advance`/`notify`。設定新任務時沿用此分工，避免在 parallel 群組用 advance/notify。
 
+### 動作後驗證 `verify`（post-condition，JSON-only）
+
+動作步驟（`click`/`key`/`drag`/`scroll`/`match_image`）可在 `params` 內加可選 `verify`，用於「點擊後是否真的切到預期畫面」的二次確認。**第一版為 JSON-only，無 GUI**，僅進階使用者手寫 JSON。
+
+```json
+{
+  "type": "click",
+  "params": {
+    "target": "custom",
+    "x": 0.5,
+    "y": 0.5,
+    "after_delay_ms": 250,
+    "verify": {
+      "type": "detect",
+      "text": "戰鬥",
+      "roi": {"x": 0, "y": 0, "w": 0, "h": 0},
+      "match_mode": "fuzzy",
+      "fuzzy_threshold": 0.8,
+      "timeout_ms": 3000,
+      "poll_interval_ms": 300,
+      "delay_before_ms": 0,
+      "on_fail": {"action": "notify", "message": "點擊後未進入戰鬥畫面"}
+    }
+  }
+}
+```
+
+`match_image` 型範例：
+
+```json
+"verify": {
+  "type": "match_image",
+  "template_data": "<base64>",
+  "threshold": 0.8,
+  "roi": {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.8},
+  "timeout_ms": 3000,
+  "poll_interval_ms": 300,
+  "on_fail": {"action": "advance"}
+}
+```
+
+| 欄位 | 型態 | 說明 |
+|---|---|---|
+| `type` | `detect`/`match_image` | 驗證方式，對應現有 `detect`/`match_image` 辨識 |
+| `roi` | dict | 驗證搜尋區域（比例座標，`roi_coord:"client"`），同主流程 |
+| `text`/`match_mode`/`fuzzy_threshold` |  | `detect` 專用 |
+| `template`/`template_data`/`threshold`/`match_color`/`color_tolerance` |  | `match_image` 專用 |
+| `timeout_ms` | int 0..30000 | 驗證預算（預設 3000），`delay_before` 結束後起算 |
+| `poll_interval_ms` | int 50..2000 | 輪詢間隔（預設 300） |
+| `delay_before_ms` | int 0..5000 | 首輪前等待（預設 0），計入 `timeout` 前 |
+| `on_fail` | 同主流程 | 逾時後執行的 `advance`/`notify`/`jump`/`key`/`skip` |
+
+**語義**：`Action → after_delay_ms → delay_before_ms → 每 poll 用新 `capture_frame()` 重拍並走既有 `_ocr_region/_tmpl_cache` 驗證 → 命中即 `advance`（`ctx.triggered=True`）→ 逾時進 `verify.on_fail` → `verification_cancelled`（`_stop_event/_pause/_emergency` 中斷）不觸 `on_fail`。
+
+**限制 — `verify.on_fail=stop` 不支援**：若 `verify.on_fail` 為 `stop`（含 `{"action":"stop"}`），該 `verify` 在 `_normalize_verify()` 階段即被判定 `invalid`、移除並 `warning("verify config invalid, dropped")`，**Action 仍照舊執行，但失去 post-condition 保護**，下幀即回到原 `stop` 輪詢，使用者會誤以為 Verify 生效。原因：`stop` 意味「停留本 Rule」，下幀會再次執行同一 Action，造成 `click→verify timeout→click→...` 無限重送。請改用 `advance`/`notify`/`jump`/`key`/`skip`。
+
+**成本**：單次 verify 約 1 次新截圖 + 1 次 OCR/`matchTemplate`（實測 immediate ~57ms，delayed 2 poll ~177ms）；多 verify 累加，未以真實長任務充分量化，`p95` 影響與 `verify 數 × poll 次數` 成正比，暫不擴張。
+
 ### on_fail notify 流程
 
 ### 舊格式自動遷移
