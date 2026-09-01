@@ -1209,16 +1209,27 @@ class MainLoop:
     def _check_verify_condition(self, verify: dict, img: np.ndarray, rect: dict) -> bool:
         """Single-frame verification check, reusing existing caches."""
         vtype = verify.get("type", "")
+        expect = str(verify.get("expect", "present")).strip() or "present"
+        is_absent = expect == "absent"
         if vtype == "detect":
             text = str(verify.get("text", "")).strip()
             if not text:
                 return False
             roi = self._resolve_roi(verify.get("roi", {}), rect)
             results = self._ocr_region(img, roi)
-            matches = find_text(
-                results, text, verify.get("match_mode", "fuzzy"), verify.get("fuzzy_threshold", 0.8)
-            )
-            return bool(matches)
+            # ponytail: 逗號分隔視為 OR（勝利,失敗 任一出現即成功）；支援中英文逗號、頓號
+            tokens = [t.strip() for t in re.split(r"[,\uFF0C\u3001]+", text) if t.strip()]
+            if not tokens:
+                tokens = [text]
+            match_mode = verify.get("match_mode", "fuzzy")
+            fuzzy_thr = verify.get("fuzzy_threshold", 0.8)
+            found_any = False
+            for tok in tokens:
+                matches = find_text(results, tok, match_mode, fuzzy_thr)
+                if matches:
+                    found_any = True
+                    break
+            return (not found_any) if is_absent else found_any
         if vtype == "match_image":
             template_data = str(verify.get("template_data", ""))
             template_path = str(verify.get("template", ""))
@@ -1276,13 +1287,24 @@ class MainLoop:
                 self._tmpl_cache.move_to_end(cache_key)
                 while len(self._tmpl_cache) > self._tmpl_cache_max:
                     self._tmpl_cache.popitem(last=False)
-            return bool(results)
+            found = bool(results)
+            return (not found) if is_absent else found
         return False
+
+    _VERIFY_PRESET_TIMEOUT = {"short": 2000, "medium": 5000, "long": 10000}
+    _VERIFY_PRESET_POLL = {"short": 100, "medium": 300, "long": 500}
 
     def _poll_verify(self, verify: dict) -> str:
         """Poll with fresh capture frames until success/timeout/cancelled."""
-        timeout_ms = verify.get("timeout_ms", 3000)
-        poll_ms = verify.get("poll_interval_ms", 300)
+        preset = str(verify.get("preset", "")).strip()
+        if preset in self._VERIFY_PRESET_TIMEOUT and "timeout_ms" not in verify:
+            timeout_ms = self._VERIFY_PRESET_TIMEOUT[preset]
+        else:
+            timeout_ms = verify.get("timeout_ms", 3000)
+        if preset in self._VERIFY_PRESET_POLL and "poll_interval_ms" not in verify:
+            poll_ms = self._VERIFY_PRESET_POLL[preset]
+        else:
+            poll_ms = verify.get("poll_interval_ms", 300)
         delay_ms = verify.get("delay_before_ms", 0)
         if delay_ms > 0:
             t0 = time.monotonic()
@@ -1386,7 +1408,72 @@ class MainLoop:
                 verify = step.params.get("verify")
                 # invalid verify (e.g. verify+stop) was dropped in normalize, so None here means skip
                 if verify:
-                    poll_res = self._poll_verify(verify)
+                    # retries: 0..3, default 1（普通使用者默認重試一次）
+                    try:
+                        retries = int(verify.get("retries", 1))
+                    except (TypeError, ValueError):
+                        retries = 1
+                    retries = max(0, min(3, retries))
+                    try:
+                        retry_delay = int(verify.get("retry_delay_ms", 500))
+                    except (TypeError, ValueError):
+                        retry_delay = 500
+                    retry_delay = max(0, min(5000, retry_delay))
+                    poll_res = None
+                    for attempt in range(retries + 1):
+                        poll_res = self._poll_verify(verify)
+                        if poll_res == "success":
+                            break
+                        if poll_res == "cancelled":
+                            ctx.triggered = False
+                            ctx.force_advance = False
+                            if not background:
+                                self._log_exec(
+                                    rule.name,
+                                    i,
+                                    step.type,
+                                    "stop",
+                                    T("exec_log.detail.verification_cancelled"),
+                                )
+                            return StepResult(
+                                "stop", detail=T("exec_log.detail.verification_cancelled")
+                            )
+                        # timeout
+                        if attempt < retries:
+                            if retry_delay > 0:
+                                t0 = time.monotonic()
+                                if (
+                                    self._stop_event.wait(timeout=retry_delay / 1000.0)
+                                    or self._emergency_event.is_set()
+                                    or self._pause_event.is_set()
+                                ):
+                                    self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                                    ctx.triggered = False
+                                    ctx.force_advance = False
+                                    if not background:
+                                        self._log_exec(
+                                            rule.name,
+                                            i,
+                                            step.type,
+                                            "stop",
+                                            T("exec_log.detail.verification_cancelled"),
+                                        )
+                                    return StepResult(
+                                        "stop", detail=T("exec_log.detail.verification_cancelled")
+                                    )
+                                self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                            # 重跑動作再驗（解決「點沒點到」）
+                            if not background:
+                                self._log(
+                                    f"規則「{rule.name}」驗證逾時，重試 {attempt + 1}/{retries}"
+                                )
+                            re_result = self._run_step(step, ctx, rule)
+                            if re_result.action != "continue" or ctx.on_fail_fired:
+                                poll_res = "timeout"
+                                break
+                            # after_delay of retry already handled via _run_step's after_delay path? no, _run_rule's after_delay for this attempt
+                            # we loop to poll again
+                            continue
                     if poll_res == "success":
                         pass  # keep continue → advance
                     elif poll_res == "cancelled":
@@ -1403,7 +1490,7 @@ class MainLoop:
                         return StepResult(
                             "stop", detail=T("exec_log.detail.verification_cancelled")
                         )
-                    else:  # timeout
+                    else:  # timeout after retries exhausted
                         v_on_fail = verify.get("on_fail", None)
                         if v_on_fail is None:
                             v_on_fail = step.params.get("on_fail", "stop")

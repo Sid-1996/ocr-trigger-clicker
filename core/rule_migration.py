@@ -132,9 +132,17 @@ def _normalize_verify(raw: object) -> dict | None:
     vtype = str(raw.get("type", "")).strip()
     if vtype not in ("detect", "match_image"):
         return None
-    timeout_ms = max(0, min(30000, _as_int(raw.get("timeout_ms", 3000), 3000)))
+    preset = str(raw.get("preset", "")).strip()
+    if preset not in ("short", "medium", "long"):
+        preset = "medium"
+    timeout_ms = max(0, min(30000, _as_int(raw.get("timeout_ms", 5000), 5000)))
     poll_ms = max(50, min(2000, _as_int(raw.get("poll_interval_ms", 300), 300)))
     delay_ms = max(0, min(5000, _as_int(raw.get("delay_before_ms", 0), 0)))
+    expect = str(raw.get("expect", "present")).strip() or "present"
+    if expect not in ("present", "absent"):
+        expect = "present"
+    retries = max(0, min(3, _as_int(raw.get("retries", 1), 1)))
+    retry_delay_ms = max(0, min(5000, _as_int(raw.get("retry_delay_ms", 500), 500)))
     roi = _sanitize_roi(raw.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}))
     on_fail_raw = raw.get("on_fail", None)
     # verify + stop is forbidden (would retry Action each loop) -> mark invalid
@@ -152,10 +160,14 @@ def _normalize_verify(raw: object) -> dict | None:
                 return None
     result: dict = {
         "type": vtype,
+        "preset": preset,
+        "expect": expect,
         "roi": roi,
         "timeout_ms": timeout_ms,
         "poll_interval_ms": poll_ms,
         "delay_before_ms": delay_ms,
+        "retries": retries,
+        "retry_delay_ms": retry_delay_ms,
     }
     if on_fail is not None:
         result["on_fail"] = on_fail

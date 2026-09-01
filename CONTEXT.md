@@ -88,3 +88,21 @@ _Avoid_: 免安裝版、綠色版、portable
 
 **省電模式**:
 限制 OCR 執行緒數以降低 CPU 占用的設定；變更立即生效，代價是單次辨識略慢。
+
+### 動作後驗證
+
+**動作後驗證 (Verify)**:
+動作步驟（click / key / drag / scroll / match_image）執行後，對新畫面做一次額外檢查，成功才算本步完成，否則走逾時處理。預設摺疊隱藏，普通使用者不需理解實作。
+_Avoid_: 後驗證、二次確認
+
+**驗證條件 (VerifyCondition)**:
+一次驗證要檢查什麼。含 `type`（文字 detect / 圖片 match_image）、`roi`（驗證區域，可與偵測區域不同）、`expect`（present=要出現 / absent=要消失，預設 present）。
+_Avoid_: 驗證目標、驗證對象
+
+**驗證策略 (VerifyPolicy)**:
+一次驗證怎麼等。含 `preset`（短 2s / 中 5s / 長 10s，三選一，普通使用者只看此項）、`timeout_ms` / `poll_interval_ms` / `delay_before_ms`（進階才展開的毫秒值）、`retries`（逾時後重試次數，預設 1）與 `retry_delay_ms`（重試間隔，預設 500ms）。
+_Avoid_: 逾時設定、輪詢設定（單指某個毫秒值時）
+
+**驗證結果 (VerifyResult)**:
+單次輪詢的結論：`success`（條件滿足）、`timeout`（限時內未滿足）、`cancelled`（被停止/暫停/緊急停止打斷）。
+_Avoid_: 驗證成功/失敗（未區分取消時）

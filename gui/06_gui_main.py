@@ -2113,6 +2113,12 @@ class _VerifyWidget(QWidget):
         th.setContentsMargins(0, 0, 0, 0)
         th.addWidget(self._text)
         form.addRow(T("verify.text", default="目標文字"), self._text_row)
+        self._text_hint = QLabel(
+            T("verify.text_hint", default="多個文字用逗號分隔，任一出現即成功")
+        )
+        self._text_hint.setWordWrap(True)
+        self._text_hint.setStyleSheet("color:#888; font-size:11px;")
+        form.addRow("", self._text_hint)
         # template for match_image
         self._thumb = QLabel()
         self._thumb.setFixedSize(48, 48)
@@ -2159,13 +2165,46 @@ class _VerifyWidget(QWidget):
         self._roi_hint.setWordWrap(True)
         self._roi_hint.setStyleSheet("color:#888; font-size:11px;")
         form.addRow("", self._roi_hint)
-        # timing — timeout visible, poll/delay hidden in advanced
+        # preset — ordinary user sees short/medium/long (2s/5s/10s)
+        self._preset = _NoWheelCombo()
+        self._preset.addItem(T("verify.preset_short", default="短 (2秒)"), "short")
+        self._preset.addItem(T("verify.preset_medium", default="中 (5秒)"), "medium")
+        self._preset.addItem(T("verify.preset_long", default="長 (10秒)"), "long")
+        _pv = v.get("preset", "") if isinstance(v, dict) else ""
+        if _pv not in ("short", "medium", "long"):
+            _tm = (
+                int(v.get("timeout_ms", 5000))
+                if isinstance(v, dict) and isinstance(v.get("timeout_ms"), (int, float))
+                else 5000
+            )
+            if _tm <= 2500:
+                _pv = "short"
+            elif _tm >= 8000:
+                _pv = "long"
+            else:
+                _pv = "medium"
+        idx_p = self._preset.findData(_pv)
+        if idx_p >= 0:
+            self._preset.setCurrentIndex(idx_p)
+        self._preset.currentIndexChanged.connect(self._on_preset_changed)
+        form.addRow(T("verify.preset", default="等待時長"), self._preset)
+        # expect present/absent — ordinary visible
+        self._expect = _NoWheelCombo()
+        self._expect.addItem(T("verify.expect_present", default="出現才算成功"), "present")
+        self._expect.addItem(T("verify.expect_absent", default="消失才算成功"), "absent")
+        _ev = v.get("expect", "present") if isinstance(v, dict) else "present"
+        if _ev not in ("present", "absent"):
+            _ev = "present"
+        idx_e = self._expect.findData(_ev)
+        if idx_e >= 0:
+            self._expect.setCurrentIndex(idx_e)
+        form.addRow(T("verify.expect", default="成功條件"), self._expect)
+        # timeout kept for compat but moved to advanced; ordinary user uses preset
         self._timeout = _NoWheelSpin()
         self._timeout.setRange(0, 30000)
         self._timeout.setSingleStep(100)
         self._timeout.setSuffix(" ms")
-        self._timeout.setValue(v.get("timeout_ms", 3000) if isinstance(v, dict) else 3000)
-        form.addRow(T("verify.timeout", default="逾時"), self._timeout)
+        self._timeout.setValue(v.get("timeout_ms", 5000) if isinstance(v, dict) else 5000)
         # advanced: poll / delay / threshold (default collapsed, not for ordinary user)
         self._vf_adv_btn = QPushButton(T("verify.advanced", default="進階設定 ▶"))
         self._vf_adv_btn.setCheckable(True)
@@ -2184,6 +2223,7 @@ class _VerifyWidget(QWidget):
         )
         adv_form = QFormLayout(self._vf_adv_container)
         adv_form.setContentsMargins(0, 0, 0, 0)
+        adv_form.addRow(T("verify.timeout", default="逾時"), self._timeout)
         self._poll = _NoWheelSpin()
         self._poll.setRange(50, 2000)
         self._poll.setSingleStep(50)
@@ -2196,6 +2236,25 @@ class _VerifyWidget(QWidget):
         self._delay.setSuffix(" ms")
         self._delay.setValue(v.get("delay_before_ms", 0) if isinstance(v, dict) else 0)
         adv_form.addRow(T("verify.delay", default="首輪等待"), self._delay)
+        self._retries = _NoWheelSpin()
+        self._retries.setRange(0, 3)
+        self._retries.setValue(
+            int(v.get("retries", 1))
+            if isinstance(v, dict) and isinstance(v.get("retries"), (int, float))
+            else 1
+        )
+        self._retries.setToolTip(T("verify.retries.tooltip", default="逾時後重試次數，0=不重試"))
+        adv_form.addRow(T("verify.retries", default="重試次數"), self._retries)
+        self._retry_delay = _NoWheelSpin()
+        self._retry_delay.setRange(0, 5000)
+        self._retry_delay.setSingleStep(100)
+        self._retry_delay.setSuffix(" ms")
+        self._retry_delay.setValue(
+            int(v.get("retry_delay_ms", 500))
+            if isinstance(v, dict) and isinstance(v.get("retry_delay_ms"), (int, float))
+            else 500
+        )
+        adv_form.addRow(T("verify.retry_delay", default="重試間隔"), self._retry_delay)
         # detect match_mode / fuzzy_threshold — also advanced, only for detect+fuzzy
         self._vf_match_mode = _NoWheelCombo()
         self._vf_match_mode.addItem(T("combo.fuzzy", default="近似比對"), "fuzzy")
@@ -2296,6 +2355,8 @@ class _VerifyWidget(QWidget):
             getattr(self, "_vf_match_mode", None) and self._vf_match_mode.currentData() == "fuzzy"
         )
         self._text_row.setVisible(is_detect)
+        if hasattr(self, "_text_hint"):
+            self._text_hint.setVisible(is_detect)
         self._tmpl_row.setVisible(not is_detect)
         self._th_row.setVisible(not is_detect)
         if hasattr(self, "_vf_match_row"):
@@ -2444,6 +2505,15 @@ class _VerifyWidget(QWidget):
             if not isinstance(self._step.params.get("verify"), dict):
                 self._step.params["verify"] = {"type": self._type.currentData() or "detect"}
 
+    def _on_preset_changed(self, _idx):
+        mapping = {"short": 2000, "medium": 5000, "long": 10000}
+        preset = self._preset.currentData()
+        if preset in mapping:
+            self._timeout.setValue(mapping[preset])
+            # poll adapt: short 100 / medium 300 / long 500 (keep user override if already custom? simple adapt)
+            poll_map = {"short": 100, "medium": 300, "long": 500}
+            self._poll.setValue(poll_map[preset])
+
     def save(self):
         if not self._enable.isChecked():
             self._step.params.pop("verify", None)
@@ -2456,10 +2526,14 @@ class _VerifyWidget(QWidget):
             roi = cur.get("roi")
         verify = {
             "type": vtype,
+            "preset": self._preset.currentData() or "medium",
+            "expect": self._expect.currentData() or "present",
             "roi": roi,
             "timeout_ms": int(self._timeout.value()),
             "poll_interval_ms": int(self._poll.value()),
             "delay_before_ms": int(self._delay.value()),
+            "retries": int(self._retries.value()),
+            "retry_delay_ms": int(self._retry_delay.value()),
         }
         if vtype == "detect":
             txt = self._text.text().strip()
@@ -3649,6 +3723,11 @@ class SettingsDialog(QDialog):
         self._ask_group.setToolTip(T("settings.ask_group_selection.tooltip"))
         form.addRow("", self._ask_group)
 
+        self._standard_window = QCheckBox(T("settings.standard_window"))
+        self._standard_window.setChecked(self._ctrl.get_setting(win, "auto_resize_standard", False))
+        self._standard_window.setToolTip(T("settings.standard_window.tooltip"))
+        form.addRow("", self._standard_window)
+
         # ── 自動化 / 辨識分頁 ──
         auto = QWidget()
         aform = QFormLayout(auto)
@@ -3785,6 +3864,7 @@ class SettingsDialog(QDialog):
             _ocr_mod.reset_engine()
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "ask_group_selection", self._ask_group.isChecked())
+        self._ctrl.set_setting(self._win, "auto_resize_standard", self._standard_window.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
         if getattr(self._win, "_current_task", ""):
             task_path = str(_rule_mod.get_tasks_dir() / f"{self._win._current_task}.json")
@@ -4061,6 +4141,7 @@ class MainWindow(QMainWindow):
             self._rule_config_ctrl = RuleConfigController()
             self._test_ctrl = TestRunController(self, _of_summary, _resolve_rule_name)
             self._applying_task_window = False
+            self._standard_suggest_dismissed: set[str] = set()
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.bg_inject_fail.connect(self._on_debug_bg_fail)
@@ -5064,6 +5145,25 @@ class MainWindow(QMainWindow):
             warn_label.setWordWrap(True)
             warn_label.setStyleSheet("color: #cc8800;")
             layout.addWidget(warn_label)
+
+        # 標準尺寸提示：僅文字，不新增勾選（P0-B）
+        try:
+            cs = preview.raw_data.get("capture_size")
+            if isinstance(cs, list) and len(cs) == 2 and all(isinstance(v, int) for v in cs):
+                if (cs[0], cs[1]) != (1600, 900):
+                    hint = QLabel(T("import.standard_hint", w=cs[0], h=cs[1]))
+                    hint.setWordWrap(True)
+                    hint.setStyleSheet("color: #2a7ae2;")
+                    layout.addWidget(hint)
+            elif isinstance(preview.meta.get("standard_client_size"), list):
+                scs = preview.meta["standard_client_size"]
+                if len(scs) == 2 and tuple(scs) != (1600, 900):
+                    hint2 = QLabel(T("import.standard_hint", w=scs[0], h=scs[1]))
+                    hint2.setWordWrap(True)
+                    hint2.setStyleSheet("color: #2a7ae2;")
+                    layout.addWidget(hint2)
+        except Exception:
+            pass
 
         cb = QCheckBox(T("ui.regenerate_ids"))
         cb.setChecked(False)
@@ -6762,6 +6862,86 @@ class MainWindow(QMainWindow):
                 )
                 if resp2 != QMessageBox.StandardButton.Yes:
                     return
+        # 標準工作尺寸：自動或差異提示（僅啟動前，勾選/切任務不觸發）
+        try:
+            _ss_mod = load_sibling("screenshot", "core/01_screenshot.py")
+            _resize = getattr(_ss_mod, "resize_window_to_client", None)
+            _get_client = getattr(_ss_mod, "get_window_client_size", None)
+            _is_fs = getattr(_ss_mod, "is_window_fullscreen", None)
+
+            def _report(res: str):
+                if res == "ok":
+                    self._status_bar.showMessage(T("status.standard_resize_ok", title=title), 4000)
+                    logging.info("standard resize ok: %s -> 1600x900 client", title)
+                elif res == "not_found":
+                    logging.warning("standard resize skip: not_found %s", title)
+                    self._status_bar.showMessage(
+                        T("status.standard_resize_not_found", title=title), 4000
+                    )
+                elif res == "minimized":
+                    logging.warning("standard resize skip: minimized %s", title)
+                    self._status_bar.showMessage(
+                        T("status.standard_resize_minimized", title=title), 4000
+                    )
+                elif res == "fullscreen":
+                    logging.warning("standard resize skip: fullscreen %s", title)
+                    self._status_bar.showMessage(
+                        T("status.standard_resize_skip_fullscreen", title=title), 4000
+                    )
+                elif res == "failed":
+                    logging.warning("standard resize failed: %s", title)
+                    self._status_bar.showMessage(
+                        T("status.standard_resize_failed", title=title), 4000
+                    )
+
+            if self._rule_config_ctrl.get_setting(self, "auto_resize_standard", False):
+                if _resize is not None:
+                    _res = _resize(title, 1600, 900)
+                    _report(_res)
+                    if _res == "ok":
+                        time.sleep(0.3)
+            else:
+                # 未開啟自動：僅當本 session 未忽略、且客戶區非標準、非全螢幕/最小化時提示
+                if (
+                    _resize is not None
+                    and _get_client is not None
+                    and _is_fs is not None
+                    and title not in getattr(self, "_standard_suggest_dismissed", set())
+                ):
+                    cs = _get_client(title)
+                    if cs is not None and cs != (1600, 900) and not _is_fs(title):
+                        hwnd = getattr(_ss_mod, "get_window_hwnd", lambda t: None)(title)
+                        _u = getattr(_ss_mod, "_user32", None)
+                        if _u is not None and hwnd is not None and _u.IsIconic(hwnd):
+                            cs = None
+                        if cs is not None:
+                            box = QMessageBox(self)
+                            box.setWindowTitle(T("settings.standard_window"))
+                            box.setText(
+                                T("status.standard_resize_suggest", title=title, cw=cs[0], ch=cs[1])
+                            )
+                            box.setInformativeText(T("status.standard_resize_suggest_hint"))
+                            yes_btn = box.addButton(
+                                T("status.standard_resize_yes"), QMessageBox.ButtonRole.YesRole
+                            )
+                            no_btn = box.addButton(
+                                T("status.standard_resize_no"), QMessageBox.ButtonRole.NoRole
+                            )
+                            box.addButton(QMessageBox.StandardButton.Cancel)
+                            box.setDefaultButton(yes_btn)
+                            box.exec()
+                            clicked = box.clickedButton()
+                            if clicked == yes_btn:
+                                _res = _resize(title, 1600, 900)
+                                _report(_res)
+                                if _res == "ok":
+                                    time.sleep(0.3)
+                            elif clicked == no_btn:
+                                self._standard_suggest_dismissed.add(title)
+                            else:
+                                return
+        except Exception:
+            logging.warning("standard resize unexpected error for '%s'", title, exc_info=True)
         # 提交未存編輯並同步寫入磁碟，確保主迴圈讀到的是最新規則
         self._save_current_rule()
         self._flush_save()
