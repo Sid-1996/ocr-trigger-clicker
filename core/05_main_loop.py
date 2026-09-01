@@ -68,6 +68,7 @@ MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
 img_to_b64 = _tmpl.img_to_b64
 _logging_config = load_sibling("logging_config", "core/00_logging_config.py")
+_obs_mod = load_sibling("observation", "core/observation.py")
 
 
 def _ensure_main_logger() -> logging.Logger:
@@ -254,11 +255,79 @@ class MainLoop:
 
         self._rules: list[Rule] = []
         self._logger = _ensure_main_logger()
+        # Shadow Observation stats (debug only, aggregated)
+        self._obs_mismatch_total: int = 0
+        self._obs_checked_total: int = 0
+        self._obs_last_diff_log: dict[str, float] = {}
         self._load_rules()
         init_engine()
         log_main(
             f"應用啟動 v{__version__}，目標視窗「{window_title}」，載入 {len(self._rules)} 條規則"
         )
+
+    def _is_obs_shadow_enabled(self) -> bool:
+        try:
+            return bool(
+                self._rule_config_ctrl.get_setting(self, "observation_shadow_enabled", False)
+            )
+        except Exception:
+            return False
+
+    def _shadow_check_ocr(self, results: list, roi: dict, rule: Rule, step_idx: int) -> None:
+        if not self._is_obs_shadow_enabled():
+            return
+        if not self._logger.isEnabledFor(logging.DEBUG):
+            return
+        try:
+            self._obs_checked_total += 1
+            obs = _obs_mod.ocr_to_observations(results, roi)
+            cmp = _obs_mod.compare_ocr_observations(results, obs)
+            if cmp.get("mismatch") is not None:
+                self._obs_mismatch_total += 1
+                key = f"{rule.id}:{step_idx}:{cmp.get('mismatch')}"
+                now = time.monotonic()
+                last = self._obs_last_diff_log.get(key, 0)
+                if now - last < 5.0:
+                    return
+                self._obs_last_diff_log[key] = now
+                self._logger.debug(
+                    "obs shadow mismatch rule=%s step=%s type=ocr %s (checked=%s mism=%s)",
+                    rule.name,
+                    step_idx,
+                    cmp,
+                    self._obs_checked_total,
+                    self._obs_mismatch_total,
+                )
+        except Exception:
+            return
+
+    def _shadow_check_template(self, results: list, roi: dict, rule: Rule, step_idx: int) -> None:
+        if not self._is_obs_shadow_enabled():
+            return
+        if not self._logger.isEnabledFor(logging.DEBUG):
+            return
+        try:
+            self._obs_checked_total += 1
+            obs = _obs_mod.template_to_observations(results, roi)
+            cmp = _obs_mod.compare_template_observations(results, obs)
+            if cmp.get("mismatch") is not None:
+                self._obs_mismatch_total += 1
+                key = f"{rule.id}:{step_idx}:{cmp.get('mismatch')}"
+                now = time.monotonic()
+                last = self._obs_last_diff_log.get(key, 0)
+                if now - last < 5.0:
+                    return
+                self._obs_last_diff_log[key] = now
+                self._logger.debug(
+                    "obs shadow mismatch rule=%s step=%s type=template %s (checked=%s mism=%s)",
+                    rule.name,
+                    step_idx,
+                    cmp,
+                    self._obs_checked_total,
+                    self._obs_mismatch_total,
+                )
+        except Exception:
+            return
 
     _ACTION_LOG_WINDOW = 1.0
 
@@ -620,6 +689,8 @@ class MainLoop:
         ctx.ocr_cache_hit = self._ocr_cache_hits > hits_before
         if roi_is_empty and ctx.img.shape[1] > 800:
             ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
+        # Shadow: pure translation check (zero impact on StepResult)
+        self._shadow_check_ocr(results, roi, rule, ctx.step_idx)
         if not results:
             return self._handle_on_fail(params, ctx, rule)
 
@@ -716,6 +787,8 @@ class MainLoop:
             ctx.best_confidence = best_below
             return self._handle_on_fail(params, ctx, rule)
 
+        # Shadow: compare template results (pure translation)
+        self._shadow_check_template(results, roi, rule, ctx.step_idx)
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = results[0]
         return StepResult("continue")
@@ -738,6 +811,7 @@ class MainLoop:
         ctx.ocr_cache_hit = self._ocr_cache_hits > hits_before
         if roi_is_empty and ctx.img.shape[1] > 800:
             ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
+        self._shadow_check_ocr(results, roi, rule, ctx.step_idx)
         combined = " ".join(r.text for r in results)
         pattern = params.get("pattern", r"-?\d+\.?\d*")
         m = re.search(pattern, combined)
@@ -1936,7 +2010,14 @@ if __name__ == "__main__":
     ml._last_completed_log = {}
     ml._action_log_ts = {}
     ml._match_image_warn_counter = {}
+    ml._detect_warn_counter = {}
     ml._last_active_rule_id = None
+    ml._frame_waited_ms = 0.0
+    ml._black_streak = 0
+    ml._slow_loop_warned = False
+    ml._obs_mismatch_total = 0
+    ml._obs_checked_total = 0
+    ml._obs_last_diff_log = {}
     ml._logger = logging.getLogger("main_loop_test")
     ml._logger.setLevel(logging.INFO)
     ml._logger.handlers.clear()

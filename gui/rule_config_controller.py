@@ -36,6 +36,7 @@ class RuleConfigController:
         "language": "zh_TW",
         "notify_resource_warn": True,
         "ask_group_selection": True,
+        "observation_shadow_enabled": False,
     }
 
     def __init__(self):
