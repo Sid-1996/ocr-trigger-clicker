@@ -2078,23 +2078,21 @@ class _VerifyWidget(QWidget):
         self._exclude_rule_id = exclude_rule_id
         p = step.params
         v = p.get("verify") if isinstance(p.get("verify"), dict) else {}
-        outer = QFormLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 8, 0, 0)
+        outer.setSpacing(4)
         self._enable = QCheckBox(T("verify.enable", default="動作後驗證（進階）"))
         self._enable.setChecked(isinstance(p.get("verify"), dict))
+        self._enable.setEnabled(True)
         self._enable.setToolTip(
             T("verify.enable.tooltip", default="點擊後等待畫面切到預期狀態才算成功，否則走逾時處理")
         )
-        outer.addRow(self._enable)
+        outer.addWidget(self._enable)
         self._container = QWidget()
         self._container.setVisible(self._enable.isChecked())
         self._enable.toggled.connect(self._container.setVisible)
-        self._enable.toggled.connect(
-            lambda _: (
-                self._list.steps_changed.emit() if hasattr(self._list, "steps_changed") else None
-            )
-        )
-        outer.addRow(self._container)
+        self._enable.toggled.connect(self._on_verify_toggled)
+        outer.addWidget(self._container)
         form = QFormLayout(self._container)
         form.setContentsMargins(0, 6, 0, 0)
         # type
@@ -2342,6 +2340,17 @@ class _VerifyWidget(QWidget):
             v.pop("template", None)
             self._update_thumb()
             self._list.steps_changed.emit()
+
+    def _on_verify_toggled(self, checked: bool):
+        # ensure a minimal verify dict exists so subsequent picks/saves have a target
+        if checked:
+            if not isinstance(self._step.params.get("verify"), dict):
+                self._step.params["verify"] = {"type": self._type.currentData() or "detect"}
+        if hasattr(self._list, "steps_changed"):
+            try:
+                self._list.steps_changed.emit()
+            except Exception:
+                pass
 
     def save(self):
         if not self._enable.isChecked():
