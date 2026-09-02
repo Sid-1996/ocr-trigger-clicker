@@ -1424,9 +1424,9 @@ class MainLoop:
                 if self._stop_event.wait(timeout=ms / 1000.0):
                     return StepResult("stop", detail=T("exec_log.detail.interrupted"))
                 self._frame_waited_ms += ms  # 刻意等待：過慢判定時扣除
-            # Verify: optional post-condition on new frames (not ctx.img)
+            # Verify: optional post-condition on new frames (not ctx.img) — 僅動作四類（追溯 ADR-0005）
             if (
-                step.type in ("click", "key", "drag", "scroll", "match_image")
+                step.type in ("click", "key", "drag", "scroll")
                 and result.action == "continue"
                 and not ctx.on_fail_fired
                 and isinstance(step.params.get("verify"), dict)

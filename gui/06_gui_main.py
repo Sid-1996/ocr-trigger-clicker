@@ -1267,18 +1267,7 @@ class _MatchImageStepForm(QWidget):
         self._after_delay.setValue(p.get("after_delay_ms", 0))
         self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
         form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
-        self._verify = _VerifyWidget(
-            self._list,
-            self._step,
-            roi_cb=self._roi_cb,
-            capture_cb=self._capture_cb,
-            window_title_cb=self._window_title_cb,
-            groups_provider=self._groups_provider,
-            rules_provider=self._rules_provider,
-            task_path_cb=self._task_path_cb,
-            exclude_rule_id=self._exclude_rule_id,
-        )
-        form.addRow(self._verify)
+        # Verify 已收斂至動作四類（ADR-0005），圖片比對不再提供驗證入口
 
         # ── on_fail collapsible section ──
         self._on_fail_expanded = False
@@ -1694,10 +1683,7 @@ class _MatchImageStepForm(QWidget):
         p["match_color"] = self._match_color.isChecked()
         p["color_tolerance"] = self._color_tolerance.value()
         p["after_delay_ms"] = self._after_delay.value()
-        try:
-            self._verify.save()
-        except Exception:
-            pass
+        # Verify 已收斂至動作四類（ADR-0005），圖片比對不再處理 verify
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":

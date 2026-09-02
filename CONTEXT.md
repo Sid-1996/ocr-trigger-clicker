@@ -92,8 +92,8 @@ _Avoid_: 免安裝版、綠色版、portable
 ### 動作後驗證
 
 **動作後驗證 (Verify, post-condition)**:
-動作步驟（click / key / drag / scroll / match_image）執行後，對新畫面做一次額外檢查，成功才算本步完成，否則走驗證逾時處理。GUI 以摺疊「動作後驗證（進階）」呈現，預設收起；與步驟的偵測失敗處理（on_fail）分屬不同層級，不可混用。
-_Avoid_: 後驗證、二次確認、把 Verify 稱為「偵測」
+動作步驟（click / key / drag / scroll，僅此四類）執行後，對新畫面做一次額外檢查，成功才算本步完成，否則走驗證逾時處理。`match_image` 為偵測步驟，不提供驗證入口（v0.4.3 後未發版，開發期直接收斂，見 ADR-0005）。GUI 以摺疊「動作後驗證（進階）」呈現，預設收起；與步驟的偵測失敗處理（on_fail）分屬不同層級，不可混用。
+_Avoid_: 後驗證、二次確認、把 Verify 稱為「偵測」、對 match_image 加驗證
 
 **驗證條件 (VerifyCondition)**:
 一次驗證要檢查什麼。含 `type`（文字 detect / 圖片 match_image）、`roi`（驗證區域，**獨立於**主步驟 ROI，可與偵測區域不同；客戶區比例 0~1，隨標準工作尺寸自動縮放）、`expect`（present=要出現 / absent=要消失，預設 present；消失用於確認彈窗已關閉等場景）、`text`（逗號分隔多關鍵字，任一命中即成功，OR 語意）。

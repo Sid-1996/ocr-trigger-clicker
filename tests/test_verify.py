@@ -107,11 +107,40 @@ def test_verify_allowed_on_parent_only():
         "detect", {"text": "hi", "verify": {"type": "detect", "text": "x"}}
     )
     assert "verify" not in out
+    # match_image must not keep verify (ADR-0005 收斂至動作四類)
+    out_mi = RuleMig._normalize_step_params(
+        "match_image",
+        {
+            "template_data": "abc==",
+            "verify": {"type": "detect", "text": "x"},
+        },
+    )
+    assert "verify" not in out_mi
     # wait must not
     out2 = RuleMig._normalize_step_params(
         "wait", {"ms": 100, "verify": {"type": "detect", "text": "x"}}
     )
     assert "verify" not in out2
+
+
+def test_match_image_verify_dropped_on_normalize():
+    # 舊任務若誤存 match_image.verify，normalize 直接丟棄（開發期無遷移期）
+    out = RuleMig._normalize_step_params(
+        "match_image",
+        {
+            "template_data": "abc==",
+            "threshold": 0.8,
+            "verify": {
+                "type": "match_image",
+                "template_data": "xyz==",
+                "threshold": 0.8,
+                "timeout_ms": 3000,
+            },
+        },
+    )
+    assert "verify" not in out
+    # _normalize_verify 本身仍合法（僅 step 層收斂），但 step 層已攔截
+    assert RuleMig._normalize_verify({"type": "match_image", "template_data": "xyz=="}) is not None
 
 
 def test_backward_compat_no_verify():

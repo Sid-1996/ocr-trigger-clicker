@@ -195,8 +195,8 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
     params = params if isinstance(params, dict) else {}
     base.update(params)
 
-    # verify is action-only optional; normalize after base merge
-    if step_type in ("click", "key", "drag", "scroll", "match_image"):
+    # verify is action-only optional; normalize after base merge — 僅動作四類，match_image 已收斂（追溯 ADR-0005）
+    if step_type in ("click", "key", "drag", "scroll"):
         raw_verify = params.get("verify", None)
         if raw_verify is not None:
             v = _normalize_verify(raw_verify)
