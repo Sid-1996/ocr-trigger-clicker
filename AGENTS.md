@@ -72,6 +72,19 @@ commit 訊息格式：`feat` / `fix` / `refactor` / `docs` / `chore` + 冒號 + 
 
 ---
 
+## 提案/推薦前必做核實（防推測式建議）
+
+提供任何「推薦/建議/優化方向」前，**必須先實證核實工具是否已存在**，不得僅憑推測：
+
+1. **檢索先行**：以 `codegraph_explore` 優先，`Grep`/`rg` + `Read` 為備選，檢索相關符號/檔名/文案 key（例如 `rule_requested` / `create_text_rule` / `_on_add_rule` / `T("ocr_debug.create_text_rule")`），有結果即視為已存在。
+2. **有無分流**：檢索為空且已說明檢索式與範圍，方可提案為「新增」；否則一律歸為「已實現/瘦身/撤案」，並在回覆中標註證據定位 `file:line`。
+3. **證據定位**：每項建議必須附 `file:line` 定位，無定位視為未完成。
+4. **與完成度掛鉤**：推測式提案（無檢索/無定位）視為與 `Lint 未過/pytest 未跑` 同級的未完成，不得進入 `add + commit + push`。二次審查時以此為必檢項（見本檔「工作完成規範」延伸）。
+
+*Rationale*：診斷主路徑 `gui/09_ocr_debug.py:620 _on_add_rule` → `gui/06_gui_main.py:6486 _on_debug_rule_requested` 的 `detect + click@text_center` 曾被誤判為缺口，補「一鍵成規」屬重複設計；核實可避免重複設計與過度設計。
+
+---
+
 ## Shell / Git 指令規範
 
 ### ✅ 使用 PowerShell 7（pwsh）執行所有指令

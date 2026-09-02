@@ -381,6 +381,8 @@ AHK 移除後，`clicker.ahk` datas 已刪除。新增 `pynput`、`dxcam`、`com
 
 加印 debug log 在關鍵 signal/slot 邊界（如 `dropEvent`、`_on_rules_reordered`、`_refresh_rule_list`）→ 從終端機執行重現以取得輸出 → 找出實際分歧的程式碼路徑 → 修根因 → 用 `git log` 驗證 commit 確實落地。改動指令給執行端（小弟/OpenCode）時必須完整明確，不預期來回確認。
 
+**提案前必做核實**：任何推薦/優化建議前，必須先以 `codegraph_explore` 優先（`Grep+Read` 備選）檢索相關符號/檔名/文案 key，有結果即視為已存在；每項建議附 `file:line` 定位，無定位視為未完成（見 `AGENTS.md:提案/推薦前必做核實`）。
+
 ## Release Notes 寫法規範
 
 Release notes 必須分兩層，先一般使用者後技術細節，中間用 `---` 分隔：
