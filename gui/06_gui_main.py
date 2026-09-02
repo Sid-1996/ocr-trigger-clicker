@@ -2430,8 +2430,6 @@ class _VerifyWidget(QWidget):
                 "verify.preset.tooltip",
                 default="短/中/長已自動匹配輪詢頻率（100/300/500ms），進階可手調逾時與輪詢",
             )
-            + "\n"
-            + T("verify.preset_hint", default="短/中/長已自動匹配輪詢 100/300/500ms，進階可手調")
         )
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         form.addRow(T("verify.preset", default="等待時長"), self._preset)
