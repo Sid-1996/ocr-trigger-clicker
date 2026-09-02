@@ -1,5 +1,21 @@
 
 
+## [v0.4.5] - 2026-09-02
+
+### 給使用者
+
+**請下載 OCRTriggerClicker-win-Setup.exe**（安裝版，自動更新）：
+
+#### 新增
+
+- **目標視窗標準工作尺寸**：`設定 → 一般` 新增「自動將目標視窗調整為 1600×900」勾選（預設關）。勾選後，啟動任務前會將選定目標視窗的**客戶區**調整為 1600×900 視窗模式並於工作區置中，供不同解析度製作的任務重用；全螢幕/無法調整時自動跳過（狀態列提示 + logging，不阻塞啟動）。不寫入 task JSON、不改 Verify/MainLoop 語義。
+- **智能提示**：未開啟自動時，若當前視窗客戶區非 1600×900 且非全螢幕/最小化，啟動前以對話框詢問「當前 {w}×{h} 是否調整」（是→一鍵調整、否→本 session 不再提示、取消→中止啟動，`_standard_suggest_dismissed` 去重，`IsZoomed` 最大化亦提示）。匯入任務時若 `capture_size != 1600×900` 於預覽追加藍字 `import.standard_hint`。
+
+### 給開發者
+
+- `core/01_screenshot.py` 新增通用 `resize_window_to_client(title,w,h)` / `get_window_client_size` / `is_window_fullscreen`（Win32 `GetClientRect/GetWindowRect/MonitorFromWindow/GetMonitorInfoW/SetWindowPos`，`IsZoomed` 先 `SW_RESTORE`，多螢幕工作區置中，chrome 增量計算客戶區 1600×900）與純函式 `_calc_outer_size/_calc_centered_pos/_rects_equal_fullscreen`；`gui/rule_config_controller.py` 新增 `auto_resize_standard` 預設 false，`gui/06_gui_main.py:SettingsDialog` 新增勾選、`MainWindow._start_loop` 啟動前鉤子（自動或差異提示，`IsIconic/IsZoomed` 分支，`_standard_suggest_dismissed` session 去重，不搶 `statusBar` 更新橫幅）與 `MainWindow._show_import_preview_dialog` 藍字提示。全螢幕以 `GetWindowRect` 覆蓋 `rcMonitor` 判定，最小化/找不到/失敗皆 `logging.warning + statusBar` 後繼續，無自動還原。
+- **測試**：`tests/test_window_resize.py` 6 用例覆蓋純計算、chrome 增量、fullscreen 判定、invalid/not_found、設定預設 false、舊設定載入不崩潰；Verify 15 / 全量 223 tests 仍通過。
+
 ## [v0.4.4] - 2026-09-02
 
 ### 給開發者

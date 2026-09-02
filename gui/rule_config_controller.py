@@ -37,6 +37,7 @@ class RuleConfigController:
         "notify_resource_warn": True,
         "ask_group_selection": True,
         "observation_shadow_enabled": False,
+        "auto_resize_standard": False,
     }
 
     def __init__(self):

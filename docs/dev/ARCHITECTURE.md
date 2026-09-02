@@ -72,7 +72,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 
 | 檔案 | 角色 | 對外暴露 |
 |------|------|----------|
-| `core/01_screenshot.py` | 視窗擷取 | `capture()`, `capture_window_content()`, `list_windows()`, `get_window_rect()`, `activate_window()`, `activate_window_bg()` |
+| `core/01_screenshot.py` | 視窗擷取 + 標準工作尺寸（Win32） | `capture()`, `capture_window_content()`, `list_windows()`, `get_window_rect()`, `activate_window()`, `get_window_client_size()`, `is_window_fullscreen()`, `resize_window_to_client(title,w,h)`, `get_window_client_offset()` |
 | `core/02_ocr_engine.py` | OCR 引擎（依 i18n 語系自動選模型：`en` 且 en 模型存在時用英文，否則繁中；英文模型缺失 fallback 繁中） | `init_engine()`, `recognize()`, `find_text()`, `OcrResult` |
 | `core/03_pynput_input.py` | 輸入模擬（前景 pynput SendInput） | `send_click()`, `send_key()`, `send_scroll()`, `send_drag()`, `send_hold_key()` |
 | `core/04_rule_engine.py` | 規則引擎 re-export hub（委派給 6 個子模組） | `Rule`, `RuleGroup`, `Step`, `load_groups()`, `save_groups()`, `load_rules()`, `save_rules()` |
@@ -265,6 +265,18 @@ on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動�
 **限制 — `verify.on_fail=stop` 不支援**：若 `verify.on_fail` 為 `stop`（含 `{"action":"stop"}`），該 `verify` 在 `_normalize_verify()` 階段即被判定 `invalid`、移除並 `warning("verify config invalid, dropped")`，**Action 仍照舊執行，但失去 post-condition 保護**，下幀即回到原 `stop` 輪詢，使用者會誤以為 Verify 生效。原因：`stop` 意味「停留本 Rule」，下幀會再次執行同一 Action，造成 `click→verify timeout→click→...` 無限重送。請改用 `advance`/`notify`/`jump`/`key`/`skip`。
 
 **成本**：單次 verify 約 1 次新截圖 + 1 次 OCR/`matchTemplate`（實測 immediate ~57ms，delayed 2 poll ~177ms）；多 verify 累加，未以真實長任務充分量化，`p95` 影響與 `verify 數 × poll 次數` 成正比，暫不擴張。
+
+### 標準工作尺寸（Standard Working Size，1600×900 client）
+
+工具標準工作尺寸是「目標視窗的工作尺寸」能力，非特定遊戲專用。第一版標準為 **1600×900 客戶區**（非外框），適合以此解析度製作的任務在不同螢幕間重用（1920×1080 全螢幕與 1600×900 視窗模式已驗證可共用同一任務）。
+
+- **設定**：`gui/rule_config_controller.py:DEFAULTS["auto_resize_standard"]=false`，`設定 → 一般 → 自動將目標視窗調整為 1600×900`（預設關，`i18n settings.standard_window`）。
+- **時機**：僅在 `gui/06_gui_main.py:MainWindow._start_loop` 真正開始執行前套用；勾選設定、切換任務、選擇視窗時不改尺寸。不寫入 task JSON、不綁定遊戲/任務、不改 `MainLoop`/Verify 語義，不新增 State/Handler。
+- **Win32 實作**（復用 `core/01_screenshot.py` 現有 `_user32`）：`resize_window_to_client(title,w,h)` 為通用函式（非 1600×900 專用），內部以 `GetClientRect/GetWindowRect` 算 chrome 增量 `outer = client + chrome`，經 `MonitorFromWindow + GetMonitorInfoW(rcWork)` 以工作區置中，用 `SetWindowPos(SWP_NOZORDER|SWP_NOACTIVATE)` 調整；若 `IsZoomed` 則先 `ShowWindow(SW_RESTORE)`。多螢幕以 `MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)` 定工作區，DPI 由系統回報邏輯像素自然對齊。
+- **全螢幕判定**：`is_window_fullscreen()` 以 `GetWindowRect` 外框是否覆蓋 `GetMonitorInfoW(rcMonitor)` 判定，涵蓋 Exclusive/Borderless/最大化全螢幕；命中則 `resize` 回 `fullscreen` 並跳過。最小化（`IsIconic`）回 `minimized`，找不到回 `not_found`，`SetWindowPos` 失敗回 `failed`。
+- **回報與行為**：全螢幕/最小化/找不到/失敗一律 `logging.warning + statusBar` 提示後**正常繼續啟動**，不 `QMessageBox` 阻塞；成功回 `ok` 並 `sleep 0.3s` 等重繪，再進既有 `capture_frame` 流程，後續 `get_window_rect/ROI ratio` 自然取新尺寸。無「自動還原」。
+- **智能便利（P0）**：`auto_resize_standard==false` 時，若 `get_window_client_size != 1600×900` 且非全螢幕/最小化、且本 session 未對該 `title` 按「否」，`_start_loop` 以阻塞 `QMessageBox` 提示 `status.standard_resize_suggest/suggest_hint`（`是→resize→report`，`否→加入 _standard_suggest_dismissed` 本 session 去重，`取消→abort 啟動`）；`IsZoomed` 最大化視為可提示（還原後再調）。匯入預覽 `gui/06_gui_main.py:_show_import_preview_dialog` 若 `preview.raw_data.capture_size != [1600,900]`（外框近似）則追加 `import.standard_hint` 藍字提示，僅文字不新增勾選，不搶 `statusBar` 更新橫幅（`_on_update_checked:7118`）。
+- **純邏輯可測**：`_calc_outer_size / _calc_centered_pos / _rects_equal_fullscreen` 為純函式，單元覆蓋於 `tests/test_window_resize.py`；Win32 需真實視窗，手測為準。
 
 ### on_fail notify 流程
 

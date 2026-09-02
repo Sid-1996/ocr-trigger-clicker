@@ -58,6 +58,26 @@ _user32.GetDpiForWindow.restype = wintypes.UINT
 _user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
 _user32.MonitorFromWindow.restype = wintypes.HMONITOR
 _user32.GetDesktopWindow.restype = wintypes.HWND
+_user32.IsIconic.argtypes = [wintypes.HWND]
+_user32.IsIconic.restype = wintypes.BOOL
+_user32.IsZoomed.argtypes = [wintypes.HWND]
+_user32.IsZoomed.restype = wintypes.BOOL
+_user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.ShowWindow.restype = wintypes.BOOL
+_user32.SetWindowPos.argtypes = [
+    wintypes.HWND,
+    wintypes.HWND,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.UINT,
+]
+_user32.SetWindowPos.restype = wintypes.BOOL
+_user32.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, ctypes.c_void_p]
+_user32.GetMonitorInfoW.restype = wintypes.BOOL
+_user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+_user32.GetSystemMetrics.restype = ctypes.c_int
 
 _gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
 _gdi32.CreateCompatibleDC.restype = wintypes.HDC
@@ -99,6 +119,55 @@ _shcore.GetDpiForMonitor.argtypes = [
     ctypes.POINTER(ctypes.c_int),
 ]
 _shcore.GetDpiForMonitor.restype = ctypes.c_long
+
+
+class _MONITORINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("rcMonitor", wintypes.RECT),
+        ("rcWork", wintypes.RECT),
+        ("dwFlags", wintypes.DWORD),
+    ]
+
+
+# ── Window standard working size helpers (generic, not 1600x900-locked) ──
+
+
+def _calc_outer_size(client_w: int, client_h: int, chrome_w: int, chrome_h: int) -> tuple[int, int]:
+    """Pure: outer = client + chrome (chrome = outer-client). No Win32."""
+    return client_w + chrome_w, client_h + chrome_h
+
+
+def _calc_centered_pos(
+    work_x: int, work_y: int, work_w: int, work_h: int, outer_w: int, outer_h: int
+) -> tuple[int, int]:
+    """Pure: centered top-left inside work area (clamped to work origin)."""
+    x = work_x + (work_w - outer_w) // 2
+    y = work_y + (work_h - outer_h) // 2
+    if outer_w >= work_w:
+        x = work_x
+    if outer_h >= work_h:
+        y = work_y
+    return x, y
+
+
+def _rects_equal_fullscreen(
+    win_left: int,
+    win_top: int,
+    win_right: int,
+    win_bottom: int,
+    mon_left: int,
+    mon_top: int,
+    mon_right: int,
+    mon_bottom: int,
+) -> bool:
+    """Pure: window outer covers monitor (allow fullscreen/borderless)."""
+    return (
+        win_left <= mon_left
+        and win_top <= mon_top
+        and win_right >= mon_right
+        and win_bottom >= mon_bottom
+    )
 
 
 def list_windows() -> list[str]:
@@ -171,6 +240,126 @@ def get_window_rect(title: str) -> dict | None:
         return {"x": window.left, "y": window.top, "w": window.width, "h": window.height}
     except Exception:
         return None
+
+
+def get_window_client_size(title: str) -> tuple[int, int] | None:
+    """Returns (client_w, client_h) for the window, or None if not found."""
+    try:
+        hwnd = get_window_hwnd(title)
+        if hwnd is None:
+            return None
+        rect = wintypes.RECT()
+        if not _user32.GetClientRect(hwnd, ctypes.byref(rect)):
+            return None
+        return int(rect.right), int(rect.bottom)
+    except Exception:
+        return None
+
+
+def is_window_fullscreen(title: str) -> bool:
+    """True if window outer covers its monitor (exclusive/borderless/maximized fullscreen)."""
+    try:
+        hwnd = get_window_hwnd(title)
+        if hwnd is None:
+            return False
+        win = wintypes.RECT()
+        if not _user32.GetWindowRect(hwnd, ctypes.byref(win)):
+            return False
+        mon = _user32.MonitorFromWindow(hwnd, 2)  # MONITOR_DEFAULTTONEAREST
+        if not mon:
+            return False
+        mi = _MONITORINFO()
+        mi.cbSize = ctypes.sizeof(_MONITORINFO)
+        if not _user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
+            return False
+        return _rects_equal_fullscreen(
+            win.left,
+            win.top,
+            win.right,
+            win.bottom,
+            mi.rcMonitor.left,
+            mi.rcMonitor.top,
+            mi.rcMonitor.right,
+            mi.rcMonitor.bottom,
+        )
+    except Exception:
+        return False
+
+
+def resize_window_to_client(title: str, width: int, height: int) -> str:
+    """Resize window so its client area becomes (width x height).
+
+    Generic — not locked to 1600x900. Caller decides the standard size.
+    Returns: "ok" | "not_found" | "minimized" | "fullscreen" | "failed"
+    Client notion: GetClientRect size; outer = client + chrome (title bar + borders).
+    Centered in the window's current monitor work area.
+    """
+    if width <= 0 or height <= 0:
+        return "failed"
+    try:
+        hwnd = get_window_hwnd(title)
+        if hwnd is None:
+            return "not_found"
+        if _user32.IsIconic(hwnd):
+            return "minimized"
+        if is_window_fullscreen(title):
+            return "fullscreen"
+        # Restore if maximised (IsZoomed) — otherwise SetWindowPos size is ignored
+        if _user32.IsZoomed(hwnd):
+            SW_RESTORE = 9
+            _user32.ShowWindow(hwnd, SW_RESTORE)
+            time.sleep(0.08)
+            if _user32.IsIconic(hwnd) or is_window_fullscreen(title):
+                return "fullscreen" if is_window_fullscreen(title) else "minimized"
+        c_rect = wintypes.RECT()
+        w_rect = wintypes.RECT()
+        if not _user32.GetClientRect(hwnd, ctypes.byref(c_rect)):
+            return "failed"
+        if not _user32.GetWindowRect(hwnd, ctypes.byref(w_rect)):
+            return "failed"
+        c_w = int(c_rect.right)
+        c_h = int(c_rect.bottom)
+        if c_w == width and c_h == height:
+            return "ok"
+        outer_w = int(w_rect.right - w_rect.left)
+        outer_h = int(w_rect.bottom - w_rect.top)
+        chrome_w = outer_w - c_w
+        chrome_h = outer_h - c_h
+        # Defensive: some borderless windows report chrome 0 — still valid
+        if chrome_w < 0:
+            chrome_w = 0
+        if chrome_h < 0:
+            chrome_h = 0
+        need_w, need_h = _calc_outer_size(width, height, chrome_w, chrome_h)
+        mon = _user32.MonitorFromWindow(hwnd, 2)
+        if mon:
+            mi = _MONITORINFO()
+            mi.cbSize = ctypes.sizeof(_MONITORINFO)
+            if _user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
+                work = mi.rcWork
+                work_x, work_y = int(work.left), int(work.top)
+                work_w = int(work.right - work.left)
+                work_h = int(work.bottom - work.top)
+                nx, ny = _calc_centered_pos(work_x, work_y, work_w, work_h, need_w, need_h)
+            else:
+                nx, ny = int(w_rect.left), int(w_rect.top)
+        else:
+            nx, ny = int(w_rect.left), int(w_rect.top)
+        SWP_NOZORDER = 0x0004
+        SWP_NOACTIVATE = 0x0010
+        ok = _user32.SetWindowPos(hwnd, None, nx, ny, need_w, need_h, SWP_NOZORDER | SWP_NOACTIVATE)
+        if not ok:
+            logging.warning(
+                "resize_window_to_client: SetWindowPos failed for '%s' -> %dx%d client",
+                title,
+                width,
+                height,
+            )
+            return "failed"
+        return "ok"
+    except Exception:
+        logging.warning("resize_window_to_client failed for '%s'", title, exc_info=True)
+        return "failed"
 
 
 def _get_dxcam_output(window_rect: dict) -> int:
