@@ -17,5 +17,6 @@ Status: accepted（2026-09-02）
 - `verify.preset` 為 GUI 快捷，正規化後仍寫 `timeout_ms`（2000/5000/10000），`poll` 依 preset 自適應（短 100ms / 中 300ms / 長 500ms），儲存仍為毫秒，舊任務讀取不受影響
 - `verify.expect` 預設 `present`，僅 `absent` 時反轉判定（文字/圖片皆適用）；多成功分支以逗號 `,` 視為 OR（`勝利,失敗` 任一出現即成功），僅對 `type=detect` 生效
 - `verify.retries` 預設 1、`retry_delay_ms` 預設 500ms，摺疊於進階；0 表示不重試（行為等同舊版）
-- 逾時重試為「重跑動作＋重驗」一次（`click/key/drag/scroll/match_image` 皆適用），非單純重輪詢，避免「點沒點到」無法自癒
+- 逾時重試為「重跑動作＋重驗」一次（`click/key/drag/scroll` 皆適用），非單純重輪詢，避免「點沒點到」無法自癒
 - 術語寫入 `CONTEXT.md`：Verify / VerifyCondition / VerifyPolicy / VerifyResult
+- TTL：Shadow Observation（`core/observation.py`）若至 v0.5.0 仍未晉升為決策路徑，單 commit 刪除，避免影子債滯留

@@ -206,6 +206,7 @@ class MainLoop:
         self._process_counter: int = 0
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
+        self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲），由 _loop 重置、_handle_wait/_run_rule 累加；
         # 過慢判定需扣除，避免長等待被誤判為偵測過慢
@@ -1215,6 +1216,18 @@ class MainLoop:
             text = str(verify.get("text", "")).strip()
             if not text:
                 return False
+            raw_roi = verify.get("roi", {}) if isinstance(verify.get("roi", {}), dict) else {}
+            roi_is_empty = all(raw_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+            if roi_is_empty and img.shape[1] > 800:
+                key = f"verify:{text[:16]}"
+                last = self._verify_warn_counter.get(key, 0)
+                self._verify_warn_counter[key] = last + 1
+                if last % 30 == 0:
+                    self._log(
+                        "⚠ 驗證文字未設定搜尋區域，大尺寸畫面會嚴重影響效能，建議框選驗證區域"
+                    )
+                    if self.on_warning:
+                        self.on_warning("驗證文字未設定搜尋區域，效能會嚴重下降，建議框選驗證區域")
             roi = self._resolve_roi(verify.get("roi", {}), rect)
             results = self._ocr_region(img, roi)
             # ponytail: 逗號分隔視為 OR（勝利,失敗 任一出現即成功）；支援中英文逗號、頓號

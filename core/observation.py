@@ -7,6 +7,10 @@ state change. Shadow mode only: Legacy result -> adapter -> comparison.
 Design: keep fields that already have reliable sources in
 core/02_ocr_engine.OcrResult and core/11_template_matching.MatchResult.
 All fields beyond the common core are optional.
+
+# ponytail: Phase 1 shadow-only — no consumer yet; if Phase 2 does not
+# promote Observation to decision path by v0.5.0, delete this module
+# (single commit rollback, ~265 lines). Keeps shadow debt bounded.
 """
 
 from __future__ import annotations
