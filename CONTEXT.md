@@ -91,18 +91,28 @@ _Avoid_: 免安裝版、綠色版、portable
 
 ### 動作後驗證
 
-**動作後驗證 (Verify)**:
-動作步驟（click / key / drag / scroll / match_image）執行後，對新畫面做一次額外檢查，成功才算本步完成，否則走逾時處理。預設摺疊隱藏，普通使用者不需理解實作。
-_Avoid_: 後驗證、二次確認
+**動作後驗證 (Verify, post-condition)**:
+動作步驟（click / key / drag / scroll / match_image）執行後，對新畫面做一次額外檢查，成功才算本步完成，否則走驗證逾時處理。GUI 以摺疊「動作後驗證（進階）」呈現，預設收起；與步驟的偵測失敗處理（on_fail）分屬不同層級，不可混用。
+_Avoid_: 後驗證、二次確認、把 Verify 稱為「偵測」
 
 **驗證條件 (VerifyCondition)**:
-一次驗證要檢查什麼。含 `type`（文字 detect / 圖片 match_image）、`roi`（驗證區域，可與偵測區域不同）、`expect`（present=要出現 / absent=要消失，預設 present）。
+一次驗證要檢查什麼。含 `type`（文字 detect / 圖片 match_image）、`roi`（驗證區域，**獨立於**主步驟 ROI，可與偵測區域不同；客戶區比例 0~1，隨標準工作尺寸自動縮放）、`expect`（present=要出現 / absent=要消失，預設 present；消失用於確認彈窗已關閉等場景）、`text`（逗號分隔多關鍵字，任一命中即成功，OR 語意）。
 _Avoid_: 驗證目標、驗證對象
 
 **驗證策略 (VerifyPolicy)**:
-一次驗證怎麼等。含 `preset`（短 2s / 中 5s / 長 10s，三選一，普通使用者只看此項）、`timeout_ms` / `poll_interval_ms` / `delay_before_ms`（進階才展開的毫秒值）、`retries`（逾時後重試次數，預設 1）與 `retry_delay_ms`（重試間隔，預設 500ms）。
+一次驗證怎麼等。含 `preset`（短 2s / 中 5s / 長 10s，三選一，普通使用者只看此項；短/中/長已自動匹配輪詢 100/300/500ms，進階可手調）、`timeout_ms` / `poll_interval_ms` / `delay_before_ms`（進階才展開的毫秒值）、`retries`（逾時後重試次數，預設 1）與 `retry_delay_ms`（重試間隔，預設 500ms）。
 _Avoid_: 逾時設定、輪詢設定（單指某個毫秒值時）
+
+**驗證逾時處理 (Verify on_fail)**:
+驗證逾時後的行為，5 選 1：跳過此規則 advance（預設可見）/ 通知並停止 notify（預設可見）/ 跳轉至規則 jump / 按下按鍵後繼續 key / 跳至步驟 skip（後三者收在進階，選中自動展開）；**無 stop**（避免無限重送）。與「偵測失敗處理（Step on_fail，6 選含 stop）」分屬不同層級。
+_Avoid_: 把 Verify on_fail 稱為「失敗處理」而不加「驗證」前綴
 
 **驗證結果 (VerifyResult)**:
 單次輪詢的結論：`success`（條件滿足）、`timeout`（限時內未滿足）、`cancelled`（被停止/暫停/緊急停止打斷）。
 _Avoid_: 驗證成功/失敗（未區分取消時）
+
+### 標準工作尺寸
+
+**標準工作尺寸 (Standard Client Size)**:
+任務製作的基準客戶區尺寸 1600×900（客戶區，不含標題列/邊框）。啟動前可自動將目標視窗客戶區調整為此尺寸並於工作區置中；全螢幕/最小化/不可調整時自動跳過。Verify ROI 等所有客戶區比例座標皆隨此基準自動等比縮放。
+_Avoid_: 標準解析度、視窗大小 1600×900（未指明客戶區時）

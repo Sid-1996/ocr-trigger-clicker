@@ -2143,8 +2143,18 @@ class _VerifyWidget(QWidget):
         self._threshold.setDecimals(2)
         self._threshold.setSingleStep(0.05)
         self._threshold.setValue(v.get("threshold", 0.8) if isinstance(v, dict) else 0.8)
-        # roi — independent from parent detect ROI
+        # roi — independent from parent detect ROI (Q2+Q6: independent badge + client scaling hint)
         self._roi_label = QLabel()
+        self._roi_badge = QLabel(T("verify.roi_independent", default="獨立"))
+        self._roi_badge.setStyleSheet(
+            "background:#eaf2ff; color:#2a64d9; border:1px solid #b8d0ff; border-radius:3px; padding:1px 4px; font-size:10px;"
+        )
+        self._roi_badge.setToolTip(
+            T(
+                "verify.roi_hint",
+                default="驗證區域獨立於偵測區域，用來確認動作後的新畫面（客戶區比例，隨標準 1600×900 自動縮放）。",
+            )
+        )
         self._roi_btn = QPushButton(T("verify.roi", default="框選區域"))
         if roi_cb:
             self._roi_btn.clicked.connect(self._pick_roi)
@@ -2152,14 +2162,16 @@ class _VerifyWidget(QWidget):
         rl = QHBoxLayout(roi_row)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.addWidget(self._roi_label)
+        rl.addWidget(self._roi_badge)
         rl.addWidget(self._roi_btn)
+        rl.addStretch()
         form.addRow(T("verify.roi_label", default="驗證區域"), roi_row)
         self._update_roi_label()
-        # hint: verify ROI independent from detect ROI
+        # hint: verify ROI independent from detect ROI + client scaling (Q2+Q6)
         self._roi_hint = QLabel(
             T(
                 "verify.roi_hint",
-                default="驗證區域可與偵測區域不同，用來確認動作後的新畫面。",
+                default="驗證區域獨立於偵測區域，用來確認動作後的新畫面（客戶區比例，隨標準 1600×900 自動縮放）。",
             )
         )
         self._roi_hint.setWordWrap(True)
@@ -2186,8 +2198,21 @@ class _VerifyWidget(QWidget):
         idx_p = self._preset.findData(_pv)
         if idx_p >= 0:
             self._preset.setCurrentIndex(idx_p)
+        self._preset.setToolTip(
+            T(
+                "verify.preset.tooltip",
+                default="短/中/長已自動匹配輪詢頻率（100/300/500ms），進階可手調逾時與輪詢",
+            )
+        )
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         form.addRow(T("verify.preset", default="等待時長"), self._preset)
+        # Q1 preset hint — always visible micro-copy
+        self._preset_hint = QLabel(
+            T("verify.preset_hint", default="短/中/長已自動匹配輪詢 100/300/500ms，進階可手調")
+        )
+        self._preset_hint.setWordWrap(True)
+        self._preset_hint.setStyleSheet("color:#888; font-size:11px;")
+        form.addRow("", self._preset_hint)
         # expect present/absent — ordinary visible
         self._expect = _NoWheelCombo()
         self._expect.addItem(T("verify.expect_present", default="出現才算成功"), "present")
@@ -2210,6 +2235,7 @@ class _VerifyWidget(QWidget):
         self._vf_adv_btn.setCheckable(True)
         self._vf_adv_btn.setChecked(False)
         self._vf_adv_btn.setStyleSheet("QPushButton { border:none; color:#888; text-align:left; }")
+        self._vf_adv_btn.setToolTip("跳轉規則/按鍵/跳至步驟在進階內，選中自動展開（Q5）")
         form.addRow(self._vf_adv_btn)
         self._vf_adv_container = QWidget()
         self._vf_adv_container.setVisible(False)
@@ -2306,7 +2332,22 @@ class _VerifyWidget(QWidget):
         idx_vf = self._on_fail.findData(vf_act)
         if idx_vf >= 0:
             self._on_fail.setCurrentIndex(idx_vf)
-        form.addRow(T("verify.on_fail", default="逾時處理"), self._on_fail)
+        self._on_fail.setToolTip(
+            T(
+                "verify.on_fail_hint",
+                default="驗證逾時處理（與上方「找不到文字/圖片時」為不同層級）",
+            )
+        )
+        form.addRow(T("verify.on_fail", default="驗證逾時處理"), self._on_fail)
+        self._on_fail_hint = QLabel(
+            T(
+                "verify.on_fail_hint",
+                default="驗證逾時處理（與上方「找不到文字/圖片時」為不同層級）",
+            )
+        )
+        self._on_fail_hint.setWordWrap(True)
+        self._on_fail_hint.setStyleSheet("color:#888; font-size:11px;")
+        form.addRow("", self._on_fail_hint)
         # notify extras for verify — main (2 主選常顯)
         self._vf_notify_msg = QLineEdit()
         self._vf_notify_msg.setPlaceholderText(
