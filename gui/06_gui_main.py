@@ -16,6 +16,7 @@ from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QDrag,
+    QFont,
     QIcon,
     QImage,
     QKeySequence,
@@ -50,6 +51,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QSystemTrayIcon,
@@ -2037,6 +2039,231 @@ class _DetectStepForm(QWidget):
             }
 
 
+class _VerifyPickImageLabel(QLabel):
+    """Clickable image label for verify pick dialog (reuses diagnostic visual)."""
+
+    clicked = pyqtSignal(int, int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("background-color: #1e1e1e; color: #888; font-size: 14px;")
+        self.setMinimumSize(400, 300)
+
+    def mousePressEvent(self, event):
+        self.clicked.emit(int(event.position().x()), int(event.position().y()))
+        super().mousePressEvent(event)
+
+
+class _VerifyTextPickDialog(QDialog):
+    """Visual OCR picker for verify text — reuses diagnostic screenshot visuals."""
+
+    def __init__(self, parent, raw_img, ocr_results):
+        super().__init__(parent)
+        self._raw = raw_img
+        self._results = list(ocr_results or [])
+        self._selected_idx = -1
+        self._selected_text = ""
+        self.setWindowTitle(T("verify.pick_text.title"))
+        self.resize(820, 560)
+        layout = QVBoxLayout(self)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        self._image_label = _VerifyPickImageLabel()
+        self._image_label.clicked.connect(self._on_image_clicked)
+        splitter.addWidget(self._image_label)
+
+        right = QWidget()
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(6)
+
+        self._table = QTableWidget()
+        self._table.setColumnCount(3)
+        self._table.setHorizontalHeaderLabels(
+            [T("ocr_debug.col_index"), T("ocr_debug.col_text"), T("ocr_debug.col_confidence")]
+        )
+        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(0, 40)
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(2, 70)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._populate_table()
+        self._table.itemSelectionChanged.connect(self._on_table_selection)
+        self._table.doubleClicked.connect(lambda _: self._accept_selected())
+        rl.addWidget(self._table, 1)
+
+        self._detail = QLabel(T("ocr_debug.selected_none"))
+        self._detail.setWordWrap(True)
+        self._detail.setMinimumHeight(70)
+        self._detail.setStyleSheet(
+            "QLabel { background: #101215; color: #d8d8d8; border: 1px solid #2a2d33; border-radius: 8px; padding: 6px; }"
+        )
+        rl.addWidget(self._detail)
+
+        splitter.addWidget(right)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([480, 300])
+        layout.addWidget(splitter, 1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self._ok_btn = QPushButton(T("ui.confirm"))
+        self._ok_btn.setEnabled(False)
+        self._ok_btn.clicked.connect(self._accept_selected)
+        cancel_btn = QPushButton(T("ui.cancel"))
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(self._ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        self._annotated: QPixmap | None = None
+        self._rebuild_annotated()
+        self._update_image_display()
+
+    def selected_text(self) -> str:
+        return self._selected_text
+
+    def _populate_table(self):
+        self._table.blockSignals(True)
+        self._table.setRowCount(len(self._results))
+        for i, r in enumerate(self._results):
+            self._table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
+            self._table.setItem(i, 1, QTableWidgetItem(r.text))
+            pct = QTableWidgetItem(f"{int(r.confidence * 100)}%")
+            pct.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            if r.confidence >= 0.8:
+                pct.setBackground(QColor(220, 255, 220))
+            elif r.confidence >= 0.5:
+                pct.setBackground(QColor(255, 250, 200))
+            else:
+                pct.setBackground(QColor(255, 220, 220))
+            pct.setForeground(QColor(30, 30, 30))
+            self._table.setItem(i, 2, pct)
+        self._table.blockSignals(False)
+
+    def _on_table_selection(self):
+        rows = self._table.selectedIndexes()
+        if rows:
+            self._selected_idx = rows[0].row()
+            r = self._results[self._selected_idx]
+            self._selected_text = r.text
+            self._ok_btn.setEnabled(True)
+            self._detail.setText(
+                T(
+                    "ocr_debug.detail_text",
+                    n=self._selected_idx + 1,
+                    text=r.text,
+                    x=r.x,
+                    y=r.y,
+                    w=r.w,
+                    h=r.h,
+                    conf=int(r.confidence * 100),
+                )
+            )
+        else:
+            self._selected_idx = -1
+            self._selected_text = ""
+            self._ok_btn.setEnabled(False)
+            self._detail.setText(T("ocr_debug.selected_none"))
+        self._rebuild_annotated()
+        self._update_image_display()
+
+    def _on_image_clicked(self, lx: int, ly: int):
+        if self._raw is None or not self._results:
+            return
+        h, w = self._raw.shape[:2]
+        pix = self._image_label.pixmap()
+        if pix is None or pix.isNull():
+            return
+        sw, sh = pix.width(), pix.height()
+        ox = max(0, (self._image_label.width() - sw) // 2)
+        oy = max(0, (self._image_label.height() - sh) // 2)
+        ix, iy = lx - ox, ly - oy
+        if ix < 0 or iy < 0 or ix >= sw or iy >= sh:
+            return
+        rx = int(ix / sw * w)
+        ry = int(iy / sh * h)
+        for idx, r in enumerate(self._results):
+            if r.x <= rx <= r.x + r.w and r.y <= ry <= r.y + r.h:
+                self._table.selectRow(idx)
+                return
+
+    def _accept_selected(self):
+        if self._selected_idx < 0 or self._selected_idx >= len(self._results):
+            return
+        self.accept()
+
+    def _rebuild_annotated(self):
+        try:
+            if self._raw is None:
+                self._annotated = None
+                return
+            h, w = self._raw.shape[:2]
+            if h < 1 or w < 1:
+                self._annotated = None
+                return
+            import numpy as np  # noqa: F401
+
+            img = np.ascontiguousarray(self._raw)
+            qimg = QImage(img.tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
+            pix = QPixmap.fromImage(qimg)
+            if pix.isNull():
+                self._annotated = None
+                return
+            painter = QPainter(pix)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            font = QFont("Consolas", 9)
+            painter.setFont(font)
+            fm = painter.fontMetrics()
+            th = fm.height()
+            for i, r in enumerate(self._results):
+                if i == self._selected_idx:
+                    painter.setPen(QPen(QColor(255, 220, 0), 4))
+                elif r.confidence >= 0.5:
+                    painter.setPen(QPen(QColor(0, 220, 255), 2))
+                else:
+                    painter.setPen(QPen(QColor(255, 80, 80), 2))
+                painter.drawRect(r.x, r.y, r.w, r.h)
+                label = f"{i + 1} {r.text} {int(r.confidence * 100)}%"
+                tw = fm.horizontalAdvance(label)
+                lx, ly = r.x, r.y - 4
+                bg_y = ly - th - 2
+                if bg_y < 0:
+                    ly = r.y + th + 4
+                    bg_y = r.y
+                painter.fillRect(lx - 2, bg_y - 2, tw + 8, th + 6, QColor(0, 0, 0, 180))
+                painter.setPen(
+                    QColor(255, 255, 255) if r.confidence >= 0.5 else QColor(255, 180, 180)
+                )
+                painter.drawText(lx + 2, ly, label)
+            painter.end()
+            self._annotated = pix
+        except Exception:
+            logging.exception("verify pick rebuild annotated failed")
+            self._annotated = None
+
+    def _update_image_display(self):
+        if self._annotated is None:
+            self._image_label.setText(T("ocr_debug.no_preview"))
+            return
+        target = self._image_label.contentsRect().size()
+        if target.width() < 10 or target.height() < 10:
+            target = self._image_label.size()
+        scaled = self._annotated.scaled(
+            target, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
+        self._image_label.setPixmap(scaled)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_image_display()
+
+
 class _VerifyWidget(QWidget):
     """Minimal verify editor for action steps — JSON-only backend, folded by default."""
 
@@ -2094,10 +2321,20 @@ class _VerifyWidget(QWidget):
         self._text = QLineEdit()
         self._text.setPlaceholderText(T("verify.text.placeholder", default="例如：戰鬥"))
         self._text.setText(v.get("text", "") if isinstance(v, dict) else "")
+        self._pick_text_btn = QPushButton(T("verify.pick_text", default="◎ 選字"))
+        self._pick_text_btn.setToolTip(
+            T(
+                "verify.pick_text.tooltip",
+                default="截圖並以 OCR 視覺選取文字（同診斷頁面），點圖或點表選字，選完即填入",
+            )
+        )
+        self._pick_text_btn.setFixedWidth(72)
+        self._pick_text_btn.clicked.connect(self._pick_verify_text)
         self._text_row = QWidget()
         th = QHBoxLayout(self._text_row)
         th.setContentsMargins(0, 0, 0, 0)
-        th.addWidget(self._text)
+        th.addWidget(self._text, 1)
+        th.addWidget(self._pick_text_btn)
         form.addRow(T("verify.text", default="目標文字"), self._text_row)
         self._text_hint = QLabel(
             T("verify.text_hint", default="多個文字用逗號分隔，任一出現即成功")
@@ -2529,6 +2766,137 @@ class _VerifyWidget(QWidget):
             v["template_data"] = sel["template_data"]
             v.pop("template", None)
             self._update_thumb()
+
+    def _pick_verify_text(self):
+        # Visual OCR picker reusing diagnostic visuals — capture → OCR → pick dialog
+        title = ""
+        try:
+            if self._window_title_cb:
+                title = str(self._window_title_cb() or "").strip()
+        except Exception:
+            title = ""
+        if not title:
+            QMessageBox.information(self, T("dialog.notice"), T("verify.pick_text.no_window"))
+            return
+        orig_text = self._pick_text_btn.text()
+        self._pick_text_btn.setEnabled(False)
+        self._pick_text_btn.setText(T("verify.pick_text.capturing"))
+        QApplication.processEvents()
+        try:
+            # capture via unified pipeline (reuse screenshot + ocr siblings)
+            try:
+                _ss = load_sibling("screenshot", "core/01_screenshot.py")
+                _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+                _cap_mod = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+                _pw_mod = load_sibling("print_window", "core/15_print_window.py")
+                _rule_mod_local = load_sibling("rule_engine", "core/04_rule_engine.py")
+            except Exception as e:
+                logging.getLogger("gui_main").warning("verify pick load siblings failed: %s", e)
+                return
+            capture_frame_fn = getattr(_cap_mod, "capture_frame", None)
+            recognize_fn = getattr(_ocr_mod, "recognize", None)
+            is_black = getattr(_pw_mod, "is_black_capture", lambda _: False)
+            get_mode = getattr(_rule_mod_local, "get_config_interaction_mode", lambda: "pynput")
+            if capture_frame_fn is None or recognize_fn is None:
+                return
+            mode = get_mode()
+            hwnd = None
+            try:
+                hwnd = _ss.get_window_hwnd(title)
+            except Exception:
+                hwnd = None
+            img = None
+            black_warn = ""
+            # foreground dance: minimize self + parent, activate target, capture
+            if mode == "pynput":
+                # reuse diagnostic dance: minimize parent chain briefly
+                parent_win = self.window()
+                was_maxed_self = False
+                was_maxed_parent = False
+                try:
+                    was_maxed_self = self.isMaximized()
+                except Exception:
+                    pass
+                try:
+                    p = parent_win if isinstance(parent_win, QMainWindow) else None
+                    if p:
+                        was_maxed_parent = p.isMaximized()
+                        p.showMinimized()
+                    self.showMinimized()
+                    QApplication.processEvents()
+                    time.sleep(0.08)
+                    _ss.activate_window(title)
+                    QApplication.processEvents()
+                    time.sleep(0.12)
+                    img = capture_frame_fn(mode, title, hwnd=hwnd)
+                finally:
+                    try:
+                        if isinstance(parent_win, QMainWindow) and parent_win.isMinimized():
+                            if was_maxed_parent:
+                                parent_win.showMaximized()
+                            else:
+                                parent_win.showNormal()
+                            parent_win.activateWindow()
+                        if self.isMinimized():
+                            if was_maxed_self:
+                                self.showMaximized()
+                            else:
+                                self.showNormal()
+                    except Exception:
+                        pass
+            else:
+                img = capture_frame_fn(mode, title, hwnd=hwnd)
+                if img is not None and is_black(img):
+                    try:
+                        from core.print_window import is_admin as _is_admin
+
+                        if not _is_admin():
+                            black_warn = T("bg_capture.black_admin_warn")
+                    except Exception:
+                        pass
+            if img is None:
+                QMessageBox.warning(
+                    self, T("dialog.warning"), T("ocr_debug.capture_failed", title=title)
+                )
+                return
+            if img is not None and isinstance(img, type(img)) and getattr(img, "size", 0) == 0:
+                QMessageBox.warning(
+                    self, T("dialog.warning"), T("ocr_debug.capture_failed", title=title)
+                )
+                return
+            # OCR
+            # capture_frame returns BGR; diagnostic does img[:,:,::-1] -> RGB before recognize
+            # recognize expects RGB; ensure copy
+            try:
+                rgb = img[:, :, ::-1].copy() if img is not None else None
+            except Exception:
+                rgb = img
+            if rgb is None:
+                QMessageBox.warning(
+                    self, T("dialog.warning"), T("ocr_debug.capture_failed", title=title)
+                )
+                return
+            results = recognize_fn(rgb, preprocess=False, max_side_len=0, min_confidence=0.25)
+            if not results:
+                QMessageBox.information(self, T("dialog.notice"), T("verify.pick_text.empty"))
+                return
+            dlg = _VerifyTextPickDialog(self, rgb, results)
+            if black_warn:
+                dlg.setWindowTitle(f"{T('verify.pick_text.title')} — {black_warn}")
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                txt = dlg.selected_text().strip()
+                if txt:
+                    self._text.setText(txt)
+                    # switch type to detect if not already
+                    try:
+                        idx = self._type.findData("detect")
+                        if idx >= 0:
+                            self._type.setCurrentIndex(idx)
+                    except Exception:
+                        pass
+        finally:
+            self._pick_text_btn.setEnabled(True)
+            self._pick_text_btn.setText(orig_text)
 
     def _on_verify_toggled(self, checked: bool):
         # keep form open — do NOT emit steps_changed (would trigger _refresh_rule_list -> _show_rule_detail -> _rebuild collapse)
