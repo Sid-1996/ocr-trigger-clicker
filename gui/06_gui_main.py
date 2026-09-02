@@ -2436,6 +2436,11 @@ class _VerifyWidget(QWidget):
         self._preset_hint.setWordWrap(True)
         self._preset_hint.setStyleSheet("color:#888; font-size:11px;")
         form.addRow("", self._preset_hint)
+        # retries hint — visible current status (fixes hidden default retry)
+        self._retries_hint = QLabel()
+        self._retries_hint.setWordWrap(True)
+        self._retries_hint.setStyleSheet("color:#888; font-size:11px;")
+        form.addRow("", self._retries_hint)
         # expect present/absent — ordinary visible
         self._expect = _NoWheelCombo()
         self._expect.addItem(T("verify.expect_present", default="出現才算成功"), "present")
@@ -2613,6 +2618,13 @@ class _VerifyWidget(QWidget):
         self._update_type_vis()
         self._update_vf_vis()
         self._update_thumb()
+        # retries hint — visible status, hidden when verify disabled
+        if hasattr(self, "_retries_hint"):
+            self._enable.toggled.connect(self._retries_hint.setVisible)
+            self._retries.valueChanged.connect(lambda _: self._sync_retries_hint())
+            self._retry_delay.valueChanged.connect(lambda _: self._sync_retries_hint())
+            self._sync_retries_hint()
+            self._retries_hint.setVisible(self._enable.isChecked())
 
     def _update_type_vis(self):
         is_detect = self._type.currentData() == "detect"
@@ -2639,6 +2651,14 @@ class _VerifyWidget(QWidget):
         self._vf_jump_combo.setVisible(act == "jump")
         self._vf_key.setVisible(act == "key")
         self._vf_skip_combo.setVisible(act == "skip")
+
+    def _sync_retries_hint(self):
+        try:
+            n = int(self._retries.value())
+            delay = int(self._retry_delay.value())
+            self._retries_hint.setText(T("verify.retries_hint", n=n, delay=delay))
+        except Exception:
+            self._retries_hint.setText(T("verify.retries_hint", n=1, delay=500))
 
     def _update_roi_label(self):
         v = (

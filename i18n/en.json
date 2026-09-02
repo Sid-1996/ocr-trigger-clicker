@@ -796,6 +796,7 @@
   "verify.roi_hint": "Independent from detection ROI — use to confirm the new screen after action (client ratio, auto-scales with standard 1600×900).",
   "verify.roi_independent": "independent",
   "verify.preset_hint": "Short/Medium/Long auto-matches poll 100/300/500ms; fine-tune in Advanced",
+  "verify.retries_hint": "Retries {n} time(s) by default (re-press after timeout, {delay}ms interval, 0-3 in Advanced)",
   "verify.on_fail_hint": "Verify timeout handling (different level from 'When text/image not found' above)",
   "verify.advanced": "Advanced ▶",
   "verify.advanced_expanded": "Advanced ▼",

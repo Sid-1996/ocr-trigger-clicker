@@ -796,6 +796,7 @@
   "verify.roi_hint": "検出範囲とは独立 — 動作後の新画面を確認（クライアント比率、標準1600×900で自動スケール）。",
   "verify.roi_independent": "独立",
   "verify.preset_hint": "短/中/長はポーリング100/300/500msに自動対応、詳細は詳細設定で",
+  "verify.retries_hint": "既定で {n} 回再試行（タイムアウト後に再押下、間隔 {delay}ms、詳細で 0-3 に変更可）",
   "verify.on_fail_hint": "検証タイムアウト時の処理（上記「見つからないとき」とは別レベル）",
   "verify.advanced": "詳細設定 ▶",
   "verify.advanced_expanded": "詳細設定 ▼",

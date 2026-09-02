@@ -796,6 +796,7 @@
   "verify.roi_hint": "驗證區域獨立於偵測區域，用來確認動作後的新畫面（客戶區比例，隨標準 1600×900 自動縮放）。",
   "verify.roi_independent": "獨立",
   "verify.preset_hint": "短/中/長已自動匹配輪詢 100/300/500ms，進階可手調",
+  "verify.retries_hint": "已默認重試 {n} 次（逾時後重按一次，間隔 {delay}ms，進階可改 0-3）",
   "verify.on_fail_hint": "驗證逾時處理（與上方「找不到文字/圖片時」為不同層級）",
   "verify.advanced": "進階設定 ▶",
   "verify.advanced_expanded": "進階設定 ▼",
