@@ -798,6 +798,7 @@
   "verify.preset_hint": "短/中/長已自動匹配輪詢 100/300/500ms，進階可手調",
   "verify.retries_hint": "已默認重試 {n} 次（逾時後重按一次，間隔 {delay}ms，進階可改 0-3）",
   "verify.on_fail_hint": "驗證逾時處理（與上方「找不到文字/圖片時」為不同層級）",
+  "verify.on_fail_retry_hint": "重試 {n} 次後仍逾時才執行此處理（默認重試 1 次，含重按一次）",
   "verify.advanced": "進階設定 ▶",
   "verify.advanced_expanded": "進階設定 ▼",
   "verify.match_mode": "比對方式",

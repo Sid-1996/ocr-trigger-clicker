@@ -798,6 +798,7 @@
   "verify.preset_hint": "短/中/長はポーリング100/300/500msに自動対応、詳細は詳細設定で",
   "verify.retries_hint": "既定で {n} 回再試行（タイムアウト後に再押下、間隔 {delay}ms、詳細で 0-3 に変更可）",
   "verify.on_fail_hint": "検証タイムアウト時の処理（上記「見つからないとき」とは別レベル）",
+  "verify.on_fail_retry_hint": "{n} 回再試行後もタイムアウトした場合に実行（既定 1 回、再押下を含む）",
   "verify.advanced": "詳細設定 ▶",
   "verify.advanced_expanded": "詳細設定 ▼",
   "verify.match_mode": "照合方式",

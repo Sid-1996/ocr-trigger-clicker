@@ -2576,6 +2576,10 @@ class _VerifyWidget(QWidget):
         self._on_fail_hint.setWordWrap(True)
         self._on_fail_hint.setStyleSheet("color:#888; font-size:11px;")
         form.addRow("", self._on_fail_hint)
+        self._on_fail_retry_hint = QLabel()
+        self._on_fail_retry_hint.setWordWrap(True)
+        self._on_fail_retry_hint.setStyleSheet("color:#888; font-size:11px;")
+        form.addRow("", self._on_fail_retry_hint)
         # notify extras for verify — main (2 主選常顯)
         self._vf_notify_msg = QLineEdit()
         self._vf_notify_msg.setPlaceholderText(
@@ -2621,10 +2625,12 @@ class _VerifyWidget(QWidget):
         # retries hint — visible status, hidden when verify disabled
         if hasattr(self, "_retries_hint"):
             self._enable.toggled.connect(self._retries_hint.setVisible)
+            self._enable.toggled.connect(self._on_fail_retry_hint.setVisible)
             self._retries.valueChanged.connect(lambda _: self._sync_retries_hint())
             self._retry_delay.valueChanged.connect(lambda _: self._sync_retries_hint())
             self._sync_retries_hint()
             self._retries_hint.setVisible(self._enable.isChecked())
+            self._on_fail_retry_hint.setVisible(self._enable.isChecked())
 
     def _update_type_vis(self):
         is_detect = self._type.currentData() == "detect"
@@ -2657,8 +2663,10 @@ class _VerifyWidget(QWidget):
             n = int(self._retries.value())
             delay = int(self._retry_delay.value())
             self._retries_hint.setText(T("verify.retries_hint", n=n, delay=delay))
+            self._on_fail_retry_hint.setText(T("verify.on_fail_retry_hint", n=n))
         except Exception:
             self._retries_hint.setText(T("verify.retries_hint", n=1, delay=500))
+            self._on_fail_retry_hint.setText(T("verify.on_fail_retry_hint", n=1))
 
     def _update_roi_label(self):
         v = (
