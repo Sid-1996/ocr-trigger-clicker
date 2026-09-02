@@ -2016,10 +2016,8 @@ class MainLoop:
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
-                    t0 = time.monotonic()
                     mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
                     img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
-                    t1 = time.monotonic()
                     if img is None:
                         if iteration % 30 == 0:
                             self._log(f"所有截圖方式皆失敗: {title}")
@@ -2050,30 +2048,12 @@ class MainLoop:
                         self._frame_diff_ratio = 1.0
 
                     t2 = time.monotonic()
-                    self._frame_waited_ms = 0.0
                     self._process_rules(img, rect)
                     t3 = time.monotonic()
 
                     ocr_ms = (t3 - t2) * 1000
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
-
-                    # 過慢判定扣除刻意等待（wait 步驟／動作後延遲）——使用者本來就要等，
-                    # 不代表偵測變慢
-                    detect_elapsed = loop_elapsed - self._frame_waited_ms
-                    if detect_elapsed > 2000:
-                        if not self._slow_loop_warned:
-                            self._slow_loop_warned = True
-                            self._log(
-                                f"執行循環過慢: {detect_elapsed:.0f}ms (截圖={(t1 - t0) * 1000:.0f}ms OCR={ocr_ms:.0f}ms)"
-                            )
-                            if self.on_warning:
-                                self.on_warning(
-                                    f"偵測執行太慢：本次花費 {detect_elapsed:.0f} 毫秒（超過 2 秒），"
-                                    "點擊反應會明顯延遲，建議縮小偵測範圍或減少偵測規則"
-                                )
-                    else:
-                        self._slow_loop_warned = False
 
                 except Exception as e:
                     self._logger.exception("主循環異常: %s", e)
