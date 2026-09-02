@@ -2339,12 +2339,16 @@ class _VerifyWidget(QWidget):
         th.addWidget(self._text, 1)
         th.addWidget(self._pick_text_btn)
         form.addRow(T("verify.text", default="目標文字"), self._text_row)
-        self._text_hint = QLabel(
+        # text_hint moved to tooltip to reduce clutter
+        self._text.setToolTip(T("verify.text_hint", default="多個文字用逗號分隔，任一出現即成功"))
+        self._pick_text_btn.setToolTip(
             T("verify.text_hint", default="多個文字用逗號分隔，任一出現即成功")
+            + "\n"
+            + T(
+                "verify.pick_text.tooltip",
+                default="截圖並以 OCR 視覺選取文字（同診斷頁面），點圖或點表選字，選完即填入",
+            )
         )
-        self._text_hint.setWordWrap(True)
-        self._text_hint.setStyleSheet("color:#888; font-size:11px;")
-        form.addRow("", self._text_hint)
         # template for match_image
         self._thumb = QLabel()
         self._thumb.setFixedSize(48, 48)
@@ -2393,16 +2397,13 @@ class _VerifyWidget(QWidget):
         rl.addStretch()
         form.addRow(T("verify.roi_label", default="驗證區域"), roi_row)
         self._update_roi_label()
-        # hint: verify ROI independent from detect ROI + client scaling (Q2+Q6)
-        self._roi_hint = QLabel(
+        # roi_hint moved to tooltip (badge already has it, add to button)
+        self._roi_btn.setToolTip(
             T(
                 "verify.roi_hint",
                 default="驗證區域獨立於偵測區域，用來確認動作後的新畫面（客戶區比例，隨標準 1600×900 自動縮放）。",
             )
         )
-        self._roi_hint.setWordWrap(True)
-        self._roi_hint.setStyleSheet("color:#888; font-size:11px;")
-        form.addRow("", self._roi_hint)
         # preset — ordinary user sees short/medium/long (2s/5s/10s)
         self._preset = _NoWheelCombo()
         self._preset.addItem(T("verify.preset_short", default="短 (2秒)"), "short")
@@ -2429,16 +2430,11 @@ class _VerifyWidget(QWidget):
                 "verify.preset.tooltip",
                 default="短/中/長已自動匹配輪詢頻率（100/300/500ms），進階可手調逾時與輪詢",
             )
+            + "\n"
+            + T("verify.preset_hint", default="短/中/長已自動匹配輪詢 100/300/500ms，進階可手調")
         )
         self._preset.currentIndexChanged.connect(self._on_preset_changed)
         form.addRow(T("verify.preset", default="等待時長"), self._preset)
-        # Q1 preset hint — always visible micro-copy
-        self._preset_hint = QLabel(
-            T("verify.preset_hint", default="短/中/長已自動匹配輪詢 100/300/500ms，進階可手調")
-        )
-        self._preset_hint.setWordWrap(True)
-        self._preset_hint.setStyleSheet("color:#888; font-size:11px;")
-        form.addRow("", self._preset_hint)
         # retries hint — visible current status (fixes hidden default retry)
         self._retries_hint = QLabel()
         self._retries_hint.setWordWrap(True)
@@ -2584,15 +2580,7 @@ class _VerifyWidget(QWidget):
             )
         )
         form.addRow(T("verify.on_fail", default="驗證逾時處理"), self._on_fail)
-        self._on_fail_hint = QLabel(
-            T(
-                "verify.on_fail_hint",
-                default="驗證逾時處理（與上方「找不到文字/圖片時」為不同層級）",
-            )
-        )
-        self._on_fail_hint.setWordWrap(True)
-        self._on_fail_hint.setStyleSheet("color:#888; font-size:11px;")
-        form.addRow("", self._on_fail_hint)
+        # on_fail_hint moved to tooltip on _on_fail to reduce clutter
         self._on_fail_retry_hint = QLabel()
         self._on_fail_retry_hint.setWordWrap(True)
         self._on_fail_retry_hint.setStyleSheet("color:#aaa; font-size:11px;")
