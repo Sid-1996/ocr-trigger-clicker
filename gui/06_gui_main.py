@@ -2329,6 +2329,9 @@ class _VerifyWidget(QWidget):
             )
         )
         self._pick_text_btn.setFixedWidth(72)
+        self._pick_text_btn.setStyleSheet(
+            "QPushButton { border: 1px solid #4a90d9; border-radius: 4px; padding: 2px 6px; }"
+        )
         self._pick_text_btn.clicked.connect(self._pick_verify_text)
         self._text_row = QWidget()
         th = QHBoxLayout(self._text_row)
@@ -2370,7 +2373,7 @@ class _VerifyWidget(QWidget):
         self._roi_label = QLabel()
         self._roi_badge = QLabel(T("verify.roi_independent", default="獨立"))
         self._roi_badge.setStyleSheet(
-            "background:#eaf2ff; color:#2a64d9; border:1px solid #b8d0ff; border-radius:3px; padding:1px 4px; font-size:10px;"
+            "background:#22395a; color:#6ea8ff; border:1px solid #3a5a8a; border-radius:3px; padding:1px 4px; font-size:10px;"
         )
         self._roi_badge.setToolTip(
             T(
@@ -2441,6 +2444,12 @@ class _VerifyWidget(QWidget):
         self._retries_hint.setWordWrap(True)
         self._retries_hint.setStyleSheet("color:#888; font-size:11px;")
         form.addRow("", self._retries_hint)
+        # visual grouping separator — between strategy and condition
+        _sep1 = QFrame()
+        _sep1.setFrameShape(QFrame.Shape.HLine)
+        _sep1.setStyleSheet("color:#2a2d33;")
+        _sep1.setFixedHeight(1)
+        form.addRow(_sep1)
         # expect present/absent — ordinary visible
         self._expect = _NoWheelCombo()
         self._expect.addItem(T("verify.expect_present", default="出現才算成功"), "present")
@@ -2462,7 +2471,9 @@ class _VerifyWidget(QWidget):
         self._vf_adv_btn = QPushButton(T("verify.advanced", default="進階設定 ▶"))
         self._vf_adv_btn.setCheckable(True)
         self._vf_adv_btn.setChecked(False)
-        self._vf_adv_btn.setStyleSheet("QPushButton { border:none; color:#888; text-align:left; }")
+        self._vf_adv_btn.setStyleSheet(
+            "QPushButton { border:none; color:#888; text-align:left; margin-top:8px; }"
+        )
         self._vf_adv_btn.setToolTip("跳轉規則/按鍵/跳至步驟在進階內，選中自動展開（Q5）")
         form.addRow(self._vf_adv_btn)
         self._vf_adv_container = QWidget()
@@ -2548,6 +2559,12 @@ class _VerifyWidget(QWidget):
         thl.addStretch()
         adv_form.addRow("", self._th_row)
         form.addRow(self._vf_adv_container)
+        # separator before on_fail group
+        _sep2 = QFrame()
+        _sep2.setFrameShape(QFrame.Shape.HLine)
+        _sep2.setStyleSheet("color:#2a2d33;")
+        _sep2.setFixedHeight(1)
+        form.addRow(_sep2)
         # on_fail for verify (no stop) — default notify
         self._on_fail = _NoWheelCombo()
         self._on_fail.addItem(T("step_form.of_skip_rule", default="跳過此規則"), "advance")
@@ -2578,7 +2595,7 @@ class _VerifyWidget(QWidget):
         form.addRow("", self._on_fail_hint)
         self._on_fail_retry_hint = QLabel()
         self._on_fail_retry_hint.setWordWrap(True)
-        self._on_fail_retry_hint.setStyleSheet("color:#888; font-size:11px;")
+        self._on_fail_retry_hint.setStyleSheet("color:#aaa; font-size:11px;")
         form.addRow("", self._on_fail_retry_hint)
         # notify extras for verify — main (2 主選常顯)
         self._vf_notify_msg = QLineEdit()
@@ -2663,10 +2680,10 @@ class _VerifyWidget(QWidget):
             n = int(self._retries.value())
             delay = int(self._retry_delay.value())
             self._retries_hint.setText(T("verify.retries_hint", n=n, delay=delay))
-            self._on_fail_retry_hint.setText(T("verify.on_fail_retry_hint", n=n))
+            self._on_fail_retry_hint.setText("↻ " + T("verify.on_fail_retry_hint", n=n))
         except Exception:
             self._retries_hint.setText(T("verify.retries_hint", n=1, delay=500))
-            self._on_fail_retry_hint.setText(T("verify.on_fail_retry_hint", n=1))
+            self._on_fail_retry_hint.setText("↻ " + T("verify.on_fail_retry_hint", n=1))
 
     def _update_roi_label(self):
         v = (
