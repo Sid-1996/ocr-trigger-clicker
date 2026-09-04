@@ -1079,6 +1079,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._task_path_cb,
                 self._rule_id,
+                step_count=len(self._steps),
             )
         if t == "key":
             return _KeyStepForm(
@@ -1092,6 +1093,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._task_path_cb,
                 self._rule_id,
+                step_count=len(self._steps),
             )
         if t == "match_image":
             return _MatchImageStepForm(
@@ -1120,6 +1122,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._task_path_cb,
                 self._rule_id,
+                step_count=len(self._steps),
             )
         if t == "scroll":
             return _ScrollStepForm(
@@ -1133,6 +1136,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._task_path_cb,
                 self._rule_id,
+                step_count=len(self._steps),
             )
         if t == "compare":
             return _CompareStepForm(
@@ -2313,10 +2317,14 @@ class _VerifyWidget(QWidget):
         rules_provider=None,
         task_path_cb=None,
         exclude_rule_id="",
+        step_idx=-1,
+        step_count=0,
     ):
         super().__init__()
         self._list = parent_list
         self._step = step
+        self._step_idx = step_idx
+        self._step_count = step_count
         self._roi_cb = roi_cb
         self._capture_cb = capture_cb
         self._window_title_cb = window_title_cb
@@ -2663,8 +2671,11 @@ class _VerifyWidget(QWidget):
             if kidx >= 0:
                 self._vf_key.setCurrentIndex(kidx)
         adv_form.addRow(T("verify.key", default="按鍵"), self._vf_key)
+        # C5: skip target dropdown (forward-only, same as match_image) instead of
+        # hardcoded rule end; old 9999 falls back to this_rule_end (same behavior).
         self._vf_skip_combo = _NoWheelCombo()
-        self._vf_skip_combo.addItem(T("step_form.this_rule_end"), 9999)
+        cur_skip = raw_vf.get("skip_to", -1) if isinstance(raw_vf, dict) else -1
+        self._populate_vf_skip_combo(cur_skip)
         adv_form.addRow(T("verify.skip", default="跳至"), self._vf_skip_combo)
         self._type.currentIndexChanged.connect(self._update_type_vis)
         self._type.currentIndexChanged.connect(lambda _: self._validate_verify_input())
@@ -2765,6 +2776,18 @@ class _VerifyWidget(QWidget):
         except Exception:
             self._loop_hint.setText("")
             self._loop_hint.setVisible(False)
+
+    def _populate_vf_skip_combo(self, current_skip_to):
+        self._vf_skip_combo.clear()
+        self._vf_skip_combo.addItem(T("step_form.this_rule_end"), self._step_count)
+        if self._step_idx >= 0 and self._step_count > 0:
+            start = self._step_idx + 2  # 1-based, after current
+            for i in range(start, self._step_count + 1):
+                self._vf_skip_combo.addItem(T("step_form.step_n", i=i), i - 1)
+        if isinstance(current_skip_to, (int, float)) and current_skip_to >= 0:
+            idx_s = self._vf_skip_combo.findData(int(current_skip_to))
+            if idx_s >= 0:
+                self._vf_skip_combo.setCurrentIndex(idx_s)
 
     def _validate_verify_input(self):
         """Live empty-input check: red hint while editing; save() keeps the draft
@@ -3132,8 +3155,10 @@ class _VerifyWidget(QWidget):
                 "key": self._vf_key.currentData() or self._vf_key.currentText(),
             }
         elif act == "skip":
-            # skip_to not easily known; use 9999 as end
-            verify["on_fail"] = {"action": "skip", "skip_to": 9999}
+            _skip_to = self._vf_skip_combo.currentData()
+            if not isinstance(_skip_to, (int, float)):
+                _skip_to = self._step_count
+            verify["on_fail"] = {"action": "skip", "skip_to": int(_skip_to)}
         self._step.params["verify"] = verify
 
 
@@ -3151,11 +3176,13 @@ class _ClickStepForm(QWidget):
         rules_provider=None,
         task_path_cb=None,
         exclude_rule_id="",
+        step_count=0,
     ):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
+        self._step_count = step_count
         self._pick_cb = pick_cb
         p = step.params
         form = QFormLayout(self)
@@ -3231,6 +3258,8 @@ class _ClickStepForm(QWidget):
             rules_provider=rules_provider,
             task_path_cb=task_path_cb,
             exclude_rule_id=exclude_rule_id,
+            step_idx=self._idx,
+            step_count=self._step_count,
         )
         form.addRow(self._verify)
 
@@ -3276,11 +3305,13 @@ class _DragStepForm(QWidget):
         rules_provider=None,
         task_path_cb=None,
         exclude_rule_id="",
+        step_count=0,
     ):
         super().__init__()
         self._list = parent_list
         self._step = step
         self._idx = idx
+        self._step_count = step_count
         self._pick_cb = pick_cb
         p = step.params
         form = QFormLayout(self)
@@ -3346,6 +3377,8 @@ class _DragStepForm(QWidget):
             rules_provider=rules_provider,
             task_path_cb=task_path_cb,
             exclude_rule_id=exclude_rule_id,
+            step_idx=self._idx,
+            step_count=self._step_count,
         )
         form.addRow(self._verify)
 
@@ -3389,10 +3422,13 @@ class _ScrollStepForm(QWidget):
         rules_provider=None,
         task_path_cb=None,
         exclude_rule_id="",
+        step_count=0,
     ):
         super().__init__()
         self._list = parent_list
         self._step = step
+        self._idx = idx
+        self._step_count = step_count
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
         p = step.params
@@ -3435,6 +3471,8 @@ class _ScrollStepForm(QWidget):
             rules_provider=rules_provider,
             task_path_cb=task_path_cb,
             exclude_rule_id=exclude_rule_id,
+            step_idx=self._idx,
+            step_count=self._step_count,
         )
         form.addRow(self._verify)
 
@@ -3776,10 +3814,13 @@ class _KeyStepForm(QWidget):
         rules_provider=None,
         task_path_cb=None,
         exclude_rule_id="",
+        step_count=0,
     ):
         super().__init__()
         self._list = parent_list
         self._step = step
+        self._idx = idx
+        self._step_count = step_count
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
@@ -3813,6 +3854,8 @@ class _KeyStepForm(QWidget):
             rules_provider=rules_provider,
             task_path_cb=task_path_cb,
             exclude_rule_id=exclude_rule_id,
+            step_idx=self._idx,
+            step_count=self._step_count,
         )
         form.addRow(self._verify)
 

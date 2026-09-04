@@ -434,7 +434,7 @@ def test_invalid_template_data_not_crash():
 _QT_APP_REF = None
 
 
-def _make_verify_widget():
+def _make_verify_widget(step_idx=-1, step_count=0):
     global _QT_APP_REF
     import os
 
@@ -449,7 +449,7 @@ def _make_verify_widget():
     m = _ls("gui_main", "gui/06_gui_main.py")
     parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
     step = Step(type="click", params={})
-    w = m._VerifyWidget(parent, step)
+    w = m._VerifyWidget(parent, step, step_idx=step_idx, step_count=step_count)
     return w
 
 
@@ -558,6 +558,48 @@ def test_detect_skip_roundtrip():
     assert step.params["on_fail"]["action"] == "skip"
     assert step.params["on_fail"]["skip_to"] == 1
     f.deleteLater()
+
+
+def test_verify_skip_target_roundtrip():
+    w = _make_verify_widget(step_idx=0, step_count=3)
+    w._enable.setChecked(True)
+    w._text.setText("hi")
+    datas = [w._vf_skip_combo.itemData(i) for i in range(w._vf_skip_combo.count())]
+    assert datas == [3, 1, 2]  # rule end, step 2, step 3 (forward-only)
+    w._on_fail.setCurrentIndex(w._on_fail.findData("skip"))
+    w._vf_skip_combo.setCurrentIndex(w._vf_skip_combo.findData(1))
+    w.save()
+    assert w._step.params["verify"]["on_fail"] == {"action": "skip", "skip_to": 1}
+    w.deleteLater()
+
+
+def test_verify_skip_legacy_9999_falls_back_to_rule_end():
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    step = Step(
+        type="click",
+        params={
+            "verify": {
+                "type": "detect",
+                "text": "hi",
+                "on_fail": {"action": "skip", "skip_to": 9999},
+            }
+        },
+    )
+    w = m._VerifyWidget(parent, step, step_idx=0, step_count=3)
+    assert w._vf_skip_combo.currentIndex() == 0
+    w.save()
+    assert w._step.params["verify"]["on_fail"]["skip_to"] == 3
+    w.deleteLater()
 
 
 def teardown_module(module):
