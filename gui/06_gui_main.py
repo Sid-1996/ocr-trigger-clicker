@@ -152,6 +152,18 @@ def _rule_own_group_id(rule_id: str, groups_provider) -> Optional[str]:
     return None
 
 
+def _set_form_row_visible(form_layout, field_widget, show: bool):
+    """QFormLayout 整行顯示/隱藏：label 與 field 分屬兩個 item，只藏 field 會
+    殘留標籤（verify 通知行曾因此留下空標籤）。找不到標籤時只處理 field。"""
+    field_widget.setVisible(show)
+    try:
+        label = form_layout.labelForField(field_widget)
+    except Exception:
+        label = None
+    if label is not None:
+        label.setVisible(show)
+
+
 _group_models = load_sibling("rule_models", "core/rule_models.py")
 group_display_name = _group_models.group_display_name
 
@@ -1291,6 +1303,7 @@ class _MatchImageStepForm(QWidget):
         self._on_fail_container.setVisible(False)
         of_form = QFormLayout(self._on_fail_container)
         of_form.setContentsMargins(0, 0, 0, 0)
+        self._of_form = of_form
 
         self._of_action = _NoWheelCombo()
         self._of_action.addItem(T("step_form.of_skip_once"), "stop")
@@ -1681,8 +1694,8 @@ class _MatchImageStepForm(QWidget):
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
         is_notify = action == "notify"
-        self._of_notify_msg.setVisible(is_notify)
-        self._of_notify_groups.setVisible(is_notify)
+        _set_form_row_visible(self._of_form, self._of_notify_msg, is_notify)
+        _set_form_row_visible(self._of_form, self._of_notify_groups, is_notify)
 
     def save(self):
         p = self._step.params
@@ -1846,6 +1859,7 @@ class _DetectStepForm(QWidget):
         self._on_fail_container.setVisible(False)
         of_form = QFormLayout(self._on_fail_container)
         of_form.setContentsMargins(0, 0, 0, 0)
+        self._of_form = of_form
 
         self._of_action = _NoWheelCombo()
 
@@ -2017,8 +2031,8 @@ class _DetectStepForm(QWidget):
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
         is_notify = action == "notify"
-        self._of_notify_msg.setVisible(is_notify)
-        self._of_notify_groups.setVisible(is_notify)
+        _set_form_row_visible(self._of_form, self._of_notify_msg, is_notify)
+        _set_form_row_visible(self._of_form, self._of_notify_groups, is_notify)
 
     def _pick_roi(self):
         if self._roi_cb:
@@ -2350,6 +2364,7 @@ class _VerifyWidget(QWidget):
         self._enable.toggled.connect(self._on_verify_toggled)
         outer.addWidget(self._container)
         form = QFormLayout(self._container)
+        self._vf_form = form
         form.setContentsMargins(0, 6, 0, 0)
         # type
         self._type = _NoWheelCombo()
@@ -2535,6 +2550,7 @@ class _VerifyWidget(QWidget):
         self._vf_adv_container = QWidget()
         self._vf_adv_container.setVisible(False)
         adv_form = QFormLayout(self._vf_adv_container)
+        self._vf_adv_form = adv_form
         adv_form.setContentsMargins(0, 0, 0, 0)
         adv_form.addRow(T("verify.timeout", default="逾時"), self._timeout)
         self._poll = _NoWheelSpin()
@@ -2730,14 +2746,15 @@ class _VerifyWidget(QWidget):
 
     def _update_vf_vis(self):
         act = self._on_fail.currentData()
-        self._vf_notify_msg.setVisible(act == "notify")
-        self._vf_notify_groups.setVisible(act == "notify")
+        is_notify = act == "notify"
+        _set_form_row_visible(self._vf_form, self._vf_notify_msg, is_notify)
+        _set_form_row_visible(self._vf_form, self._vf_notify_groups, is_notify)
         # 進階動作自動展開進階區，避免選了看不到目標
         if act in ("jump", "key", "skip") and not self._vf_adv_container.isVisible():
             self._toggle_vf_adv()
-        self._vf_jump_combo.setVisible(act == "jump")
-        self._vf_key.setVisible(act == "key")
-        self._vf_skip_combo.setVisible(act == "skip")
+        _set_form_row_visible(self._vf_adv_form, self._vf_jump_combo, act == "jump")
+        _set_form_row_visible(self._vf_adv_form, self._vf_key, act == "key")
+        _set_form_row_visible(self._vf_adv_form, self._vf_skip_combo, act == "skip")
 
     def _sync_retries_hint(self):
         try:
@@ -3565,6 +3582,7 @@ class _CompareStepForm(QWidget):
         self._adv_container.setVisible(False)
         adv = QFormLayout(self._adv_container)
         adv.setContentsMargins(0, 0, 0, 0)
+        self._of_form = adv
 
         self._pattern = QLineEdit()
         self._pattern.setText(p.get("pattern", r"-?\d+\.?\d*"))
@@ -3692,7 +3710,6 @@ class _CompareStepForm(QWidget):
         form.addRow(self._adv_container)
 
         self._on_of_action_changed()
-        form.addRow(self._adv_container)
         self._on_fail_container = self._adv_container
 
     def _populate_skip_combo(self, current_skip_to: int):
@@ -3797,8 +3814,8 @@ class _CompareStepForm(QWidget):
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
         is_notify = action == "notify"
-        self._of_notify_msg.setVisible(is_notify)
-        self._of_notify_groups.setVisible(is_notify)
+        _set_form_row_visible(self._of_form, self._of_notify_msg, is_notify)
+        _set_form_row_visible(self._of_form, self._of_notify_groups, is_notify)
 
 
 class _KeyStepForm(QWidget):

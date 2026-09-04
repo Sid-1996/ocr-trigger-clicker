@@ -602,6 +602,40 @@ def test_verify_skip_legacy_9999_falls_back_to_rule_end():
     w.deleteLater()
 
 
+def test_verify_notify_row_label_hidden_when_not_notify():
+    # QFormLayout label and field are separate items: hiding the field must
+    # hide the label too (previously left orphan "通知文字/停止群組" labels).
+    w = _enable_verify(_make_verify_widget())
+    w._text.setText("hi")
+    w._on_fail.setCurrentIndex(w._on_fail.findData("advance"))
+    lbl = w._vf_form.labelForField(w._vf_notify_msg)
+    assert lbl is not None and lbl.isHidden()
+    assert w._vf_form.labelForField(w._vf_notify_groups).isHidden()
+    w._on_fail.setCurrentIndex(w._on_fail.findData("notify"))
+    assert not w._vf_form.labelForField(w._vf_notify_msg).isHidden()
+    assert not w._vf_notify_msg.isHidden()
+    w.deleteLater()
+
+
+def test_detect_notify_row_label_hidden_when_not_notify():
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    step = Step(type="detect", params={"text": "hi"})
+    f = m._DetectStepForm(None, step, 0, None, step_count=3)
+    assert f._of_form.labelForField(f._of_notify_msg).isHidden()
+    f._of_action.setCurrentIndex(f._of_action.findData("notify"))
+    assert not f._of_form.labelForField(f._of_notify_msg).isHidden()
+    f.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication
