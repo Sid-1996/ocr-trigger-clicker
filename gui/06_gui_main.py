@@ -2425,6 +2425,9 @@ class _VerifyWidget(QWidget):
         idx_p = self._preset.findData(_pv)
         if idx_p >= 0:
             self._preset.setCurrentIndex(idx_p)
+        # C1: remember applied preset so _on_preset_changed can tell a hand-tuned
+        # timeout/poll apart from a preset default (don't clobber user values).
+        self._last_preset = _pv
         self._preset.setToolTip(
             T(
                 "verify.preset.tooltip",
@@ -2977,12 +2980,23 @@ class _VerifyWidget(QWidget):
 
     def _on_preset_changed(self, _idx):
         mapping = {"short": 2000, "medium": 5000, "long": 10000}
+        poll_map = {"short": 100, "medium": 300, "long": 500}
         preset = self._preset.currentData()
+        old = getattr(self, "_last_preset", None)
         if preset in mapping:
-            self._timeout.setValue(mapping[preset])
-            # poll adapt: short 100 / medium 300 / long 500 (keep user override if already custom? simple adapt)
-            poll_map = {"short": 100, "medium": 300, "long": 500}
-            self._poll.setValue(poll_map[preset])
+            # only follow the preset when the value still equals the old preset's
+            # default — a differing value means the user hand-tuned it, keep it.
+            if old in mapping:
+                if self._timeout.value() == mapping[old]:
+                    self._timeout.setValue(mapping[preset])
+                if self._poll.value() == poll_map[old]:
+                    self._poll.setValue(poll_map[preset])
+            else:
+                self._timeout.setValue(mapping[preset])
+                self._poll.setValue(poll_map[preset])
+            self._last_preset = preset
+        if hasattr(self, "_loop_hint"):
+            self._sync_loop_hint()
 
     def save(self):
         if not self._enable.isChecked():

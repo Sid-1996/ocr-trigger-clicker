@@ -431,6 +431,51 @@ def test_invalid_template_data_not_crash():
     _QA5.instance().processEvents()
 
 
+_QT_APP_REF = None
+
+
+def _make_verify_widget():
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    # ponytail: keep a global ref — a local-only QApplication wrapper may be
+    # gc'd on helper return, taking the widget C++ tree with it.
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    parent = type("P", (), {"steps_changed": type("S", (), {"emit": lambda self: None})()})()
+    step = Step(type="click", params={})
+    w = m._VerifyWidget(parent, step)
+    return w
+
+
+def test_preset_change_preserves_hand_tuned_ms():
+    w = _make_verify_widget()
+    assert w._last_preset == "medium"
+    # hand-tuned values differ from medium defaults (5000/300) → must survive
+    w._timeout.setValue(3000)
+    w._poll.setValue(150)
+    w._preset.setCurrentIndex(w._preset.findData("long"))
+    assert w._timeout.value() == 3000
+    assert w._poll.value() == 150
+    assert w._last_preset == "long"
+    w.deleteLater()
+
+
+def test_preset_change_follows_when_untouched():
+    w = _make_verify_widget()
+    assert (w._timeout.value(), w._poll.value()) == (5000, 300)
+    w._preset.setCurrentIndex(w._preset.findData("long"))
+    assert (w._timeout.value(), w._poll.value()) == (10000, 500)
+    w._preset.setCurrentIndex(w._preset.findData("short"))
+    assert (w._timeout.value(), w._poll.value()) == (2000, 100)
+    w.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication
