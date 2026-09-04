@@ -507,6 +507,25 @@ def test_filled_text_save_writes_and_clears_hint():
     w.deleteLater()
 
 
+def test_verify_on_fail_defaults_to_advance():
+    w = _make_verify_widget()
+    assert w._on_fail.currentData() == "advance"
+    w.deleteLater()
+
+
+def test_verify_advanced_toggle():
+    w = _make_verify_widget()
+    # offscreen: assert explicit hidden flag, not isVisible()
+    assert w._vf_adv_container.isHidden()
+    w._vf_adv_btn.click()
+    assert not w._vf_adv_container.isHidden()
+    assert "▼" in w._vf_adv_btn.text()
+    w._vf_adv_btn.click()
+    assert w._vf_adv_container.isHidden()
+    assert "▶" in w._vf_adv_btn.text()
+    w.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication

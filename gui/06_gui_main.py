@@ -2477,25 +2477,20 @@ class _VerifyWidget(QWidget):
         self._timeout.setSingleStep(100)
         self._timeout.setSuffix(" ms")
         self._timeout.setValue(v.get("timeout_ms", 5000) if isinstance(v, dict) else 5000)
+        self._timeout.setToolTip(T("verify.timeout_hint"))
         # advanced: poll / delay / threshold (default collapsed, not for ordinary user)
+        self._vf_adv_expanded = False
         self._vf_adv_btn = QPushButton(T("verify.advanced", default="進階設定 ▶"))
-        self._vf_adv_btn.setCheckable(True)
-        self._vf_adv_btn.setChecked(False)
+        self._vf_adv_btn.setFlat(True)
+        self._vf_adv_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._vf_adv_btn.setStyleSheet(
-            "QPushButton { border:none; color:#888; text-align:left; margin-top:8px; }"
+            "QPushButton { text-align: left; border: none; color: #888; }"
         )
-        self._vf_adv_btn.setToolTip("跳轉規則/按鍵/跳至步驟在進階內，選中自動展開（Q5）")
+        self._vf_adv_btn.setToolTip(T("verify.advanced_hint"))
+        self._vf_adv_btn.clicked.connect(self._toggle_vf_adv)
         form.addRow(self._vf_adv_btn)
         self._vf_adv_container = QWidget()
         self._vf_adv_container.setVisible(False)
-        self._vf_adv_btn.toggled.connect(self._vf_adv_container.setVisible)
-        self._vf_adv_btn.toggled.connect(
-            lambda c: self._vf_adv_btn.setText(
-                T("verify.advanced_expanded", default="進階設定 ▼")
-                if c
-                else T("verify.advanced", default="進階設定 ▶")
-            )
-        )
         adv_form = QFormLayout(self._vf_adv_container)
         adv_form.setContentsMargins(0, 0, 0, 0)
         adv_form.addRow(T("verify.timeout", default="逾時"), self._timeout)
@@ -2510,7 +2505,7 @@ class _VerifyWidget(QWidget):
         self._delay.setSingleStep(100)
         self._delay.setSuffix(" ms")
         self._delay.setValue(v.get("delay_before_ms", 0) if isinstance(v, dict) else 0)
-        adv_form.addRow(T("verify.delay", default="首輪等待"), self._delay)
+        adv_form.addRow(T("verify.delay", default="驗證前等待"), self._delay)
         self._retries = _NoWheelSpin()
         self._retries.setRange(0, 3)
         self._retries.setValue(
@@ -2583,7 +2578,8 @@ class _VerifyWidget(QWidget):
         self._on_fail.addItem(T("step_form.of_key_continue", default="按鍵後繼續"), "key")
         self._on_fail.addItem(T("step_form.of_jump_step", default="跳至步驟"), "skip")
         raw_vf = v.get("on_fail") if isinstance(v, dict) else None
-        vf_act = raw_vf.get("action", "notify") if isinstance(raw_vf, dict) else "notify"
+        # C3: default advance (skip rule, gentle) instead of notify (stops groups)
+        vf_act = raw_vf.get("action", "advance") if isinstance(raw_vf, dict) else "advance"
         idx_vf = self._on_fail.findData(vf_act)
         if idx_vf >= 0:
             self._on_fail.setCurrentIndex(idx_vf)
@@ -2677,13 +2673,22 @@ class _VerifyWidget(QWidget):
         if hasattr(self, "_vf_fuzzy_row"):
             self._vf_fuzzy_row.setVisible(is_detect and bool(is_fuzzy))
 
+    def _toggle_vf_adv(self):
+        self._vf_adv_expanded = not self._vf_adv_expanded
+        self._vf_adv_container.setVisible(self._vf_adv_expanded)
+        self._vf_adv_btn.setText(
+            T("verify.advanced_expanded", default="進階設定 ▼")
+            if self._vf_adv_expanded
+            else T("verify.advanced", default="進階設定 ▶")
+        )
+
     def _update_vf_vis(self):
         act = self._on_fail.currentData()
         self._vf_notify_msg.setVisible(act == "notify")
         self._vf_notify_groups.setVisible(act == "notify")
         # 進階動作自動展開進階區，避免選了看不到目標
         if act in ("jump", "key", "skip") and not self._vf_adv_container.isVisible():
-            self._vf_adv_btn.setChecked(True)
+            self._toggle_vf_adv()
         self._vf_jump_combo.setVisible(act == "jump")
         self._vf_key.setVisible(act == "key")
         self._vf_skip_combo.setVisible(act == "skip")
