@@ -692,6 +692,26 @@ def test_pick_dialog_image_grows_with_label():
     dlg.deleteLater()
 
 
+def test_pick_dialog_has_maximize_button():
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication
+
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    import numpy as np
+
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    img = np.zeros((600, 800, 3), dtype=np.uint8)
+    dlg = m._VerifyTextPickDialog(None, img, [])
+    assert bool(dlg.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint)
+    dlg.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication

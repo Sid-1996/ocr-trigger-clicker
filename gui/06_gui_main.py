@@ -2126,6 +2126,7 @@ class _VerifyTextPickDialog(QDialog):
         self._selected_idx = -1
         self._selected_text = ""
         self.setWindowTitle(T("verify.pick_text.title"))
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMaximizeButtonHint)
         # screen-relative size (never smaller than the old 820x560 floor):
         # the annotated pixmap is full-res, so a bigger window is sharper free.
         _ag = None
