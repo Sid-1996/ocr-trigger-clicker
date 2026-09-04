@@ -2097,6 +2097,7 @@ class _VerifyPickImageLabel(QLabel):
     """Clickable image label for verify pick dialog (reuses diagnostic visual)."""
 
     clicked = pyqtSignal(int, int)
+    resized = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -2109,6 +2110,10 @@ class _VerifyPickImageLabel(QLabel):
     def mousePressEvent(self, event):
         self.clicked.emit(int(event.position().x()), int(event.position().y()))
         super().mousePressEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.resized.emit()
 
 
 class _VerifyTextPickDialog(QDialog):
@@ -2140,6 +2145,8 @@ class _VerifyTextPickDialog(QDialog):
 
         self._image_label = _VerifyPickImageLabel()
         self._image_label.clicked.connect(self._on_image_clicked)
+        # label (not dialog) is what actually grows via the splitter — re-render on it
+        self._image_label.resized.connect(self._update_image_display)
         splitter.addWidget(self._image_label)
 
         right = QWidget()
@@ -2317,12 +2324,22 @@ class _VerifyTextPickDialog(QDialog):
             self._annotated = None
 
     def _update_image_display(self):
-        if self._annotated is None:
-            self._image_label.setText(T("ocr_debug.no_preview"))
+        if getattr(self, "_annotated", None) is None:
+            if hasattr(self, "_image_label"):
+                self._image_label.setText(T("ocr_debug.no_preview"))
             return
         target = self._image_label.contentsRect().size()
         if target.width() < 10 or target.height() < 10:
             target = self._image_label.size()
+        # skip redundant re-renders (label resize storms while dragging dialog):
+        # compare KeepAspectRatio math instead of scaling twice.
+        cur = self._image_label.pixmap()
+        aw, ah = self._annotated.width(), self._annotated.height()
+        tw, th = target.width(), target.height()
+        if cur is not None and not cur.isNull() and min(aw, ah, tw, th) > 0:
+            s = min(tw / aw, th / ah)
+            if abs(cur.width() - aw * s) < 2 and abs(cur.height() - ah * s) < 2:
+                return
         scaled = self._annotated.scaled(
             target, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
         )

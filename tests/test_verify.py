@@ -661,6 +661,37 @@ def test_pick_dialog_screen_relative_size():
     dlg.deleteLater()
 
 
+def test_pick_dialog_image_grows_with_label():
+    # regression: pixmap was rendered once at construction size and never
+    # re-rendered when the splitter stretched the label (image looked small
+    # inside a big dialog). Read synchronously: QWidget.resize() delivers the
+    # resize event immediately, before the splitter layout can reset it.
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    import numpy as np
+
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    img = np.zeros((600, 800, 3), dtype=np.uint8)
+    dlg = m._VerifyTextPickDialog(None, img, [])
+    dlg.show()
+    QApplication.instance().processEvents()
+    QApplication.instance().processEvents()
+    p1 = dlg._image_label.pixmap()
+    assert p1 is not None and not p1.isNull()
+    dlg._image_label.resize(1000, 700)
+    p2 = dlg._image_label.pixmap()
+    assert p2 is not None and not p2.isNull()
+    assert p2.width() > p1.width()
+    dlg.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication
