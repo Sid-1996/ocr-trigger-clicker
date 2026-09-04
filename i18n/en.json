@@ -803,6 +803,7 @@
   "verify.advanced_expanded": "Advanced ▼",
   "verify.match_mode": "Match mode",
   "verify.fuzzy_threshold": "Similarity",
+  "verify.loop_long_hint": "This rule uses a long verify (~{secs}s) inside a loop group — other rules in the group will wait while verifying. Switch to Medium/Short if the transition isn't that slow.",
   "settings.standard_window": "Auto resize target window to 1600×900",
   "settings.standard_window.tooltip": "Before starting a task, resize the target window to 1600×900 windowed mode. Works with tasks made at different resolutions; fullscreen or non-resizable windows are skipped automatically.",
   "status.standard_resize_ok": "Resized target window to 1600×900 ({title})",

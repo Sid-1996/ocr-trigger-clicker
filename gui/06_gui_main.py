@@ -2438,6 +2438,12 @@ class _VerifyWidget(QWidget):
         self._retries_hint.setWordWrap(True)
         self._retries_hint.setStyleSheet("color:#888; font-size:11px;")
         form.addRow("", self._retries_hint)
+        # loop-group long-verify hint — config-time soft guardrail for novices (Q1),
+        # same rule as MainLoop.should_warn_loop_verify, shown before pressing start.
+        self._loop_hint = QLabel()
+        self._loop_hint.setWordWrap(True)
+        self._loop_hint.setStyleSheet("color:#b78a3a; font-size:11px;")
+        form.addRow("", self._loop_hint)
         # visual grouping separator — between strategy and condition
         _sep1 = QFrame()
         _sep1.setFrameShape(QFrame.Shape.HLine)
@@ -2629,11 +2635,17 @@ class _VerifyWidget(QWidget):
         if hasattr(self, "_retries_hint"):
             self._enable.toggled.connect(self._retries_hint.setVisible)
             self._enable.toggled.connect(self._on_fail_retry_hint.setVisible)
+            self._enable.toggled.connect(lambda _: self._sync_loop_hint())
             self._retries.valueChanged.connect(lambda _: self._sync_retries_hint())
             self._retry_delay.valueChanged.connect(lambda _: self._sync_retries_hint())
             self._sync_retries_hint()
             self._retries_hint.setVisible(self._enable.isChecked())
             self._on_fail_retry_hint.setVisible(self._enable.isChecked())
+        if hasattr(self, "_loop_hint"):
+            self._preset.currentIndexChanged.connect(lambda _: self._sync_loop_hint())
+            self._timeout.valueChanged.connect(lambda _: self._sync_loop_hint())
+            self._sync_loop_hint()
+            self._loop_hint.setVisible(self._enable.isChecked() and bool(self._loop_hint.text()))
 
     def _update_type_vis(self):
         is_detect = self._type.currentData() == "detect"
@@ -2670,6 +2682,34 @@ class _VerifyWidget(QWidget):
         except Exception:
             self._retries_hint.setText(T("verify.retries_hint", n=1, delay=500))
             self._on_fail_retry_hint.setText("↻ " + T("verify.on_fail_retry_hint", n=1))
+
+    def _sync_loop_hint(self):
+        """循環群組＋長驗證即時提示（配置時軟護欄，與主循環同一判定）。"""
+        try:
+            gid = _rule_own_group_id(self._exclude_rule_id, self._groups_provider)
+            mode = ""
+            if gid and self._groups_provider:
+                for g in self._groups_provider() or []:
+                    g_id = g.get("id", "") if isinstance(g, dict) else g.id
+                    if g_id == gid:
+                        mode = g.get("mode", "") if isinstance(g, dict) else g.mode
+                        break
+            fn = getattr(_main_loop_mod, "should_warn_loop_verify", None)
+            preset = self._preset.currentData() or "medium"
+            try:
+                timeout = int(self._timeout.value())
+            except Exception:
+                timeout = 0
+            show = bool(fn(mode, timeout, preset)) if fn else False
+            if show:
+                secs = timeout // 1000 or 10
+                self._loop_hint.setText("⚠ " + T("verify.loop_long_hint", secs=secs))
+            else:
+                self._loop_hint.setText("")
+            self._loop_hint.setVisible(self._enable.isChecked() and show)
+        except Exception:
+            self._loop_hint.setText("")
+            self._loop_hint.setVisible(False)
 
     def _update_roi_label(self):
         v = (

@@ -803,6 +803,7 @@
   "verify.advanced_expanded": "進階設定 ▼",
   "verify.match_mode": "比對方式",
   "verify.fuzzy_threshold": "相似度",
+  "verify.loop_long_hint": "此規則在循環群組用長驗證（約 {secs} 秒），驗證期間同群組其他規則會被卡住；若轉場沒這麼慢，建議改用中／短。",
   "settings.standard_window": "自動將目標視窗調整為 1600×900",
   "settings.standard_window.tooltip": "啟動任務前，將目標視窗調整為 1600×900 的視窗模式。適合使用不同解析度的任務；全螢幕或無法調整的視窗會自動跳過。",
   "status.standard_resize_ok": "已將目標視窗調整為 1600×900（{title}）",

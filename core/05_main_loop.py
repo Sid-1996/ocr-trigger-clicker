@@ -153,6 +153,30 @@ def _crop_hash(crop: np.ndarray) -> bytes:
     return hashlib.blake2b(np.ascontiguousarray(crop).tobytes(), digest_size=16).digest()
 
 
+_VERIFY_LOOP_WARN_SEC = (
+    8  # 循環群組長驗證警告閾值（秒）：與 GUI preset 反推一致（>=8000ms 視為 long）
+)
+
+
+def should_warn_loop_verify(group_mode: str = "", timeout_ms=None, preset: str = "") -> bool:
+    """循環群組＋長驗證是否該警告（純函式，無副作用，GUI 與主循環共用同一判定）。
+
+    只看有效等待預算：timeout_ms 為數字且 >0 時以它為準，否則回退 preset 對照
+    （long=10s）。非 loop 群組一律 False。
+    """
+    if str(group_mode or "") != "loop":
+        return False
+    secs = 0.0
+    try:
+        if timeout_ms is not None and float(timeout_ms) > 0:
+            secs = float(timeout_ms) / 1000.0
+    except (TypeError, ValueError):
+        secs = 0.0
+    if secs <= 0:
+        secs = {"short": 2.0, "medium": 5.0, "long": 10.0}.get(str(preset or "").strip(), 0.0)
+    return secs >= _VERIFY_LOOP_WARN_SEC
+
+
 class MainLoop:
     def __init__(
         self,
@@ -1447,6 +1471,34 @@ class MainLoop:
                 verify = step.params.get("verify")
                 # invalid verify (e.g. verify+stop) was dropped in normalize, so None here means skip
                 if verify:
+                    # ponytail: 循環群組＋長驗證會卡住同組其他規則——軟護欄只警告一次，不擋執行。
+                    # _current_group() 會跳過 loop+parallel，故用 rule.id 反查所屬群組才準。
+                    try:
+                        _own = next(
+                            (g for g in self._groups if rule.id in (g.rule_ids or [])),
+                            None,
+                        )
+                        _own_mode = (
+                            (_own.get("mode", "") if isinstance(_own, dict) else _own.mode)
+                            if _own is not None
+                            else ""
+                        )
+                    except Exception:
+                        _own_mode = ""
+                    if should_warn_loop_verify(
+                        _own_mode, verify.get("timeout_ms"), verify.get("preset", "")
+                    ):
+                        _wk = f"loop-verify:{rule.id}:{ctx.step_idx}"
+                        if _wk not in self._verify_warn_counter:
+                            self._verify_warn_counter[_wk] = 1
+                            try:
+                                _secs = int(verify.get("timeout_ms", 0)) // 1000 or 10
+                            except (TypeError, ValueError):
+                                _secs = 10
+                            _msg = T("verify.loop_long_hint", secs=_secs)
+                            self._log(f"⚠ {_msg}")
+                            if self.on_warning and not background:
+                                self.on_warning(_msg)
                     # retries: 0..3, default 1（普通使用者默認重試一次）
                     try:
                         retries = int(verify.get("retries", 1))

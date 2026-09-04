@@ -3,9 +3,29 @@ from _loader import load_sibling
 RuleMig = load_sibling("rule_migration", "core/rule_migration.py")
 Ser = load_sibling("rule_serialization", "core/rule_serialization.py")
 Models = load_sibling("rule_models", "core/rule_models.py")
+MainLoopMod = load_sibling("main_loop", "core/05_main_loop.py")
 
 Rule = Models.Rule
 Step = Models.Step
+
+
+def test_should_warn_loop_verify():
+    f = MainLoopMod.should_warn_loop_verify
+    # loop + long → warn
+    assert f("loop", 10000, "long") is True
+    # loop + 手寫 timeout 達 8s（preset 缺席）→ warn
+    assert f("loop", 8000, "") is True
+    assert f("loop", None, "long") is True
+    # loop + 中/短 → quiet
+    assert f("loop", 5000, "medium") is False
+    assert f("loop", 2000, "short") is False
+    # 非 loop 群組一律 quiet
+    assert f("once", 10000, "long") is False
+    assert f("repeat", 10000, "long") is False
+    assert f("", 10000, "long") is False
+    # 髒輸入不崩
+    assert f("loop", "bad", "medium") is False
+    assert f("loop", 0, "") is False
 
 
 def test_verify_normalize_detect_valid():
