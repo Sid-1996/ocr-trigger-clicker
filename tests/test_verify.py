@@ -526,6 +526,40 @@ def test_verify_advanced_toggle():
     w.deleteLater()
 
 
+def _combo_datas(combo):
+    return [combo.itemData(i) for i in range(combo.count())]
+
+
+def test_on_fail_order_canonical():
+    w = _make_verify_widget()
+    assert _combo_datas(w._on_fail) == ["advance", "skip", "jump", "key", "notify"]
+    w.deleteLater()
+
+
+def test_detect_skip_roundtrip():
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    # _DetectStepForm forwards parent_list to QWidget: pass None headless
+    step = Step(type="detect", params={"text": "hi"})
+    f = m._DetectStepForm(None, step, 0, None, step_count=3)
+    assert _combo_datas(f._of_action) == ["stop", "advance", "skip", "jump", "key", "notify"]
+    f._of_action.setCurrentIndex(f._of_action.findData("skip"))
+    assert not f._of_skip_row.isHidden()
+    f._of_skip_combo.setCurrentIndex(f._of_skip_combo.findData(1))
+    f.save()
+    assert step.params["on_fail"]["action"] == "skip"
+    assert step.params["on_fail"]["skip_to"] == 1
+    f.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication

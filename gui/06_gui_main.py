@@ -1064,6 +1064,7 @@ class _StepListWidget(QWidget):
                 self._rules_provider,
                 self._rule_id,
                 groups_provider=self._groups_provider,
+                step_count=len(self._steps),
             )
         if t == "click":
             return _ClickStepForm(
@@ -1739,10 +1740,12 @@ class _DetectStepForm(QWidget):
         rules_provider=None,
         exclude_rule_id="",
         groups_provider=None,
+        step_count=0,
     ):
         super().__init__(parent_list)
         self._step = step
         self._idx = idx
+        self._step_count = step_count
         self._roi_cb = roi_cb
         self._rules_provider = rules_provider
         self._exclude_rule_id = exclude_rule_id
@@ -1843,21 +1846,24 @@ class _DetectStepForm(QWidget):
         self._of_action = _NoWheelCombo()
 
         form.addRow(self._advanced_container)
-        form.addRow(self._advanced_container)
 
+        # C4: canonical order stop/advance/skip/jump/key/notify (same as
+        # match_image/compare); detect gains the missing skip entry.
         self._of_action.addItem(T("step_form.of_skip_once"), "stop")
         self._of_action.addItem(T("step_form.of_skip_rule"), "advance")
+        self._of_action.addItem(T("step_form.of_jump_step"), "skip")
         self._of_action.addItem(T("step_form.of_jump_rule"), "jump")
         self._of_action.addItem(T("step_form.of_key_continue"), "key")
         self._of_action.addItem(T("step_form.of_notify_stop"), "notify")
         self._of_action.setItemData(0, T("step_form.of_skip_once_tip"), Qt.ItemDataRole.ToolTipRole)
         self._of_action.setItemData(1, T("step_form.of_skip_rule_tip"), Qt.ItemDataRole.ToolTipRole)
-        self._of_action.setItemData(2, T("step_form.of_jump_rule_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(2, T("step_form.of_jump_step_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._of_action.setItemData(3, T("step_form.of_jump_rule_tip"), Qt.ItemDataRole.ToolTipRole)
         self._of_action.setItemData(
-            3, T("step_form.of_key_continue_tip"), Qt.ItemDataRole.ToolTipRole
+            4, T("step_form.of_key_continue_tip"), Qt.ItemDataRole.ToolTipRole
         )
         self._of_action.setItemData(
-            4, T("step_form.of_notify_stop_tip"), Qt.ItemDataRole.ToolTipRole
+            5, T("step_form.of_notify_stop_tip"), Qt.ItemDataRole.ToolTipRole
         )
         raw = p.get("on_fail", "stop")
         default_notify_msg = ""
@@ -1892,6 +1898,17 @@ class _DetectStepForm(QWidget):
             default_duration = 0.0
         self._of_fail_duration.setValue(default_duration)
         of_form.addRow(T("step_form.fail_duration"), self._of_fail_duration)
+
+        # skip row (jump to step, forward-only) — same as match_image
+        self._of_skip_row = QWidget()
+        sf = QHBoxLayout(self._of_skip_row)
+        sf.setContentsMargins(0, 0, 0, 0)
+        self._of_skip_combo = _NoWheelCombo()
+        self._populate_skip_combo(raw.get("skip_to", -1) if isinstance(raw, dict) else -1)
+        sf.addWidget(QLabel(T("step_form.skip_to")))
+        sf.addWidget(self._of_skip_combo)
+        sf.addStretch()
+        of_form.addRow("", self._of_skip_row)
 
         # jump row (jump to rule)
         self._of_jump_row = QWidget()
@@ -1979,8 +1996,20 @@ class _DetectStepForm(QWidget):
             else T("step_form.toggle_detect_collapsed")
         )
 
+    def _populate_skip_combo(self, current_skip_to):
+        self._of_skip_combo.clear()
+        self._of_skip_combo.addItem(T("step_form.this_rule_end"), self._step_count)
+        start = self._idx + 2  # 1-based, after current
+        for i in range(start, self._step_count + 1):
+            self._of_skip_combo.addItem(T("step_form.step_n", i=i), i - 1)
+        if current_skip_to >= 0:
+            idx_s = self._of_skip_combo.findData(current_skip_to)
+            if idx_s >= 0:
+                self._of_skip_combo.setCurrentIndex(idx_s)
+
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()
+        self._of_skip_row.setVisible(action == "skip")
         self._of_jump_row.setVisible(action == "jump")
         self._of_key_row.setVisible(action == "key")
         is_notify = action == "notify"
@@ -2012,6 +2041,12 @@ class _DetectStepForm(QWidget):
                 }
             else:
                 self._step.params["on_fail"] = "stop"
+        elif action == "skip":
+            self._step.params["on_fail"] = {
+                "action": "skip",
+                "skip_to": self._of_skip_combo.currentData() or 0,
+                "fail_duration_sec": fail_duration,
+            }
         elif action == "jump":
             self._step.params["on_fail"] = {
                 "action": "jump",
@@ -2570,13 +2605,13 @@ class _VerifyWidget(QWidget):
         _sep2.setStyleSheet("color:#2a2d33;")
         _sep2.setFixedHeight(1)
         form.addRow(_sep2)
-        # on_fail for verify (no stop) — default notify
+        # on_fail for verify (no stop) — canonical order minus stop
         self._on_fail = _NoWheelCombo()
         self._on_fail.addItem(T("step_form.of_skip_rule", default="跳過此規則"), "advance")
-        self._on_fail.addItem(T("step_form.of_notify_stop", default="通知並停止"), "notify")
+        self._on_fail.addItem(T("step_form.of_jump_step", default="跳至步驟"), "skip")
         self._on_fail.addItem(T("step_form.of_jump_rule", default="跳轉規則"), "jump")
         self._on_fail.addItem(T("step_form.of_key_continue", default="按鍵後繼續"), "key")
-        self._on_fail.addItem(T("step_form.of_jump_step", default="跳至步驟"), "skip")
+        self._on_fail.addItem(T("step_form.of_notify_stop", default="通知並停止"), "notify")
         raw_vf = v.get("on_fail") if isinstance(v, dict) else None
         # C3: default advance (skip rule, gentle) instead of notify (stops groups)
         vf_act = raw_vf.get("action", "advance") if isinstance(raw_vf, dict) else "advance"
