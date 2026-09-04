@@ -476,6 +476,37 @@ def test_preset_change_follows_when_untouched():
     w.deleteLater()
 
 
+def _enable_verify(w):
+    w._enable.setChecked(True)
+    from PyQt6.QtWidgets import QApplication as _QA
+
+    _QA.instance().processEvents()
+    return w
+
+
+def test_empty_text_save_keeps_draft_and_warns():
+    w = _enable_verify(_make_verify_widget())
+    w._text.setText("")
+    assert w._validate_verify_input() is False
+    # offscreen widget is never shown: assert explicit hidden flag + text
+    assert not w._err_hint.isHidden() and w._err_hint.text() != ""
+    w.save()
+    # draft kept, not silently dropped
+    assert isinstance(w._step.params.get("verify"), dict)
+    assert w._step.params["verify"].get("text", "") == ""
+    w.deleteLater()
+
+
+def test_filled_text_save_writes_and_clears_hint():
+    w = _enable_verify(_make_verify_widget())
+    w._text.setText("戰鬥")
+    assert w._validate_verify_input() is True
+    assert w._err_hint.isHidden() and w._err_hint.text() == ""
+    w.save()
+    assert w._step.params["verify"]["text"] == "戰鬥"
+    w.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication

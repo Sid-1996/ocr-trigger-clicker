@@ -2368,6 +2368,13 @@ class _VerifyWidget(QWidget):
         tl.addWidget(self._pick_btn)
         self._tmpl_row = tmpl_row
         form.addRow(T("verify.template", default="圖片"), self._tmpl_row)
+        # C2: live empty-input hint — draft is kept on save (normalize drops it
+        # on load), so an empty verify must be visible instead of silently lost.
+        self._err_hint = QLabel()
+        self._err_hint.setWordWrap(True)
+        self._err_hint.setStyleSheet("color:#c0392b; font-size:11px;")
+        self._err_hint.setVisible(False)
+        form.addRow("", self._err_hint)
         self._threshold = _NoWheelDoubleSpin()
         self._threshold.setRange(0.01, 1.0)
         self._threshold.setDecimals(2)
@@ -2629,6 +2636,8 @@ class _VerifyWidget(QWidget):
         self._vf_skip_combo.addItem(T("step_form.this_rule_end"), 9999)
         adv_form.addRow(T("verify.skip", default="跳至"), self._vf_skip_combo)
         self._type.currentIndexChanged.connect(self._update_type_vis)
+        self._type.currentIndexChanged.connect(lambda _: self._validate_verify_input())
+        self._text.textChanged.connect(lambda _: self._validate_verify_input())
         self._vf_match_mode.currentIndexChanged.connect(self._update_type_vis)
         self._on_fail.currentIndexChanged.connect(self._update_vf_vis)
         self._update_type_vis()
@@ -2647,8 +2656,11 @@ class _VerifyWidget(QWidget):
         if hasattr(self, "_loop_hint"):
             self._preset.currentIndexChanged.connect(lambda _: self._sync_loop_hint())
             self._timeout.valueChanged.connect(lambda _: self._sync_loop_hint())
+            self._enable.toggled.connect(lambda _: self._validate_verify_input())
             self._sync_loop_hint()
             self._loop_hint.setVisible(self._enable.isChecked() and bool(self._loop_hint.text()))
+        if hasattr(self, "_err_hint"):
+            self._validate_verify_input()
 
     def _update_type_vis(self):
         is_detect = self._type.currentData() == "detect"
@@ -2713,6 +2725,26 @@ class _VerifyWidget(QWidget):
         except Exception:
             self._loop_hint.setText("")
             self._loop_hint.setVisible(False)
+
+    def _validate_verify_input(self):
+        """Live empty-input check: red hint while editing; save() keeps the draft
+        (normalize drops it on load), so nothing is silently lost."""
+        try:
+            is_detect = self._type.currentData() == "detect"
+            if is_detect:
+                bad = not self._text.text().strip()
+                msg = T("verify.empty_text") if bad else ""
+            else:
+                cur = self._step.params.get("verify")
+                td = cur.get("template_data", "") if isinstance(cur, dict) else ""
+                bad = not td.strip()
+                msg = T("verify.empty_template") if bad else ""
+            show = bad and self._enable.isChecked()
+            self._err_hint.setText("⚠ " + msg if show else "")
+            self._err_hint.setVisible(show)
+            return not bad
+        except Exception:
+            return True
 
     def _update_roi_label(self):
         v = (
@@ -2803,6 +2835,7 @@ class _VerifyWidget(QWidget):
             v["template_data"] = data.get("b64", "")
             v.pop("template", None)
             self._update_thumb()
+            self._validate_verify_input()
         elif data:
             v = self._step.params.get("verify")
             if not isinstance(v, dict):
@@ -2810,6 +2843,7 @@ class _VerifyWidget(QWidget):
                 self._step.params["verify"] = v
             v["template_data"] = data
             self._update_thumb()
+            self._validate_verify_input()
 
     def _pick_verify_template(self):
         try:
@@ -2840,6 +2874,7 @@ class _VerifyWidget(QWidget):
             v["template_data"] = sel["template_data"]
             v.pop("template", None)
             self._update_thumb()
+            self._validate_verify_input()
 
     def _pick_verify_text(self):
         # Visual OCR picker reusing diagnostic visuals — capture → OCR → pick dialog
@@ -3020,10 +3055,9 @@ class _VerifyWidget(QWidget):
             "retry_delay_ms": int(self._retry_delay.value()),
         }
         if vtype == "detect":
+            # C2: keep the draft even when empty (live red hint already warns);
+            # normalize drops invalid verify on load, so nothing rots on disk.
             txt = self._text.text().strip()
-            if not txt:
-                self._step.params.pop("verify", None)
-                return
             verify["text"] = txt
             mm = self._vf_match_mode.currentData() or "fuzzy"
             verify["match_mode"] = str(mm)
@@ -3036,9 +3070,6 @@ class _VerifyWidget(QWidget):
                 else {}
             )
             td = cur2.get("template_data", "") if isinstance(cur2, dict) else ""
-            if not td.strip():
-                self._step.params.pop("verify", None)
-                return
             verify["template_data"] = td
             verify["threshold"] = float(self._threshold.value())
         act = self._on_fail.currentData()

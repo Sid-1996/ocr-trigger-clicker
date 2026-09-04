@@ -803,6 +803,8 @@
   "verify.advanced_expanded": "Advanced ▼",
   "verify.match_mode": "Match mode",
   "verify.fuzzy_threshold": "Similarity",
+  "verify.empty_text": "Verify text is empty — draft kept, fill in text to take effect.",
+  "verify.empty_template": "Verify image not set — draft kept, capture or pick an image to take effect.",
   "verify.loop_long_hint": "This rule uses a long verify (~{secs}s) inside a loop group — other rules in the group will wait while verifying. Switch to Medium/Short if the transition isn't that slow.",
   "settings.standard_window": "Auto resize target window to 1600×900",
   "settings.standard_window.tooltip": "Before starting a task, resize the target window to 1600×900 windowed mode. Works with tasks made at different resolutions; fullscreen or non-resizable windows are skipped automatically.",
