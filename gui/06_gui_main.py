@@ -50,6 +50,7 @@ from PyQt6.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QSplitter,
     QStackedWidget,
@@ -2100,8 +2101,10 @@ class _VerifyPickImageLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setScaledContents(False)
         self.setStyleSheet("background-color: #1e1e1e; color: #888; font-size: 14px;")
-        self.setMinimumSize(400, 300)
+        self.setMinimumSize(560, 420)
 
     def mousePressEvent(self, event):
         self.clicked.emit(int(event.position().x()), int(event.position().y()))
@@ -2118,7 +2121,20 @@ class _VerifyTextPickDialog(QDialog):
         self._selected_idx = -1
         self._selected_text = ""
         self.setWindowTitle(T("verify.pick_text.title"))
-        self.resize(820, 560)
+        # screen-relative size (never smaller than the old 820x560 floor):
+        # the annotated pixmap is full-res, so a bigger window is sharper free.
+        _ag = None
+        try:
+            _scr = QApplication.primaryScreen()
+            _ag = _scr.availableGeometry() if _scr is not None else None
+        except Exception:
+            _ag = None
+        if _ag is not None:
+            _w = max(820, int(_ag.width() * 0.8))
+            _h = max(560, int(_ag.height() * 0.85))
+        else:
+            _w, _h = 820, 560
+        self.resize(_w, _h)
         layout = QVBoxLayout(self)
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -2160,7 +2176,7 @@ class _VerifyTextPickDialog(QDialog):
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
-        splitter.setSizes([480, 300])
+        splitter.setSizes([int(_w * 0.6), int(_w * 0.4)])
         layout.addWidget(splitter, 1)
 
         btn_row = QHBoxLayout()

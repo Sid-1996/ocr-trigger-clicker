@@ -636,6 +636,31 @@ def test_detect_notify_row_label_hidden_when_not_notify():
     f.deleteLater()
 
 
+def test_pick_dialog_screen_relative_size():
+    global _QT_APP_REF
+    import os
+
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PyQt6.QtWidgets import QApplication
+
+    _QT_APP_REF = QApplication.instance() or QApplication([])
+    import numpy as np
+
+    from _loader import load_sibling as _ls
+
+    m = _ls("gui_main", "gui/06_gui_main.py")
+    ag = QApplication.primaryScreen().availableGeometry()
+    img = np.zeros((600, 800, 3), dtype=np.uint8)
+    dlg = m._VerifyTextPickDialog(None, img, [])
+    assert dlg.width() == max(820, int(ag.width() * 0.8))
+    assert dlg.height() == max(560, int(ag.height() * 0.85))
+    assert dlg._image_label.minimumWidth() >= 560
+    from PyQt6.QtWidgets import QSizePolicy as _SP
+
+    assert dlg._image_label.sizePolicy().horizontalPolicy() == _SP.Policy.Expanding
+    dlg.deleteLater()
+
+
 def teardown_module(module):
     try:
         from PyQt6.QtWidgets import QApplication
