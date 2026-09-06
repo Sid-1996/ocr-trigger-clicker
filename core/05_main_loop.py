@@ -460,8 +460,8 @@ class MainLoop:
             self._group_rounds_completed.clear()
             self._match_image_warn_counter.clear()
             self._detect_warn_counter.clear()
-            self._xframe_ocr_cache.clear()
-            self._tmpl_cache.clear()
+            # ponytail: 結果快取（_xframe/_tmpl）key 皆為內容定址，模板/閾值/ROI 變動自動 miss，
+            # LRU 另有上限；reload 後保留，免去重啟必卡幾幀全量重算
             self._fail_since.clear()
             self._last_active_rule_id = None
             self._update_has_detect()
@@ -1660,6 +1660,13 @@ class MainLoop:
             elif result.action == "stop":
                 detail = result.detail
                 if not detail:
+                    detail = self._infer_stop_detail(step, ctx)
+                elif (
+                    step.type == "match_image"
+                    and ctx.best_confidence >= 0
+                    and detail == T("exec_log.detail.fail_stop")
+                ):
+                    # ponytail: on_fail=stop 回填固定文案會蓋掉比對信心，調閾值時需要它
                     detail = self._infer_stop_detail(step, ctx)
                 if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
                     self._rule_completed.discard(rule.id)
@@ -3372,5 +3379,24 @@ if __name__ == "__main__":
     finally:
         ml._logger.removeHandler(_probe2)
     print("  [OK] exec file ms + slow throttle")
+
+    # ── Test 35: 找圖 stop 顯示最佳信心值（on_fail=stop 蓋掉前） ──
+    ml._execution_log.clear()
+    ml._last_exec_log.clear()
+
+    def _stub_hit(params, ctx, rule):
+        ctx.best_confidence = 0.79
+        return StepResult("stop", detail=T("exec_log.detail.fail_stop"))
+
+    ml._handle_match_image = _stub_hit
+    _conf_rule = Rule(
+        id="conf1",
+        name="conf1",
+        enabled=True,
+        steps=[Step(type="match_image", params={"template_data": "x", "on_fail": "stop"})],
+    )
+    ml._run_rule(_conf_rule, _simg, _srect)
+    assert len(ml._execution_log) == 1 and "79" in ml._execution_log[0]["detail"]
+    print("  [OK] match stop shows confidence")
 
     print("\n=== All 30 tests passed ===")

@@ -1582,3 +1582,53 @@ def test_click_and_key_failures_route_to_on_bg_fail(monkeypatch):
     assert calls == ["fail"], "click 後台失敗應觸發 on_bg_fail"
     ml._handle_key({"key": "Escape"}, ctx, rule)
     assert calls == ["fail"], "節流窗內 key 失敗不重複觸發，但不得拋例外"
+
+
+def test_run_rule_stop_shows_match_confidence():
+    from i18n import T
+
+    ml = _make_ml()
+    ml._execution_log.clear()
+    ml._last_exec_log.clear()
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+
+    def _stub_hit(params, ctx, rule):
+        ctx.best_confidence = 0.79
+        return StepResult("stop", detail=T("exec_log.detail.fail_stop"))
+
+    ml._handle_match_image = _stub_hit
+    rule = Rule(
+        id="conf1",
+        name="conf1",
+        enabled=True,
+        steps=[Step(type="match_image", params={"template_data": "x", "on_fail": "stop"})],
+    )
+    ml._run_rule(rule, img, rect)
+    assert len(ml._execution_log) == 1
+    assert "79" in ml._execution_log[0]["detail"], "找圖stop應顯示最佳信心值"
+
+    def _stub_no_conf(params, ctx, rule):
+        return StepResult("stop", detail=T("exec_log.detail.fail_stop"))
+
+    ml._handle_match_image = _stub_no_conf
+    ml._execution_log.clear()
+    ml._last_exec_log.clear()
+    rule2 = Rule(
+        id="conf2",
+        name="conf2",
+        enabled=True,
+        steps=[Step(type="match_image", params={"template_data": "x", "on_fail": "stop"})],
+    )
+    ml._run_rule(rule2, img, rect)
+    assert ml._execution_log[0]["detail"] == T("exec_log.detail.fail_stop"), "無信心值時保留原文案"
+
+
+def test_load_rules_preserves_result_caches():
+    ml = _make_ml()
+    ml._tmpl_cache["k"] = ("r", 0.5)
+    ml._xframe_ocr_cache["k"] = ("h", ["r"])
+    ml._rules_path = "nonexistent-task.json"
+    ml._load_rules()
+    assert ml._tmpl_cache.get("k") == ("r", 0.5), "reload 不得清空找圖結果快取"
+    assert ml._xframe_ocr_cache.get("k") == ("h", ["r"]), "reload 不得清空跨幀 OCR 快取"

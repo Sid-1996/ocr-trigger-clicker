@@ -69,6 +69,8 @@ def make_main_loop():
     ml._detect_warn_counter = {}
     ml._slow_loop_warned = False
     ml._frame_waited_ms = 0.0
+    ml._last_prewarm_ms = 0.0
+    ml._last_slow_log = 0.0
     ml._black_streak = 0
     ml._last_frida_err_ts = 0.0
     ml._FRIDA_ERR_THROTTLE_SEC = 30.0
