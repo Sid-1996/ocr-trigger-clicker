@@ -60,7 +60,7 @@ def make_main_loop():
     ml._rule_config_ctrl = type(
         "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "pynput"}
     )()
-    ml._execution_log = deque(maxlen=10)
+    ml._execution_log = deque(maxlen=50)
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}

@@ -241,7 +241,7 @@ class MainLoop:
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
         self._last_active_rule_id: str | None = None
-        self._execution_log: deque = deque(maxlen=10)
+        self._execution_log: deque = deque(maxlen=50)
         self._last_exec_log: dict[str, tuple] = {}
         self._rule_completed: set[str] = set()
         self._last_completed_log: dict[str, float] = {}
@@ -1385,6 +1385,15 @@ class MainLoop:
             self._frame_waited_ms += (time.monotonic() - t0) * 1000
         return "timeout"
 
+    def _get_verify_cancel_detail(self) -> str:
+        if self._emergency_event.is_set():
+            return T("exec_log.detail.emergency_stop")
+        if self._pause_event.is_set():
+            return T("exec_log.detail.paused")
+        if self._stop_event.is_set():
+            return T("exec_log.detail.stopped")
+        return T("exec_log.detail.verification_cancelled")
+
     def _verify_timeout_hint(self, verify: dict) -> str:
         vtype = verify.get("type", "")
         expect = verify.get("expect", "present")
@@ -1518,17 +1527,16 @@ class MainLoop:
                         if poll_res == "cancelled":
                             ctx.triggered = False
                             ctx.force_advance = False
+                            cancel_detail = self._get_verify_cancel_detail()
                             if not background:
                                 self._log_exec(
                                     rule.name,
                                     i,
                                     step.type,
                                     "stop",
-                                    T("exec_log.detail.verification_cancelled"),
+                                    cancel_detail,
                                 )
-                            return StepResult(
-                                "stop", detail=T("exec_log.detail.verification_cancelled")
-                            )
+                            return StepResult("stop", detail=cancel_detail)
                         # timeout
                         if attempt < retries:
                             if retry_delay > 0:
@@ -1541,17 +1549,16 @@ class MainLoop:
                                     self._frame_waited_ms += (time.monotonic() - t0) * 1000
                                     ctx.triggered = False
                                     ctx.force_advance = False
+                                    retry_cancel = self._get_verify_cancel_detail()
                                     if not background:
                                         self._log_exec(
                                             rule.name,
                                             i,
                                             step.type,
                                             "stop",
-                                            T("exec_log.detail.verification_cancelled"),
+                                            retry_cancel,
                                         )
-                                    return StepResult(
-                                        "stop", detail=T("exec_log.detail.verification_cancelled")
-                                    )
+                                    return StepResult("stop", detail=retry_cancel)
                                 self._frame_waited_ms += (time.monotonic() - t0) * 1000
                             # 重跑動作再驗（解決「點沒點到」）
                             if not background:
@@ -1570,17 +1577,16 @@ class MainLoop:
                     elif poll_res == "cancelled":
                         ctx.triggered = False
                         ctx.force_advance = False
+                        late_cancel = self._get_verify_cancel_detail()
                         if not background:
                             self._log_exec(
                                 rule.name,
                                 i,
                                 step.type,
                                 "stop",
-                                T("exec_log.detail.verification_cancelled"),
+                                late_cancel,
                             )
-                        return StepResult(
-                            "stop", detail=T("exec_log.detail.verification_cancelled")
-                        )
+                        return StepResult("stop", detail=late_cancel)
                     else:  # timeout after retries exhausted
                         v_on_fail = verify.get("on_fail", None)
                         if v_on_fail is None:
@@ -1632,7 +1638,11 @@ class MainLoop:
             elif result.action == "jump_step":
                 if not background:
                     self._log_exec(
-                        rule.name, i, step.type, "jump", f"→ 步驟 {result.step_index + 1}"
+                        rule.name,
+                        i,
+                        step.type,
+                        "jump",
+                        T("exec_log.detail.jump_to", n=result.step_index + 1),
                     )
                 idx = result.step_index
                 if idx < 0:
@@ -1649,7 +1659,7 @@ class MainLoop:
                             i,
                             step.type,
                             "stop",
-                            "跳轉目標無效（需在目前步驟之後），中止",
+                            T("exec_log.detail.jump_invalid"),
                         )
                     return
                 i = idx
@@ -1657,7 +1667,10 @@ class MainLoop:
             else:
                 detail = self._build_ok_detail(step, ctx)
                 if not background:
-                    self._log_exec(rule.name, i, step.type, "ok", detail)
+                    if ctx.on_fail_fired:
+                        self._log_exec(rule.name, i, step.type, "stop", detail)
+                    else:
+                        self._log_exec(rule.name, i, step.type, "ok", detail)
                 self._rule_completed.discard(rule.id)
             i += 1
 
@@ -1687,7 +1700,7 @@ class MainLoop:
         if t in ("detect", "compare") and ctx.matched_text and hasattr(ctx.matched_text, "text"):
             detail = ctx.matched_text.text[:15]
             if ctx.ocr_cache_hit:
-                detail += " (0ms, 共用快取)"
+                detail += T("exec_log.detail.cache_hit")
             elif ctx.ocr_elapsed_ms > 0:
                 detail += f" ({ctx.ocr_elapsed_ms:.0f}ms)"
             return detail
@@ -1703,7 +1716,7 @@ class MainLoop:
             num = ctx.matched_box.get("number", "")
             detail = str(num) if num != "" else ""
             if ctx.ocr_cache_hit:
-                detail += " (0ms, 共用快取)"
+                detail += T("exec_log.detail.cache_hit")
             elif ctx.ocr_elapsed_ms > 0:
                 detail += f" ({ctx.ocr_elapsed_ms:.0f}ms)"
             return detail
@@ -2343,7 +2356,7 @@ if __name__ == "__main__":
     ml._xframe_ocr_cache_max = 64
     ml._tmpl_cache = OrderedDict()
     ml._tmpl_cache_max = 64
-    ml._execution_log = deque(maxlen=10)
+    ml._execution_log = deque(maxlen=50)
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}

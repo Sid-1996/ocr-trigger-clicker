@@ -476,6 +476,28 @@ def test_detect_after_delay_resets_flag_per_step():
     assert captured == {"timeout": 0.3}, f"旗標重置後第二步應等待，got {captured}"
 
 
+def test_on_fail_key_logs_stop_not_ok():
+    """on_fail=key 是步驟失敗後的復原動作 → 執行日誌記 stop 而非 ok。"""
+    ml = _make_ml()
+    ctx = _detect_hit_ctx()
+    ml._send_key = lambda k: True
+    orig = _ml_mod.recognize
+    _ml_mod.recognize = lambda img, **kw: []  # 未命中
+    try:
+        step = Step(
+            type="detect",
+            params={"text": "確定", "on_fail": {"action": "key", "key": "Escape"}},
+        )
+        rule = Rule(id="ofl-key", name="ofl-key", enabled=True, steps=[step])
+        ml._run_rule(rule, ctx.img, ctx.rect, ctx)
+    finally:
+        _ml_mod.recognize = orig
+    assert ctx.on_fail_fired
+    assert len(ml._execution_log) == 1
+    assert ml._execution_log[0]["result"] == "stop"
+    assert "Escape" in ml._execution_log[0]["detail"]
+
+
 # ── _send_click frida 模式派發 ──
 
 
