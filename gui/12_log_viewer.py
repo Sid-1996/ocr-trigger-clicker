@@ -73,6 +73,11 @@ class LogViewer(QDialog):
         self._refresh()
         super().showEvent(event)
 
+    def set_search(self, text: str):
+        """外部預填搜尋（執行日誌表直達用）；相同值不發 signal，保底重刷一次。"""
+        self._search_edit.setText(text or "")
+        self._refresh()
+
     def _open_dir(self):
         os.startfile(self._log_path.parent)
 

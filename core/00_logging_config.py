@@ -82,6 +82,8 @@ def clear_log_file(handler: "logging.Handler | None" = None) -> None:
     # 清空 app.log 供乾淨起跑抓 bug 回報。要透過 handler 自己的 stream 截斷，
     # 否則外開 handle 截斷會在檔頭留下 null 空洞（handler 內部位置未歸零）。
     # startup_error.log 由啟動時整檔覆寫、無持有 handle，直接移除即可。
+    # faulthandler.log 無持有 handle（main 區域變數）只能按路徑截斷：
+    # 下次崩潰寫入時檔頭可能補零，但該檔只在崩潰時寫、尾部 dump 照樣可讀。
     if handler is None:
         _ensure_root_handler()
         handler = _handler
@@ -93,6 +95,11 @@ def clear_log_file(handler: "logging.Handler | None" = None) -> None:
             stream.flush()
         except OSError:
             pass
+    try:
+        with open(get_log_dir() / "faulthandler.log", "w", encoding="utf-8"):
+            pass
+    except OSError:
+        pass
     (get_log_dir() / "startup_error.log").unlink(missing_ok=True)
 
 
