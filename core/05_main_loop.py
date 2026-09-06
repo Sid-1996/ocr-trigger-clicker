@@ -241,7 +241,7 @@ class MainLoop:
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
         self._last_active_rule_id: str | None = None
-        self._execution_log: deque = deque(maxlen=10)
+        self._execution_log: deque = deque(maxlen=200)
         self._last_exec_log: dict[str, tuple] = {}
         self._rule_completed: set[str] = set()
         self._last_completed_log: dict[str, float] = {}
@@ -376,43 +376,73 @@ class MainLoop:
         step_type: str,
         result: str,
         detail: str = "",
+        rule_id: str = "",
     ):
-        if result == "completed":
-            now = time.monotonic()
-            last = self._last_completed_log.get(rule_name, 0.0)
-            if now - last < 1.0:
+        with self._rules_lock:
+            if result == "completed":
+                now = time.monotonic()
+                throttle_key = rule_id or rule_name
+                last = self._last_completed_log.get(throttle_key, 0.0)
+                if now - last < 1.0:
+                    return
+                self._last_completed_log[throttle_key] = now
+                key = f"{rule_id or rule_name}:{step_idx}:{step_type}"
+                self._last_exec_log.pop(key, None)
+            else:
+                key = f"{rule_id or rule_name}:{step_idx}:{step_type}"
+            entry_sig = (result, detail)
+            prev = self._last_exec_log.get(key)
+            if prev is not None and prev[0] == entry_sig[0] and prev[1] == entry_sig[1]:
+                count = prev[2] + 1 if len(prev) > 2 else 2
+                self._last_exec_log[key] = (result, detail, count)
+                for e in reversed(self._execution_log):
+                    if e.get("_key") == key:
+                        e["ts"] = self._exec_ts()
+                        e["count"] = count
+                        break
                 return
-            self._last_completed_log[rule_name] = now
-            key = f"{rule_name}:{step_idx}"
-            self._last_exec_log.pop(key, None)
-        else:
-            key = f"{rule_name}:{step_idx}"
-        entry = (result, detail)
-        if self._last_exec_log.get(key) == entry:
-            return
-        self._last_exec_log[key] = entry
-        self._execution_log.append(
-            {
-                "ts": time.strftime("%H:%M:%S"),
-                "rule_name": rule_name,
-                "step_idx": step_idx,
-                "step_type": step_type,
-                "result": result,
-                "detail": detail,
-            }
-        )
-        self._logger.info(
-            "[exec] rule=%s step=%s type=%s result=%s detail=%s",
-            rule_name,
-            step_idx,
-            step_type,
-            result,
-            detail,
-        )
+            self._last_exec_log[key] = (result, detail, 1)
+            self._execution_log.append(
+                {
+                    "_key": key,
+                    "ts": self._exec_ts(),
+                    "rule_name": rule_name,
+                    "rule_id": rule_id,
+                    "step_idx": step_idx,
+                    "step_type": step_type,
+                    "result": result,
+                    "detail": detail,
+                    "count": 1,
+                }
+            )
+            self._logger.info(
+                "[exec] rule=%s step=%s type=%s result=%s detail=%s",
+                rule_name,
+                step_idx,
+                step_type,
+                result,
+                detail,
+            )
+
+    @staticmethod
+    def _exec_ts() -> str:
+        t = time.time()
+        return time.strftime("%H:%M:%S", time.localtime(t)) + f".{int((t - int(t)) * 1000):03d}"
+
+    def clear_execution_log(self) -> None:
+        with self._rules_lock:
+            self._execution_log.clear()
+            self._last_exec_log.clear()
+            self._last_completed_log.clear()
 
     def get_execution_log(self) -> list[dict]:
         with self._rules_lock:
-            return list(self._execution_log)
+            out = []
+            for e in self._execution_log:
+                d = dict(e)
+                d.pop("_key", None)
+                out.append(d)
+            return out
 
     def _load_rules(self):
         with self._rules_lock:
@@ -1447,7 +1477,7 @@ class MainLoop:
             if step.type == "wait":
                 ms = step.params.get("ms", 500)
                 if not background:
-                    self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
+                    self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms", rule_id=rule.id)
             result = self._run_step(step, ctx, rule)
             ms = step.params.get("after_delay_ms", 0) or 0
             if (
@@ -1518,14 +1548,14 @@ class MainLoop:
                         if poll_res == "cancelled":
                             ctx.triggered = False
                             ctx.force_advance = False
-                            if not background:
-                                self._log_exec(
-                                    rule.name,
-                                    i,
-                                    step.type,
-                                    "stop",
-                                    T("exec_log.detail.verification_cancelled"),
-                                )
+                            self._log_exec(
+                                rule.name,
+                                i,
+                                step.type,
+                                "stop",
+                                T("exec_log.detail.verification_cancelled"),
+                                rule_id=rule.id,
+                            )
                             return StepResult(
                                 "stop", detail=T("exec_log.detail.verification_cancelled")
                             )
@@ -1541,14 +1571,14 @@ class MainLoop:
                                     self._frame_waited_ms += (time.monotonic() - t0) * 1000
                                     ctx.triggered = False
                                     ctx.force_advance = False
-                                    if not background:
-                                        self._log_exec(
-                                            rule.name,
-                                            i,
-                                            step.type,
-                                            "stop",
-                                            T("exec_log.detail.verification_cancelled"),
-                                        )
+                                    self._log_exec(
+                                        rule.name,
+                                        i,
+                                        step.type,
+                                        "stop",
+                                        T("exec_log.detail.verification_cancelled"),
+                                        rule_id=rule.id,
+                                    )
                                     return StepResult(
                                         "stop", detail=T("exec_log.detail.verification_cancelled")
                                     )
@@ -1570,14 +1600,14 @@ class MainLoop:
                     elif poll_res == "cancelled":
                         ctx.triggered = False
                         ctx.force_advance = False
-                        if not background:
-                            self._log_exec(
-                                rule.name,
-                                i,
-                                step.type,
-                                "stop",
-                                T("exec_log.detail.verification_cancelled"),
-                            )
+                        self._log_exec(
+                            rule.name,
+                            i,
+                            step.type,
+                            "stop",
+                            T("exec_log.detail.verification_cancelled"),
+                            rule_id=rule.id,
+                        )
                         return StepResult(
                             "stop", detail=T("exec_log.detail.verification_cancelled")
                         )
@@ -1595,13 +1625,14 @@ class MainLoop:
                                 self._log(
                                     f"規則「{rule.name}」驗證逾時，但 on_fail=stop 已被禁止，停留"
                                 )
-                                self._log_exec(
-                                    rule.name,
-                                    i,
-                                    step.type,
-                                    "stop",
-                                    T("exec_log.detail.verification_timeout"),
-                                )
+                            self._log_exec(
+                                rule.name,
+                                i,
+                                step.type,
+                                "stop",
+                                T("exec_log.detail.verification_timeout"),
+                                rule_id=rule.id,
+                            )
                             return StepResult(
                                 "stop", detail=T("exec_log.detail.verification_timeout")
                             )
@@ -1617,22 +1648,26 @@ class MainLoop:
                         return res
             if step.type == "wait" and result.action == "continue":
                 if not background:
-                    self._log_exec(rule.name, i, "wait", "ok")
+                    self._log_exec(rule.name, i, "wait", "ok", rule_id=rule.id)
                 self._rule_completed.discard(rule.id)
             elif result.action == "stop":
-                if not background:
-                    detail = result.detail
-                    if not detail:
-                        detail = self._infer_stop_detail(step, ctx)
-                    if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
-                        self._rule_completed.discard(rule.id)
-                    else:
-                        self._log_exec(rule.name, i, step.type, "stop", detail)
+                detail = result.detail
+                if not detail:
+                    detail = self._infer_stop_detail(step, ctx)
+                if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
+                    self._rule_completed.discard(rule.id)
+                else:
+                    self._log_exec(rule.name, i, step.type, "stop", detail, rule_id=rule.id)
                 return
             elif result.action == "jump_step":
                 if not background:
                     self._log_exec(
-                        rule.name, i, step.type, "jump", f"→ 步驟 {result.step_index + 1}"
+                        rule.name,
+                        i,
+                        step.type,
+                        "jump",
+                        f"→ 步驟 {result.step_index + 1}",
+                        rule_id=rule.id,
                     )
                 idx = result.step_index
                 if idx < 0:
@@ -1643,21 +1678,21 @@ class MainLoop:
                     return
                 # 跳轉必須向前（GUI 也只允許向前 skip），否則可能跳轉成環卡死主執行緒
                 if idx <= i:
-                    if not background:
-                        self._log_exec(
-                            rule.name,
-                            i,
-                            step.type,
-                            "stop",
-                            "跳轉目標無效（需在目前步驟之後），中止",
-                        )
+                    self._log_exec(
+                        rule.name,
+                        i,
+                        step.type,
+                        "stop",
+                        "跳轉目標無效（需在目前步驟之後），中止",
+                        rule_id=rule.id,
+                    )
                     return
                 i = idx
                 continue
             else:
                 detail = self._build_ok_detail(step, ctx)
                 if not background:
-                    self._log_exec(rule.name, i, step.type, "ok", detail)
+                    self._log_exec(rule.name, i, step.type, "ok", detail, rule_id=rule.id)
                 self._rule_completed.discard(rule.id)
             i += 1
 
@@ -1846,7 +1881,7 @@ class MainLoop:
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
                 if bg_ctx.triggered:
-                    self._log_exec(rule.name, 0, "background", "triggered")
+                    self._log_exec(rule.name, 0, "background", "triggered", rule_id=rule.id)
                 self._rule_pointer = saved_ptr
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
@@ -1891,7 +1926,7 @@ class MainLoop:
         if (ctx.triggered or ctx.force_advance) and not ctx.jumped:
             if ctx.triggered:
                 self._rule_completed.add(rule.id)
-                self._log_exec(rule.name, -1, "completed", "completed")
+                self._log_exec(rule.name, -1, "completed", "completed", rule_id=rule.id)
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
@@ -1967,7 +2002,7 @@ class MainLoop:
             if r_ctx.triggered:
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.id)
-                self._log_exec(r.name, -1, "completed", "completed")
+                self._log_exec(r.name, -1, "completed", "completed", rule_id=r.id)
                 triggered = True
         if triggered and group.mode == "once":
             self._advance_group_queue()
@@ -2141,10 +2176,8 @@ class MainLoop:
     def start(self) -> None:
         self._started_at = time.monotonic()
         log_main(f"循環開始，目標視窗「{self._window_title}」")
-        self._execution_log.clear()
-        self._last_exec_log.clear()
+        self.clear_execution_log()
         self._rule_completed.clear()
-        self._last_completed_log.clear()
         self._black_streak = 0
         self._stop_event.clear()
         self._pause_event.clear()
@@ -2343,7 +2376,7 @@ if __name__ == "__main__":
     ml._xframe_ocr_cache_max = 64
     ml._tmpl_cache = OrderedDict()
     ml._tmpl_cache_max = 64
-    ml._execution_log = deque(maxlen=10)
+    ml._execution_log = deque(maxlen=200)
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}
@@ -3252,7 +3285,26 @@ if __name__ == "__main__":
         ],
     )
     ml._run_rule(_ad_rule2, _ad_ctx.img, _ad_ctx.rect, _ad_ctx)
-    assert "ad_selfcheck2:1" not in ml._last_exec_log, "中斷後尾隨步驟不應執行"
+    assert not any(k.startswith("ad_selfcheck2:1:") for k in ml._last_exec_log), (
+        "中斷後尾隨步驟不應執行"
+    )
     print("  [OK] after_delay_ms: 中斷時跳過後續步驟")
+
+    # ── Test 33: 執行日誌去重改計數＋ms 時間戳＋rule_id 隔離 ──
+    ml._execution_log.clear()
+    ml._last_exec_log.clear()
+    ml._last_completed_log.clear()
+    ml._log_exec("同名", 0, "detect", "stop", "未偵測到目標", rule_id="id-A")
+    ml._log_exec("同名", 0, "detect", "stop", "未偵測到目標", rule_id="id-A")
+    assert len(ml._execution_log) == 1, "重複應合併不 append"
+    assert ml._execution_log[0]["count"] == 2, "重複應計數×2"
+    ml._log_exec("同名", 0, "detect", "stop", "未偵測到目標", rule_id="id-B")
+    assert len(ml._execution_log) == 2, "不同 rule_id 不可互撞"
+    assert "." in ml._execution_log[0]["ts"], "時間戳應含毫秒"
+    got = ml.get_execution_log()
+    assert all("_key" not in e for e in got), "_key 不可外洩"
+    ml.clear_execution_log()
+    assert len(ml._execution_log) == 0 and not ml._last_exec_log
+    print("  [OK] exec_log count/ms/rule_id/clear")
 
     print("\n=== All 30 tests passed ===")
