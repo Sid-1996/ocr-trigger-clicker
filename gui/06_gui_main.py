@@ -4702,8 +4702,6 @@ class _ExecutionLogWidget(QWidget):
             "QTableWidget { font-size: 11px; }QTableWidget::item { padding: 2px 4px; }"
         )
         layout.addWidget(self._table)
-        self._last_fp = None
-        self._on_clear_request = None
 
     _RESULT_KEYS = {
         "ok": "exec_log.result.ok",
@@ -4715,24 +4713,11 @@ class _ExecutionLogWidget(QWidget):
     }
 
     def _populate(self, entries: list[dict]):
-        fp = (
-            len(entries),
-            entries[-1].get("ts") if entries else None,
-            entries[-1].get("count", 1) if entries else None,
-        )
-        if fp == self._last_fp:
-            return
-        self._last_fp = fp
-        bar = self._table.verticalScrollBar()
-        at_bottom = bar.value() >= bar.maximum() - 20 if entries else True
         self._table.setRowCount(len(entries))
         for row, e in enumerate(entries):
             result = e.get("result", "")
             result_label = T(self._RESULT_KEYS.get(result, result))
             detail = e.get("detail", "")
-            count = e.get("count", 1) or 1
-            if count > 1:
-                detail = f"{detail} ×{count}" if detail else f"×{count}"
             step_idx = e.get("step_idx", 0)
             step_type = e.get("step_type", "")
             if step_idx < 0 or step_type in ("completed", "background"):
@@ -4761,17 +4746,11 @@ class _ExecutionLogWidget(QWidget):
                 elif result == "wait":
                     item.setForeground(QColor(140, 140, 140))
                 self._table.setItem(row, col, item)
-        if entries and at_bottom:
+        if entries:
             self._table.scrollToBottom()
 
     def _clear(self):
         self._table.setRowCount(0)
-        self._last_fp = None
-        if self._on_clear_request is not None:
-            try:
-                self._on_clear_request()
-            except Exception:
-                pass
 
 
 class MainWindow(QMainWindow):
@@ -5215,7 +5194,6 @@ class MainWindow(QMainWindow):
 
         self._exec_log_widget = _ExecutionLogWidget()
         self._exec_log_widget.setVisible(False)
-        self._exec_log_widget._on_clear_request = self._on_exec_log_clear
         outer_layout.addWidget(self._exec_log_widget)
 
         self._main_stack.addWidget(rules_page)
@@ -7658,7 +7636,6 @@ class MainWindow(QMainWindow):
             self._exec_log_timer = QTimer()
             self._exec_log_timer.timeout.connect(self._update_exec_log)
             self._exec_log_timer.start(500)
-            self._exec_log_widget._clear()
             self._exec_log_widget.setVisible(True)
             self._exec_log_toggle.setText(T("exec_log.hide"))
         else:
@@ -7807,17 +7784,8 @@ class MainWindow(QMainWindow):
     def _update_exec_log(self):
         if not self._loop or not self._loop.is_running:
             return
-        if not self._exec_log_widget.isVisible():
-            return
         entries = self._loop.get_execution_log()
         self._exec_log_widget._populate(entries)
-
-    def _on_exec_log_clear(self):
-        if self._loop is not None:
-            try:
-                self._loop.clear_execution_log()
-            except Exception:
-                pass
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)
