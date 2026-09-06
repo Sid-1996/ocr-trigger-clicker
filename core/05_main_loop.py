@@ -39,8 +39,6 @@ _MIN_INTERVAL_SEC = 0.1
 _MAX_CPS = 5
 _CPS_WINDOW_SEC = 1.0
 _BLACK_STREAK_WARN = 3  # 後台連續全黑幀數達標才警告（避開單帧 GDI 抖動誤報）
-_SLOW_FRAME_MS = 2000  # 單幀超過此耗時才打 [slow] 分解行（診斷用）
-_SLOW_LOG_THROTTLE_SEC = 5.0  # [slow] 最小間隔，避免掛機洗版
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -237,8 +235,6 @@ class MainLoop:
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲），由 _loop 重置、_handle_wait/_run_rule 累加；
         # 過慢判定需扣除，避免長等待被誤判為偵測過慢
         self._frame_waited_ms: float = 0.0
-        self._last_prewarm_ms: float = 0.0  # 本幀全窗預熱 OCR 耗時（慢幀分解用）
-        self._last_slow_log: float = 0.0  # 上次 [slow] 行的 monotonic 時間（節流用）
         # 後台全黑偵測：連續黑幀計數，每次黑幕期只警告一次（見 _check_black_frame）
         self._black_streak: int = 0
         self._fail_since: dict[
@@ -382,8 +378,6 @@ class MainLoop:
         detail: str = "",
         rule_id: str = "",
     ):
-        # ponytail: 寫檔 I/O 在鎖外——鎖內只動 deque/dict，避免慢磁碟擋住主循環。
-        ts = self._exec_ts()
         with self._rules_lock:
             if result == "completed":
                 now = time.monotonic()
@@ -403,7 +397,7 @@ class MainLoop:
                 self._last_exec_log[key] = (result, detail, count)
                 for e in reversed(self._execution_log):
                     if e.get("_key") == key:
-                        e["ts"] = ts
+                        e["ts"] = self._exec_ts()
                         e["count"] = count
                         break
                 return
@@ -411,7 +405,7 @@ class MainLoop:
             self._execution_log.append(
                 {
                     "_key": key,
-                    "ts": ts,
+                    "ts": self._exec_ts(),
                     "rule_name": rule_name,
                     "rule_id": rule_id,
                     "step_idx": step_idx,
@@ -421,15 +415,14 @@ class MainLoop:
                     "count": 1,
                 }
             )
-        self._logger.info(
-            "[exec %s] rule=%s step=%s type=%s result=%s detail=%s",
-            ts,
-            rule_name,
-            step_idx,
-            step_type,
-            result,
-            detail,
-        )
+            self._logger.info(
+                "[exec] rule=%s step=%s type=%s result=%s detail=%s",
+                rule_name,
+                step_idx,
+                step_type,
+                result,
+                detail,
+            )
 
     @staticmethod
     def _exec_ts() -> str:
@@ -1866,20 +1859,6 @@ class MainLoop:
             y2 = max(r[1] + r[3] for r in members)
             self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
 
-    def _maybe_log_slow_frame(self, loop_ms: float, cap_ms: float, rules_ms: float) -> None:
-        """慢幀分解行：超過門檻才記，5 秒節流。waited 為刻意等待（已扣除概念）。"""
-        if loop_ms < _SLOW_FRAME_MS:
-            return
-        now = time.monotonic()
-        if now - self._last_slow_log < _SLOW_LOG_THROTTLE_SEC:
-            return
-        self._last_slow_log = now
-        self._log(
-            f"[slow] frame={loop_ms:.0f}ms capture={cap_ms:.0f}ms "
-            f"prewarm={self._last_prewarm_ms:.0f}ms rules={rules_ms:.0f}ms "
-            f"waited={self._frame_waited_ms:.0f}ms"
-        )
-
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()
         with self._rules_lock:
@@ -1887,11 +1866,7 @@ class MainLoop:
         if not rules_snapshot:
             return
         if self._has_detect_rules:
-            _pw0 = time.monotonic()
             self._prewarm_ocr_clusters(img, rect)
-            self._last_prewarm_ms = (time.monotonic() - _pw0) * 1000.0
-        else:
-            self._last_prewarm_ms = 0.0
 
         # ponytail: run all background rules each frame; jumps are cancelled
         for rule in rules_snapshot:
@@ -2109,8 +2084,6 @@ class MainLoop:
                     break
                 iteration += 1
                 loop_start = time.monotonic()
-                self._frame_waited_ms = 0.0
-                cap_ms = 0.0
                 # 讀取掃描間隔設定（允許即時生效）
                 self._interval = max(
                     self._rule_config_ctrl.get_setting(self, "scan_interval_ms") / 1000.0,
@@ -2144,9 +2117,7 @@ class MainLoop:
                         self._stop_event.wait(self._interval)
                         continue
                     mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-                    _cap0 = time.monotonic()
                     img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
-                    cap_ms = (time.monotonic() - _cap0) * 1000.0
                     if img is None:
                         if iteration % 30 == 0:
                             self._log(f"所有截圖方式皆失敗: {title}")
@@ -2183,7 +2154,6 @@ class MainLoop:
                     ocr_ms = (t3 - t2) * 1000
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
-                    self._maybe_log_slow_frame(loop_elapsed, cap_ms, ocr_ms)
 
                 except Exception as e:
                     self._logger.exception("主循環異常: %s", e)
@@ -2415,8 +2385,6 @@ if __name__ == "__main__":
     ml._detect_warn_counter = {}
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
-    ml._last_prewarm_ms = 0.0
-    ml._last_slow_log = 0.0
     ml._black_streak = 0
     ml._slow_loop_warned = False
     ml._obs_mismatch_total = 0
@@ -3338,39 +3306,5 @@ if __name__ == "__main__":
     ml.clear_execution_log()
     assert len(ml._execution_log) == 0 and not ml._last_exec_log
     print("  [OK] exec_log count/ms/rule_id/clear")
-
-    # ── Test 34: [exec] 檔 log 毫秒＋慢幀節流 ──
-    ts = MainLoop._exec_ts()
-    assert ts.count(":") == 2 and "." in ts and len(ts.rsplit(".", 1)[1]) == 3, f"ts 格式錯誤: {ts}"
-
-    class _Probe2(logging.Handler):
-        def __init__(self):
-            super().__init__()
-            self.records: list[str] = []
-
-        def emit(self, record):
-            self.records.append(record.getMessage())
-
-    _probe2 = _Probe2()
-    ml._logger.addHandler(_probe2)
-    try:
-        ml._execution_log.clear()
-        ml._last_exec_log.clear()
-        ml._log_exec("毫秒", 0, "detect", "ok", "命中", rule_id="ms-id")
-        assert any("[exec " in r and "." in r for r in _probe2.records), "檔 log 應含毫秒 [exec]"
-        n0 = len(_probe2.records)
-        ml._last_slow_log = 0.0
-        ml._last_prewarm_ms = 10.0
-        ml._frame_waited_ms = 5.0
-        ml._maybe_log_slow_frame(100.0, 10.0, 50.0)
-        assert len(_probe2.records) == n0, "未達門檻不應打 [slow]"
-        ml._maybe_log_slow_frame(5000.0, 100.0, 4000.0)
-        assert len(_probe2.records) == n0 + 1, "超門檻應打一行 [slow]"
-        assert "[slow]" in _probe2.records[-1] and "prewarm=" in _probe2.records[-1]
-        ml._maybe_log_slow_frame(5000.0, 100.0, 4000.0)
-        assert len(_probe2.records) == n0 + 1, "5 秒內第二行應被節流"
-    finally:
-        ml._logger.removeHandler(_probe2)
-    print("  [OK] exec file ms + slow throttle")
 
     print("\n=== All 30 tests passed ===")
