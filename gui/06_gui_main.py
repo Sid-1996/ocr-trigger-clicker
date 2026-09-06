@@ -4670,10 +4670,6 @@ class _ExecutionLogWidget(QWidget):
         self._title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         header.addWidget(self._title_label)
         header.addStretch()
-        self._full_log_btn = QPushButton(T("exec_log.full_log"))
-        self._full_log_btn.setStyleSheet("font-size: 11px; padding: 2px 8px;")
-        self._full_log_btn.clicked.connect(self._request_full_log)
-        header.addWidget(self._full_log_btn)
         self._clear_btn = QPushButton(T("exec_log.clear"))
         self._clear_btn.setStyleSheet("font-size: 11px; padding: 2px 8px;")
         self._clear_btn.clicked.connect(self._clear)
@@ -4708,7 +4704,6 @@ class _ExecutionLogWidget(QWidget):
         layout.addWidget(self._table)
         self._last_fp = None
         self._on_clear_request = None
-        self._on_full_log_request = None
 
     _RESULT_KEYS = {
         "ok": "exec_log.result.ok",
@@ -4775,13 +4770,6 @@ class _ExecutionLogWidget(QWidget):
         if self._on_clear_request is not None:
             try:
                 self._on_clear_request()
-            except Exception:
-                pass
-
-    def _request_full_log(self):
-        if self._on_full_log_request is not None:
-            try:
-                self._on_full_log_request()
             except Exception:
                 pass
 
@@ -5228,7 +5216,6 @@ class MainWindow(QMainWindow):
         self._exec_log_widget = _ExecutionLogWidget()
         self._exec_log_widget.setVisible(False)
         self._exec_log_widget._on_clear_request = self._on_exec_log_clear
-        self._exec_log_widget._on_full_log_request = self._open_full_log
         outer_layout.addWidget(self._exec_log_widget)
 
         self._main_stack.addWidget(rules_page)
@@ -5312,7 +5299,9 @@ class MainWindow(QMainWindow):
         self._signals.emergency_signal.connect(self._emergency_stop)
         self._signals.test_done_signal.connect(self._show_test_result)
         self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
-        # warning 只走 toast（狀態列會被下一條訊息洗掉；檔 log 照寫可追溯）
+        self._signals.warning_signal.connect(
+            lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
+        )
         self._signals.warning_signal.connect(self._notif_stack.push)
         self._signals.resource_warning_signal.connect(self._on_resource_warning)
         self._signals.bg_fail_signal.connect(self._on_bg_fail)
@@ -7906,23 +7895,12 @@ class MainWindow(QMainWindow):
         )
         menu.exec(self._sponsor_btn.mapToGlobal(QPoint(0, self._sponsor_btn.height())))
 
-    def _open_log_viewer(self, search: str | None = None):
+    def _open_log_viewer(self):
         if not hasattr(self, "_log_viewer") or self._log_viewer is None:
             self._log_viewer = LogViewer(self)
-        self._log_viewer.set_search(search or "")
         self._log_viewer.show()
         self._log_viewer.raise_()
         self._log_viewer.activateWindow()
-
-    def _open_full_log(self):
-        """執行日誌表直達完整日誌：預填當前選中規則名；未選中則全覽。"""
-        name = ""
-        rid = getattr(self, "_selected_rule_id", None)
-        if rid:
-            resolved = _resolve_rule_name(rid, lambda: getattr(self, "_rules", []))
-            if resolved and resolved != rid:
-                name = resolved
-        self._open_log_viewer(name or None)
 
     # === About & Version ===
     def _show_about(self):
