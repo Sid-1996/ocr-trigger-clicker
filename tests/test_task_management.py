@@ -362,6 +362,56 @@ def test_import_task_rejects_non_dict_params(tmp_tasks_dir, tmp_path):
     assert (tmp_tasks_dir / "bad_params.json").exists() is False
 
 
+def test_preview_import_warn_only_keeps_rules(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "empty_key",
+                "name": "EmptyKey",
+                "enabled": True,
+                "steps": [{"type": "key", "params": {"key": ""}}],
+            },
+            {
+                "id": "empty_jump",
+                "name": "EmptyJump",
+                "enabled": True,
+                "steps": [{"type": "jump", "params": {"rule_id": ""}}],
+            },
+            {
+                "id": "bad_on_fail",
+                "name": "BadOnFail",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "detect",
+                        "params": {"text": "x", "on_fail": {"action": "explode"}},
+                    }
+                ],
+            },
+            {
+                "id": "fine",
+                "name": "Fine",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+        ]
+    }
+    src = tmp_path / "warn_only.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert preview.rule_count == 4
+    assert any("按鍵為空" in w for w in preview.warnings)
+    assert any("跳轉目標為空" in w for w in preview.warnings)
+    assert any("未知失敗動作" in w for w in preview.warnings)
+
+    result = _tm.import_task(str(src))
+    assert result is not None
+    loaded = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    assert len(loaded["rules"]) == 4
+
+
 # ── collect_templates ──
 
 _B64_PNG_1PX = (

@@ -6974,7 +6974,11 @@ class MainWindow(QMainWindow):
                 tid = s.params.get("rule_id", "")
                 if tid and tid not in valid_ids:
                     warnings.append(T("notif.rule_validation_missing_rule", idx=i + 1))
-            elif s.type == "match_image" and not s.params.get("template", "").strip():
+            elif (
+                s.type == "match_image"
+                and not s.params.get("template", "").strip()
+                and not s.params.get("template_data", "").strip()
+            ):
                 warnings.append(T("notif.rule_validation_no_image", idx=i + 1))
             elif s.type == "notify" and not s.params.get("message", "").strip():
                 warnings.append(T("notif.rule_validation_empty_notify", idx=i + 1))

@@ -17,6 +17,9 @@ _models = load_sibling("rule_models", "core/rule_models.py")
 ImportPreview = _models.ImportPreview
 Rule = _models.Rule
 
+_migration = load_sibling("rule_migration", "core/rule_migration.py")
+_STEP_DEFAULTS = _migration._STEP_DEFAULTS
+
 _FORMAT_VERSION = 1
 _MAX_IMPORT_SIZE = 10 * 1024 * 1024
 
@@ -92,18 +95,8 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
     if not isinstance(steps, list) or len(steps) == 0:
         warnings.append(f"規則「{raw.get('name', '?')}」缺少 steps，已略過")
         return False
-    valid_types = {
-        "detect",
-        "click",
-        "key",
-        "wait",
-        "jump",
-        "drag",
-        "scroll",
-        "match_image",
-        "compare",
-        "notify",
-    }
+    # ponytail: 白名單唯一來源（新增 step type 只需改 _STEP_DEFAULTS，此處自動跟隨）
+    valid_types = set(_STEP_DEFAULTS)
     for i, s in enumerate(steps):
         if not isinstance(s, dict):
             warnings.append(f"規則「{raw['name']}」步驟 {i} 格式錯誤，已略過")
@@ -115,6 +108,25 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         if p is not None and not isinstance(p, dict):
             warnings.append(f"規則「{raw['name']}」步驟 {i} params 格式錯誤，已略過")
             return False
+        # 以下為 warn-only：只告警、不略過（存檔/啟動已有 detect/notify 等檢查，此處僅補其未覆蓋者）
+        stype = s.get("type")
+        pp = p if isinstance(p, dict) else {}
+        if stype == "key" and not str(pp.get("key", "")).strip():
+            warnings.append(f"規則「{raw['name']}」步驟 {i} 按鍵為空，執行時無動作")
+        elif stype == "jump" and not str(pp.get("rule_id", "")).strip():
+            warnings.append(f"規則「{raw['name']}」步驟 {i} 跳轉目標為空，執行時原地停止")
+        elif isinstance(pp.get("on_fail"), dict) and str(pp["on_fail"].get("action", "")) not in (
+            "stop",
+            "advance",
+            "notify",
+            "key",
+            "skip",
+            "jump",
+        ):
+            # 查 raw 才有意義：_normalize_on_fail 會把未知 action 靜默壓成 stop（normalize 發生在日後 load）
+            warnings.append(
+                f"規則「{raw['name']}」步驟 {i} 未知失敗動作「{pp['on_fail'].get('action', '')}」，將被視為 stop"
+            )
     return True
 
 
