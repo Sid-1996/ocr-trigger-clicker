@@ -641,6 +641,7 @@
   "test.capture_failed": "截圖失敗：無法擷取視窗「{title}」",
   "test.exception": "測試異常：{e}",
   "test.rule_header": "規則「{name}」— {count} 個步驟",
+  "test.dead_legend": "（刪除線＝本輪因前面失敗不會執行，圖上標記為假設位置，實際以「找不到時」設定為準）",
   "test.text_empty": "[{idx}] ⚠ 偵測文字為空白",
   "test.roi_invalid": "[{idx}] ⚠ ROI 裁切無效",
   "test.detect_hit": "[{idx}] 🔍 命中「{text}」{confidence}  ({x},{y}) {w}×{h}",

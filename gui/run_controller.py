@@ -33,6 +33,43 @@ _get_interaction_mode = _rule_engine.get_config_interaction_mode
 get_capture_size = _rule_engine.get_capture_size
 
 
+def _dry_fail_fate(on_fail_raw):
+    """預覽用：偵測失敗後，後續步驟的命運（鏡像 MainLoop._handle_on_fail 分派）。
+
+    回傳 "terminal"（後續全死）、("jump", n)（只死 fail 之後、n 之前）、"continue"。
+    fail_duration_sec > 0 一律視為 terminal：單幀快照必定落在容忍期內。
+    """
+    raw = on_fail_raw
+    if isinstance(raw, dict):
+        try:
+            if float(raw.get("fail_duration_sec", 0) or 0) > 0:
+                return "terminal"
+        except (TypeError, ValueError):
+            pass
+        action = raw.get("action", "stop")
+    elif isinstance(raw, str):
+        action = raw
+    else:
+        return "terminal"
+    if action == "key":
+        return "continue"
+    if action == "skip":
+        try:
+            return ("jump", int(raw.get("skip_to", 0)))
+        except (TypeError, ValueError):
+            return "terminal"
+    return "terminal"
+
+
+def _dead_after(fail_idx: int, fate, n_steps: int) -> set[int]:
+    """fate → 本輪不會執行的後續步驟（0-based 索引集合）。純函式，可測試。"""
+    if fate == "continue":
+        return set()
+    if isinstance(fate, tuple) and fate[1] > fail_idx:
+        return set(range(fail_idx + 1, min(fate[1], n_steps)))
+    return set(range(fail_idx + 1, n_steps))
+
+
 class TestRunController:
     def __init__(self, win, of_summary, resolve_rule_name):
         self._win = win
@@ -114,13 +151,15 @@ class TestRunController:
     def _run_rule_test(self, rule, img, warn=""):
         result = {}
         try:
-            markers, log_lines = self._run_dry_run(rule, img)
+            markers, log_lines, dead_lines = self._run_dry_run(rule, img)
             if warn:
                 log_lines.insert(0, warn)
+                dead_lines = {d + 1 for d in dead_lines}
             annotated = self._draw_test_annotations(img.copy(), markers)
             result = {
                 "image": annotated,
                 "log": "\n".join(log_lines),
+                "log_dead": sorted(dead_lines),
             }
         except Exception as e:
             result = {"error": T("test.exception", e=e)}
@@ -174,14 +213,25 @@ class TestRunController:
         log.append("─" * 40)
 
         last_center = None
+        # 本輪不會執行的步驟（0-based）與 log 行號：鏡像引擎真實控制流，
+        # 預覽仍完整顯示，僅標記。
+        dead_steps: set[int] = set()
+        dead_lines: set[int] = set()
+
+        def _fatal(fail_idx: int, fate) -> None:
+            if fail_idx in dead_steps:
+                return  # 已死的步驟在引擎根本不會跑，其 on_fail 不觸發
+            dead_steps.update(_dead_after(fail_idx, fate, len(rule.steps)))
 
         for idx, step in enumerate(rule.steps):
+            line_start = len(log)
             try:
                 if step.type == "detect":
                     p = step.params
                     text = p.get("text", "").strip()
                     if not text:
                         log.append(T("test.text_empty", idx=idx + 1))
+                        _fatal(idx, "terminal")  # 引擎：detect_empty 直接 stop
                         continue
                     roi = _resolve(p.get("roi", {}))
                     use_roi = any(roi.get(k, 0) != 0 for k in ("x", "y", "w", "h"))
@@ -286,6 +336,7 @@ class TestRunController:
                             log.append(T("test.nearby_text", text=top5))
                             if len(results_ocr) > 5:
                                 log.append(T("test.more_results", count=len(results_ocr) - 5))
+                        _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
 
                 elif step.type == "click":
                     p = step.params
@@ -298,6 +349,7 @@ class TestRunController:
                             cx, cy = last_center
                         else:
                             log.append(T("test.click_target_no_detect", idx=idx + 1))
+                            _fatal(idx, "terminal")  # 引擎：click 無 on_fail，直接 stop
                             continue
                     elif target == "cursor":
                         btn = {"left": T("combo.left"), "right": T("combo.right")}.get(
@@ -348,6 +400,7 @@ class TestRunController:
                             sx, sy = last_center
                         else:
                             log.append(T("test.drag_start_no_detect", idx=idx + 1))
+                            _fatal(idx, "terminal")  # 引擎：drag 無 on_fail，直接 stop
                             continue
                     if sx is not None:
                         dx = p.get("dx", 0)
@@ -458,6 +511,7 @@ class TestRunController:
                                 "h": rh,
                             }
                         )
+                        _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
                         continue
 
                     try:
@@ -480,6 +534,7 @@ class TestRunController:
                                 "h": rh,
                             }
                         )
+                        _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
                         continue
 
                     _cmp_ops = {
@@ -512,6 +567,7 @@ class TestRunController:
                         of_hint = of_summary(p.get("on_fail", "stop"))
                         if of_hint:
                             log.append(f"  → {of_hint}")
+                        _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
 
                 elif step.type == "key":
                     p = step.params
@@ -522,6 +578,8 @@ class TestRunController:
                     if ad:
                         s += " " + T("summary.format_after_delay", ms=ad)
                     log.append(T("test.key_action", idx=idx + 1, action=s, key=k))
+                    if not k:
+                        _fatal(idx, "terminal")  # 引擎：key_empty 直接 stop
 
                 elif step.type == "wait":
                     p = step.params
@@ -531,6 +589,7 @@ class TestRunController:
                     rid = step.params.get("rule_id", "")
                     name = resolve_rule_name(rid, lambda: list(win._rules))
                     log.append(T("test.jump", idx=idx + 1, name=name))
+                    _fatal(idx, "terminal")  # 引擎：jump 必定離開本規則
 
                 elif step.type == "match_image":
                     p = step.params
@@ -538,6 +597,7 @@ class TestRunController:
                     tmpl_path = p.get("template", "")
                     if not tmpl_data.strip() and not tmpl_path.strip():
                         log.append(T("test.template_not_set", idx=idx + 1))
+                        _fatal(idx, "terminal")  # 引擎：template_empty 直接 stop
                         continue
                     roi = _resolve(p.get("roi", {}))
                     threshold = p.get("threshold", 0.8)
@@ -639,6 +699,7 @@ class TestRunController:
                         )
                         if match_color and best_below >= threshold:
                             log.append(T("test.template_color_note", tolerance=color_tolerance))
+                        _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
                         markers.append(
                             {
                                 "step": idx + 1,
@@ -656,8 +717,14 @@ class TestRunController:
 
             except Exception as e:
                 log.append(f"[{idx + 1}] ⚠ {type(e).__name__}: {e}")
+            if idx in dead_steps:
+                dead_lines.update(range(line_start, len(log)))
 
-        return markers, log
+        if dead_lines:
+            log.insert(2, T("test.dead_legend"))
+            dead_lines = {d + 1 for d in dead_lines}
+
+        return markers, log, dead_lines
 
     # ── annotation drawing ──
 

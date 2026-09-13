@@ -691,6 +691,23 @@ def _of_summary(raw: str | dict, rules_provider=None) -> str:
     return ""
 
 
+def _test_log_html(log_text: str, dead_lines) -> str:
+    """測試預覽 log → HTML：dead 行（本輪不會執行）灰字刪除線，其餘原樣。
+
+    log 混入 OCR/檔名等外部文字，一律 escape（信任邊界）。
+    """
+    import html as _html
+
+    dead = set(dead_lines or [])
+    parts = []
+    for i, line in enumerate(log_text.split("\n")):
+        esc = _html.escape(line, quote=False)
+        if i in dead:
+            esc = f'<span style="color:#888888; text-decoration:line-through;">{esc}</span>'
+        parts.append(esc)
+    return "<br>".join(parts)
+
+
 def _make_key_combo(parent=None):
     cb = _KeyCombo(parent)
     for group in [
@@ -7076,7 +7093,7 @@ class MainWindow(QMainWindow):
 
         log_edit = QTextEdit()
         log_edit.setReadOnly(True)
-        log_edit.setText(log_text)
+        log_edit.setHtml(_test_log_html(log_text, result.get("log_dead") or []))
         log_edit.setMaximumHeight(150)
         layout.addWidget(log_edit)
 

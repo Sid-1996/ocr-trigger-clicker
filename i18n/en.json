@@ -641,6 +641,7 @@
   "test.capture_failed": "Capture failed: cannot capture window \"{title}\"",
   "test.exception": "Test exception: {e}",
   "test.rule_header": "Rule \"{name}\" — {count} steps",
+  "test.dead_legend": "(Struck-through lines will not run this cycle due to an earlier failure; markers show hypothetical positions. Actual behavior follows the \"on fail\" settings.)",
   "test.text_empty": "[{idx}] ⚠ Detect text is empty",
   "test.roi_invalid": "[{idx}] ⚠ ROI crop invalid",
   "test.detect_hit": "[{idx}] 🔍 Hit \"{text}\" {confidence}  ({x},{y}) {w}×{h}",

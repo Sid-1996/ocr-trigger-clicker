@@ -641,6 +641,7 @@
   "test.capture_failed": "キャプチャに失敗しました: ウィンドウ「{title}」をキャプチャできません",
   "test.exception": "テスト例外: {e}",
   "test.rule_header": "ルール「{name}」 — {count} ステップ",
+  "test.dead_legend": "（取消線は途中の失敗により今回実行されません。図のマーカーは想定位置です。実際は「見つからないとき」の設定に従います）",
   "test.text_empty": "[{idx}] ⚠ 検出テキストが空です",
   "test.roi_invalid": "[{idx}] ⚠ ROI 切り出しが無効です",
   "test.detect_hit": "[{idx}] 🔍 ヒット「{text}」{confidence}  ({x},{y}) {w}×{h}",
