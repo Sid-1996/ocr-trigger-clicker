@@ -259,7 +259,7 @@ class TestRunController:
                                 idx=idx + 1,
                                 text=text,
                                 mode=match_mode,
-                                threshold=threshold,
+                                threshold=f"{round(threshold * 100)}%",
                                 best_pct=f"{best_ratio * 100:.0f}",
                             )
                         )
@@ -632,11 +632,13 @@ class TestRunController:
                                 "test.template_miss",
                                 idx=idx + 1,
                                 name=tmpl_name,
-                                threshold=threshold,
+                                threshold=f"{round(threshold * 100)}%",
                                 best_pct=f"{best_below * 100:.0f}",
                                 suffix=of_suffix,
                             )
                         )
+                        if match_color and best_below >= threshold:
+                            log.append(T("test.template_color_note", tolerance=color_tolerance))
                         markers.append(
                             {
                                 "step": idx + 1,

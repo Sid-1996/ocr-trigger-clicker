@@ -671,6 +671,7 @@
   "test.template_embedded": "截圖",
   "test.template_hit": "[{idx}] 🖼 命中「{name}」{confidence}  ({x},{y}) {w}×{h}",
   "test.template_miss": "[{idx}] ❌ 未命中「{name}」（閾值 {threshold}，最高 {best_pct}%）{suffix}",
+  "test.template_color_note": "  ↳ 灰階有達標但顏色驗證未過（容差 {tolerance}，可放寬或關閉顏色比對）",
   "test.unknown_step": "[{idx}] ? 未知步驟: {type}",
   "test.default_task": "我的任務",
   "test.default_group": "所有規則",

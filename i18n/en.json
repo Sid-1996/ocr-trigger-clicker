@@ -671,6 +671,7 @@
   "test.template_embedded": "Screenshot",
   "test.template_hit": "[{idx}] 🖼 Hit \"{name}\" {confidence}  ({x},{y}) {w}×{h}",
   "test.template_miss": "[{idx}] ❌ Miss \"{name}\" (threshold {threshold}, best {best_pct}%){suffix}",
+  "test.template_color_note": "  ↳ Grayscale matched but color check failed (tolerance {tolerance}; relax it or turn off color matching)",
   "test.unknown_step": "[{idx}] ? Unknown step: {type}",
   "test.default_task": "My Task",
   "test.default_group": "All Rules",

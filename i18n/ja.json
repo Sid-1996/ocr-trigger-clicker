@@ -671,6 +671,7 @@
   "test.template_embedded": "スクリーンショット",
   "test.template_hit": "[{idx}] 🖼 ヒット「{name}」{confidence}  ({x},{y}) {w}×{h}",
   "test.template_miss": "[{idx}] ❌ ミス「{name}」（しきい値 {threshold}、最高 {best_pct}%）{suffix}",
+  "test.template_color_note": "  ↳ グレースケールは一致したが色検証で除外（許容差 {tolerance}、緩和または色照合をオフ）",
   "test.unknown_step": "[{idx}] ? 不明なステップ: {type}",
   "test.default_task": "マイタスク",
   "test.default_group": "すべてのルール",
