@@ -412,6 +412,122 @@ def test_preview_import_warn_only_keeps_rules(tmp_tasks_dir, tmp_path):
     assert len(loaded["rules"]) == 4
 
 
+def test_preview_warns_dropped_verify(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "vstop",
+                "name": "VerifyStop",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "click",
+                        "params": {
+                            "target": "custom",
+                            "x": 0.1,
+                            "y": 0.1,
+                            "verify": {
+                                "type": "detect",
+                                "text": "ok",
+                                "on_fail": {"action": "stop"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "id": "vimg",
+                "name": "VerifyImage",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "match_image",
+                        "params": {
+                            "template_data": "aGVsbG8=",
+                            "verify": {"type": "detect", "text": "ok"},
+                        },
+                    }
+                ],
+            },
+        ]
+    }
+    src = tmp_path / "dropped_verify.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert preview.rule_count == 2  # warn-only：規則保留
+    assert any("VerifyStop" in w and "stop" in w for w in preview.warnings)
+    assert any("VerifyImage" in w and "圖片比對" in w for w in preview.warnings)
+
+
+def test_import_regenerate_uuids_remaps_verify_on_fail(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "actor",
+                "name": "Actor",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "click",
+                        "params": {
+                            "target": "custom",
+                            "x": 0.1,
+                            "y": 0.1,
+                            "verify": {
+                                "type": "detect",
+                                "text": "ok",
+                                "on_fail": {"action": "jump", "rule_id": "dst"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "id": "dst",
+                "name": "Dst",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+        ]
+    }
+    src = tmp_path / "verify_jump.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=True)
+    assert result is not None
+    imported = json.loads((tmp_tasks_dir / f"{result}.json").read_text("utf-8"))
+    new_ids = {r["id"] for r in imported["rules"]}
+    assert "actor" not in new_ids and "dst" not in new_ids
+    vfy = imported["rules"][0]["steps"][0]["params"]["verify"]
+    assert vfy["on_fail"]["rule_id"] in new_ids
+    assert "dst" not in json.dumps(imported), "舊 ID 不得殘留"
+
+
+def test_preview_does_not_mutate_input(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "groups": [{"id": "g1", "name": "G1", "rule_ids": ["ok", "ghost"]}],
+        "rules": [
+            {
+                "id": "ok",
+                "name": "Ok",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            }
+        ],
+    }
+    src = tmp_path / "mutate.json"
+    src.write_text(json.dumps(src_data, ensure_ascii=False), encoding="utf-8")
+
+    p1 = _tm.preview_import_task(str(src))
+    p2 = _tm.preview_import_task(str(src))
+    assert p1 is not None and p2 is not None
+    assert p1.raw_data["groups"][0]["rule_ids"] == ["ok"]
+    assert p1.raw_data["groups"][0]["rule_ids"] is not p2.raw_data["groups"][0]["rule_ids"]
+    assert any("自動過濾" in w for w in p1.warnings)
+
+
 # ── collect_templates ──
 
 _B64_PNG_1PX = (

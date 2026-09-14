@@ -127,6 +127,20 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
             warnings.append(
                 f"規則「{raw['name']}」步驟 {i} 未知失敗動作「{pp['on_fail'].get('action', '')}」，將被視為 stop"
             )
+        # 驗證在載入時會被靜默移除的兩種情況，此處先行警告（含規則名）
+        vfy = pp.get("verify")
+        if isinstance(vfy, dict):
+            _v_on_fail = vfy.get("on_fail", None)
+            if _v_on_fail == "stop" or (
+                isinstance(_v_on_fail, dict) and str(_v_on_fail.get("action", "")) == "stop"
+            ):
+                warnings.append(
+                    f"規則「{raw['name']}」步驟 {i} 驗證 on_fail=stop 不支援，驗證將被移除（動作照常執行但失去保護）"
+                )
+            elif stype == "match_image":
+                warnings.append(
+                    f"規則「{raw['name']}」步驟 {i} 圖片比對不支援動作後驗證，驗證將被移除"
+                )
     return True
 
 
@@ -195,8 +209,8 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
         filtered = [rid for rid in raw_ids if isinstance(rid, str) and rid in valid_ids]
         if len(filtered) < len(raw_ids):
             warnings.append(f"群組「{gname}」部分 rule_ids 指向無效規則，已自動過濾")
-        g["rule_ids"] = filtered
-        valid_groups.append(g)
+        # ponytail: 拷貝後再寫 rule_ids，不改寫讀入的原始 dict（連調 preview 互不污染）
+        valid_groups.append({**g, "rule_ids": filtered})
 
     raw_data: dict = {"rules": valid_rules}
     if valid_groups:
@@ -222,7 +236,10 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
     preview = preview_import_task(src_path)
     if preview is None or preview.rule_count == 0:
         return None
-    data = preview.raw_data
+    import copy as _copy
+
+    # ponytail: 深拷貝後再改寫，避免污染呼叫端可能持有的 preview.raw_data
+    data = _copy.deepcopy(preview.raw_data)
     if regenerate_uuids:
         id_map: dict[str, str] = {}
         for r in data["rules"]:
@@ -230,6 +247,13 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
             new_id = uuid.uuid4().hex[:12]
             id_map[old_id] = new_id
             r["id"] = new_id
+
+        def _remap_on_fail(of: dict) -> None:
+            rid = of.get("rule_id", "") or of.get("jump_rule_id", "")
+            if rid in id_map:
+                of["rule_id"] = id_map[rid]
+            of.pop("jump_rule_id", None)
+
         for r in data["rules"]:
             for s in r.get("steps", []):
                 p = s.get("params", {})
@@ -240,10 +264,13 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
                 if s["type"] in ("detect", "compare", "match_image") and isinstance(
                     p.get("on_fail"), dict
                 ):
-                    rid = p["on_fail"].get("rule_id", "") or p["on_fail"].get("jump_rule_id", "")
-                    if rid in id_map:
-                        p["on_fail"]["rule_id"] = id_map[rid]
-                    p["on_fail"].pop("jump_rule_id", None)
+                    _remap_on_fail(p["on_fail"])
+                # 動作步的 verify.on_fail 同樣含跨規則跳轉，一併 remap
+                vfy = p.get("verify")
+                if isinstance(vfy, dict) and isinstance(vfy.get("on_fail"), dict):
+                    _remap_on_fail(vfy["on_fail"])
+                # notify 停止群組是群組 id，不隨規則改；此處僅 remap 誤寫成規則 id 的舊資料
+                # （正常 stop_groups 本來就是群組 id，不在 id_map 內，原樣保留）
         for g in data.get("groups", []):
             g["rule_ids"] = [id_map.get(rid, rid) for rid in g.get("rule_ids", [])]
 

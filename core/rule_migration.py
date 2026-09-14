@@ -190,7 +190,7 @@ def _normalize_verify(raw: object) -> dict | None:
     return result
 
 
-def _normalize_step_params(step_type: str, params: dict | None) -> dict:
+def _normalize_step_params(step_type: str, params: dict | None, rule_name: str = "") -> dict:
     base = deepcopy(_STEP_DEFAULTS.get(step_type, {}))
     params = params if isinstance(params, dict) else {}
     base.update(params)
@@ -207,7 +207,9 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
                     import logging
 
                     logging.getLogger("rule_migration").warning(
-                        "verify config invalid, dropped: %r", raw_verify
+                        "規則「%s」動作後驗證無效已移除（verify+stop 不支援或缺文字/圖片）: %r",
+                        rule_name or "?",
+                        raw_verify,
                     )
                 except Exception:
                     pass
@@ -216,6 +218,18 @@ def _normalize_step_params(step_type: str, params: dict | None) -> dict:
         elif "verify" in base:
             base.pop("verify", None)
     else:
+        if params.get("verify", None) is not None:
+            try:
+                import logging
+
+                logging.getLogger("rule_migration").warning(
+                    "規則「%s」步驟類型 %s 不支援動作後驗證，已移除: %r",
+                    rule_name or "?",
+                    step_type,
+                    params.get("verify"),
+                )
+            except Exception:
+                pass
         base.pop("verify", None)
 
     if step_type == "detect":

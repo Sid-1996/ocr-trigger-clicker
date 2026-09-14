@@ -111,6 +111,25 @@ def test_verify_plus_stop_invalid():
         assert "verify" not in out
 
 
+def test_dropped_verify_warning_names_rule(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="rule_migration"):
+        RuleMig._normalize_step_params(
+            "click",
+            {"verify": {"type": "detect", "text": "hi", "on_fail": "stop"}},
+            rule_name="我的規則",
+        )
+    assert any("我的規則" in m for m in caplog.messages)
+    with caplog.at_level(logging.WARNING, logger="rule_migration"):
+        RuleMig._normalize_step_params(
+            "match_image",
+            {"template_data": "abc==", "verify": {"type": "detect", "text": "x"}},
+            rule_name="找圖規則",
+        )
+    assert any("找圖規則" in m for m in caplog.messages)
+
+
 def test_verify_invalid_empty_text_template():
     assert RuleMig._normalize_verify({"type": "detect", "text": "   "}) is None
     assert (

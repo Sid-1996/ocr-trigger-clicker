@@ -31,7 +31,9 @@ def _dict_to_rule(d: dict) -> Rule:
     steps = [
         Step(
             type=str(s.get("type", "")),
-            params=_normalize_step_params(str(s.get("type", "")), s.get("params")),
+            params=_normalize_step_params(
+                str(s.get("type", "")), s.get("params"), rule_name=str(d.get("name", ""))
+            ),
         )
         for s in d.get("steps", [])
     ]
