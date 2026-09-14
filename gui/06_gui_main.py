@@ -4389,11 +4389,6 @@ class SettingsDialog(QDialog):
         self._ask_group.setToolTip(T("settings.ask_group_selection.tooltip"))
         form.addRow("", self._ask_group)
 
-        self._standard_window = QCheckBox(T("settings.standard_window"))
-        self._standard_window.setChecked(self._ctrl.get_setting(win, "auto_resize_standard", False))
-        self._standard_window.setToolTip(T("settings.standard_window.tooltip"))
-        form.addRow("", self._standard_window)
-
         # ── 自動化 / 辨識分頁 ──
         auto = QWidget()
         aform = QFormLayout(auto)
@@ -4530,7 +4525,6 @@ class SettingsDialog(QDialog):
             _ocr_mod.reset_engine()
         self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
         self._ctrl.set_setting(self._win, "ask_group_selection", self._ask_group.isChecked())
-        self._ctrl.set_setting(self._win, "auto_resize_standard", self._standard_window.isChecked())
         self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
         if getattr(self._win, "_current_task", ""):
             task_path = str(_rule_mod.get_tasks_dir() / f"{self._win._current_task}.json")
@@ -4807,7 +4801,6 @@ class MainWindow(QMainWindow):
             self._rule_config_ctrl = RuleConfigController()
             self._test_ctrl = TestRunController(self, _of_summary, _resolve_rule_name)
             self._applying_task_window = False
-            self._standard_suggest_dismissed: set[str] = set()
             self._setup_ui()
             self._debug_panel = OcrDebugPanel("", self)
             self._debug_panel.bg_inject_fail.connect(self._on_debug_bg_fail)
@@ -5811,25 +5804,6 @@ class MainWindow(QMainWindow):
             warn_label.setWordWrap(True)
             warn_label.setStyleSheet("color: #cc8800;")
             layout.addWidget(warn_label)
-
-        # 標準尺寸提示：僅文字，不新增勾選（P0-B）
-        try:
-            cs = preview.raw_data.get("capture_size")
-            if isinstance(cs, list) and len(cs) == 2 and all(isinstance(v, int) for v in cs):
-                if (cs[0], cs[1]) != (1600, 900):
-                    hint = QLabel(T("import.standard_hint", w=cs[0], h=cs[1]))
-                    hint.setWordWrap(True)
-                    hint.setStyleSheet("color: #2a7ae2;")
-                    layout.addWidget(hint)
-            elif isinstance(preview.meta.get("standard_client_size"), list):
-                scs = preview.meta["standard_client_size"]
-                if len(scs) == 2 and tuple(scs) != (1600, 900):
-                    hint2 = QLabel(T("import.standard_hint", w=scs[0], h=scs[1]))
-                    hint2.setWordWrap(True)
-                    hint2.setStyleSheet("color: #2a7ae2;")
-                    layout.addWidget(hint2)
-        except Exception:
-            pass
 
         cb = QCheckBox(T("ui.regenerate_ids"))
         cb.setChecked(False)
@@ -7532,86 +7506,6 @@ class MainWindow(QMainWindow):
                 )
                 if resp2 != QMessageBox.StandardButton.Yes:
                     return
-        # 標準工作尺寸：自動或差異提示（僅啟動前，勾選/切任務不觸發）
-        try:
-            _ss_mod = load_sibling("screenshot", "core/01_screenshot.py")
-            _resize = getattr(_ss_mod, "resize_window_to_client", None)
-            _get_client = getattr(_ss_mod, "get_window_client_size", None)
-            _is_fs = getattr(_ss_mod, "is_window_fullscreen", None)
-
-            def _report(res: str):
-                if res == "ok":
-                    self._status_bar.showMessage(T("status.standard_resize_ok", title=title), 4000)
-                    logging.info("standard resize ok: %s -> 1600x900 client", title)
-                elif res == "not_found":
-                    logging.warning("standard resize skip: not_found %s", title)
-                    self._status_bar.showMessage(
-                        T("status.standard_resize_not_found", title=title), 4000
-                    )
-                elif res == "minimized":
-                    logging.warning("standard resize skip: minimized %s", title)
-                    self._status_bar.showMessage(
-                        T("status.standard_resize_minimized", title=title), 4000
-                    )
-                elif res == "fullscreen":
-                    logging.warning("standard resize skip: fullscreen %s", title)
-                    self._status_bar.showMessage(
-                        T("status.standard_resize_skip_fullscreen", title=title), 4000
-                    )
-                elif res == "failed":
-                    logging.warning("standard resize failed: %s", title)
-                    self._status_bar.showMessage(
-                        T("status.standard_resize_failed", title=title), 4000
-                    )
-
-            if self._rule_config_ctrl.get_setting(self, "auto_resize_standard", False):
-                if _resize is not None:
-                    _res = _resize(title, 1600, 900)
-                    _report(_res)
-                    if _res == "ok":
-                        time.sleep(0.3)
-            else:
-                # 未開啟自動：僅當本 session 未忽略、且客戶區非標準、非全螢幕/最小化時提示
-                if (
-                    _resize is not None
-                    and _get_client is not None
-                    and _is_fs is not None
-                    and title not in getattr(self, "_standard_suggest_dismissed", set())
-                ):
-                    cs = _get_client(title)
-                    if cs is not None and cs != (1600, 900) and not _is_fs(title):
-                        hwnd = getattr(_ss_mod, "get_window_hwnd", lambda t: None)(title)
-                        _u = getattr(_ss_mod, "_user32", None)
-                        if _u is not None and hwnd is not None and _u.IsIconic(hwnd):
-                            cs = None
-                        if cs is not None:
-                            box = QMessageBox(self)
-                            box.setWindowTitle(T("settings.standard_window"))
-                            box.setText(
-                                T("status.standard_resize_suggest", title=title, cw=cs[0], ch=cs[1])
-                            )
-                            box.setInformativeText(T("status.standard_resize_suggest_hint"))
-                            yes_btn = box.addButton(
-                                T("status.standard_resize_yes"), QMessageBox.ButtonRole.YesRole
-                            )
-                            no_btn = box.addButton(
-                                T("status.standard_resize_no"), QMessageBox.ButtonRole.NoRole
-                            )
-                            box.addButton(QMessageBox.StandardButton.Cancel)
-                            box.setDefaultButton(yes_btn)
-                            box.exec()
-                            clicked = box.clickedButton()
-                            if clicked == yes_btn:
-                                _res = _resize(title, 1600, 900)
-                                _report(_res)
-                                if _res == "ok":
-                                    time.sleep(0.3)
-                            elif clicked == no_btn:
-                                self._standard_suggest_dismissed.add(title)
-                            else:
-                                return
-        except Exception:
-            logging.warning("standard resize unexpected error for '%s'", title, exc_info=True)
         # 提交未存編輯並同步寫入磁碟，確保主迴圈讀到的是最新規則
         self._save_current_rule()
         self._flush_save()

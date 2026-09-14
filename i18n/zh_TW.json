@@ -815,17 +815,5 @@
   "verify.fuzzy_threshold": "相似度",
   "verify.empty_text": "驗證文字為空——草稿已保留，填入文字後才會生效",
   "verify.empty_template": "驗證圖片未設定——草稿已保留，截取或選擇圖片後才會生效",
-  "verify.loop_long_hint": "此規則在循環群組用長驗證（約 {secs} 秒），驗證期間同群組其他規則會被卡住；若轉場沒這麼慢，建議改用中／短。",
-  "settings.standard_window": "自動將目標視窗調整為 1600×900",
-  "settings.standard_window.tooltip": "啟動任務前，將目標視窗調整為 1600×900 的視窗模式。適合使用不同解析度的任務；全螢幕或無法調整的視窗會自動跳過。",
-  "status.standard_resize_ok": "已將目標視窗調整為 1600×900（{title}）",
-  "status.standard_resize_skip_fullscreen": "已跳過：全螢幕/無法調整的視窗（{title}）",
-  "status.standard_resize_not_found": "已跳過：找不到視窗（{title}）",
-  "status.standard_resize_minimized": "已跳過：視窗已最小化（{title}）",
-  "status.standard_resize_failed": "尺寸調整失敗（{title}）",
-  "status.standard_resize_suggest": "目標視窗「{title}」目前 {cw}×{ch}，與標準 1600×900 不同，是否調整為 1600×900 視窗模式？",
-  "status.standard_resize_suggest_hint": "可在「設定 → 一般」開啟自動調整，之後不再詢問。",
-  "status.standard_resize_yes": "是，調整",
-  "status.standard_resize_no": "否，維持目前尺寸（本次不再詢問）",
-  "import.standard_hint": "此任務以 {w}×{h} 製作，建議以 1600×900 視窗執行（可在啟動時一鍵套用）"
+  "verify.loop_long_hint": "此規則在循環群組用長驗證（約 {secs} 秒），驗證期間同群組其他規則會被卡住；若轉場沒這麼慢，建議改用中／短。"
 }
