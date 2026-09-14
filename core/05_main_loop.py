@@ -1636,21 +1636,29 @@ class MainLoop:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
                 return
             elif result.action == "jump_step":
+                idx = result.step_index
+                if idx < 0:
+                    idx = 0
+                if idx >= len(rule.steps):
+                    # skip_to 越界（含舊 9999 sentinel）＝跳到本規則結尾，與測試預覽
+                    # _dead_after 同語義：結束本規則，剩餘步驟不再執行
+                    if not background:
+                        self._log_exec(
+                            rule.name,
+                            i,
+                            step.type,
+                            "jump",
+                            T("exec_log.detail.skip_to_end"),
+                        )
+                    return
                 if not background:
                     self._log_exec(
                         rule.name,
                         i,
                         step.type,
                         "jump",
-                        T("exec_log.detail.jump_to", n=result.step_index + 1),
+                        T("exec_log.detail.jump_to", n=idx + 1),
                     )
-                idx = result.step_index
-                if idx < 0:
-                    idx = 0
-                if idx >= len(rule.steps):
-                    idx = len(rule.steps) - 1
-                if idx < 0:
-                    return
                 # 跳轉必須向前（GUI 也只允許向前 skip），否則可能跳轉成環卡死主執行緒
                 if idx <= i:
                     if not background:

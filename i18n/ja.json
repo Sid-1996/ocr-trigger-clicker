@@ -735,6 +735,7 @@
   "exec_log.detail.template_miss": "ミス（最高 {confidence}%）",
   "exec_log.detail.jump_to": "→ ステップ {n}",
   "exec_log.detail.jump_invalid": "ジャンプ先が無効です（現在のステップより後である必要があります）、中止",
+  "exec_log.detail.skip_to_end": "→ ルール末尾（残りスキップ）",
   "exec_log.detail.cache_hit": " (0ms, 共有キャッシュ)",
   "exec_log.detail.emergency_stop": "緊急停止",
   "exec_log.detail.paused": "一時停止中",

@@ -735,6 +735,7 @@
   "exec_log.detail.template_miss": "未命中（最佳 {confidence}%）",
   "exec_log.detail.jump_to": "→ 步驟 {n}",
   "exec_log.detail.jump_invalid": "跳轉目標無效（需在目前步驟之後），中止",
+  "exec_log.detail.skip_to_end": "→ 本規則結尾（後續略過）",
   "exec_log.detail.cache_hit": " (0ms, 共用快取)",
   "exec_log.detail.emergency_stop": "緊急停止",
   "exec_log.detail.paused": "已暫停",

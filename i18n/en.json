@@ -735,6 +735,7 @@
   "exec_log.detail.template_miss": "Miss (best {confidence}%)",
   "exec_log.detail.jump_to": "→ Step {n}",
   "exec_log.detail.jump_invalid": "Invalid jump target (must be after current step), aborted",
+  "exec_log.detail.skip_to_end": "→ End of rule (rest skipped)",
   "exec_log.detail.cache_hit": " (0ms, shared cache)",
   "exec_log.detail.emergency_stop": "Emergency stop",
   "exec_log.detail.paused": "Paused",

@@ -1604,3 +1604,57 @@ def test_click_and_key_failures_route_to_on_bg_fail(monkeypatch):
     assert calls == ["fail"], "click 後台失敗應觸發 on_bg_fail"
     ml._handle_key({"key": "Escape"}, ctx, rule)
     assert calls == ["fail"], "節流窗內 key 失敗不重複觸發，但不得拋例外"
+
+
+# ── on_fail skip 越界＝結束本規則（與測試預覽 _dead_after 同語義）──
+
+
+def _run_skip_rule(ml, skip_to):
+    """3 步規則：第 0 步文字偵測必敗（mock OCR 回空）→ skip；回傳實際執行的步驟索引。"""
+    blank = np.zeros((10, 10, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    rule = Rule(
+        id=f"r_skip_{skip_to}",
+        name="跳轉測試",
+        enabled=True,
+        steps=[
+            Step(
+                "detect",
+                {
+                    "text": "zzz-never-present",
+                    "on_fail": {"action": "skip", "skip_to": skip_to},
+                },
+            ),
+            Step("wait", {"ms": 0}),
+            Step("wait", {"ms": 0}),
+        ],
+    )
+    executed = []
+    orig_run_step = ml._run_step
+    orig_ocr_region = ml._ocr_region
+
+    def _record(step, ctx, _rule, _o=orig_run_step, _e=executed):
+        _e.append(ctx.step_idx)
+        return _o(step, ctx, _rule)
+
+    ml._ocr_region = lambda *a, **kw: []  # 永遠沒命中 → detect 走 on_fail
+    ml._run_step = _record
+    try:
+        ml._run_rule(rule, blank, rect, StepContext(img=blank, rect=rect))
+    finally:
+        ml._run_step = orig_run_step
+        ml._ocr_region = orig_ocr_region
+    return executed
+
+
+def test_skip_to_end_of_rule():
+    ml = _make_ml()
+    for skip_to in (3, 9999):  # ==len 與舊 sentinel 都視為跳到結尾
+        executed = _run_skip_rule(ml, skip_to)
+        assert executed == [0], f"skip_to={skip_to} 應結束本規則，實際執行: {executed}"
+
+
+def test_skip_to_valid_step_still_jumps():
+    ml = _make_ml()
+    executed = _run_skip_rule(ml, 2)
+    assert executed == [0, 2], f"合法 skip 應跳到該步並執行，實際: {executed}"
