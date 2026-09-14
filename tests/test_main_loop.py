@@ -1658,3 +1658,55 @@ def test_skip_to_valid_step_still_jumps():
     ml = _make_ml()
     executed = _run_skip_rule(ml, 2)
     assert executed == [0, 2], f"合法 skip 應跳到該步並執行，實際: {executed}"
+
+
+# ── verify 逾時日誌帶總耗時＋阻塞計數分離 ──
+
+
+def test_verify_timeout_logs_total_and_splits_counters(monkeypatch):
+    ml = _make_ml()
+    ml._logger.setLevel(logging.INFO)
+    blank = np.zeros((10, 10, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    monkeypatch.setattr(_ml_mod, "capture_frame", lambda *a, **k: blank)
+    monkeypatch.setattr(_ml_mod, "get_window_rect", lambda title: rect)
+    ml._check_verify_condition = lambda *a, **k: False  # 永不命中 → 走逾時
+    seen = []
+
+    class _Probe(logging.Handler):
+        def emit(self, record):
+            seen.append(record.getMessage())
+
+    probe = _Probe()
+    ml._logger.addHandler(probe)
+    try:
+        rule = Rule(
+            id="r_verify_timeout",
+            name="驗證逾時",
+            enabled=True,
+            steps=[
+                Step(
+                    "click",
+                    {
+                        "target": "custom",
+                        "x": 0.5,
+                        "y": 0.5,
+                        "after_delay_ms": 0,
+                        "verify": {
+                            "type": "detect",
+                            "text": "zzz",
+                            "timeout_ms": 300,
+                            "poll_interval_ms": 50,
+                            "retries": 0,
+                            "on_fail": {"action": "advance"},
+                        },
+                    },
+                ),
+            ],
+        )
+        ml._run_rule(rule, blank, rect, StepContext(img=blank, rect=rect))
+    finally:
+        ml._logger.removeHandler(probe)
+    assert any("共耗時" in m for m in seen), f"逾時行應帶總耗時: {seen}"
+    assert ml._verify_blocked_ms >= 200, f"阻塞應累計輪詢耗時: {ml._verify_blocked_ms:.0f}ms"
+    assert ml._frame_waited_ms == 0, "驗證等待不得再計入刻意等待（避免重複扣除）"

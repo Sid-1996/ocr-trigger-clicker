@@ -11,20 +11,25 @@ Step = Models.Step
 
 def test_should_warn_loop_verify():
     f = MainLoopMod.should_warn_loop_verify
-    # loop + long → warn
+    # loop + long → warn（總預算）
     assert f("loop", 10000, "long") is True
     # loop + 手寫 timeout 達 8s（preset 缺席）→ warn
     assert f("loop", 8000, "") is True
     assert f("loop", None, "long") is True
-    # loop + 中/短 → quiet
-    assert f("loop", 5000, "medium") is False
+    # 預設中驗證（5s×2+0.5s≈10.5s）總預算超標 → warn
+    assert f("loop", 5000, "medium") is True
+    # 同樣中驗證、不重試（5s）→ quiet
+    assert f("loop", 5000, "medium", 0, 0) is False
+    # 短驗證預設（2s×2+0.5s=4.5s）→ quiet
     assert f("loop", 2000, "short") is False
+    # 短驗證但重試拉滿（2s×4+5s×3=23s）→ warn
+    assert f("loop", 2000, "short", 3, 5000) is True
     # 非 loop 群組一律 quiet
     assert f("once", 10000, "long") is False
     assert f("repeat", 10000, "long") is False
     assert f("", 10000, "long") is False
-    # 髒輸入不崩
-    assert f("loop", "bad", "medium") is False
+    # 髒輸入不崩（"bad" 回退 preset medium，總預算 10.5s → 照樣警告）
+    assert f("loop", "bad", "medium") is True
     assert f("loop", 0, "") is False
 
 

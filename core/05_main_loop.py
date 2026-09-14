@@ -158,11 +158,19 @@ _VERIFY_LOOP_WARN_SEC = (
 )
 
 
-def should_warn_loop_verify(group_mode: str = "", timeout_ms=None, preset: str = "") -> bool:
+def should_warn_loop_verify(
+    group_mode: str = "",
+    timeout_ms=None,
+    preset: str = "",
+    retries: int = 1,
+    retry_delay_ms: int = 500,
+) -> bool:
     """循環群組＋長驗證是否該警告（純函式，無副作用，GUI 與主循環共用同一判定）。
 
-    只看有效等待預算：timeout_ms 為數字且 >0 時以它為準，否則回退 preset 對照
-    （long=10s）。非 loop 群組一律 False。
+    看有效總預算而非單次 timeout：(retries+1)*timeout + retries*retry_delay。
+    預設重試 1 次的中驗證（5s×2+0.5s≈10.5s）即達標——同組其他規則會被卡住這麼久。
+    timeout_ms 為數字且 >0 時以它為準，否則回退 preset 對照（long=10s）。
+    非 loop 群組一律 False。
     """
     if str(group_mode or "") != "loop":
         return False
@@ -174,7 +182,15 @@ def should_warn_loop_verify(group_mode: str = "", timeout_ms=None, preset: str =
         secs = 0.0
     if secs <= 0:
         secs = {"short": 2.0, "medium": 5.0, "long": 10.0}.get(str(preset or "").strip(), 0.0)
-    return secs >= _VERIFY_LOOP_WARN_SEC
+    try:
+        n = max(0, min(3, int(retries)))
+    except (TypeError, ValueError):
+        n = 1
+    try:
+        d = max(0, min(5000, int(retry_delay_ms)))
+    except (TypeError, ValueError):
+        d = 500
+    return secs * (n + 1) + (d / 1000.0) * n >= _VERIFY_LOOP_WARN_SEC
 
 
 class MainLoop:
@@ -232,9 +248,12 @@ class MainLoop:
         self._detect_warn_counter: dict[str, int] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
-        # 本幀「刻意等待」時間（wait 步驟＋動作後延遲），由 _loop 重置、_handle_wait/_run_rule 累加；
-        # 過慢判定需扣除，避免長等待被誤判為偵測過慢
+        # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
+        # _handle_wait/_run_rule 累加；過慢判定需扣除，避免長等待被誤判為偵測過慢
         self._frame_waited_ms: float = 0.0
+        # 本幀驗證阻塞時間（_poll_verify 全程，含截圖/OCR/等待），由 _loop 重置、
+        # _poll_verify 累加；過慢判定需扣除——驗證等待是故意的，只記錄不告警
+        self._verify_blocked_ms: float = 0.0
         # 後台全黑偵測：連續黑幀計數，每次黑幕期只警告一次（見 _check_black_frame）
         self._black_streak: int = 0
         self._fail_since: dict[
@@ -1333,6 +1352,10 @@ class MainLoop:
 
     def _poll_verify(self, verify: dict) -> str:
         """Poll with fresh capture frames until success/timeout/cancelled."""
+        # ponytail: 全程計入 _verify_blocked_ms（_loop 過慢判定扣除用）；
+        # 內部等待不再另計 _frame_waited_ms，避免同一段時間被扣兩次。
+        # 所有 return 前都需累計（新增 return 別漏）。
+        t_poll0 = time.monotonic()
         preset = str(verify.get("preset", "")).strip()
         if preset in self._VERIFY_PRESET_TIMEOUT and "timeout_ms" not in verify:
             timeout_ms = self._VERIFY_PRESET_TIMEOUT[preset]
@@ -1344,15 +1367,13 @@ class MainLoop:
             poll_ms = verify.get("poll_interval_ms", 300)
         delay_ms = verify.get("delay_before_ms", 0)
         if delay_ms > 0:
-            t0 = time.monotonic()
             if (
                 self._stop_event.wait(timeout=delay_ms / 1000.0)
                 or self._emergency_event.is_set()
                 or self._pause_event.is_set()
             ):
-                self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
-            self._frame_waited_ms += (time.monotonic() - t0) * 1000
         deadline = time.monotonic() + timeout_ms / 1000.0
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         while time.monotonic() < deadline:
@@ -1361,6 +1382,7 @@ class MainLoop:
                 or self._emergency_event.is_set()
                 or self._pause_event.is_set()
             ):
+                self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
             # fresh capture, reuse pipeline
             try:
@@ -1372,17 +1394,17 @@ class MainLoop:
                 # isolate per-poll frame cache to avoid stale superset from previous poll
                 self._frame_ocr_cache.clear()
                 if self._check_verify_condition(verify, img, fresh_rect):
+                    self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                     return "success"
             # wait poll interval, interruptible
-            t0 = time.monotonic()
             if (
                 self._stop_event.wait(timeout=poll_ms / 1000.0)
                 or self._emergency_event.is_set()
                 or self._pause_event.is_set()
             ):
-                self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
-            self._frame_waited_ms += (time.monotonic() - t0) * 1000
+        self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
         return "timeout"
 
     def _get_verify_cancel_detail(self) -> str:
@@ -1495,13 +1517,20 @@ class MainLoop:
                     except Exception:
                         _own_mode = ""
                     if should_warn_loop_verify(
-                        _own_mode, verify.get("timeout_ms"), verify.get("preset", "")
+                        _own_mode,
+                        verify.get("timeout_ms"),
+                        verify.get("preset", ""),
+                        verify.get("retries", 1),
+                        verify.get("retry_delay_ms", 500),
                     ):
                         _wk = f"loop-verify:{rule.id}:{ctx.step_idx}"
                         if _wk not in self._verify_warn_counter:
                             self._verify_warn_counter[_wk] = 1
                             try:
-                                _secs = int(verify.get("timeout_ms", 0)) // 1000 or 10
+                                _t = int(verify.get("timeout_ms", 5000))
+                                _r = max(0, min(3, int(verify.get("retries", 1))))
+                                _d = max(0, min(5000, int(verify.get("retry_delay_ms", 500))))
+                                _secs = (_t * (_r + 1) + _d * _r) // 1000 or 10
                             except (TypeError, ValueError):
                                 _secs = 10
                             _msg = T("verify.loop_long_hint", secs=_secs)
@@ -1520,6 +1549,7 @@ class MainLoop:
                         retry_delay = 500
                     retry_delay = max(0, min(5000, retry_delay))
                     poll_res = None
+                    t_verify0 = time.monotonic()
                     for attempt in range(retries + 1):
                         poll_res = self._poll_verify(verify)
                         if poll_res == "success":
@@ -1614,8 +1644,10 @@ class MainLoop:
                         tmp_params = {"on_fail": v_on_fail}
                         if not background:
                             hint = self._verify_timeout_hint(verify)
+                            total_s = time.monotonic() - t_verify0
                             self._log(
                                 f"規則「{rule.name}」驗證逾時{hint} → {self._on_fail_hint(v_on_fail)}"
+                                f"（共耗時{total_s:.1f}s）"
                             )
                         res = self._handle_on_fail(tmp_params, ctx, rule)
                         if res.action == "stop" and not res.detail:
@@ -2134,12 +2166,34 @@ class MainLoop:
                         self._frame_diff_ratio = 1.0
 
                     t2 = time.monotonic()
+                    self._frame_waited_ms = 0.0
+                    self._verify_blocked_ms = 0.0
                     self._process_rules(img, rect)
                     t3 = time.monotonic()
 
                     ocr_ms = (t3 - t2) * 1000
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
+
+                    # 過慢判定：扣除刻意等待（wait/動作後延遲）與驗證阻塞——
+                    # 驗證等待是故意的，只記錄不告警，避免重蹈 verify 誤報
+                    detect_elapsed = loop_elapsed - self._frame_waited_ms - self._verify_blocked_ms
+                    if detect_elapsed > 2000:
+                        if not self._slow_loop_warned:
+                            self._slow_loop_warned = True
+                            self._log(
+                                f"偵測循環過慢: {detect_elapsed:.0f}ms"
+                                f" (OCR={ocr_ms:.0f}ms，驗證阻塞={self._verify_blocked_ms:.0f}ms、"
+                                f"刻意等待={self._frame_waited_ms:.0f}ms 已排除)"
+                            )
+                            if self.on_warning:
+                                self.on_warning(
+                                    f"偵測執行太慢：本次花費{detect_elapsed:.0f} 毫秒"
+                                    "（已排除驗證等待與刻意等待，超過 2 秒）。"
+                                    "畫面更新有明顯延遲？建議縮小偵測範圍或減少偵測規則。"
+                                )
+                    else:
+                        self._slow_loop_warned = False
 
                 except Exception as e:
                     self._logger.exception("主循環異常: %s", e)

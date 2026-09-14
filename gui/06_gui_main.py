@@ -2834,9 +2834,14 @@ class _VerifyWidget(QWidget):
                 timeout = int(self._timeout.value())
             except Exception:
                 timeout = 0
-            show = bool(fn(mode, timeout, preset)) if fn else False
+            try:
+                retries = int(self._retries.value())
+                retry_delay = int(self._retry_delay.value())
+            except Exception:
+                retries, retry_delay = 1, 500
+            show = bool(fn(mode, timeout, preset, retries, retry_delay)) if fn else False
             if show:
-                secs = timeout // 1000 or 10
+                secs = (timeout * (retries + 1) + retry_delay * retries) // 1000 or 10
                 self._loop_hint.setText("⚠ " + T("verify.loop_long_hint", secs=secs))
             else:
                 self._loop_hint.setText("")
