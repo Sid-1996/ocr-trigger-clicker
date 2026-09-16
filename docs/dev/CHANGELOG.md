@@ -1,11 +1,26 @@
 
 
-## [v0.4.4] - 2026-09-02
+## [v0.4.4]
+
+> 開發中，尚未發版；正式日期由發版流程補填。
+
+### 給使用者
+
+**請下載 OCRTriggerClicker-win-Setup.exe**（本版本正式發行後）：
+
+- **動作後驗證**：點擊、按鍵、拖曳與滾輪可在進階設定中加入文字／圖片驗證，確認目標出現或消失。提供短／中／長等待預設，預設逾時後重做動作並重新驗證 1 次；仍逾時時依設定跳過規則、通知停止、跳轉或按鍵。
+- **測試預覽更清楚**：以刪除線標示本輪不會執行的步驟，圖片未命中時顯示顏色驗證設定與百分比門檻。
+- **驗證提示更完整**：顯示重試設定、空驗證條件提示、循環群組長驗證警告，以及逾時總耗時。
+- 補強匯入校驗與驗證跳轉 ID 重映射；預覽不再改寫輸入資料，無效驗證提供警告。
+- 跳至超出範圍的步驟時結束本規則，與測試預覽一致。
+- 移除開發期間的自動調整標準視窗尺寸功能，目標視窗大小改由使用者自行調整。
 
 ### 給開發者
 
-- **動作後驗證 `verify`（JSON-only）**：`click`/`key`/`drag`/`scroll`/`match_image` 可在 `params` 加 `verify:{type:"detect"|"match_image", timeout_ms, poll_ms, delay_before_ms, on_fail}`，以新 `capture_frame` 輪詢 post-condition；命中即 `advance`，逾時進既有 `on_fail`（`advance/notify/jump/key/skip`），`cancelled` 不觸 `on_fail`。復用既有 OCR/模板快取與 `observation` 轉譯，無新服務/狀態機/排程器。
-- **限制**：`verify.on_fail=stop` 不支援，`normalize` 階段移除並 `warning`，Action 仍執行但失去保護（避免 `click→verify→click` 無限重送）；請改用 `advance/notify/jump/key`。單次 verify 成本目前可接受（實測 immediate ~57ms）；多 verify 累積成本尚未以真實長任務充分量化，暫不擴張為 GUI/框架，先進入真實使用觀察（B 判定）。
+- `verify` 僅附於 `click/key/drag/scroll` 四類動作；`match_image` 是偵測步驟，不接受附加 `verify`（ADR-0005）。GUI 已提供摺疊編輯入口，不再是 JSON-only。
+- 驗證透過新 `capture_frame` 輪詢，沿用既有 OCR／圖片比對流程；支援 `expect=present/absent`、多文字 OR、預設等待策略及重做動作的重試（ADR-0004）。
+- 驗證逾時處理支援 `advance/notify/jump/key/skip`，預設 `advance`；`stop` 不支援，無效驗證由正規化移除並警告。取消不觸發驗證逾時處理。
+- 驗證仍同步阻塞主循環，長等待採警告而非強制限制；阻塞耗時與一般等待分開計數，避免重複扣除。尚未以真實長任務完成效能量化，不宣稱非阻塞或固定耗時。
 
 ## [v0.4.3] - 2026-08-30
 
