@@ -109,7 +109,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `gui/rule_config_controller.py` | 規則配置控制器（v0.0.10 從 MainWindow 拆出） | `RuleConfigController` |
 | `gui/run_controller.py` | 乾執行測試控制器（v0.0.10 從 MainWindow 拆出；原名 `test_run_controller.py`，v0.4.2 改名避免誤為測試檔） | `TestRunController` |
 | `gui/14_capture_region.py` | 區域截圖選取器（match_image 模板來源） | `capture_region()` |
-| `updater_main.py` | 獨立更新行程（以 `WaitForSingleObject` 等待母進程、重試複製、重新啟動、清理暫存） | **無對外匯出**，由 `apply_update()` 以 `subprocess.Popen` 啟動 |
+| `core/observation.py` | 辨識結果影子轉譯／等價比較，不參與執行決策；v0.5.0 前未晉升則移除（ADR-0004） | `Observation`, `ocr_to_observations()`, `template_to_observations()`, `compare_ocr_observations()`, `compare_template_observations()` |
 | `docs/` | GitHub Pages 專案網站（含 `index.html`、Google Search Console 驗證） | 由 `sid-1996.github.io/ocr-trigger-clicker/` 發布 |
 | （無對應資料夾） | match_image 模板隨任務 `.json` 內嵌 | `match_image` 步驟的 `template_data` 為 base64 PNG，存於任務檔本身；不另設 `images/` 目錄 |
 
@@ -787,13 +787,23 @@ uv run python -m pytest                # 含覆蓋報告
 | `test_main_loop.py` | 主迴圈：步驟分派、群組兩層指標、on_fail 各動作、fail_duration_sec、ROI/座標解析、OCR 快取標記、動作日誌 rate-limit |
 | `test_rule_engine.py` | 舊格式遷移 V1→V2→V3、規則/群組序列化、on_fail 正規化 |
 | `test_rule_serialization.py` | 序列化 round-trip、corrupt 檔、預設值、舊欄位相容 |
-| `test_task_management.py` | 任務 CRUD、匯入匯出、UUID 重映射、無效輸入過濾 |
+| `test_task_management.py` | 任務 CRUD、匯入匯出、UUID 重映射、無效輸入過濾、匯入部分寫入／替換失敗不損舊任務 |
 | `test_template_matching.py` | match_template、NMS、多尺度、色彩容差、跨解析度 |
-| `test_i18n.py` | 程式碼用到的 `T("key")` 必須存在於所有語言檔 |
+| `test_i18n.py` | 程式碼用到的靜態 `T("key")` 逐語言檢查、各語言 key 集合一致性、系統語言映射 |
 | `test_recorder_convert.py` | 錄製 session → 規則轉換（OCR 錨點 / 模板錨點 / wait+click 三層、座標比例、群組結構） |
 | `test_ocr_merge.py` | OCR 合併快取 vs 逐 ROI 等價（需本機 RapidOCR model，無則 skip） |
 | `test_prematch_equiv.py` | 並行 prematch vs 循序等價 |
 | `test_template_cache.py` | 模板解碼 LRU 快取等價/命中/清除 |
+| `test_verify.py` | 驗證條件、重試、取消、正規化與 GUI 編輯行為 |
+| `test_verify_log_translations.py` | 三語驗證逾時與失敗處理日誌格式 |
+| `test_preview_fate.py` | 測試預覽跳步與後續步驟略過標記 |
+| `test_file_utils.py` | 原子替換及失敗時暫存清理 |
+| `test_rule_config_controller.py` | 設定持久化及寫入失敗 |
+| `test_run_config.py` | 任務視窗／執行設定與快取 |
+| `test_group_display_name.py` | 群組顯示名稱 |
+| `test_ocr_precluster.py` | OCR ROI 預合併 |
+| `test_template_crop.py` | 圖片裁剪 |
+| `test_frida_bg.py` / `test_frida_real.py` | Frida 後台輸入單元／整合檢查（環境需求以測試內 skip 條件為準） |
 
 ### 共用與 fixture 資料
 
@@ -804,7 +814,8 @@ uv run python -m pytest                # 含覆蓋報告
 ### 注意
 
 - 整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 `custom_models/chinese_cht_rec_mobile.onnx` 才真正執行，無 model 環境自動 skip。
-- 後台模式（`16_bg_input` / `15_print_window` / `17_capture_pipeline`）、`box_utils`、GUI 層依賴 Win32 畫面，僅以 `__main__` self-check 涵蓋；updater 的純邏輯另有 pytest（delta 函式＋資產探測＝`test_updater_delta.py`、備份策略＋PID 逾時＝`test_updater_process.py`）。
+- Win32 截圖、真實遊戲輸入及完整 GUI 操作仍需環境實測；部分純邏輯與 GUI 元件已有上表 pytest，不能把測試通過視為真實遊戲端到端驗證。
+- 舊自製 updater 與 `test_updater_delta.py`／`test_updater_process.py` 已退役，不代表現行更新流程仍受這些測試涵蓋。Velopack 安裝／更新／重啟流程依 `AGENTS.md` 的測試庫 E2E 清單驗證。
 
 ## 開發注意事項
 
