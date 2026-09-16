@@ -39,9 +39,17 @@ def _code_keys() -> set[str]:
 def test_code_keys_exist_in_all_langs():
     langs = _load_langs()
     assert langs, "i18n 目錄沒有語言檔"
+    code_keys = _code_keys()
+    missing = {lang: sorted(code_keys - entries.keys()) for lang, entries in langs.items()}
+    assert not any(missing.values()), f"Missing code translation keys by language: {missing}"
+
+
+def test_language_keys_match():
+    langs = _load_langs()
+    assert langs, "No language files found"
     all_keys = set().union(*langs.values())
-    orphans = sorted(_code_keys() - all_keys)
-    assert not orphans, f"程式碼用到的 T() key 在所有語言檔皆缺漏: {orphans}"
+    missing = {lang: sorted(all_keys - entries.keys()) for lang, entries in langs.items()}
+    assert not any(missing.values()), f"Inconsistent language keys: {missing}"
 
 
 def test_langid_to_code():
