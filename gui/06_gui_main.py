@@ -2495,12 +2495,7 @@ class _VerifyWidget(QWidget):
         self._roi_badge.setStyleSheet(
             "background:#22395a; color:#6ea8ff; border:1px solid #3a5a8a; border-radius:3px; padding:1px 4px; font-size:10px;"
         )
-        self._roi_badge.setToolTip(
-            T(
-                "verify.roi_hint",
-                default="驗證區域獨立於偵測區域，用來確認動作後的新畫面（客戶區比例，隨標準 1600×900 自動縮放）。",
-            )
-        )
+        self._roi_badge.setToolTip(T("verify.roi_hint"))
         self._roi_btn = QPushButton(T("verify.roi", default="框選區域"))
         if roi_cb:
             self._roi_btn.clicked.connect(self._pick_roi)
@@ -2514,12 +2509,7 @@ class _VerifyWidget(QWidget):
         form.addRow(T("verify.roi_label", default="驗證區域"), roi_row)
         self._update_roi_label()
         # roi_hint moved to tooltip (badge already has it, add to button)
-        self._roi_btn.setToolTip(
-            T(
-                "verify.roi_hint",
-                default="驗證區域獨立於偵測區域，用來確認動作後的新畫面（客戶區比例，隨標準 1600×900 自動縮放）。",
-            )
-        )
+        self._roi_btn.setToolTip(T("verify.roi_hint"))
         # preset — ordinary user sees short/medium/long (2s/5s/10s)
         self._preset = _NoWheelCombo()
         self._preset.addItem(T("verify.preset_short", default="短 (2秒)"), "short")
