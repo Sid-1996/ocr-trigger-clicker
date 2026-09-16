@@ -1,4 +1,14 @@
 {
+  "verify.timeout_hint_detect": "（{preset}/{expect}：未見「{text}」 重試{retries}次仍超時，建議改長或放寬驗證區/相似度）",
+  "verify.timeout_hint_image": "（{preset}/{expect}：圖片未匹配 重試{retries}次仍超時，建議改長或調閾值/驗證區）",
+  "verify.timeout_generic": "（{preset} 重試{retries}次仍超時）",
+  "verify.timeout_log": "規則「{rule}」驗證逾時{hint} → {onfail}（共耗時{total_s:.1f}s）",
+  "verify.of_advance": "跳過此規則",
+  "verify.of_notify": "通知並停止",
+  "verify.of_jump": "跳轉規則",
+  "verify.of_key": "按鍵後繼續",
+  "verify.of_skip": "跳至步驟",
+
   "settings.title": "偏好設定",
   "settings.tab_general": "一般",
   "settings.tab_auto": "自動化 / 辨識",

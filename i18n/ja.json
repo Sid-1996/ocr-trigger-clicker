@@ -1,4 +1,14 @@
 {
+  "verify.timeout_hint_detect": "（{preset}/{expect}：{retries} 回再試行しても「{text}」が見つかりません。待機時間を長くするか、検証範囲／類似度を調整してください）",
+  "verify.timeout_hint_image": "（{preset}/{expect}：{retries} 回再試行しても画像が一致しません。待機時間を長くするか、しきい値／検証範囲を調整してください）",
+  "verify.timeout_generic": "（{preset}：{retries} 回再試行後もタイムアウト）",
+  "verify.timeout_log": "ルール「{rule}」の検証がタイムアウト{hint} → {onfail}（合計 {total_s:.1f} 秒）",
+  "verify.of_advance": "このルールをスキップ",
+  "verify.of_notify": "通知して停止",
+  "verify.of_jump": "ルールへジャンプ",
+  "verify.of_key": "キーを押して続行",
+  "verify.of_skip": "ステップへジャンプ",
+
   "verify.timeout_hint": "待機時間のプリセットから設定されます。手動で調整した値はプリセットを切り替えても保持されます",
   "verify.advanced_hint": "タイムアウト／ポーリング／再試行／照合方法。タイムアウト時の処理でジャンプ／キー／ステップ移動を選ぶと自動展開します",
   "verify.empty_text": "検証テキストが空です。下書きは保持されています。テキストを入力すると有効になります",

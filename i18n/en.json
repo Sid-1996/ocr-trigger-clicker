@@ -1,4 +1,14 @@
 {
+  "verify.timeout_hint_detect": " ({preset}/{expect}: text '{text}' not found after {retries} retries; try a longer timeout or adjust the verification region/similarity)",
+  "verify.timeout_hint_image": " ({preset}/{expect}: image not matched after {retries} retries; try a longer timeout or adjust the threshold/verification region)",
+  "verify.timeout_generic": " ({preset}: timed out after {retries} retries)",
+  "verify.timeout_log": "Rule '{rule}' verification timed out{hint} → {onfail} (total {total_s:.1f}s)",
+  "verify.of_advance": "Skip this rule",
+  "verify.of_notify": "Notify and stop",
+  "verify.of_jump": "Jump to rule",
+  "verify.of_key": "Press key and continue",
+  "verify.of_skip": "Jump to step",
+
   "settings.title": "Preferences",
   "settings.tab_general": "General",
   "settings.tab_auto": "Automation / Recognition",

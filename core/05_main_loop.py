@@ -1423,22 +1423,31 @@ class MainLoop:
         retries = verify.get("retries", 1)
         if vtype == "detect":
             txt = str(verify.get("text", ""))[:12]
-            return f"（{preset}/{expect}：未見「{txt}」 重試{retries}次仍超時，建議改長或放寬驗證區/相似度）"
-        if vtype == "match_image":
-            return (
-                f"（{preset}/{expect}：圖片未匹配 重試{retries}次仍超時，建議改長或調閾值/驗證區）"
+            return T(
+                "verify.timeout_hint_detect",
+                preset=preset,
+                expect=expect,
+                text=txt,
+                retries=retries,
             )
-        return f"（{preset} 重試{retries}次仍超時）"
+        if vtype == "match_image":
+            return T(
+                "verify.timeout_hint_image",
+                preset=preset,
+                expect=expect,
+                retries=retries,
+            )
+        return T("verify.timeout_generic", preset=preset, retries=retries)
 
     def _on_fail_hint(self, on_fail) -> str:
         if isinstance(on_fail, dict):
             act = on_fail.get("action", "stop")
             return {
-                "advance": "跳過此規則",
-                "notify": "通知並停止",
-                "jump": "跳轉規則",
-                "key": "按鍵後繼續",
-                "skip": "跳至步驟",
+                "advance": T("verify.of_advance"),
+                "notify": T("verify.of_notify"),
+                "jump": T("verify.of_jump"),
+                "key": T("verify.of_key"),
+                "skip": T("verify.of_skip"),
             }.get(act, str(act))
         return str(on_fail)
 
@@ -1646,8 +1655,13 @@ class MainLoop:
                             hint = self._verify_timeout_hint(verify)
                             total_s = time.monotonic() - t_verify0
                             self._log(
-                                f"規則「{rule.name}」驗證逾時{hint} → {self._on_fail_hint(v_on_fail)}"
-                                f"（共耗時{total_s:.1f}s）"
+                                T(
+                                    "verify.timeout_log",
+                                    rule=rule.name,
+                                    hint=hint,
+                                    onfail=self._on_fail_hint(v_on_fail),
+                                    total_s=total_s,
+                                )
                             )
                         res = self._handle_on_fail(tmp_params, ctx, rule)
                         if res.action == "stop" and not res.detail:
