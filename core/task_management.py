@@ -1,6 +1,7 @@
 import base64
 import json
 import sys
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,9 @@ Rule = _models.Rule
 
 _migration = load_sibling("rule_migration", "core/rule_migration.py")
 _STEP_DEFAULTS = _migration._STEP_DEFAULTS
+
+_utils = load_sibling("file_utils", "core/file_utils.py")
+_replace_file = _utils._replace_file
 
 _FORMAT_VERSION = 1
 _MAX_IMPORT_SIZE = 10 * 1024 * 1024
@@ -280,11 +284,24 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
     while dest.exists():
         dest = get_tasks_dir() / f"{src_name}_{suffix}.json"
         suffix += 1
+    tmp_path = None
     try:
-        dest.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dest.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            # Record the path before writing, including partial-write failures.
+            tmp_path = Path(f.name)
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        _replace_file(str(tmp_path), str(dest))
         return dest.stem
     except OSError:
         return None
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def collect_templates(

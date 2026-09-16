@@ -590,3 +590,35 @@ def test_collect_templates_live_replaces_disk(tmp_tasks_dir):
 
 def test_collect_templates_empty(tmp_tasks_dir):
     assert _tm.collect_templates() == []
+
+
+def test_import_atomic_write_failures(tmp_tasks_dir, tmp_path, monkeypatch):
+    src = tmp_path / "atomic.json"
+    data = {"rules": [{"id": "r", "name": "R", "steps": [{"type": "wait", "params": {"ms": 1}}]}]}
+    src.write_text(json.dumps(data), encoding="utf-8")
+    existing = tmp_tasks_dir / "atomic.json"
+    existing.write_text("existing task", encoding="utf-8")
+
+    def fail_dump(data, stream, **kwargs):
+        stream.write('{"rules":')
+        raise OSError("disk full")
+
+    def fail_replace(source, destination):
+        assert json.loads(_tm.Path(source).read_text(encoding="utf-8"))["rules"]
+        assert not _tm.Path(destination).exists()
+        raise OSError("replace denied")
+
+    for target, attribute, replacement in (
+        (_tm.json, "dump", fail_dump),
+        (_tm, "_replace_file", fail_replace),
+    ):
+        with monkeypatch.context() as patch:
+            patch.setattr(target, attribute, replacement)
+            assert _tm.import_task(str(src)) is None
+        assert existing.read_text(encoding="utf-8") == "existing task"
+        assert list(tmp_tasks_dir.iterdir()) == [existing]
+
+    assert _tm.import_task(str(src)) == "atomic_1"
+    assert json.loads((tmp_tasks_dir / "atomic_1.json").read_text(encoding="utf-8"))["rules"]
+    assert not list(tmp_tasks_dir.glob("*.tmp"))
+    assert existing.read_text(encoding="utf-8") == "existing task"
