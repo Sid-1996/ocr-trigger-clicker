@@ -75,11 +75,11 @@ def _set_foreground(hwnd: int) -> None:
 
 
 @contextlib.contextmanager
-def focus_guard(title: str, activate_fn):
+def focus_guard(title: str, activate_fn, target_hwnd: int | None = None):
     """混合模式動作區間：進入時存檔並激活遊戲，離開時還原使用者狀態。
 
-    activate_fn(title) -> bool：實際激活函式（由呼叫端注入 _screenshot.activate_window，
-    避免 core 模組循環載入）。非致命失敗僅記 log——激活失敗時物理點擊仍會嘗試。
+    activate_fn(title) -> bool：實際激活函式。啟用後必須確認目標已成為前景；
+    視窗消失、最小化或激活失敗時 yield False，讓呼叫端跳過物理輸入。
     """
     with _act_lock:
         state = save_state()
@@ -90,9 +90,19 @@ def focus_guard(title: str, activate_fn):
             pass
         if not ok:
             _log_activate_fail(title)
+        hwnd = target_hwnd or _user32.GetForegroundWindow()
+        ready = bool(
+            ok
+            and hwnd
+            and _user32.IsWindow(hwnd)
+            and not _user32.IsIconic(hwnd)
+            and _user32.GetForegroundWindow() == hwnd
+        )
+        if not ready:
+            _log_activate_fail(title)
         time.sleep(_ACTIVATE_SETTLE_SEC)
         try:
-            yield ok
+            yield ready
         finally:
             time.sleep(_RESTORE_DELAY_SEC)
             restore_state(state)
@@ -125,12 +135,13 @@ if __name__ == "__main__":
 
     # focus_guard 進出：activate_fn 用假函式，確認 yield 值與狀態還原
     activated = []
+    target_hwnd = _user32.GetForegroundWindow()
 
     def fake_activate(t):
         activated.append(t)
         return True
 
-    with focus_guard("dummy", fake_activate) as ok_flag:
+    with focus_guard("dummy", fake_activate, target_hwnd) as ok_flag:
         assert ok_flag is True
         _user32.SetCursorPos(orig[0] + 30, orig[1] + 30)
     assert activated == ["dummy"]

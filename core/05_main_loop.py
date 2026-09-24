@@ -53,6 +53,7 @@ is_admin = _pw.is_admin
 activate_window = _screenshot.activate_window
 get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
 is_window_foreground = _perf.is_window_foreground
+is_window_minimized = _perf.is_window_minimized
 OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
 find_text = _ocr.find_text
@@ -506,8 +507,10 @@ class MainLoop:
         """hybrid 模式動作區間：存/還原使用者前景＋滑鼠；其他模式 no-op。"""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         if mode == "hybrid":
-            return _hybrid.focus_guard(self._window_title, _screenshot.activate_window)
-        return contextlib.nullcontext(False)
+            return _hybrid.focus_guard(
+                self._window_title, _screenshot.activate_window, self._window_hwnd
+            )
+        return contextlib.nullcontext(True)
 
     def _report_bg_failure(self) -> None:
         """後台（frida）輸入失敗的統一回報：30s 節流 + 寫 log + 通知 GUI。
@@ -1084,7 +1087,9 @@ class MainLoop:
         else:
             sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
 
-        with self._focus_guard():
+        with self._focus_guard() as focus_ok:
+            if not focus_ok:
+                return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
             ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
         if ok:
@@ -1109,7 +1114,9 @@ class MainLoop:
         if self._is_tool_foreground():
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
-        with self._focus_guard():
+        with self._focus_guard() as focus_ok:
+            if not focus_ok:
+                return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
 
             hold_ms = params.get("hold_ms", 0)
@@ -1160,7 +1167,9 @@ class MainLoop:
         ssx, ssy = self._to_screen_coords(ctx.rect, sx, sy)
         sex, sey = self._to_screen_coords(ctx.rect, sx + dx, sy + dy)
 
-        with self._focus_guard():
+        with self._focus_guard() as focus_ok:
+            if not focus_ok:
+                return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
             if mode == "frida" and self._window_hwnd:
@@ -1195,7 +1204,9 @@ class MainLoop:
         amount = params.get("amount", 1)
         delay_ms = params.get("delay_ms", 30)
 
-        with self._focus_guard():
+        with self._focus_guard() as focus_ok:
+            if not focus_ok:
+                return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
             for _ in range(amount):
                 ok = self._send_scroll(direction)
@@ -2129,6 +2140,14 @@ class MainLoop:
 
                     with self._window_lock:
                         title = self._window_title
+                    if self._window_hwnd is None:
+                        with self._window_lock:
+                            self._window_hwnd = get_window_hwnd_orig(title)
+                    if self._window_hwnd and is_window_minimized(self._window_hwnd):
+                        self._black_streak = 0
+                        self._perf.record_frame()
+                        self._stop_event.wait(self._interval)
+                        continue
                     rect = get_window_rect(title)
                     if rect is None:
                         self._wait_window_recover(title)

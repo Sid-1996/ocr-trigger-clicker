@@ -805,8 +805,8 @@ class OcrDebugPanel(QWidget):
             ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
             cx = pt.x + ocr_center_x
             cy = pt.y + ocr_center_y
-            with _hybrid.focus_guard(self._window_title, activate_window):
-                click_ok = _input.send_click(cx, cy)
+            with _hybrid.focus_guard(self._window_title, activate_window, hwnd_val) as focus_ok:
+                click_ok = _input.send_click(cx, cy) if focus_ok else False
         else:
             # Foreground mode: use existing pynput logic
             _screenshot.activate_window(self._window_title)

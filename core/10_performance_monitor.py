@@ -56,6 +56,10 @@ _GetProcessMemoryInfo.argtypes = [
 _GetForegroundWindow = _user32.GetForegroundWindow
 _GetForegroundWindow.restype = wintypes.HWND
 
+_IsIconic = _user32.IsIconic
+_IsIconic.argtypes = [wintypes.HWND]
+_IsIconic.restype = wintypes.BOOL
+
 _GetWindowThreadProcessId = _user32.GetWindowThreadProcessId
 _GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 
@@ -116,6 +120,11 @@ def is_coordinate_safe(x: int, y: int) -> bool:
 
 def is_window_foreground(hwnd: int) -> bool:
     return _GetForegroundWindow() == hwnd
+
+
+def is_window_minimized(hwnd: int) -> bool:
+    """Return whether a Win32 window is currently minimized."""
+    return bool(hwnd and _IsIconic(hwnd))
 
 
 class PerformanceMonitor:
