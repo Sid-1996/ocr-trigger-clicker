@@ -36,7 +36,6 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -4146,6 +4145,11 @@ NotificationStack = _notification_mod.NotificationStack
 _group_settings_mod = load_sibling("group_settings_controller", "gui/group_settings_controller.py")
 GroupSettingsController = _group_settings_mod.GroupSettingsController
 
+_group_selection_mod = load_sibling(
+    "group_selection_controller", "gui/group_selection_controller.py"
+)
+GroupSelectionController = _group_selection_mod.GroupSelectionController
+
 _screenshot_mod = load_sibling("screenshot_controller", "gui/screenshot_controller.py")
 ScreenshotController = _screenshot_mod.ScreenshotController
 
@@ -4710,6 +4714,7 @@ class MainWindow(QMainWindow):
             self._pending_update_ver = ""
 
             self._group_settings_ctrl = GroupSettingsController()
+            self._group_selection_ctrl = GroupSelectionController()
             self._screenshot_ctrl = ScreenshotController(self)
             self._rule_config_ctrl = RuleConfigController()
             self._test_ctrl = TestRunController(self, _of_summary, _resolve_rule_name)
@@ -7205,112 +7210,8 @@ class MainWindow(QMainWindow):
         )
 
     # === Start / Pause ===
-    def _uncat_enabled_count(self) -> int:
-        """未歸類中「啟用中」的規則數（這些規則啟動時不會執行）。"""
-        uncat = next((g for g in self._groups if g.id == "__uncategorized__"), None)
-        if not uncat:
-            return 0
-        live = {r.id for r in self._rules if r.enabled}
-        return sum(1 for rid in uncat.rule_ids if rid in live)
-
     def _show_group_selection_dialog(self) -> Optional[list[str]]:
-        enabled = [g for g in self._groups if g.enabled]
-        uncat_count = self._uncat_enabled_count()
-        if len(enabled) <= 1:
-            return [g.id for g in enabled] if enabled else []
-        # 「不再詢問」：跳過群組確認窗，直接執行全部啟用群組。
-        # 重新開啟詢問：設定 → 一般 → 「啟動時詢問要執行的群組」。
-        if not self._rule_config_ctrl.get_setting(self, "ask_group_selection", True):
-            return [g.id for g in enabled]
-        # 沒有勾「不再詢問」→ 每次啟動照常詢問、預設全部啟用群組打勾。
-        dialog = QDialog(self)
-        dialog.setWindowTitle(T("dialog.group_selection"))
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
-
-        hint = QLabel(T("ui.select_group_hint", count=len(enabled)))
-        layout.addWidget(hint)
-        if uncat_count:
-            warn = QLabel(T("dialog.uncat_skip_hint", count=uncat_count))
-            warn.setStyleSheet("color: #b58900; font-size: 12px;")
-            warn.setWordWrap(True)
-            layout.addWidget(warn)
-
-        # ── 核取清單：2 欄排列 + 捲動區域（群組多時彈窗不會過長）──
-        body = QWidget()
-        grid = QGridLayout(body)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(6)
-        checks = []
-        per_col = (len(enabled) + 1) // 2
-        for i, g in enumerate(enabled):
-            cb = QCheckBox(group_display_name(g))
-            cb.setChecked(True)  # 每次開啟預設全部啟用群組打勾
-            cb.setProperty("gid", g.id)
-            checks.append(cb)
-            grid.addWidget(cb, i % per_col, i // per_col)
-
-        # 全選 / 全不選（依當前狀態切換）
-        toggle_all_btn = QPushButton(T("dialog.group_toggle_all_none"))
-
-        def _toggle_all():
-            target = not all(cb.isChecked() for cb in checks)
-            for cb in checks:
-                cb.setChecked(target)
-            toggle_all_btn.setText(
-                T("dialog.group_toggle_all_none" if not target else "dialog.group_toggle_all")
-            )
-
-        toggle_all_btn.clicked.connect(_toggle_all)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidget(body)
-        avail = QApplication.primaryScreen().availableGeometry().height()
-        scroll.setMaximumHeight(int(avail * 0.55))
-        layout.addWidget(toggle_all_btn)
-        layout.addWidget(scroll)
-
-        # 不再詢問：勾選後從此 F8 / 開始按鈕啟動不再彈群組確認窗，直接執行全部啟用群組。
-        dont_ask_cb = QCheckBox(T("dialog.group_dont_ask"))
-        dont_ask_cb.setToolTip(T("dialog.group_dont_ask.tooltip"))
-        layout.addWidget(dont_ask_cb)
-
-        # 便利按鈕：一鍵切換互動模式並執行（前景 ↔ 後台）
-        if self._is_bg_mode():
-            switch_text = T("dialog.group_switch_to_fg")
-            switch_target = "pynput"
-        else:
-            switch_text = T("dialog.group_switch_to_bg")
-            switch_target = "frida"
-
-        def _switch_mode_and_run():
-            self._rule_config_ctrl.set_setting(self, "interaction_mode", switch_target)
-            if self._current_task:
-                task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
-                set_task_interaction_mode(task_path, switch_target)
-            self._update_interaction_mode_label()
-            dialog.accept()
-
-        switch_btn = QPushButton(switch_text)
-        switch_btn.clicked.connect(_switch_mode_and_run)
-        layout.addWidget(switch_btn)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(T("dialog.group_ok"))
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return None
-        if dont_ask_cb.isChecked():
-            self._rule_config_ctrl.set_setting(self, "ask_group_selection", False)
-        selected = [cb.property("gid") for cb in checks if cb.isChecked()]
-        return selected
+        return self._group_selection_ctrl.show(self)
 
     def nativeEvent(self, eventType, message):
         handled, result, hid = _hk_handle_native(eventType, message)
@@ -7381,7 +7282,7 @@ class MainWindow(QMainWindow):
             return
         # 單一啟用群組任務不彈群組確認窗 → 未歸類警告改走狀態列（非阻塞）
         if len([g for g in self._groups if g.enabled]) <= 1:
-            uncat_count = self._uncat_enabled_count()
+            uncat_count = self._group_selection_ctrl.uncat_enabled_count(self)
             if uncat_count:
                 self._status_bar.showMessage(T("dialog.uncat_skip_hint", count=uncat_count), 8000)
         allowed_ids = {rid for g in self._groups if g.id in group_ids for rid in g.rule_ids}
