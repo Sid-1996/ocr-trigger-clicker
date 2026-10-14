@@ -48,6 +48,7 @@ gui/06_gui_main.py  ──→  _loader ──→  core/04_rule_engine   ──�
                   │               └──→  gui/screenshot_controller
                   │               └──→  gui/rule_config_controller
                   │               └──→  gui/run_controller
+                  │               └──→  gui/execution_log_widget
                   │               └──→  core/19_recorder        ──→  core/17_capture_pipeline
                   │               └──→  core/20_recorder_convert ──→  core/02_ocr_engine, core/11_template_matching
                   │               └──→  core/group_selection
@@ -104,6 +105,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
 | `gui/notification_stack.py` | 右下角暫時通知浮層 | `NotificationStack` |
+| `gui/execution_log_widget.py` | 執行紀錄表格（結果翻譯、著色與清除） | `ExecutionLogWidget` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊（啟動／停止；暫停中按 F8 為繼續）＋ F9 熱鍵註冊（錄製開始/停止） |
 | `gui/group_selection_controller.py` | 啟動時選擇要執行的群組與互動方法 | `GroupSelectionController` |
 | `gui/group_settings_controller.py` | 群組設定對話框控制器（v0.0.10 從 MainWindow 拆出） | `GroupSettingsController` |
