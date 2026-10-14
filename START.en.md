@@ -15,6 +15,7 @@ Someone already made a task file (JSON). You just load it and run.
 Run the installer (it installs to `%LocalAppData%\OCRTriggerClicker` and creates desktop / Start-menu shortcuts), then launch the tool. Future versions update automatically — no more manual downloads.
 
 > Usually it works fine without admin rights. If nothing happens when the tool runs, try **right-click → Run as Administrator**.
+> Do NOT tick "Run this program as an administrator" under Properties → Compatibility — that breaks future installs / auto-updates with a privilege error. Right-click each time you need it instead.
 
 ### ② Download a task
 
