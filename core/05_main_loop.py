@@ -227,6 +227,15 @@ class MainLoop:
         self._has_detect_rules: bool = False
         self._frame_ocr_cache: dict = {}
         self._ocr_cache_hits: int = 0
+        self._frame_ocr_profile = {
+            "calls": 0,
+            "ms": 0.0,
+            "pixels": 0,
+            "max_pixels": 0,
+            "max_rect": None,
+        }
+        self._frame_prewarm_ms: float = 0.0
+        self._frame_cache_hits_before: int = 0
         # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
         # key=(x,y,w,h) value=(crop_hash, results)；有界 LRU，視窗縮放會因 rect 不同自動 miss。
         self._xframe_ocr_cache: OrderedDict = OrderedDict()
@@ -576,7 +585,7 @@ class MainLoop:
                 self._ocr_cache_hits += 1
                 self._frame_ocr_cache[cache_key] = entry[1]
                 return entry[1]
-            results = recognize(img, preprocess=False, max_side_len=0, min_confidence=0.25)
+            results = self._profiled_recognize(img, (0, 0, img.shape[1], img.shape[0]))
             self._frame_ocr_cache[cache_key] = results
             self._xframe_ocr_cache[cache_key] = (ch, results)
             self._xframe_ocr_cache.move_to_end(cache_key)
@@ -651,7 +660,7 @@ class MainLoop:
             self._ocr_cache_hits += 1
             self._frame_ocr_cache[rect] = entry[1]
             return entry[1]
-        results = recognize(crop, preprocess=False, max_side_len=0, min_confidence=0.25)
+        results = self._profiled_recognize(crop, rect)
         for r in results:
             r.x += x1
             r.y += y1
@@ -663,6 +672,22 @@ class MainLoop:
         while len(self._xframe_ocr_cache) > self._xframe_ocr_cache_max:
             self._xframe_ocr_cache.popitem(last=False)
         return results
+
+    def _profiled_recognize(self, crop: np.ndarray, rect: tuple[int, int, int, int]) -> list:
+        started = time.monotonic()
+        try:
+            return recognize(crop, preprocess=False, max_side_len=0, min_confidence=0.25)
+        finally:
+            profile = getattr(self, "_frame_ocr_profile", None)
+            if profile is not None:
+                elapsed_ms = (time.monotonic() - started) * 1000
+                pixels = int(crop.shape[0]) * int(crop.shape[1])
+                profile["calls"] += 1
+                profile["ms"] += elapsed_ms
+                profile["pixels"] += pixels
+                if pixels > profile["max_pixels"]:
+                    profile["max_pixels"] = pixels
+                    profile["max_rect"] = rect
 
     def _resolve_roi(self, roi: dict, rect: dict, chrome: tuple | None = None) -> dict:
         x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
@@ -1904,12 +1929,22 @@ class MainLoop:
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()
+        self._frame_ocr_profile = {
+            "calls": 0,
+            "ms": 0.0,
+            "pixels": 0,
+            "max_pixels": 0,
+            "max_rect": None,
+        }
+        self._frame_cache_hits_before = self._ocr_cache_hits
+        prewarm_started = time.monotonic()
         with self._rules_lock:
             rules_snapshot = list(self._rules)
         if not rules_snapshot:
             return
         if self._has_detect_rules:
             self._prewarm_ocr_clusters(img, rect)
+        self._frame_prewarm_ms = (time.monotonic() - prewarm_started) * 1000
 
         # ponytail: run all background rules each frame; jumps are cancelled
         for rule in rules_snapshot:
@@ -2214,10 +2249,21 @@ class MainLoop:
                     if detect_elapsed > 2000:
                         if not self._slow_loop_warned:
                             self._slow_loop_warned = True
+                            profile = self._frame_ocr_profile
+                            max_rect = profile["max_rect"]
+                            max_roi = (
+                                f"{max_rect[2]}x{max_rect[3]}@{max_rect[0]},{max_rect[1]}"
+                                if max_rect
+                                else "none"
+                            )
                             self._log(
                                 f"偵測循環過慢: {detect_elapsed:.0f}ms"
                                 f" (OCR={ocr_ms:.0f}ms，驗證阻塞={self._verify_blocked_ms:.0f}ms、"
-                                f"刻意等待={self._frame_waited_ms:.0f}ms 已排除)"
+                                f"刻意等待={self._frame_waited_ms:.0f}ms 已排除；"
+                                f"OCR診斷: recognize={profile['calls']}次/{profile['ms']:.0f}ms，"
+                                f"ROI像素={profile['pixels']}，最大ROI={max_roi}，"
+                                f"快取重用={self._ocr_cache_hits - self._frame_cache_hits_before}，"
+                                f"預熱={self._frame_prewarm_ms:.0f}ms)"
                             )
                             if self.on_warning:
                                 self.on_warning(
@@ -3269,6 +3315,13 @@ if __name__ == "__main__":
     _ml_ocr = MainLoop.__new__(MainLoop)
     _ml_ocr._frame_ocr_cache = {}
     _ml_ocr._ocr_cache_hits = 0
+    _ml_ocr._frame_ocr_profile = {
+        "calls": 0,
+        "ms": 0.0,
+        "pixels": 0,
+        "max_pixels": 0,
+        "max_rect": None,
+    }
     _ml_ocr._xframe_ocr_cache = OrderedDict()
     _ml_ocr._xframe_ocr_cache_max = 64
     _ocalls = {"n": 0}
@@ -3295,6 +3348,8 @@ if __name__ == "__main__":
 
     # nested subset ROI contained in an already-OCR'd larger ROI → single OCR call
     _ra = _ml_ocr._ocr_region(_mimg, {"x": 10, "y": 10, "w": 100, "h": 60})
+    assert _ml_ocr._frame_ocr_profile["calls"] == 1
+    assert _ml_ocr._frame_ocr_profile["max_pixels"] == 6000
     _rb = _ml_ocr._ocr_region(_mimg, {"x": 20, "y": 15, "w": 40, "h": 30})
     assert _ocalls["n"] == 1, "contained ROI should reuse one recognize call"
     assert [r.text for r in _ra] == ["對 話"] and [r.text for r in _rb] == ["對 話"]
