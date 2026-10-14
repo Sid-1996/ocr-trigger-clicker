@@ -103,6 +103,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/12_updater.py` | 自動更新薄封裝（Velopack）：feed 讀取、檢查、下載並套用 | `check_for_update()`, `download_and_apply()`, `clean_stale_temp_dirs()` |
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
+| `gui/notification_stack.py` | 右下角暫時通知浮層 | `NotificationStack` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊（啟動／停止；暫停中按 F8 為繼續）＋ F9 熱鍵註冊（錄製開始/停止） |
 | `gui/group_settings_controller.py` | 群組設定對話框控制器（v0.0.10 從 MainWindow 拆出） | `GroupSettingsController` |
 | `gui/screenshot_controller.py` | 截圖／模板控制器（v0.0.10 從 MainWindow 拆出） | `ScreenshotController` |
@@ -160,7 +161,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
-| `notify` | 右下角疊加通知提示（經 `on_warning` → GUI `_NotificationStack` 顯示；回 `continue`，不設 `ctx.triggered`，不影響規則流程） | `message` |
+| `notify` | 右下角疊加通知提示（經 `on_warning` → GUI `NotificationStack` 顯示；回 `continue`，不設 `ctx.triggered`，不影響規則流程） | `message` |
 | `scroll` | 滑鼠滾輪（設 `ctx.triggered = True） | `direction`, `amount`, `delay_ms`, `after_delay_ms` |
 | `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`, `dx`, `dy`, `button`, `after_delay_ms` |
 
