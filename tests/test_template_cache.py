@@ -25,7 +25,7 @@ ROOT = _ROOT
 DATA = Path(__file__).resolve().parent / "data"
 # 快照自 docs/tasks/StarSavior-跑馬輔助.json — 固定基準，任務內容更新不影響回歸測試
 JOB = DATA / "fixture_task.json"
-FRAMES = ["test.png", "test2.png", "test3.png"]
+FRAMES = ["test.png", "test2.png", "test3.png", "starsavior_training_live.png"]
 
 _tm = load_sibling("template_matching", "core/11_template_matching.py")
 match_template = _tm.match_template

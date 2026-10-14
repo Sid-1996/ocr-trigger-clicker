@@ -26,7 +26,7 @@ StepResult = _ml_mod.StepResult
 Step = _rule_mod.Step
 img_to_b64 = _ml_mod.img_to_b64
 
-FRAMES = ["test.png", "test2.png", "test3.png"]
+FRAMES = ["test.png", "test2.png", "test3.png", "starsavior_training_live.png"]
 # 快照自 docs/tasks/StarSavior-跑馬輔助.json — 固定基準，任務內容更新不影響回歸測試
 JOB = _ROOT / "tests/data/fixture_task.json"
 

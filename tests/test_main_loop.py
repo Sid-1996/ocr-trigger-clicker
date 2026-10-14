@@ -947,6 +947,87 @@ def test_should_process_static_frame():
     assert not ml._should_process_static_frame()
 
 
+def test_loop_triggers_rule_on_second_static_game_frame(monkeypatch):
+    frame_path = Path(__file__).parent / "data" / "starsavior_training_live.png"
+    frame = cv2.imread(str(frame_path))
+    assert frame is not None, f"missing captured game frame: {frame_path}"
+
+    ml = _make_ml()
+    rule = Rule(
+        id="live_frame",
+        name="畫面命中",
+        enabled=True,
+        steps=[
+            Step(
+                type="detect",
+                params={
+                    "text": "55%",
+                    "match_mode": "exact",
+                    "roi": {"x": 0.85, "y": 0.25, "w": 0.12, "h": 0.08},
+                },
+            ),
+            Step(type="notify", params={"message": "game-frame-triggered"}),
+        ],
+    )
+    ml._rules = [rule]
+    ml._rule_map = {rule.id: rule}
+    ml._groups = [RuleGroup(id="live", name="Live", mode="loop", rule_ids=[rule.id])]
+    ml.set_active_groups(["live"])
+    ml._update_has_detect()
+    ml._window_hwnd = 1
+    ml._foreground_only = False
+    ml._rule_config_ctrl = type(
+        "FakeRuleConfig",
+        (),
+        {
+            "get_setting": lambda self, win, key: {
+                "scan_interval_ms": 10,
+                "interaction_mode": "pynput",
+            }[key]
+        },
+    )()
+    ml._prewarm_ocr_clusters = lambda _img, _rect: None
+    ml.on_finished = None
+    errors = []
+    ml.on_error = errors.append
+
+    captured = []
+    monkeypatch.setattr(
+        _ml_mod, "get_window_rect", lambda _title: {"x": 0, "y": 0, "w": 1920, "h": 1080}
+    )
+    monkeypatch.setattr(_ml_mod, "is_window_minimized", lambda _hwnd: False)
+    monkeypatch.setattr(
+        _ml_mod,
+        "capture_frame",
+        lambda *_args, **_kwargs: captured.append(frame) or frame,
+    )
+
+    ocr_calls = []
+
+    def fake_ocr(img, _roi):
+        assert img is frame
+        ocr_calls.append(1)
+        if len(ocr_calls) == 1:
+            return []
+        return [_ml_mod.OcrResult(text="55%", x=1680, y=300, w=60, h=30, confidence=1.0)]
+
+    ml._ocr_region = fake_ocr
+    notifications = []
+
+    def on_warning(message):
+        notifications.append(message)
+        if message == "game-frame-triggered":
+            ml._stop_event.set()
+
+    ml.on_warning = on_warning
+    ml._loop()
+
+    assert len(captured) == 2, "loop should inspect the unchanged game frame again"
+    assert len(ocr_calls) == 2, "detect rules must be rechecked on static frames"
+    assert notifications == ["game-frame-triggered"]
+    assert errors == [], f"main loop reported an error: {errors}"
+
+
 # ── _handle_wait stop-event interrupt ──
 
 

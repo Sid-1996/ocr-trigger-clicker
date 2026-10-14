@@ -32,7 +32,7 @@ from core.rule_models import Rule, RuleGroup, Step  # noqa: E402
 ROOT = _ROOT
 DATA = Path(__file__).resolve().parent / "data"
 JOB = DATA / "fixture_task.json"
-FRAMES = ["test.png", "test2.png", "test3.png"]
+FRAMES = ["test.png", "test2.png", "test3.png", "starsavior_training_live.png"]
 WIN = (1920.0, 1080.0)
 
 _ml_mod = load_sibling("main_loop", "core/05_main_loop.py")
