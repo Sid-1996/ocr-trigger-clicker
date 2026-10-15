@@ -112,6 +112,8 @@ class StepContext:
     prematch: Optional[dict] = None
     frame_captured_ns: int = 0
     matched_ns: int = 0
+    rule_started_ns: int = 0
+    intentional_wait_ms: float = 0.0
 
 
 @dataclass
@@ -403,18 +405,24 @@ class MainLoop:
         if not ctx.matched_ns or not ctx.frame_captured_ns:
             return
         dispatch_ns = time.monotonic_ns()
+        rule_started_ns = ctx.rule_started_ns or ctx.matched_ns
         frame_no = getattr(self, "_diagnostic_frame_no", 0)
         phase = "startup" if frame_no <= 3 else "steady"
         self._logger.info(
             "偵測延遲 phase=%s frame=%s rule=%s step=%s action=%s "
-            "capture_to_dispatch_ms=%.1f match_to_dispatch_ms=%.1f diff=%.4f",
+            "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
+            "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f diff=%.4f",
             phase,
             frame_no,
             rule.name,
             ctx.step_idx,
             action,
             (dispatch_ns - ctx.frame_captured_ns) / 1_000_000,
+            getattr(self, "_frame_prewarm_ms", 0.0),
+            max(0, (rule_started_ns - ctx.frame_captured_ns) / 1_000_000),
+            max(0, (ctx.matched_ns - rule_started_ns) / 1_000_000),
             (dispatch_ns - ctx.matched_ns) / 1_000_000,
+            ctx.intentional_wait_ms,
             getattr(self, "_frame_diff_ratio", 0.0),
         )
 
@@ -1543,6 +1551,8 @@ class MainLoop:
             ctx = StepContext(img=img, rect=rect)
         if not ctx.frame_captured_ns:
             ctx.frame_captured_ns = getattr(self, "_frame_captured_ns", 0)
+        if not ctx.rule_started_ns:
+            ctx.rule_started_ns = time.monotonic_ns()
         i = 0
         while i < len(rule.steps):
             ctx.step_idx = i
@@ -1567,6 +1577,7 @@ class MainLoop:
                 if self._stop_event.wait(timeout=ms / 1000.0):
                     return StepResult("stop", detail=T("exec_log.detail.interrupted"))
                 self._frame_waited_ms += ms  # 刻意等待：過慢判定時扣除
+                ctx.intentional_wait_ms += ms
             # Verify: optional post-condition on new frames (not ctx.img) — 僅動作四類（追溯 ADR-0005）
             if (
                 step.type in ("click", "key", "drag", "scroll")
