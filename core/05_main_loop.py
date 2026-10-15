@@ -110,6 +110,8 @@ class StepContext:
     ocr_elapsed_ms: float = 0
     ocr_cache_hit: bool = False
     prematch: Optional[dict] = None
+    frame_captured_ns: int = 0
+    matched_ns: int = 0
 
 
 @dataclass
@@ -395,6 +397,26 @@ class MainLoop:
                 return
             self._action_log_ts[dedup_key] = now
         self._logger.info(msg)
+
+    def _log_dispatch_latency(self, ctx: StepContext, rule: Rule, action: str) -> None:
+        """Record match-to-input timing only for actions following a successful match."""
+        if not ctx.matched_ns or not ctx.frame_captured_ns:
+            return
+        dispatch_ns = time.monotonic_ns()
+        frame_no = getattr(self, "_diagnostic_frame_no", 0)
+        phase = "startup" if frame_no <= 3 else "steady"
+        self._logger.info(
+            "偵測延遲 phase=%s frame=%s rule=%s step=%s action=%s "
+            "capture_to_dispatch_ms=%.1f match_to_dispatch_ms=%.1f diff=%.4f",
+            phase,
+            frame_no,
+            rule.name,
+            ctx.step_idx,
+            action,
+            (dispatch_ns - ctx.frame_captured_ns) / 1_000_000,
+            (dispatch_ns - ctx.matched_ns) / 1_000_000,
+            getattr(self, "_frame_diff_ratio", 0.0),
+        )
 
     _DETECT_STEP_TYPES = frozenset({"detect", "compare", "match_image"})
 
@@ -1116,6 +1138,7 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
+            self._log_dispatch_latency(ctx, rule, "click")
             ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
         if ok:
             self._perf.record_click()
@@ -1143,6 +1166,7 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
+            self._log_dispatch_latency(ctx, rule, "key")
 
             hold_ms = params.get("hold_ms", 0)
             if hold_ms > 0:
@@ -1196,6 +1220,7 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
+            self._log_dispatch_latency(ctx, rule, "drag")
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
             if mode == "frida" and self._window_hwnd:
                 _bg_input.set_method(mode)
@@ -1234,6 +1259,7 @@ class MainLoop:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
             for _ in range(amount):
+                self._log_dispatch_latency(ctx, rule, "scroll")
                 ok = self._send_scroll(direction)
                 if not ok:
                     return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
@@ -1515,6 +1541,8 @@ class MainLoop:
     ) -> None:
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
+        if not ctx.frame_captured_ns:
+            ctx.frame_captured_ns = getattr(self, "_frame_captured_ns", 0)
         i = 0
         while i < len(rule.steps):
             ctx.step_idx = i
@@ -1525,6 +1553,8 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
+            if step.type in self._DETECT_STEP_TYPES and result.action == "continue":
+                ctx.matched_ns = time.monotonic_ns()
             ms = step.params.get("after_delay_ms", 0) or 0
             if (
                 step.type in ("click", "key", "drag", "scroll", "detect", "match_image")
@@ -1928,6 +1958,7 @@ class MainLoop:
             self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
+        self._diagnostic_frame_no = getattr(self, "_diagnostic_frame_no", 0) + 1
         self._frame_ocr_cache.clear()
         self._frame_ocr_profile = {
             "calls": 0,
@@ -2209,6 +2240,7 @@ class MainLoop:
                             self._log(f"所有截圖方式皆失敗: {title}")
                         self._perf.record_frame()
                         continue
+                    self._frame_captured_ns = time.monotonic_ns()
 
                     if self._check_black_frame(img, mode != "pynput"):
                         self._perf.record_frame()
