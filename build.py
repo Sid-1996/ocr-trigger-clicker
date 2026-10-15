@@ -259,6 +259,7 @@ def main():
     exe = here / "dist" / "ocr-trigger-clicker" / "ocr-trigger-clicker.exe"
     if exe.exists():
         print(f"\n打包成功: {exe}")
+        synchronize_qt_vc_runtime()
         # 清理 build/ 暫存（spec 保留供除錯）
         import shutil
 
@@ -268,6 +269,22 @@ def main():
         pack_velopack()
     else:
         print("\n打包失敗")
+
+
+def synchronize_qt_vc_runtime():
+    """避免 Qt wheel 的舊 MSVC runtime 蓋過 PyInstaller 收集的新版 DLL。"""
+    import shutil
+
+    internal = Path(__file__).parent / "dist" / "ocr-trigger-clicker" / "_internal"
+    qt_bin = internal / "PyQt6" / "Qt6" / "bin"
+    for name in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"):
+        bundled = internal / name
+        qt_copy = qt_bin / name
+        if qt_copy.is_file():
+            if not bundled.is_file():
+                sys.exit(f"❌ 打包缺少共用 MSVC runtime: {name}")
+            shutil.copy2(bundled, qt_copy)
+            print(f"統一 Qt MSVC runtime: {name}")
 
 
 def slim_dist():
