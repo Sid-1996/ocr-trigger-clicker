@@ -426,7 +426,8 @@ class MainLoop:
             "偵測延遲 phase=%s frame=%s rule=%s step=%s action=%s "
             "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
             "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f "
-            "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s%s diff=%.4f",
+            "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s prematch_submitted=%s "
+            "prematch_cancelled=%s%s diff=%.4f",
             phase,
             frame_no,
             rule.name,
@@ -441,6 +442,8 @@ class MainLoop:
             profile.get("calls", 0),
             profile.get("ms", 0.0),
             profile.get("pixels", 0),
+            getattr(self, "_frame_prematch_submitted", 0),
+            getattr(self, "_frame_prematch_cancelled", 0),
             stages,
             getattr(self, "_frame_diff_ratio", 0.0),
         )
@@ -2016,6 +2019,8 @@ class MainLoop:
             "max_pixels": 0,
             "max_rect": None,
         }
+        self._frame_prematch_submitted = 0
+        self._frame_prematch_cancelled = 0
         self._frame_cache_hits_before = self._ocr_cache_hits
         prewarm_started = time.monotonic()
         with self._rules_lock:
@@ -2132,6 +2137,9 @@ class MainLoop:
                         p.get("match_color", False),
                         p.get("color_tolerance", 100),
                     )
+                    self._frame_prematch_submitted = (
+                        getattr(self, "_frame_prematch_submitted", 0) + 1
+                    )
                 except RuntimeError:
                     # 池已被外部 shutdown：本幀退回循序匹配，不讓主循環掛掉
                     break
@@ -2162,6 +2170,14 @@ class MainLoop:
                 self._rule_completed.add(r.id)
                 self._log_exec(r.name, -1, "completed", "completed")
                 triggered = True
+        if triggered:
+            # This group stops at its first triggered rule; later queued template checks
+            # cannot affect this frame and would only compete with the next OCR cycle.
+            for future in pending.values():
+                if future.cancel():
+                    self._frame_prematch_cancelled = (
+                        getattr(self, "_frame_prematch_cancelled", 0) + 1
+                    )
         if triggered and group.mode == "once":
             self._advance_group_queue()
 

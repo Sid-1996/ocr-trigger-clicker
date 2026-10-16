@@ -70,6 +70,68 @@ def test_activate_window_skips_reactivation_when_target_is_foreground(monkeypatc
     assert activations == ["測試視窗"]
 
 
+def test_parallel_group_cancels_unused_prematch_work_after_trigger(monkeypatch):
+    class Future:
+        def __init__(self):
+            self.cancelled = False
+            self.completed = False
+
+        def result(self):
+            self.completed = True
+            return None
+
+        def cancel(self):
+            if self.completed:
+                return False
+            self.cancelled = True
+            return True
+
+    class Pool:
+        def __init__(self):
+            self.futures = []
+
+        def submit(self, *_args):
+            future = Future()
+            self.futures.append(future)
+            return future
+
+    ml = _make_ml()
+    rules = [
+        Rule(
+            id=f"parallel-{i}",
+            name=f"平行規則 {i}",
+            enabled=True,
+            steps=[Step("match_image", {"template_data": "template"})],
+        )
+        for i in range(3)
+    ]
+    ml._rule_map = {rule.id: rule for rule in rules}
+    ml._rules_path = "task.json"
+    ml._prematch_pool = Pool()
+    ml._frame_prematch_submitted = 0
+    ml._frame_prematch_cancelled = 0
+    ml._resolve_roi = lambda *_args: {"x": 0, "y": 0, "w": 10, "h": 10}
+    ml._run_rule = lambda rule, _img, _rect, ctx: setattr(ctx, "triggered", rule.id == "parallel-0")
+    monkeypatch.setattr(_ml_mod, "get_capture_size", lambda _path: [100, 100])
+    monkeypatch.setattr(_ml_mod, "get_window_client_offset", lambda _title: None)
+
+    group = RuleGroup(
+        id="parallel-group",
+        name="平行群組",
+        mode="loop",
+        order="parallel",
+        rule_ids=[rule.id for rule in rules],
+    )
+    _ml_mod.MainLoop._run_parallel_group(
+        ml, group, np.zeros((20, 20, 3), dtype=np.uint8), {"w": 20, "h": 20}
+    )
+
+    assert ml._frame_prematch_submitted == 3
+    assert ml._frame_prematch_cancelled == 2
+    assert ml._prematch_pool.futures[1].cancelled
+    assert ml._prematch_pool.futures[2].cancelled
+
+
 # ── _to_screen_coords ──
 
 
