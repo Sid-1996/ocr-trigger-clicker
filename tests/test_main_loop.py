@@ -51,6 +51,25 @@ def test_step_context():
     assert ctx.matched_text.text == "test"
 
 
+def test_activate_window_skips_reactivation_when_target_is_foreground(monkeypatch):
+    ml = _make_ml()
+    ml._window_hwnd = 123
+    activations = []
+    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda hwnd: hwnd == 123)
+    monkeypatch.setattr(
+        _ml_mod._screenshot,
+        "activate_window",
+        lambda title: activations.append(title) or True,
+    )
+
+    assert _ml_mod.MainLoop._activate_window(ml)
+    assert activations == []
+
+    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda _hwnd: False)
+    assert _ml_mod.MainLoop._activate_window(ml)
+    assert activations == ["測試視窗"]
+
+
 # ── _to_screen_coords ──
 
 

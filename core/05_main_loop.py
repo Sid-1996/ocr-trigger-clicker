@@ -400,18 +400,33 @@ class MainLoop:
             self._action_log_ts[dedup_key] = now
         self._logger.info(msg)
 
-    def _log_dispatch_latency(self, ctx: StepContext, rule: Rule, action: str) -> None:
+    def _log_dispatch_latency(
+        self,
+        ctx: StepContext,
+        rule: Rule,
+        action: str,
+        *,
+        dispatch_ns: int | None = None,
+        stage_ms: dict[str, float] | None = None,
+    ) -> None:
         """Record match-to-input timing only for actions following a successful match."""
         if not ctx.matched_ns or not ctx.frame_captured_ns:
             return
-        dispatch_ns = time.monotonic_ns()
+        dispatch_ns = dispatch_ns or time.monotonic_ns()
         rule_started_ns = ctx.rule_started_ns or ctx.matched_ns
         frame_no = getattr(self, "_diagnostic_frame_no", 0)
         phase = "startup" if frame_no <= 3 else "steady"
+        profile = getattr(self, "_frame_ocr_profile", {})
+        stages = (
+            ""
+            if not stage_ms
+            else " " + " ".join(f"{name}={elapsed:.1f}" for name, elapsed in stage_ms.items())
+        )
         self._logger.info(
             "偵測延遲 phase=%s frame=%s rule=%s step=%s action=%s "
             "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
-            "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f diff=%.4f",
+            "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f "
+            "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s%s diff=%.4f",
             phase,
             frame_no,
             rule.name,
@@ -423,6 +438,10 @@ class MainLoop:
             max(0, (ctx.matched_ns - rule_started_ns) / 1_000_000),
             (dispatch_ns - ctx.matched_ns) / 1_000_000,
             ctx.intentional_wait_ms,
+            profile.get("calls", 0),
+            profile.get("ms", 0.0),
+            profile.get("pixels", 0),
+            stages,
             getattr(self, "_frame_diff_ratio", 0.0),
         )
 
@@ -536,9 +555,9 @@ class MainLoop:
     def _activate_window(self) -> bool:
         """Activate window using the appropriate method based on interaction mode."""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if self._window_hwnd and is_window_foreground(self._window_hwnd):
+            return True
         if mode and mode != "pynput":
-            if self._window_hwnd and is_window_foreground(self._window_hwnd):
-                return True  # 已在前景（如 hybrid focus_guard 激活過），免重複激活
             return _screenshot.activate_window_bg(self._window_title)
         return _screenshot.activate_window(self._window_title)
 
@@ -1165,16 +1184,22 @@ class MainLoop:
         if not key:
             return StepResult("stop", detail=T("exec_log.detail.key_empty"))
 
+        checks_started_ns = time.monotonic_ns()
         if not self._can_perform_action():
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
+        checks_ms = (time.monotonic_ns() - checks_started_ns) / 1_000_000
 
+        focus_started_ns = time.monotonic_ns()
         with self._focus_guard() as focus_ok:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
+            focus_ms = (time.monotonic_ns() - focus_started_ns) / 1_000_000
+            activate_started_ns = time.monotonic_ns()
             self._activate_window()
-            self._log_dispatch_latency(ctx, rule, "key")
+            activate_ms = (time.monotonic_ns() - activate_started_ns) / 1_000_000
+            dispatch_ns = time.monotonic_ns()
 
             hold_ms = params.get("hold_ms", 0)
             if hold_ms > 0:
@@ -1186,6 +1211,19 @@ class MainLoop:
                     ok = _input_mod.send_hold_key(key, hold_ms)
             else:
                 ok = self._send_key(key)
+            input_call_ms = (time.monotonic_ns() - dispatch_ns) / 1_000_000
+            self._log_dispatch_latency(
+                ctx,
+                rule,
+                "key",
+                dispatch_ns=dispatch_ns,
+                stage_ms={
+                    "action_checks_ms": checks_ms,
+                    "focus_guard_ms": focus_ms,
+                    "window_activation_ms": activate_ms,
+                    "input_call_ms": input_call_ms,
+                },
+            )
         if ok:
             self._perf.record_click()
             ctx.triggered = True
