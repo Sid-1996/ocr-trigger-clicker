@@ -1944,7 +1944,12 @@ class MainLoop:
         return ""
 
     def _prewarm_ocr_clusters(
-        self, img: np.ndarray, rect: dict, rule_ids: set[str] | None = None
+        self,
+        img: np.ndarray,
+        rect: dict,
+        rule_ids: set[str] | None = None,
+        *,
+        defer: bool = False,
     ) -> None:
         """預聚類指定規則的 step-0 detect/compare ROI，每個重疊叢集只 OCR 一次。
 
@@ -1973,6 +1978,7 @@ class MainLoop:
                 rule_ids.add(cur.rule_ids[self._rule_in_group_ptr])
 
         rects: list[tuple[int, int, int, int]] = []
+        rect_rule_ids: dict[tuple[int, int, int, int], list[str]] = {}
         for r in rules:
             if r.id not in rule_ids or not r.enabled or not r.steps:
                 continue
@@ -1986,9 +1992,12 @@ class MainLoop:
             if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
                 continue
             rk = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
-            if rk[2] <= 0 or rk[3] <= 0 or rk in rects:
+            if rk[2] <= 0 or rk[3] <= 0:
                 continue
-            rects.append(rk)
+            if rk not in rect_rule_ids:
+                rects.append(rk)
+                rect_rule_ids[rk] = []
+            rect_rule_ids[rk].append(r.id)
         if not rects:
             return
 
@@ -2017,19 +2026,40 @@ class MainLoop:
         clusters: dict[int, list[tuple[int, int, int, int]]] = {}
         for i, rk in enumerate(rects):
             clusters.setdefault(_find(i), []).append(rk)
+        cluster_by_rule: dict[str, tuple[tuple[int, int, int, int], dict]] = {}
         for members in clusters.values():
             x1 = min(r[0] for r in members)
             y1 = min(r[1] for r in members)
             x2 = max(r[0] + r[2] for r in members)
             y2 = max(r[1] + r[3] for r in members)
-            self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
+            cluster_rect = (x1, y1, x2 - x1, y2 - y1)
+            roi = {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
+            for rk in members:
+                for rid in rect_rule_ids[rk]:
+                    cluster_by_rule[rid] = (cluster_rect, roi)
+            if not defer:
+                self._ocr_region(img, roi)
+        if defer:
+            self._frame_ocr_cluster_by_rule = cluster_by_rule
+            self._frame_ocr_prewarmed = set()
 
     def _prewarm_ocr_rules(self, img: np.ndarray, rect: dict, rule_ids: set[str]) -> None:
         """Prewarm only the OCR rules that must be checked before the next action boundary."""
         if not rule_ids or not self._has_detect_rules:
             return
+        cluster_by_rule = getattr(self, "_frame_ocr_cluster_by_rule", {})
+        prewarmed = getattr(self, "_frame_ocr_prewarmed", set())
+        clusters = {}
+        for rid, (key, roi) in cluster_by_rule.items():
+            if rid in rule_ids and key not in prewarmed:
+                clusters[key] = roi
+        if not clusters:
+            return
         started = time.monotonic()
-        self._prewarm_ocr_clusters(img, rect, rule_ids)
+        for key, roi in clusters.items():
+            self._ocr_region(img, roi)
+            prewarmed.add(key)
+        self._frame_ocr_prewarmed = prewarmed
         elapsed_ms = (time.monotonic() - started) * 1000
         self._frame_prewarm_ms = getattr(self, "_frame_prewarm_ms", 0.0) + elapsed_ms
         self._frame_phase_timings.append(f"ocr_prewarm={elapsed_ms:.1f}")
@@ -2048,11 +2078,15 @@ class MainLoop:
         self._frame_prematch_cancelled = 0
         self._frame_phase_timings = []
         self._frame_cache_hits_before = self._ocr_cache_hits
+        self._frame_ocr_cluster_by_rule = {}
+        self._frame_ocr_prewarmed = set()
         with self._rules_lock:
             rules_snapshot = list(self._rules)
         if not rules_snapshot:
             return
         self._frame_prewarm_ms = 0.0
+        if self._has_detect_rules:
+            self._prewarm_ocr_clusters(img, rect, defer=True)
         self._prewarm_ocr_rules(
             img, rect, {rule.id for rule in rules_snapshot if rule.enabled and rule.background}
         )

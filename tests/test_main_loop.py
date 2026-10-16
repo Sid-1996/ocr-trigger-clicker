@@ -186,6 +186,47 @@ def test_parallel_group_prewarm_is_lazy_and_stops_after_trigger(monkeypatch):
     ]
 
 
+def test_lazy_ocr_prewarm_reuses_overlapping_cluster():
+    rules = [
+        Rule(
+            "ocr-a",
+            "OCR A",
+            True,
+            [Step("detect", {"text": "first", "roi": {"x": 0, "y": 0, "w": 30, "h": 10}})],
+        ),
+        Rule(
+            "ocr-b",
+            "OCR B",
+            True,
+            [Step("detect", {"text": "second", "roi": {"x": 20, "y": 0, "w": 30, "h": 10}})],
+        ),
+    ]
+    ml = _make_ml()
+    ml._rules = rules
+    ml._groups = [
+        RuleGroup(
+            id="g", name="Group", mode="loop", order="parallel", rule_ids=[r.id for r in rules]
+        )
+    ]
+    ml._active_group_ids = ["g"]
+    ml._has_detect_rules = True
+    ml._frame_phase_timings = []
+    ml._frame_prewarm_ms = 0.0
+    ml._resolve_roi = lambda roi, _rect: roi
+    calls = []
+    ml._ocr_region = lambda _img, roi: calls.append(roi) or []
+    img = np.zeros((20, 60, 3), dtype=np.uint8)
+    rect = {"w": 60, "h": 20}
+
+    _ml_mod.MainLoop._prewarm_ocr_clusters(ml, img, rect, defer=True)
+    assert calls == []
+
+    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"ocr-a"})
+    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"ocr-b"})
+
+    assert calls == [{"x": 0, "y": 0, "w": 50, "h": 10}]
+
+
 # ── _to_screen_coords ──
 
 
@@ -1121,7 +1162,7 @@ def test_loop_notifies_once_per_continuous_match(monkeypatch):
             }[key]
         },
     )()
-    ml._prewarm_ocr_clusters = lambda *_args: None
+    ml._prewarm_ocr_clusters = lambda *_args, **_kwargs: None
     ml.on_finished = None
     errors = []
     ml.on_error = errors.append
