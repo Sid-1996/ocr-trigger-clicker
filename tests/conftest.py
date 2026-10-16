@@ -68,6 +68,7 @@ def make_main_loop():
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
     ml._slow_loop_warned = False
+    ml._slow_frame_snapshots_saved = 0
     ml._frame_waited_ms = 0.0
     ml._verify_blocked_ms = 0.0
     ml._black_streak = 0

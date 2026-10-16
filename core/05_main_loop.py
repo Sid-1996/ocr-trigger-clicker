@@ -80,6 +80,17 @@ def log_main(msg: str):
     _ensure_main_logger().info(msg)
 
 
+def _write_slow_frame_snapshot(img: np.ndarray, path: Path, logger: logging.Logger) -> None:
+    try:
+        ok = cv2.imwrite(str(path), img, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+        if ok:
+            logger.info("慢循環畫面快照已保存：%s", path)
+        else:
+            logger.warning("慢循環畫面快照保存失敗：%s", path)
+    except Exception:
+        logger.exception("慢循環畫面快照保存異常：%s", path)
+
+
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
     h, w = img.shape[:2]
     x1 = max(0, int(roi["x"]))
@@ -264,6 +275,7 @@ class MainLoop:
         self._detect_warn_counter: dict[str, int] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
+        self._slow_frame_snapshots_saved: int = 0
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
         # _handle_wait/_run_rule 累加；過慢判定需扣除，避免長等待被誤判為偵測過慢
         self._frame_waited_ms: float = 0.0
@@ -450,6 +462,32 @@ class MainLoop:
             stages,
             getattr(self, "_frame_diff_ratio", 0.0),
         )
+
+    def _save_slow_frame_snapshot(self, img: np.ndarray, frame_no: int) -> Path | None:
+        """Save a bounded, lossless copy of a frame that caused a slow-loop warning."""
+        saved = getattr(self, "_slow_frame_snapshots_saved", 0)
+        if saved >= 5:
+            return None
+        try:
+            folder = _logging_config.get_log_dir() / "slow_frames"
+            folder.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            subsecond = time.time_ns() % 1_000_000_000
+            path = folder / f"slow-{stamp}-{subsecond:09d}-frame-{frame_no:06d}.png"
+            self._slow_frame_snapshots_saved = saved + 1
+            # cv2 encoding and disk I/O run off the detection thread so the diagnostic
+            # capture does not add its own delay to the next frame.
+            threading.Thread(
+                target=_write_slow_frame_snapshot,
+                args=(img.copy(), path, self._logger),
+                name="slow-frame-snapshot",
+                daemon=True,
+            ).start()
+            self._logger.info("慢循環畫面快照排程中：%s", path)
+            return path
+        except Exception:
+            self._logger.exception("慢循環畫面快照無法排程")
+            return None
 
     _DETECT_STEP_TYPES = frozenset({"detect", "compare", "match_image"})
 
@@ -2468,6 +2506,7 @@ class MainLoop:
                                 f"快取重用={self._ocr_cache_hits - self._frame_cache_hits_before}，"
                                 f"預熱={self._frame_prewarm_ms:.0f}ms，階段={phase_detail or 'none'})"
                             )
+                            self._save_slow_frame_snapshot(img, iteration)
                             if self.on_warning:
                                 self.on_warning(
                                     f"偵測執行太慢：本次花費{detect_elapsed:.0f} 毫秒"
@@ -2503,6 +2542,7 @@ class MainLoop:
         self._rule_completed.clear()
         self._last_completed_log.clear()
         self._black_streak = 0
+        self._slow_frame_snapshots_saved = 0
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)

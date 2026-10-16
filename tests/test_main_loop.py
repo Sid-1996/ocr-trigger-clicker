@@ -51,6 +51,37 @@ def test_step_context():
     assert ctx.matched_text.text == "test"
 
 
+def test_slow_frame_snapshots_are_saved_off_thread_and_bounded(monkeypatch, tmp_path):
+    ml = _make_ml()
+    writes = []
+
+    class ImmediateThread:
+        def __init__(self, *, target, args, **kwargs):
+            self.target = target
+            self.args = args
+
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(_ml_mod.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(_ml_mod._logging_config, "get_log_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        _ml_mod.cv2,
+        "imwrite",
+        lambda path, image, options: writes.append((Path(path), image, options)) or True,
+    )
+
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    saved_paths = [ml._save_slow_frame_snapshot(frame, i) for i in range(1, 7)]
+
+    assert len(writes) == 5
+    assert all(path.parent == tmp_path / "slow_frames" for path in saved_paths[:5])
+    assert saved_paths[5] is None
+    assert all(path.suffix == ".png" for path, _, _ in writes)
+    assert all(options == [_ml_mod.cv2.IMWRITE_PNG_COMPRESSION, 1] for _, _, options in writes)
+    assert all(image is not frame for _, image, _ in writes)
+
+
 def test_activate_window_skips_reactivation_when_target_is_foreground(monkeypatch):
     ml = _make_ml()
     ml._window_hwnd = 123
