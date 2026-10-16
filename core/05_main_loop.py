@@ -2171,12 +2171,19 @@ class MainLoop:
                 self._process_counter += 1
                 saved_ptr = self._rule_pointer
                 bg_ctx = StepContext(img=img, rect=rect)
+                rule_started = time.monotonic()
                 try:
                     self._run_rule(rule, img, rect, bg_ctx, background=True)
                 except Exception as e:
                     self._logger.exception("背景規則「%s」異常: %s", rule.name, e)
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
+                finally:
+                    rule_elapsed_ms = (time.monotonic() - rule_started) * 1000
+                    if rule_elapsed_ms >= 10:
+                        self._frame_phase_timings.append(
+                            f"background_rule:{rule.name}={rule_elapsed_ms:.1f}"
+                        )
                 if bg_ctx.triggered:
                     self._log_exec(rule.name, 0, "background", "triggered")
                 self._rule_pointer = saved_ptr

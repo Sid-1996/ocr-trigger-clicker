@@ -259,6 +259,29 @@ def test_parallel_group_prewarm_is_lazy_and_stops_after_trigger(monkeypatch):
     ]
 
 
+def test_process_rules_records_slow_background_rule_phase():
+    from time import sleep
+
+    rule = Rule("background", "Slow background", True, [Step("wait", {})], background=True)
+    ml = _make_ml()
+    ml._rules = [rule]
+    ml._rule_map = {rule.id: rule}
+    ml._groups = []
+    ml._active_group_ids = []
+    ml._has_detect_rules = False
+    ml._current_group = lambda: None
+    ml._run_rule = lambda *_args, **_kwargs: sleep(0.02)
+
+    ml._process_rules(
+        np.zeros((10, 10, 3), dtype=np.uint8),
+        {"x": 0, "y": 0, "w": 10, "h": 10},
+    )
+
+    assert any(
+        phase.startswith("background_rule:Slow background=") for phase in ml._frame_phase_timings
+    )
+
+
 def test_lazy_ocr_prewarm_reuses_overlapping_cluster():
     rules = [
         Rule(
