@@ -2139,6 +2139,27 @@ class MainLoop:
         self._frame_prewarm_ms = 0.0
         if self._has_detect_rules:
             self._prewarm_ocr_clusters(img, rect, defer=True)
+
+        # Start pure template matching for every parallel group while the earlier
+        # background/OCR work runs. Results are still consumed in configured order.
+        loop_groups = [
+            g
+            for g in self._groups
+            if g.enabled
+            and g.id in self._active_group_ids
+            and g.mode == "loop"
+            and g.order == "parallel"
+        ]
+        queued_group = self._current_group()
+        prematch_groups = list(loop_groups)
+        if (
+            queued_group is not None
+            and queued_group.order == "parallel"
+            and all(g.id != queued_group.id for g in prematch_groups)
+        ):
+            prematch_groups.append(queued_group)
+        prematch_by_group = self._submit_parallel_group_prematches(prematch_groups, img, rect)
+
         self._prewarm_ocr_rules(
             img, rect, {rule.id for rule in rules_snapshot if rule.enabled and rule.background}
         )
@@ -2173,7 +2194,7 @@ class MainLoop:
                 and g.order == "parallel"
             ):
                 group_started = time.monotonic()
-                self._run_parallel_group(g, img, rect)
+                self._run_parallel_group(g, img, rect, prematch_by_group.get(g.id, {}))
                 self._frame_phase_timings.append(
                     f"loop:{g.name}={((time.monotonic() - group_started) * 1000):.1f}"
                 )
@@ -2185,7 +2206,7 @@ class MainLoop:
 
         if group.order == "parallel":
             group_started = time.monotonic()
-            self._run_parallel_group(group, img, rect)
+            self._run_parallel_group(group, img, rect, prematch_by_group.get(group.id, {}))
             self._frame_phase_timings.append(
                 f"queue:{group.name}={((time.monotonic() - group_started) * 1000):.1f}"
             )
@@ -2221,25 +2242,27 @@ class MainLoop:
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
-    def _run_parallel_group(self, group: RuleGroup, img: np.ndarray, rect: dict) -> None:
-        # 平行預算：收集本群組各規則第一個 match_image step 的參數（主執行緒解析），
-        # 把純 match_template 計算丟進執行緒池平行跑，結果以 rule_id 為鍵存入手稿 ctx.prematch。
-        # ponytail: 不跳過任何規則、不改執行路徑（warning/log/on_fail 仍由 _run_rule 依序處理），
-        # 只把「找圖計算」平行化後由 _handle_match_image 消費——行為完全等價。
-        pending: dict[str, object] = {}
+    def _submit_parallel_group_prematches(
+        self, groups: list[RuleGroup], img: np.ndarray, rect: dict
+    ) -> dict[str, dict[str, object]]:
+        """Speculate pure template checks across groups without changing action order."""
         pool = getattr(self, "_prematch_pool", None)
-        if pool is not None or len(group.rule_ids) >= 2:
-            if pool is None:
-                pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
-                self._prematch_pool = pool
-            # ponytail: 共享預算——capture_size/chrome/current_size 主線程只算一次，
-            # 各 worker 不再各自讀檔/呼叫 Win32（否則 N 次/幀的重複 I/O 是變慢元兇）。
-            capture_size = get_capture_size(self._rules_path)
-            chrome = get_window_client_offset(self._window_title)
-            if chrome:
-                current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
-            else:
-                current_size = [rect["w"], rect["h"]]
+        if pool is None and not any(len(g.rule_ids) >= 2 for g in groups):
+            return {}
+        if pool is None:
+            pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
+            self._prematch_pool = pool
+        eligible_groups = groups
+
+        # Shared per-frame values: don't repeat file or Win32 lookups per group.
+        capture_size = get_capture_size(self._rules_path)
+        chrome = get_window_client_offset(self._window_title)
+        current_size = (
+            [rect["w"] - chrome[0], rect["h"] - chrome[1]] if chrome else [rect["w"], rect["h"]]
+        )
+        pending_by_group: dict[str, dict[str, object]] = {}
+        for group in eligible_groups:
+            pending: dict[str, object] = {}
             for rid in group.rule_ids:
                 r = self._rule_map.get(rid)
                 if r is None or not r.enabled or not r.steps:
@@ -2271,6 +2294,20 @@ class MainLoop:
                 except RuntimeError:
                     # 池已被外部 shutdown：本幀退回循序匹配，不讓主循環掛掉
                     break
+            pending_by_group[group.id] = pending
+        return pending_by_group
+
+    def _run_parallel_group(
+        self,
+        group: RuleGroup,
+        img: np.ndarray,
+        rect: dict,
+        pending: dict[str, object] | None = None,
+    ) -> None:
+        # Pure template work may be supplied frame-wide; rule evaluation and actions
+        # still follow the group's original order.
+        if pending is None:
+            pending = self._submit_parallel_group_prematches([group], img, rect).get(group.id, {})
 
         triggered = False
         for rid in group.rule_ids:
