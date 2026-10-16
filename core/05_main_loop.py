@@ -1943,34 +1943,34 @@ class MainLoop:
                     )
         return ""
 
-    def _prewarm_ocr_clusters(self, img: np.ndarray, rect: dict) -> None:
-        """方案 B：本幀會執行的 step-0 detect/compare ROI 預聚類，每叢集 bbox 只 OCR 一次，
-        寫入 _frame_ocr_cache，規則執行時走既有 superset 過濾路徑（05_main_loop.py:408）。
-        行為等價（OCR 大區域→過濾到子區域，與 ee08013 union-merge 同類語義），
-        每幀 OCR 呼叫數從 ~N 降到 ~叢集數。
+    def _prewarm_ocr_clusters(
+        self, img: np.ndarray, rect: dict, rule_ids: set[str] | None = None
+    ) -> None:
+        """預聚類指定規則的 step-0 detect/compare ROI，每個重疊叢集只 OCR 一次。
 
-        ponytail: 只收 step-0（step>0 是條件觸發，預先 OCR 是浪費）；收集對象為
-        背景規則 + loop+parallel 群組規則 + 當前群組當前規則——即本幀實際會執行的規則。
+        未指定 rule_ids 時保留全幀候選收集行為；正常主循環會傳入當下必須檢查的
+        規則，避免尚未輪到或前面命中後不會執行的規則阻塞目前的操作。
         """
         with self._rules_lock:
             rules = list(self._rules)
         if not rules:
             return
-        rule_ids: set[str] = set()
-        for r in rules:
-            if r.enabled and r.background:
-                rule_ids.add(r.id)
-        for g in self._groups:
-            if (
-                g.enabled
-                and g.id in self._active_group_ids
-                and g.mode == "loop"
-                and g.order == "parallel"
-            ):
-                rule_ids.update(g.rule_ids)
-        cur = self._current_group()
-        if cur is not None and self._rule_in_group_ptr < len(cur.rule_ids):
-            rule_ids.add(cur.rule_ids[self._rule_in_group_ptr])
+        if rule_ids is None:
+            rule_ids = set()
+            for r in rules:
+                if r.enabled and r.background:
+                    rule_ids.add(r.id)
+            for g in self._groups:
+                if (
+                    g.enabled
+                    and g.id in self._active_group_ids
+                    and g.mode == "loop"
+                    and g.order == "parallel"
+                ):
+                    rule_ids.update(g.rule_ids)
+            cur = self._current_group()
+            if cur is not None and self._rule_in_group_ptr < len(cur.rule_ids):
+                rule_ids.add(cur.rule_ids[self._rule_in_group_ptr])
 
         rects: list[tuple[int, int, int, int]] = []
         for r in rules:
@@ -2024,6 +2024,16 @@ class MainLoop:
             y2 = max(r[1] + r[3] for r in members)
             self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
 
+    def _prewarm_ocr_rules(self, img: np.ndarray, rect: dict, rule_ids: set[str]) -> None:
+        """Prewarm only the OCR rules that must be checked before the next action boundary."""
+        if not rule_ids or not self._has_detect_rules:
+            return
+        started = time.monotonic()
+        self._prewarm_ocr_clusters(img, rect, rule_ids)
+        elapsed_ms = (time.monotonic() - started) * 1000
+        self._frame_prewarm_ms = getattr(self, "_frame_prewarm_ms", 0.0) + elapsed_ms
+        self._frame_phase_timings.append(f"ocr_prewarm={elapsed_ms:.1f}")
+
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._diagnostic_frame_no = getattr(self, "_diagnostic_frame_no", 0) + 1
         self._frame_ocr_cache.clear()
@@ -2038,15 +2048,14 @@ class MainLoop:
         self._frame_prematch_cancelled = 0
         self._frame_phase_timings = []
         self._frame_cache_hits_before = self._ocr_cache_hits
-        prewarm_started = time.monotonic()
         with self._rules_lock:
             rules_snapshot = list(self._rules)
         if not rules_snapshot:
             return
-        if self._has_detect_rules:
-            self._prewarm_ocr_clusters(img, rect)
-        self._frame_prewarm_ms = (time.monotonic() - prewarm_started) * 1000
-        self._frame_phase_timings.append(f"ocr_prewarm={self._frame_prewarm_ms:.1f}")
+        self._frame_prewarm_ms = 0.0
+        self._prewarm_ocr_rules(
+            img, rect, {rule.id for rule in rules_snapshot if rule.enabled and rule.background}
+        )
 
         # ponytail: run all background rules each frame; jumps are cancelled
         background_started = time.monotonic()
@@ -2105,6 +2114,9 @@ class MainLoop:
         if rule is None or not rule.enabled:
             self._advance_rule_in_group()
             return
+
+        if rule.steps and rule.steps[0].type in ("detect", "compare"):
+            self._prewarm_ocr_rules(img, rect, {rule.id})
 
         self._process_counter += 1
         ctx = StepContext(img=img, rect=rect)
@@ -2181,6 +2193,8 @@ class MainLoop:
             r = self._rule_map.get(rid)
             if r is None or not r.enabled:
                 continue
+            if r.steps and r.steps[0].type in ("detect", "compare"):
+                self._prewarm_ocr_rules(img, rect, {rid})
             r_ctx = StepContext(img=img, rect=rect)
             if rid in pending:
                 fut = pending[rid]

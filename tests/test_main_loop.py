@@ -132,6 +132,60 @@ def test_parallel_group_cancels_unused_prematch_work_after_trigger(monkeypatch):
     assert ml._prematch_pool.futures[2].cancelled
 
 
+def test_parallel_group_prewarm_is_lazy_and_stops_after_trigger(monkeypatch):
+    class Future:
+        def result(self):
+            return None
+
+        def cancel(self):
+            return True
+
+    class Pool:
+        def submit(self, *_args):
+            return Future()
+
+    rules = [
+        Rule("ocr-before", "OCR before", True, [Step("detect", {"text": "first"})]),
+        Rule("image-hit", "Image hit", True, [Step("match_image", {"template_data": "data"})]),
+        Rule("ocr-after", "OCR after", True, [Step("detect", {"text": "later"})]),
+    ]
+    ml = _make_ml()
+    ml._rule_map = {rule.id: rule for rule in rules}
+    ml._rules_path = "task.json"
+    ml._prematch_pool = Pool()
+    ml._frame_prematch_submitted = 0
+    ml._frame_prematch_cancelled = 0
+    ml._frame_phase_timings = []
+    ml._resolve_roi = lambda *_args: {"x": 0, "y": 0, "w": 10, "h": 10}
+    events = []
+    ml._prewarm_ocr_rules = lambda _img, _rect, ids: events.append(("prewarm", ids))
+
+    def run_rule(rule, _img, _rect, ctx):
+        events.append(("run", rule.id))
+        ctx.triggered = rule.id == "image-hit"
+
+    ml._run_rule = run_rule
+    monkeypatch.setattr(_ml_mod, "get_capture_size", lambda _path: [100, 100])
+    monkeypatch.setattr(_ml_mod, "get_window_client_offset", lambda _title: None)
+    group = RuleGroup(
+        id="ordered",
+        name="Ordered",
+        mode="loop",
+        order="parallel",
+        rule_ids=[rule.id for rule in rules],
+    )
+
+    _ml_mod.MainLoop._run_parallel_group(
+        ml, group, np.zeros((20, 20, 3), dtype=np.uint8), {"w": 20, "h": 20}
+    )
+
+    assert events == [
+        ("prewarm", {"ocr-before"}),
+        ("run", "ocr-before"),
+        ("run", "image-hit"),
+    ]
+
+
 # ── _to_screen_coords ──
 
 
@@ -1067,7 +1121,7 @@ def test_loop_notifies_once_per_continuous_match(monkeypatch):
             }[key]
         },
     )()
-    ml._prewarm_ocr_clusters = lambda _img, _rect: None
+    ml._prewarm_ocr_clusters = lambda *_args: None
     ml.on_finished = None
     errors = []
     ml.on_error = errors.append
