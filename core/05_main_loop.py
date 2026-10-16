@@ -813,17 +813,31 @@ class MainLoop:
         t_ocr = time.monotonic()
         hits_before = self._ocr_cache_hits
         results = self._ocr_region(ctx.img, roi)
+        ocr_lookup_ms = (time.monotonic() - t_ocr) * 1000
         ctx.ocr_cache_hit = self._ocr_cache_hits > hits_before
         if roi_is_empty and ctx.img.shape[1] > 800:
-            ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
+            ctx.ocr_elapsed_ms = ocr_lookup_ms
+        if ocr_lookup_ms >= 10:
+            phase_timings = getattr(self, "_frame_phase_timings", None)
+            if phase_timings is not None:
+                phase_timings.append(
+                    f"ocr_lookup:{rule.name}={ocr_lookup_ms:.1f}ms"
+                    f"({'cache' if ctx.ocr_cache_hit else 'run'})"
+                )
         # Shadow: pure translation check (zero impact on StepResult)
         self._shadow_check_ocr(results, roi, rule, ctx.step_idx)
         if not results:
             return self._handle_on_fail(params, ctx, rule)
 
+        t_match = time.monotonic()
         matches = find_text(
             results, text, params.get("match_mode", "fuzzy"), params.get("fuzzy_threshold", 0.8)
         )
+        match_ms = (time.monotonic() - t_match) * 1000
+        if match_ms >= 5:
+            phase_timings = getattr(self, "_frame_phase_timings", None)
+            if phase_timings is not None:
+                phase_timings.append(f"text_match:{rule.name}={match_ms:.1f}ms")
         if not matches:
             return self._handle_on_fail(params, ctx, rule)
 
@@ -2232,10 +2246,16 @@ class MainLoop:
             r_ctx = StepContext(img=img, rect=rect)
             if rid in pending:
                 fut = pending[rid]
+                prematch_wait_started = time.monotonic()
                 try:
                     r_ctx.prematch = {0: fut.result()}
                 except Exception:
                     r_ctx.prematch = None
+                prematch_wait_ms = (time.monotonic() - prematch_wait_started) * 1000
+                if prematch_wait_ms >= 5:
+                    self._frame_phase_timings.append(
+                        f"prematch_wait:{r.name}={prematch_wait_ms:.1f}ms"
+                    )
             self._process_counter += 1
             rule_started = time.monotonic()
             try:
@@ -2429,6 +2449,10 @@ class MainLoop:
                         if not self._slow_loop_warned:
                             self._slow_loop_warned = True
                             profile = self._frame_ocr_profile
+                            phase_timings = getattr(self, "_frame_phase_timings", [])
+                            phase_detail = ",".join(phase_timings[:20])
+                            if len(phase_timings) > 20:
+                                phase_detail += f",…(+{len(phase_timings) - 20})"
                             max_rect = profile["max_rect"]
                             max_roi = (
                                 f"{max_rect[2]}x{max_rect[3]}@{max_rect[0]},{max_rect[1]}"
@@ -2442,7 +2466,7 @@ class MainLoop:
                                 f"OCR診斷: recognize={profile['calls']}次/{profile['ms']:.0f}ms，"
                                 f"ROI像素={profile['pixels']}，最大ROI={max_roi}，"
                                 f"快取重用={self._ocr_cache_hits - self._frame_cache_hits_before}，"
-                                f"預熱={self._frame_prewarm_ms:.0f}ms)"
+                                f"預熱={self._frame_prewarm_ms:.0f}ms，階段={phase_detail or 'none'})"
                             )
                             if self.on_warning:
                                 self.on_warning(

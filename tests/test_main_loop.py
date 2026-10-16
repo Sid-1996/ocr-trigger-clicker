@@ -347,6 +347,34 @@ def test_handle_detect_empty_text():
     assert result.action == "stop"
 
 
+def test_handle_detect_profiles_ocr_lookup_and_text_match(monkeypatch):
+    ml = _make_ml()
+    ml._frame_phase_timings = []
+    ml._ocr_cache_hits = 0
+    result_box = _ml_mod.OcrResult(text="other", x=1, y=1, w=3, h=3, confidence=0.9)
+
+    def slow_ocr_lookup(*_args):
+        time.sleep(0.02)
+        return [result_box]
+
+    def slow_text_match(*_args):
+        time.sleep(0.02)
+        return []
+
+    monkeypatch.setattr(ml, "_ocr_region", slow_ocr_lookup)
+    monkeypatch.setattr(_ml_mod, "find_text", slow_text_match)
+    rule = Rule(id="rule_profile", name="診斷拆分", enabled=True, steps=[])
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 10, "h": 10}
+    )
+
+    result = ml._handle_detect({"text": "target", "roi": {}}, ctx, rule)
+
+    assert result.action == "stop"
+    assert any(t.startswith("ocr_lookup:診斷拆分=") for t in ml._frame_phase_timings)
+    assert any(t.startswith("text_match:診斷拆分=") for t in ml._frame_phase_timings)
+
+
 # ── _ocr_region cache-hit marker ──
 
 
