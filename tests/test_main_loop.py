@@ -1028,7 +1028,7 @@ def test_should_process_static_frame():
     assert not ml._should_process_static_frame()
 
 
-def test_loop_triggers_rule_on_second_static_game_frame(monkeypatch):
+def test_loop_notifies_once_per_continuous_match(monkeypatch):
     frame_path = Path(__file__).parent / "data" / "starsavior_training_live.png"
     frame = cv2.imread(str(frame_path))
     assert frame is not None, f"missing captured game frame: {frame_path}"
@@ -1088,24 +1088,27 @@ def test_loop_triggers_rule_on_second_static_game_frame(monkeypatch):
     def fake_ocr(img, _roi):
         assert img is frame
         ocr_calls.append(1)
-        if len(ocr_calls) == 1:
+        if len(ocr_calls) in (1, 4):
             return []
-        return [_ml_mod.OcrResult(text="55%", x=1680, y=300, w=60, h=30, confidence=1.0)]
+        result = [_ml_mod.OcrResult(text="55%", x=1680, y=300, w=60, h=30, confidence=1.0)]
+        if len(ocr_calls) == 5:
+            ml._stop_event.set()
+        return result
 
     ml._ocr_region = fake_ocr
     notifications = []
 
     def on_warning(message):
         notifications.append(message)
-        if message == "game-frame-triggered":
-            ml._stop_event.set()
 
     ml.on_warning = on_warning
     ml._loop()
 
-    assert len(captured) == 2, "loop should inspect the unchanged game frame again"
-    assert len(ocr_calls) == 2, "detect rules must be rechecked on static frames"
-    assert notifications == ["game-frame-triggered"]
+    assert len(captured) == 5, "loop should keep checking across match loss and reappearance"
+    assert len(ocr_calls) == 5, "detect rules must be rechecked on every frame"
+    assert notifications == ["game-frame-triggered", "game-frame-triggered"], (
+        "notify once for a continuous match, then rearm after the condition disappears"
+    )
     assert errors == [], f"main loop reported an error: {errors}"
 
 

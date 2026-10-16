@@ -239,6 +239,8 @@ class MainLoop:
             "max_rect": None,
         }
         self._frame_prewarm_ms: float = 0.0
+        self._frame_phase_timings: list[str] = []
+        self._notified_conditions: set[str] = set()
         self._frame_cache_hits_before: int = 0
         # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
         # key=(x,y,w,h) value=(crop_hash, results)；有界 LRU，視窗縮放會因 rect 不同自動 miss。
@@ -427,7 +429,7 @@ class MainLoop:
             "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
             "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f "
             "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s prematch_submitted=%s "
-            "prematch_cancelled=%s%s diff=%.4f",
+            "prematch_cancelled=%s prior_phases=%s%s diff=%.4f",
             phase,
             frame_no,
             rule.name,
@@ -444,6 +446,7 @@ class MainLoop:
             profile.get("pixels", 0),
             getattr(self, "_frame_prematch_submitted", 0),
             getattr(self, "_frame_prematch_cancelled", 0),
+            ",".join(getattr(self, "_frame_phase_timings", [])) or "none",
             stages,
             getattr(self, "_frame_diff_ratio", 0.0),
         )
@@ -1355,10 +1358,14 @@ class MainLoop:
 
     def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         msg = params.get("message", "")
+        if ctx.matched_ns and rule.id in self._notified_conditions:
+            return StepResult("continue")
         if msg:
             self._log(f"規則「{rule.name}」通知：{msg}")
             if self.on_warning:
                 self.on_warning(msg)
+            if ctx.matched_ns:
+                self._notified_conditions.add(rule.id)
         return StepResult("continue")
 
     def _check_verify_condition(self, verify: dict, img: np.ndarray, rect: dict) -> bool:
@@ -1588,6 +1595,8 @@ class MainLoop:
         ctx: StepContext | None = None,
         background: bool = False,
     ) -> None:
+        if not hasattr(self, "_notified_conditions"):
+            self._notified_conditions = set()
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
         if not ctx.frame_captured_ns:
@@ -1604,6 +1613,12 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
+            if (
+                i == 0
+                and step.type in self._DETECT_STEP_TYPES
+                and (result.action != "continue" or ctx.on_fail_fired)
+            ):
+                self._notified_conditions.discard(rule.id)
             if step.type in self._DETECT_STEP_TYPES and result.action == "continue":
                 ctx.matched_ns = time.monotonic_ns()
             ms = step.params.get("after_delay_ms", 0) or 0
@@ -2021,6 +2036,7 @@ class MainLoop:
         }
         self._frame_prematch_submitted = 0
         self._frame_prematch_cancelled = 0
+        self._frame_phase_timings = []
         self._frame_cache_hits_before = self._ocr_cache_hits
         prewarm_started = time.monotonic()
         with self._rules_lock:
@@ -2030,8 +2046,10 @@ class MainLoop:
         if self._has_detect_rules:
             self._prewarm_ocr_clusters(img, rect)
         self._frame_prewarm_ms = (time.monotonic() - prewarm_started) * 1000
+        self._frame_phase_timings.append(f"ocr_prewarm={self._frame_prewarm_ms:.1f}")
 
         # ponytail: run all background rules each frame; jumps are cancelled
+        background_started = time.monotonic()
         for rule in rules_snapshot:
             if rule.enabled and rule.background:
                 self._process_counter += 1
@@ -2046,6 +2064,10 @@ class MainLoop:
                 if bg_ctx.triggered:
                     self._log_exec(rule.name, 0, "background", "triggered")
                 self._rule_pointer = saved_ptr
+        if any(rule.enabled and rule.background for rule in rules_snapshot):
+            self._frame_phase_timings.append(
+                f"background={((time.monotonic() - background_started) * 1000):.1f}"
+            )
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
         for g in self._groups:
@@ -2055,7 +2077,11 @@ class MainLoop:
                 and g.mode == "loop"
                 and g.order == "parallel"
             ):
+                group_started = time.monotonic()
                 self._run_parallel_group(g, img, rect)
+                self._frame_phase_timings.append(
+                    f"loop:{g.name}={((time.monotonic() - group_started) * 1000):.1f}"
+                )
 
         # ── Group-based rule pointer (sequential / once / repeat) ──
         group = self._current_group()
@@ -2063,7 +2089,11 @@ class MainLoop:
             return
 
         if group.order == "parallel":
+            group_started = time.monotonic()
             self._run_parallel_group(group, img, rect)
+            self._frame_phase_timings.append(
+                f"queue:{group.name}={((time.monotonic() - group_started) * 1000):.1f}"
+            )
             return
 
         if self._rule_in_group_ptr >= len(group.rule_ids):
@@ -2159,12 +2189,16 @@ class MainLoop:
                 except Exception:
                     r_ctx.prematch = None
             self._process_counter += 1
+            rule_started = time.monotonic()
             try:
                 self._run_rule(r, img, rect, r_ctx)
             except Exception as e:
                 self._logger.exception("並行規則「%s」異常: %s", r.name, e)
                 if self.on_warning:
                     self.on_warning(f"並行規則「{r.name}」異常: {e}")
+            rule_elapsed_ms = (time.monotonic() - rule_started) * 1000
+            if rule_elapsed_ms >= 10:
+                self._frame_phase_timings.append(f"rule:{r.name}={rule_elapsed_ms:.1f}")
             if r_ctx.triggered:
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.id)
