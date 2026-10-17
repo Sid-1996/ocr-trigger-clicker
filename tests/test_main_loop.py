@@ -260,6 +260,41 @@ def test_lazy_ocr_prewarm_reuses_overlapping_cluster():
     assert calls == [{"x": 0, "y": 0, "w": 50, "h": 10}]
 
 
+def test_gated_ocr_reuses_unchanged_background_cluster():
+    rules = [
+        Rule(
+            "bg",
+            "BG",
+            True,
+            [Step("detect", {"text": "x", "roi": {"x": 0, "y": 0, "w": 40, "h": 20}})],
+            background=True,
+        ),
+    ]
+    ml = _make_ml()
+    ml._rules = rules
+    ml._groups = []
+    ml._active_group_ids = []
+    ml._has_detect_rules = True
+    ml._resolve_roi = lambda roi, _rect: roi
+    ml._frame_phase_timings = []
+    ml._frame_prewarm_ms = 0.0
+    calls = []
+    ml._ocr_region = lambda _img, roi: calls.append(dict(roi)) or []
+    img = np.zeros((20, 40, 3), dtype=np.uint8)
+    rect = {"w": 40, "h": 20}
+
+    _ml_mod.MainLoop._prewarm_ocr_clusters(ml, img, rect, defer=True)
+    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"bg"}, gate=True)
+    assert len(calls) == 1, "首次背景 prewarm 應實際 OCR"
+
+    ml._frame_ocr_cache = {}  # 模擬下一幀（幀快取重置）
+    ml._gated_ocr_hits = 0
+    _ml_mod.MainLoop._prewarm_ocr_clusters(ml, img, rect, defer=True)
+    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"bg"}, gate=True)
+    assert len(calls) == 1, "內容未變應複用上次結果，不再 OCR"
+    assert ml._gated_ocr_hits == 1, "應記錄一次閘門命中"
+
+
 # ── _to_screen_coords ──
 
 

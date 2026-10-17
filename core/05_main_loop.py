@@ -169,6 +169,32 @@ def _crop_hash(crop: np.ndarray) -> bytes:
     return hashlib.blake2b(np.ascontiguousarray(crop).tobytes(), digest_size=16).digest()
 
 
+_SIG_BLOCK = 8  # 簽章區塊均值降採樣邊長（px）
+_SIG_MAX_DIM = 64  # 簽章最大邊（超過先整數降採樣以控成本）
+
+
+def _crop_signature(crop: np.ndarray) -> np.ndarray:
+    """ROI 裁切的粗粒度像素簽章（區塊均值），供背景規則的容差閘門使用。
+
+    與 _crop_hash 不同：hash 只認逐位元相同，任何動畫都會 miss。簽章允許小幅差異，
+    且是相對「上次實際辨識」比對——慢速變化會持續累積，一旦超過閾值便被迫重跑 OCR，
+    藉此把漏判風險限界在一個閾值內（見 MainLoop._gated_ocr）。"""
+    g = crop
+    if g.ndim == 3:
+        g = g.mean(axis=2)
+    g = g.astype(np.float32)
+    step = max(1, max(g.shape[0], g.shape[1]) // _SIG_MAX_DIM)
+    if step > 1:
+        g = g[::step, ::step]
+    h, w = g.shape[:2]
+    ph = (-h) % _SIG_BLOCK
+    pw = (-w) % _SIG_BLOCK
+    if ph or pw:
+        g = np.pad(g, ((0, ph), (0, pw)), mode="edge")
+    bh, bw = g.shape[0] // _SIG_BLOCK, g.shape[1] // _SIG_BLOCK
+    return g.reshape(bh, _SIG_BLOCK, bw, _SIG_BLOCK).mean(axis=(1, 3))
+
+
 _VERIFY_LOOP_WARN_SEC = (
     8  # 循環群組長驗證警告閾值（秒）：與 GUI preset 反推一致（>=8000ms 視為 long）
 )
@@ -257,6 +283,14 @@ class MainLoop:
         # key=(x,y,w,h) value=(crop_hash, results)；有界 LRU，視窗縮放會因 rect 不同自動 miss。
         self._xframe_ocr_cache: OrderedDict = OrderedDict()
         self._xframe_ocr_cache_max = 64
+
+        # ponytail: 背景規則容差閘門——cluster 內容相對「上次實際辨識」近乎沒變 → 複用上次
+        # OCR 結果，省下每幀重跑動畫 HUD 的 OCR（見 _gated_ocr）。只作用於背景規則，前景
+        # 規則維持逐幀精確 OCR，避免漏判影響主流程。key=cluster_rect value=(signature, results)。
+        self._gated_ocr_cache: OrderedDict = OrderedDict()
+        self._gated_ocr_cache_max = 64
+        self._gated_ocr_threshold = 2.0  # 區塊均值絕對差（0-255）閾值，越小越敏感
+        self._gated_ocr_hits: int = 0
 
         # ponytail: match_image 搜尋區跨幀快取——搜尋區像素＋模板＋參數皆同 → 比對結果必同
         # （matchTemplate deterministic），直接複用。key 詳見 _handle_match_image。
@@ -444,7 +478,7 @@ class MainLoop:
             "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
             "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f "
             "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s prematch_submitted=%s "
-            "prior_phases=%s%s diff=%.4f",
+            "gated_ocr_hits=%s prior_phases=%s%s diff=%.4f",
             phase,
             frame_no,
             rule.name,
@@ -460,6 +494,7 @@ class MainLoop:
             profile.get("ms", 0.0),
             profile.get("pixels", 0),
             getattr(self, "_frame_prematch_submitted", 0),
+            getattr(self, "_gated_ocr_hits", 0),
             ",".join(getattr(self, "_frame_phase_timings", [])) or "none",
             stages,
             getattr(self, "_frame_diff_ratio", 0.0),
@@ -767,6 +802,36 @@ class MainLoop:
         while len(self._xframe_ocr_cache) > self._xframe_ocr_cache_max:
             self._xframe_ocr_cache.popitem(last=False)
         return results
+
+    def _gated_ocr(self, img: np.ndarray, key: tuple, roi: dict) -> None:
+        """背景規則 OCR 容差閘門：cluster 內容相對上次實際辨識近乎沒變 → 複用上次結果。
+
+        命中時把上次結果放進本幀快取，讓後續背景規則的 detect 路徑（superset/rect 命中）
+        等同本幀真的 OCR 過；未命中才實際 OCR 並更新簽章。簽章以「上次辨識當下」為基準，
+        故慢速變化會累積到超過閾值而被迫重跑，漏判風險因此有界（見 _crop_signature）。
+        """
+        h, w = img.shape[:2]
+        x1 = max(0, int(roi["x"]))
+        y1 = max(0, int(roi["y"]))
+        x2 = min(w, int(roi["x"]) + int(roi["w"]))
+        y2 = min(h, int(roi["y"]) + int(roi["h"]))
+        if x2 <= x1 or y2 <= y1:
+            return
+        rect = (x1, y1, x2 - x1, y2 - y1)
+        if rect in self._frame_ocr_cache:
+            return  # 本幀已 OCR 過同一 rect（cluster 去重）
+        sig = _crop_signature(img[y1:y2, x1:x2])
+        entry = self._gated_ocr_cache.get(key)
+        if entry is not None and entry[0].shape == sig.shape:
+            if float(np.abs(entry[0] - sig).mean()) <= self._gated_ocr_threshold:
+                self._gated_ocr_hits += 1
+                self._frame_ocr_cache[rect] = entry[1]
+                return
+        results = self._ocr_region(img, roi)
+        self._gated_ocr_cache[key] = (sig, results)
+        self._gated_ocr_cache.move_to_end(key)
+        while len(self._gated_ocr_cache) > self._gated_ocr_cache_max:
+            self._gated_ocr_cache.popitem(last=False)
 
     def _profiled_recognize(self, crop: np.ndarray, rect: tuple[int, int, int, int]) -> list:
         started = time.monotonic()
@@ -2097,8 +2162,13 @@ class MainLoop:
             self._frame_ocr_cluster_by_rule = cluster_by_rule
             self._frame_ocr_prewarmed = set()
 
-    def _prewarm_ocr_rules(self, img: np.ndarray, rect: dict, rule_ids: set[str]) -> None:
-        """Prewarm only the OCR rules that must be checked before the next action boundary."""
+    def _prewarm_ocr_rules(
+        self, img: np.ndarray, rect: dict, rule_ids: set[str], *, gate: bool = False
+    ) -> None:
+        """Prewarm only the OCR rules that must be checked before the next action boundary.
+
+        gate=True 時（供背景規則使用）走容差閘門，內容近乎沒變的 cluster 直接複用上次結果。
+        """
         if not rule_ids or not self._has_detect_rules:
             return
         cluster_by_rule = getattr(self, "_frame_ocr_cluster_by_rule", {})
@@ -2111,7 +2181,10 @@ class MainLoop:
             return
         started = time.monotonic()
         for key, roi in clusters.items():
-            self._ocr_region(img, roi)
+            if gate:
+                self._gated_ocr(img, key, roi)
+            else:
+                self._ocr_region(img, roi)
             prewarmed.add(key)
         self._frame_ocr_prewarmed = prewarmed
         elapsed_ms = (time.monotonic() - started) * 1000
@@ -2129,6 +2202,7 @@ class MainLoop:
             "max_rect": None,
         }
         self._frame_prematch_submitted = 0
+        self._gated_ocr_hits = 0
         self._frame_phase_timings = []
         self._frame_cache_hits_before = self._ocr_cache_hits
         self._frame_ocr_cluster_by_rule = {}
@@ -2162,7 +2236,10 @@ class MainLoop:
         prematch_by_group = self._submit_parallel_group_prematches(prematch_groups, img, rect)
 
         self._prewarm_ocr_rules(
-            img, rect, {rule.id for rule in rules_snapshot if rule.enabled and rule.background}
+            img,
+            rect,
+            {rule.id for rule in rules_snapshot if rule.enabled and rule.background},
+            gate=True,
         )
 
         # ponytail: run all background rules each frame; jumps are cancelled
@@ -3697,5 +3774,62 @@ if __name__ == "__main__":
     ml._run_rule(_ad_rule2, _ad_ctx.img, _ad_ctx.rect, _ad_ctx)
     assert "ad_selfcheck2:1" not in ml._last_exec_log, "中斷後尾隨步驟不應執行"
     print("  [OK] after_delay_ms: 中斷時跳過後續步驟")
+
+    # ── Test 33: 背景規則 OCR 容差閘門 (_crop_signature / _gated_ocr) ──
+    _gs = _crop_signature(np.zeros((40, 60, 3), dtype=np.uint8))
+    assert _gs.ndim == 2 and _gs.shape[0] >= 1 and _gs.shape[1] >= 1, "簽章應為 2D 區塊均值"
+    assert float(np.abs(_gs - _crop_signature(np.zeros((40, 60, 3), np.uint8))).mean()) == 0.0
+    assert (
+        float(np.abs(_gs - _crop_signature(np.full((40, 60, 3), 120, dtype=np.uint8))).mean()) > 2.0
+    ), "明顯不同的裁切簽章差應過閾值"
+    print("  [OK] _crop_signature: 相同=0，明顯不同>閾值")
+
+    _ml_g = MainLoop.__new__(MainLoop)
+    _ml_g._frame_ocr_cache = {}
+    _ml_g._ocr_cache_hits = 0
+    _ml_g._frame_ocr_profile = {
+        "calls": 0,
+        "ms": 0.0,
+        "pixels": 0,
+        "max_pixels": 0,
+        "max_rect": None,
+    }
+    _ml_g._xframe_ocr_cache = OrderedDict()
+    _ml_g._xframe_ocr_cache_max = 64
+    _ml_g._gated_ocr_cache = OrderedDict()
+    _ml_g._gated_ocr_cache_max = 64
+    _ml_g._gated_ocr_threshold = 2.0
+    _ml_g._gated_ocr_hits = 0
+    _gcalls = {"n": 0}
+    _g_orig_rec = recognize
+
+    def _g_fake_reco(bx, roi_offset=None, preprocess=False, max_side_len=0, min_confidence=0.25):
+        _gcalls["n"] += 1
+        return []
+
+    recognize = _g_fake_reco
+    _roi_g = {"x": 5, "y": 5, "w": 50, "h": 40}
+    _g_key = (5, 5, 50, 40)
+    _gimg_a = np.zeros((80, 80, 3), dtype=np.uint8)
+    _gimg_noise = _gimg_a.copy()
+    _gimg_noise[5:20, 5:20] = 1  # 微幅變化（低於閾值）
+    _gimg_b = np.full((80, 80, 3), 200, dtype=np.uint8)
+
+    _ml_g._gated_ocr(_gimg_a, _g_key, _roi_g)  # 首次無簽章 → 實際 OCR
+    assert _gcalls["n"] == 1 and _ml_g._gated_ocr_hits == 0
+    _ml_g._frame_ocr_cache = {}
+    _ml_g._gated_ocr(_gimg_a, _g_key, _roi_g)  # 同內容 → 閘門命中
+    assert _gcalls["n"] == 1, "內容相同應複用上次 OCR 結果"
+    assert _ml_g._gated_ocr_hits == 1
+    assert _g_key in _ml_g._frame_ocr_cache, "命中時應回填本幀快取"
+    _ml_g._frame_ocr_cache = {}
+    _ml_g._gated_ocr(_gimg_noise, _g_key, _roi_g)  # 微幅變化 → 仍命中（容差）
+    assert _gcalls["n"] == 1, "低於閾值的變化應仍複用"
+    assert _ml_g._gated_ocr_hits == 2
+    _ml_g._frame_ocr_cache = {}
+    _ml_g._gated_ocr(_gimg_b, _g_key, _roi_g)  # 大幅變化 → 強制重跑
+    assert _gcalls["n"] == 2, "內容大幅變化應重新 OCR"
+    print("  [OK] _gated_ocr: 靜態/微變複用、大幅變化重跑")
+    recognize = _g_orig_rec
 
     print("\n=== All 30 tests passed ===")

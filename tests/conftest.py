@@ -50,6 +50,10 @@ def make_main_loop():
     ml._ocr_cache_hits = 0
     ml._xframe_ocr_cache = OrderedDict()
     ml._xframe_ocr_cache_max = 64
+    ml._gated_ocr_cache = OrderedDict()
+    ml._gated_ocr_cache_max = 64
+    ml._gated_ocr_threshold = 2.0
+    ml._gated_ocr_hits = 0
     ml._tmpl_cache = OrderedDict()
     ml._tmpl_cache_max = 64
     ml._logger = logging.getLogger("main_loop_test")
