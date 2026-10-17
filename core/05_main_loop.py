@@ -2215,25 +2215,11 @@ class MainLoop:
         if self._has_detect_rules:
             self._prewarm_ocr_clusters(img, rect, defer=True)
 
-        # Start pure template matching for every parallel group while the earlier
-        # background/OCR work runs. Results are still consumed in configured order.
-        loop_groups = [
-            g
-            for g in self._groups
-            if g.enabled
-            and g.id in self._active_group_ids
-            and g.mode == "loop"
-            and g.order == "parallel"
-        ]
-        queued_group = self._current_group()
-        prematch_groups = list(loop_groups)
-        if (
-            queued_group is not None
-            and queued_group.order == "parallel"
-            and all(g.id != queued_group.id for g in prematch_groups)
-        ):
-            prematch_groups.append(queued_group)
-        prematch_by_group = self._submit_parallel_group_prematches(prematch_groups, img, rect)
+        # A/B 實驗：停用跨群組投機 prematch。原本每幀對所有 parallel 群組一次性硬算 template
+        # 比對（4 核上約 40 任務/幀，且 _prematch_pure 繞過 _tmpl_cache 每幀重算），疑似與
+        # 主執行緒搶 GIL/CPU，使背景規則／loop 群組階段被拖慢。改為在各群組於
+        # _run_parallel_group 內即時計算（走 _tmpl_cache 跨幀快取）。
+        prematch_by_group: dict = {}
 
         self._prewarm_ocr_rules(
             img,
