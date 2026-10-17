@@ -19,7 +19,7 @@ import numpy as np
 
 _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _loader import load_sibling  # noqa: E402
-from _version import __version__  # noqa: E402
+from _version import __version__, build_id  # noqa: E402
 from i18n import T  # noqa: E402
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
@@ -333,8 +333,11 @@ class MainLoop:
         self._obs_last_diff_log: dict[str, float] = {}
         self._load_rules()
         init_engine()
+        _build = build_id()
+        _build_tag = f"+{_build}" if _build else ""
         log_main(
-            f"應用啟動 v{__version__}，目標視窗「{window_title}」，載入 {len(self._rules)} 條規則"
+            f"應用啟動 v{__version__}{_build_tag}，目標視窗「{window_title}」，"
+            f"載入 {len(self._rules)} 條規則"
         )
 
     def _is_obs_shadow_enabled(self) -> bool:
