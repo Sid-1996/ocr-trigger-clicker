@@ -328,10 +328,6 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 - HTML 下載連結是相對路徑 `tasks/XXX.json`，只要 JSON 檔名不變就不需改链接
 - 體力型/力量型跑馬通常是二選一，使用者自行啟停
 
-## 待辦（下次主動提醒使用者）
-
-- **前景規則優先**：`core/05_main_loop.py:2172-2247` 目前每幀順序為「預熱所有 cluster → 背景規則 → loop 群組 → 前景（佇列）規則」，重幀時前景動作被前面的工作延遲最多 ~1.1s（真實任務 log：`rule_queue_ms` 最大 1118ms、`prewarm_ms` 最大 756ms，場景切換幀 52627px／5 次 OCR）。計畫：只先預熱並執行當前佇列的前景規則，把背景規則與 loop 群組延後到該幀其後；會讓背景規則晚一拍執行（語意改變），需另跑真實任務 A/B，以 log 的 `rule_queue_ms` / `prewarm_ms` 為指標。2026-10-17 使用者決定延後處理，下次主動提醒。
-
 ## CodeGraph
 
 專案已用 `codegraph init` 建過索引（`.codegraph/`），透過 MCP server 自動接給 agent 使用，不需要在這裡寫使用規則——`codegraph_explore` 由 agent 依需求自行判斷呼叫，索引也由檔案監控自動同步，commit 流程不需要任何額外步驟。
