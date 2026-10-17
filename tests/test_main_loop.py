@@ -101,60 +101,7 @@ def test_activate_window_skips_reactivation_when_target_is_foreground(monkeypatc
     assert activations == ["測試視窗"]
 
 
-def test_parallel_prematches_are_submitted_across_groups_before_evaluation(monkeypatch):
-    class Future:
-        def result(self):
-            return None
-
-    class Pool:
-        def __init__(self):
-            self.calls = []
-
-        def submit(self, fn, *args):
-            self.calls.append((fn, args))
-            return Future()
-
-    rules = [
-        Rule("image-a", "Image A", True, [Step("match_image", {"template_data": "a"})]),
-        Rule("image-b", "Image B", True, [Step("match_image", {"template_data": "b"})]),
-    ]
-    ml = _make_ml()
-    ml._rule_map = {rule.id: rule for rule in rules}
-    ml._rules_path = "task.json"
-    ml._window_title = "test window"
-    ml._prematch_pool = Pool()
-    ml._frame_prematch_submitted = 0
-    ml._resolve_roi = lambda *_args: {"x": 0, "y": 0, "w": 10, "h": 10}
-    monkeypatch.setattr(_ml_mod, "get_capture_size", lambda _path: [100, 100])
-    monkeypatch.setattr(_ml_mod, "get_window_client_offset", lambda _title: None)
-    groups = [
-        RuleGroup("group-a", "Group A", mode="loop", order="parallel", rule_ids=["image-a"]),
-        RuleGroup("group-b", "Group B", mode="loop", order="parallel", rule_ids=["image-b"]),
-    ]
-
-    pending = _ml_mod.MainLoop._submit_parallel_group_prematches(
-        ml, groups, np.zeros((20, 20, 3), dtype=np.uint8), {"w": 20, "h": 20}
-    )
-
-    assert list(pending) == ["group-a", "group-b"]
-    assert list(pending["group-a"]) == ["image-a"]
-    assert list(pending["group-b"]) == ["image-b"]
-    assert len(ml._prematch_pool.calls) == 2
-    assert ml._frame_prematch_submitted == 2
-
-
 def test_parallel_group_prewarm_is_lazy_and_stops_after_trigger(monkeypatch):
-    class Future:
-        def result(self):
-            return None
-
-        def cancel(self):
-            return True
-
-    class Pool:
-        def submit(self, *_args):
-            return Future()
-
     rules = [
         Rule("ocr-before", "OCR before", True, [Step("detect", {"text": "first"})]),
         Rule("image-hit", "Image hit", True, [Step("match_image", {"template_data": "data"})]),
@@ -163,8 +110,6 @@ def test_parallel_group_prewarm_is_lazy_and_stops_after_trigger(monkeypatch):
     ml = _make_ml()
     ml._rule_map = {rule.id: rule for rule in rules}
     ml._rules_path = "task.json"
-    ml._prematch_pool = Pool()
-    ml._frame_prematch_submitted = 0
     ml._frame_phase_timings = []
     ml._resolve_roi = lambda *_args: {"x": 0, "y": 0, "w": 10, "h": 10}
     events = []

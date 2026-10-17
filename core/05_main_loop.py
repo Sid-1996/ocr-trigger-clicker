@@ -1,14 +1,12 @@
 import contextlib
 import hashlib
 import logging
-import os
 import random
 import re
 import sys as _sys
 import threading
 import time
 from collections import OrderedDict, deque
-from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -120,7 +118,6 @@ class StepContext:
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
     ocr_cache_hit: bool = False
-    prematch: Optional[dict] = None
     frame_captured_ns: int = 0
     matched_ns: int = 0
     rule_started_ns: int = 0
@@ -132,35 +129,6 @@ class StepResult:
     action: str  # "continue" | "stop" | "jump_step"
     step_index: int = -1
     detail: str = ""
-
-
-def _prematch_pure(
-    img: np.ndarray,
-    template_path: str,
-    roi: dict | None,
-    threshold: float,
-    template_data: str | None,
-    capture_size,
-    current_size,
-    match_color: bool,
-    color_tolerance,
-):
-    """執行緒池純計算函式：只跑 match_template，不碰任何執行個體狀態、不讀檔、
-    不呼叫 Win32。capture_size/current_size/roi 皆由主執行緒預算後傳入，避免
-    N 次/幀的重複 I/O（變慢元兇）。回傳 match_template(return_best=True) 原始結果。
-    """
-    return match_template(
-        img,
-        template_path,
-        roi,
-        threshold,
-        template_data=template_data,
-        capture_size=capture_size,
-        current_size=current_size,
-        match_color=match_color,
-        color_tolerance=color_tolerance,
-        return_best=True,
-    )
 
 
 def _crop_hash(crop: np.ndarray) -> bytes:
@@ -357,8 +325,6 @@ class MainLoop:
 
         # 平行預算執行緒池：供並行群組平行計算各規則的 match_image 結果。
         # ponytail: 只在此類群組真正需要時才建立，避免背景全部開一條 pool。
-        self._prematch_pool: Optional[ThreadPoolExecutor] = None
-
         self._rules: list[Rule] = []
         self._logger = _ensure_main_logger()
         # Shadow Observation stats (debug only, aggregated)
@@ -477,7 +443,7 @@ class MainLoop:
             "偵測延遲 phase=%s frame=%s rule=%s step=%s action=%s "
             "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
             "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f "
-            "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s prematch_submitted=%s "
+            "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s "
             "gated_ocr_hits=%s prior_phases=%s%s diff=%.4f",
             phase,
             frame_no,
@@ -493,7 +459,6 @@ class MainLoop:
             profile.get("calls", 0),
             profile.get("ms", 0.0),
             profile.get("pixels", 0),
-            getattr(self, "_frame_prematch_submitted", 0),
             getattr(self, "_gated_ocr_hits", 0),
             ",".join(getattr(self, "_frame_phase_timings", [])) or "none",
             stages,
@@ -979,56 +944,48 @@ class MainLoop:
         threshold = params.get("threshold", 0.8)
         match_color = params.get("match_color", False)
         color_tolerance = params.get("color_tolerance", 100)
-        # 若並行群組已為本 step（index 0）平行預算好 match_template，直接消費，
-        # 省去重複的找圖計算；步進>0或無預算時一律照舊即時計算。
-        # prematch 只對應第 0 步（並行群組預算的結果），非第 0 步或已消費後一律
-        # 即時計算，避免後續 match_image 步驟誤用第 0 步的 ROI/範本比對結果。
-        if ctx.step_idx == 0 and ctx.prematch and 0 in ctx.prematch:
-            results, best_below = ctx.prematch[0]
-            ctx.prematch = None
+        # 跨幀快取：搜尋區像素＋模板＋比對參數皆同 → 結果必同（matchTemplate deterministic）
+        h_img, w_img = ctx.img.shape[:2]
+        if any(roi.get(k, 0) != 0 for k in ("w", "h")):
+            rx1, ry1 = max(0, int(roi["x"])), max(0, int(roi["y"]))
+            rx2 = min(w_img, int(roi["x"]) + int(roi["w"]))
+            ry2 = min(h_img, int(roi["y"]) + int(roi["h"]))
+            region = ctx.img[ry1:ry2, rx1:rx2] if rx2 > rx1 and ry2 > ry1 else ctx.img
         else:
-            # 跨幀快取：搜尋區像素＋模板＋比對參數皆同 → 結果必同（matchTemplate deterministic）
-            h_img, w_img = ctx.img.shape[:2]
-            if any(roi.get(k, 0) != 0 for k in ("w", "h")):
-                rx1, ry1 = max(0, int(roi["x"])), max(0, int(roi["y"]))
-                rx2 = min(w_img, int(roi["x"]) + int(roi["w"]))
-                ry2 = min(h_img, int(roi["y"]) + int(roi["h"]))
-                region = ctx.img[ry1:ry2, rx1:rx2] if rx2 > rx1 and ry2 > ry1 else ctx.img
-            else:
-                region = ctx.img
-            cache_key = (
-                "mi",
-                _crop_hash(region),
-                template_data or template_path,
+            region = ctx.img
+        cache_key = (
+            "mi",
+            _crop_hash(region),
+            template_data or template_path,
+            threshold,
+            match_color,
+            color_tolerance,
+        )
+        cached = self._tmpl_cache.get(cache_key)
+        if cached is not None:
+            self._tmpl_cache.move_to_end(cache_key)
+            self._ocr_cache_hits += 1
+            results, best_below = cached
+        else:
+            results = match_template(
+                ctx.img,
+                template_path,
+                roi,
                 threshold,
-                match_color,
-                color_tolerance,
+                template_data=template_data or None,
+                capture_size=capture_size,
+                current_size=current_size,
+                match_color=match_color,
+                color_tolerance=color_tolerance,
+                return_best=True,
             )
-            cached = self._tmpl_cache.get(cache_key)
-            if cached is not None:
-                self._tmpl_cache.move_to_end(cache_key)
-                self._ocr_cache_hits += 1
-                results, best_below = cached
-            else:
-                results = match_template(
-                    ctx.img,
-                    template_path,
-                    roi,
-                    threshold,
-                    template_data=template_data or None,
-                    capture_size=capture_size,
-                    current_size=current_size,
-                    match_color=match_color,
-                    color_tolerance=color_tolerance,
-                    return_best=True,
-                )
-                best_below = -1.0
-                if isinstance(results, tuple):
-                    results, best_below = results
-                self._tmpl_cache[cache_key] = (results, best_below)
-                self._tmpl_cache.move_to_end(cache_key)
-                while len(self._tmpl_cache) > self._tmpl_cache_max:
-                    self._tmpl_cache.popitem(last=False)
+            best_below = -1.0
+            if isinstance(results, tuple):
+                results, best_below = results
+            self._tmpl_cache[cache_key] = (results, best_below)
+            self._tmpl_cache.move_to_end(cache_key)
+            while len(self._tmpl_cache) > self._tmpl_cache_max:
+                self._tmpl_cache.popitem(last=False)
         if not results:
             ctx.best_confidence = best_below
             return self._handle_on_fail(params, ctx, rule)
@@ -2201,7 +2158,6 @@ class MainLoop:
             "max_pixels": 0,
             "max_rect": None,
         }
-        self._frame_prematch_submitted = 0
         self._gated_ocr_hits = 0
         self._frame_phase_timings = []
         self._frame_cache_hits_before = self._ocr_cache_hits
@@ -2214,12 +2170,6 @@ class MainLoop:
         self._frame_prewarm_ms = 0.0
         if self._has_detect_rules:
             self._prewarm_ocr_clusters(img, rect, defer=True)
-
-        # A/B 實驗：停用跨群組投機 prematch。原本每幀對所有 parallel 群組一次性硬算 template
-        # 比對（4 核上約 40 任務/幀，且 _prematch_pure 繞過 _tmpl_cache 每幀重算），疑似與
-        # 主執行緒搶 GIL/CPU，使背景規則／loop 群組階段被拖慢。改為在各群組於
-        # _run_parallel_group 內即時計算（走 _tmpl_cache 跨幀快取）。
-        prematch_by_group: dict = {}
 
         self._prewarm_ocr_rules(
             img,
@@ -2265,7 +2215,7 @@ class MainLoop:
                 and g.order == "parallel"
             ):
                 group_started = time.monotonic()
-                self._run_parallel_group(g, img, rect, prematch_by_group.get(g.id, {}))
+                self._run_parallel_group(g, img, rect)
                 self._frame_phase_timings.append(
                     f"loop:{g.name}={((time.monotonic() - group_started) * 1000):.1f}"
                 )
@@ -2277,7 +2227,7 @@ class MainLoop:
 
         if group.order == "parallel":
             group_started = time.monotonic()
-            self._run_parallel_group(group, img, rect, prematch_by_group.get(group.id, {}))
+            self._run_parallel_group(group, img, rect)
             self._frame_phase_timings.append(
                 f"queue:{group.name}={((time.monotonic() - group_started) * 1000):.1f}"
             )
@@ -2313,73 +2263,12 @@ class MainLoop:
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
-    def _submit_parallel_group_prematches(
-        self, groups: list[RuleGroup], img: np.ndarray, rect: dict
-    ) -> dict[str, dict[str, object]]:
-        """Speculate pure template checks across groups without changing action order."""
-        pool = getattr(self, "_prematch_pool", None)
-        if pool is None and not any(len(g.rule_ids) >= 2 for g in groups):
-            return {}
-        if pool is None:
-            pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
-            self._prematch_pool = pool
-        eligible_groups = groups
-
-        # Shared per-frame values: don't repeat file or Win32 lookups per group.
-        capture_size = get_capture_size(self._rules_path)
-        chrome = get_window_client_offset(self._window_title)
-        current_size = (
-            [rect["w"] - chrome[0], rect["h"] - chrome[1]] if chrome else [rect["w"], rect["h"]]
-        )
-        pending_by_group: dict[str, dict[str, object]] = {}
-        for group in eligible_groups:
-            pending: dict[str, object] = {}
-            for rid in group.rule_ids:
-                r = self._rule_map.get(rid)
-                if r is None or not r.enabled or not r.steps:
-                    continue
-                if r.steps[0].type != "match_image":
-                    continue
-                p = r.steps[0].params
-                tdata = p.get("template_data", "")
-                tpath = p.get("template", "")
-                if not tdata.strip() and not tpath.strip():
-                    continue
-                roi = self._resolve_roi(p.get("roi", {}), rect, chrome)
-                try:
-                    pending[rid] = pool.submit(
-                        _prematch_pure,
-                        img,
-                        tpath,
-                        roi,
-                        p.get("threshold", 0.8),
-                        tdata or None,
-                        capture_size,
-                        current_size,
-                        p.get("match_color", False),
-                        p.get("color_tolerance", 100),
-                    )
-                    self._frame_prematch_submitted = (
-                        getattr(self, "_frame_prematch_submitted", 0) + 1
-                    )
-                except RuntimeError:
-                    # 池已被外部 shutdown：本幀退回循序匹配，不讓主循環掛掉
-                    break
-            pending_by_group[group.id] = pending
-        return pending_by_group
-
     def _run_parallel_group(
         self,
         group: RuleGroup,
         img: np.ndarray,
         rect: dict,
-        pending: dict[str, object] | None = None,
     ) -> None:
-        # Pure template work may be supplied frame-wide; rule evaluation and actions
-        # still follow the group's original order.
-        if pending is None:
-            pending = self._submit_parallel_group_prematches([group], img, rect).get(group.id, {})
-
         triggered = False
         for rid in group.rule_ids:
             if triggered:
@@ -2390,18 +2279,6 @@ class MainLoop:
             if r.steps and r.steps[0].type in ("detect", "compare"):
                 self._prewarm_ocr_rules(img, rect, {rid})
             r_ctx = StepContext(img=img, rect=rect)
-            if rid in pending:
-                fut = pending[rid]
-                prematch_wait_started = time.monotonic()
-                try:
-                    r_ctx.prematch = {0: fut.result()}
-                except Exception:
-                    r_ctx.prematch = None
-                prematch_wait_ms = (time.monotonic() - prematch_wait_started) * 1000
-                if prematch_wait_ms >= 5:
-                    self._frame_phase_timings.append(
-                        f"prematch_wait:{r.name}={prematch_wait_ms:.1f}ms"
-                    )
             self._process_counter += 1
             rule_started = time.monotonic()
             try:
@@ -2626,11 +2503,6 @@ class MainLoop:
 
                 self._stop_event.wait(self._interval)
         finally:
-            # ponytail: pool 只在 loop 執行緒使用，由擁有者在此關閉，
-            # 避免 stop()（GUI 執行緒）在 loop 仍 submit 時 shutdown 造成競態崩潰。
-            if self._prematch_pool is not None:
-                self._prematch_pool.shutdown(wait=False)
-                self._prematch_pool = None
             if self.on_finished:
                 self.on_finished()
 
