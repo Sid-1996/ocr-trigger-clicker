@@ -133,9 +133,16 @@ if ($FeedTest) {
     $savedPyproject = Get-Content pyproject.toml -Raw -Encoding utf8
 }
 
-"__version__ = `"$Version`"" | Set-Content _version.py -Encoding utf8
-"__author__ = `"Sid`"" | Add-Content _version.py -Encoding utf8
-'__github__ = "https://github.com/Sid-1996/ocr-trigger-clicker"' | Add-Content _version.py -Encoding utf8
+$versionPath = Join-Path $root "_version.py"
+$versionText = Get-Content -Path $versionPath -Raw -Encoding utf8
+# 只替換版號單行，保留 __author__/__github__/build_id() 等其餘內容——
+# 舊版整檔覆寫曾把 build_id 砍掉，導致打包後 05_main_loop import 失敗（v0.4.7 事故）
+$versionText = [regex]::Replace($versionText, '(?m)^__version__ = "[^"]*"', "__version__ = `"$Version`"")
+Set-Content -Path $versionPath -Value $versionText -Encoding utf8
+# 防呆：確認版號真的寫進去，否則硬失敗
+if ((Get-Content -Path $versionPath -Raw -Encoding utf8) -notmatch ('__version__ = "' + [regex]::Escape($Version) + '"')) {
+    throw "_version.py 版本同步失敗：找不到 __version__ = `"$Version`""
+}
 
 $pyprojectPath = Join-Path $root "pyproject.toml"
 $pyprojectText = Get-Content -Path $pyprojectPath -Raw -Encoding utf8
