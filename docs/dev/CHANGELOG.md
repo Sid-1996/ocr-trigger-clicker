@@ -1,5 +1,21 @@
 
 
+## [v0.4.7] - 2026-10-17
+
+### 給使用者
+
+**請下載 OCRTriggerClicker-win-Setup.exe**（安裝版，自動更新）：
+
+#### 改善
+
+- **主循環更省資源**：移除會與主執行緒搶 CPU 的跨群組平行預比對，改走跨幀快取；背景規則 OCR 加入容差閘門，靜態畫面直接複用上次結果。實測幀耗時中位數約減半、慢速警告明顯減少，辨識與觸發行為不變。
+
+### 給開發者
+
+- `core/05_main_loop.py` 移除跨群組投機 prematch：`_prematch_pure`／`_submit_parallel_group_prematches`／`_prematch_pool`／`StepContext.prematch`（真任務 A/B 證明在低核數機器上為負效益，`_tmpl_cache` 即時計算更快）。
+- 新增背景規則 gated OCR（`_crop_signature`／`_gated_ocr`）：ROI 指紋變化在容差內即複用上次 OCR 結果。
+- 移除 `tests/test_prematch_equiv.py` 及 `tests/conftest.py` 對應 fixture 欄位。
+
 ## [v0.4.6] - 2026-10-15
 
 ### 給使用者
