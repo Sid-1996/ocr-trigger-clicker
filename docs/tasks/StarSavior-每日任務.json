@@ -28,7 +28,7 @@
               ],
               "fail_duration_sec": 0.5
             },
-            "after_delay_ms": 250
+            "after_delay_ms": 0
           }
         },
         {
@@ -40,7 +40,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "after_delay_ms": 250,
+            "after_delay_ms": 0,
             "text": ""
           }
         }
@@ -54,9 +54,10 @@
       "enabled": true,
       "steps": [
         {
-          "type": "detect",
+          "type": "match_image",
           "params": {
-            "text": "獲得獎勵",
+            "template": "",
+            "template_data": "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",
             "roi": {
               "x": 0.684375,
               "y": 0.6842592592592592,
@@ -64,10 +65,15 @@
               "h": 0.06851851851851852,
               "roi_coord": "client"
             },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
+            "threshold": 0.9,
+            "match_color": true,
+            "color_tolerance": 25,
+            "on_fail": {
+              "action": "advance",
+              "fail_duration_sec": 0.5
+            },
+            "after_delay_ms": 0,
+            "template_source": "foreground"
           }
         },
         {
@@ -79,16 +85,15 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "after_delay_ms": 600,
-            "text": ""
+            "after_delay_ms": 100
           }
         },
         {
           "type": "key",
           "params": {
-            "key": "Escape",
+            "key": "",
             "hold_ms": 0,
-            "after_delay_ms": 250
+            "after_delay_ms": 100
           }
         }
       ],
@@ -104,15 +109,15 @@
           "type": "match_image",
           "params": {
             "template": "",
-            "template_data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAWCAIAAAB7WupNAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAByUlEQVQokX3STU8TQRgH8P+zM0t3UV7sUiJGEw8SQ4iReCDRg34JEE2MFxMTT/gpvPoNTNQDqB9A7UVPxINJa/CgSJvGQBDo9mV36ra78+KhsKyk8Jz+z+SXmWcyQ+VvJSVlHEUd35ftNotjY1kYGx/O553REcYsm9t8p1p1i0X+8YMDoCNABBjDOBzn77Xr4eJCYXqa1ji3HFsXxvgZl2wOAIDRWonINAME3WTpLn25fN72RrQhPjt38clyH4nKr/rzZ0RGh5Hc2uMsP6oNAPCJyYmbt/qot/sHgDFEZ4f5lUsWDku3W2lO6vtpJs4ySIRplo0GMnWETJKkuVernICCo+PizZ+DkW4306z8vcEIWkkRAJBC4P+ysk2v0QSQdIQ5BYnNDQA4RgCebfyVl8GnogoDOgV1N34kEnp3+8SdrMmpG+8/A9BKfX/0MF7/OmCmodm5gyXGCvcfDB5cbf02WgMwxnTWy1nEHk95/aQb+61ymc55O+/etlZepEIGgtY4z129oHPO8XsDiGO1Xddhlyf3lrD6Rg0R88YtN3fwfWOp/BZFib59x3m6TLVaxa9Ue6WSfv0KrcM3dl1aWOTz897MjOM6/wD5WMwfw+w58gAAAABJRU5ErkJggg==",
+            "template_data": "iVBORw0KGgoAAAANSUhEUgAAABEAAAAUCAIAAADkwkEeAAACnUlEQVQ4EWXBW0hTcRwH8O/vXOaZmqTlVNTsoi5vY53aQw+lBUnUW1E+FXSD7MEirId8yh6krKR6qCQJEi0hNCEoIwjxUnZSg/RJpdR0jrxvutrO+Z/cYcvZPh/q7+/1q37G2Nyk0/zundDWBhCWlkBYofM8SRIrsLmPHU3MyhLEAOrv6/P5fJ7WVnN1NSdJLDFOiDGTKMCgM6Z5vPqcB4t//CVHhLOnBHM0jQwNTVZWci8a+FSLuCGO6STk2dNKy2DwjAxP11QR6cz9W52Y1Qry1t+roY7S86h7ZMrczEkmgABIhcX5d+/DMPGq2XmjAiAAuqr5RqcoN5+6BYHPTuWkKAQQAJPdYaurh+HHk9rphzUI0VWmDk9RT0o8l5KIIAIgZObYm1pgGL5VNd/0DGH0hWVS7NvA8QgiAHxG5o7m1zAMXjjn7elEGAKRImcjiGDg4jfK7zth6C/eq838whpEimzFfzh+lzIIw5edOQgihJAiWxHB3v5ZiI1TPZ6vhQ4EEMKQIlsRIaelLWZThtflGjhURFhBCEOKbEWE9OoHSfsPeKdcA4eLCCsIYUiRrYgQLTvE5BTNvejpaEcAYRWRIlsRgYtdx2/dzlwTmsuJAEIQAaDegi1MNGEVcZZk+c0HAExjA2dO+r71YRVxYNQtmMWCDBD+kfYdzL9dA4Oz7e3EtcsIIgDq5Bx1p2dA94qWBISIWbm2xpfEka7rI3duzj+vR4jm9rLRWepqqGdlF3mzKFriEUAAzI7dlhOnFz59nG98ihB1cVkdn9Erymls9PtYZxdXfhXTC1HZFhYlYQ3CCp9fm5xnbr96/UpayXFyOn/6ff7ZsfGFx7ViU4tm4viEWM4cBSJA132aNushL2N7HNKlsiSbjRf4v9I2BaxHQ946AAAAAElFTkSuQmCC",
             "roi": {
-              "x": 0.6259374999999999,
-              "y": 0.6807407407407408,
-              "w": 0.02625,
-              "h": 0.04037037037037037,
+              "x": 0.6228125,
+              "y": 0.678888888888889,
+              "w": 0.0325,
+              "h": 0.045,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
+            "threshold": 0.9,
             "match_color": false,
             "color_tolerance": 100,
             "on_fail": "stop",
@@ -126,16 +131,16 @@
           "params": {
             "text": "緊急支援",
             "roi": {
-              "x": 0.5401041666666667,
+              "x": 0.540625,
               "y": 0.6842592592592592,
-              "w": 0.07552083333333333,
+              "w": 0.075,
               "h": 0.06851851851851852,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop",
-            "after_delay_ms": 250
+            "after_delay_ms": 0
           }
         },
         {
@@ -147,8 +152,7 @@
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
+            "after_delay_ms": 500
           }
         }
       ],
@@ -163,18 +167,18 @@
         {
           "type": "detect",
           "params": {
-            "text": "今日剩餘次數12",
+            "text": "免費",
             "roi": {
-              "x": 0.440625,
-              "y": 0.5935185185185186,
-              "w": 0.10885416666666667,
-              "h": 0.062037037037037036,
+              "x": 0.5115552779512804,
+              "y": 0.5471698113207547,
+              "w": 0.05121798875702686,
+              "h": 0.0732519422863485,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
             "on_fail": "stop",
-            "after_delay_ms": 250
+            "after_delay_ms": 0
           }
         },
         {
@@ -250,34 +254,6 @@
       "enabled": true,
       "steps": [
         {
-          "type": "match_image",
-          "params": {
-            "template": "",
-            "template_data": "iVBORw0KGgoAAAANSUhEUgAAABIAAAANCAIAAAArLKlOAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAzklEQVQokWP8//8/Axr4i8RmRpeEACYsYv8YOjo6GP4xMGAYiAD/McHf/wIiPKrqKkuXLf358+evX78wlWDT9v8/vxA3rwAXDx+HhaX5y5cvidUG0cPNx8HNxyEowpeSmvL9+3fC2rj5OHgFOJGRnKLM2nVr4QqwBQkmYGSwt3X08vSCC7BgD18mxn//oOHIz81/7vRFcQlxlMjAHiQi3LyCXMJigguWLMCqALs2QRG+8LCwHz9+YJXFqe3t27e4NEAA43/MxEUEIC4kMQAAjsdGs5Ct+GkAAAAASUVORK5CYII=",
-            "roi": {
-              "x": 0.18527363184079604,
-              "y": 0.06048458149779736,
-              "w": 0.03119402985074627,
-              "h": 0.034317180616740085,
-              "roi_coord": "client"
-            },
-            "threshold": 0.8,
-            "match_color": false,
-            "color_tolerance": 100,
-            "on_fail": {
-              "action": "notify",
-              "message": "找不到大廳特徵",
-              "stop_groups": [
-                "group_266e1f8c"
-              ],
-              "fail_duration_sec": 0.5
-            },
-            "after_delay_ms": 0,
-            "match_mode": "fuzzy",
-            "template_source": "foreground"
-          }
-        },
-        {
           "type": "detect",
           "params": {
             "text": "派遣完成",
@@ -304,131 +280,13 @@
         {
           "type": "click",
           "params": {
-            "target": "custom",
-            "x": 0.09479166666666666,
-            "y": 0.4583333333333333,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "5c6ec220a8c9",
-      "name": "地區派遣",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "地區派遣",
-            "roi": {
-              "x": 0.051041666666666666,
-              "y": 0.1388888888888889,
-              "w": 0.0734375,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
             "target": "text_center",
             "x": 0.0,
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
             "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "e78022cd87ba",
-      "name": "進入",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "進入",
-            "roi": {
-              "x": 0.8833333333333333,
-              "y": 0.8777777777777778,
-              "w": 0.05,
-              "h": 0.06851851851851852,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "ec2a396e3f90",
-      "name": "一鍵領取",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "一鍵領取",
-            "roi": {
-              "x": 0.8536458333333333,
-              "y": 0.8870370370370371,
-              "w": 0.0734375,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
+            "after_delay_ms": 0
           }
         }
       ],
@@ -582,501 +440,6 @@
             "y": 0.0,
             "button": "left",
             "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "ec4875752fe4",
-      "name": "3/3",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "3/3",
-            "roi": {
-              "x": 0.9052083333333333,
-              "y": 0.41944444444444445,
-              "w": 0.04375,
-              "h": 0.37777777777777777,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": {
-              "action": "notify",
-              "message": "沒有找到3/3次數，每日探索已完成，跳過此群組",
-              "stop_groups": [
-                "group_39a1b80d"
-              ],
-              "fail_duration_sec": 1.0
-            },
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "953ba51f72e6",
-      "name": "掃蕩戰鬥",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "掃蕩戰鬥",
-            "roi": {
-              "x": 0.803125,
-              "y": 0.8407407407407408,
-              "w": 0.0734375,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "3802c47ad696",
-      "name": "MAX",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "MAX",
-            "roi": {
-              "x": 0.8895833333333333,
-              "y": 0.8296296296296296,
-              "w": 0.0515625,
-              "h": 0.06481481481481481,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "51015e19256f",
-      "name": "是否為三次",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "X3",
-            "roi": {
-              "x": 0.8090796019900498,
-              "y": 0.8149779735682819,
-              "w": 0.05286069651741294,
-              "h": 0.08039647577092511,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.8427083333333333,
-            "y": 0.937962962962963,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "10eb3f3de862",
-      "name": "0/3點下一頁",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "0/3",
-            "roi": {
-              "x": 0.7817708333333333,
-              "y": 0.032407407407407406,
-              "w": 0.058854166666666666,
-              "h": 0.06296296296296296,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.9671875,
-            "y": 0.4981481481481482,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "8280240ec5a5",
-      "name": "掃蕩戰鬥 (2)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "掃蕩戰鬥",
-            "roi": {
-              "x": 0.803125,
-              "y": 0.8407407407407408,
-              "w": 0.0734375,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "d9d439d9e176",
-      "name": "MAX (2)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "MAX",
-            "roi": {
-              "x": 0.8895833333333333,
-              "y": 0.8296296296296296,
-              "w": 0.0515625,
-              "h": 0.06481481481481481,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "rule_6fc982fe",
-      "name": "是否為三次 (2)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "X3",
-            "roi": {
-              "x": 0.8177860696517413,
-              "y": 0.829295154185022,
-              "w": 0.03731343283582089,
-              "h": 0.04955947136563876,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.8427083333333333,
-            "y": 0.937962962962963,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
-            "hold_ms": 0,
-            "after_delay_ms": 250
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "a068faa605e9",
-      "name": "0/3點下一頁 (2)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "0/3",
-            "roi": {
-              "x": 0.7817708333333333,
-              "y": 0.032407407407407406,
-              "w": 0.058854166666666666,
-              "h": 0.06296296296296296,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.9671875,
-            "y": 0.4981481481481482,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "82cdad4adbfa",
-      "name": "掃蕩戰鬥 (3)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "掃蕩戰鬥",
-            "roi": {
-              "x": 0.803125,
-              "y": 0.8407407407407408,
-              "w": 0.0734375,
-              "h": 0.06574074074074074,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "1e95387f6db1",
-      "name": "MAX (3)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "MAX",
-            "roi": {
-              "x": 0.8895833333333333,
-              "y": 0.8296296296296296,
-              "w": 0.0515625,
-              "h": 0.06481481481481481,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "text_center",
-            "x": 0.0,
-            "y": 0.0,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        }
-      ],
-      "background": false,
-      "notes": ""
-    },
-    {
-      "id": "rule_c6eef45d",
-      "name": "是否為三次 (3)",
-      "enabled": true,
-      "steps": [
-        {
-          "type": "detect",
-          "params": {
-            "text": "X3",
-            "roi": {
-              "x": 0.8090796019900498,
-              "y": 0.8149779735682819,
-              "w": 0.05286069651741294,
-              "h": 0.08039647577092511,
-              "roi_coord": "client"
-            },
-            "match_mode": "fuzzy",
-            "fuzzy_threshold": 0.8,
-            "on_fail": "stop",
-            "after_delay_ms": 250
-          }
-        },
-        {
-          "type": "click",
-          "params": {
-            "target": "custom",
-            "x": 0.8427083333333333,
-            "y": 0.937962962962963,
-            "button": "left",
-            "random_offset": 3,
-            "hold_ms": 0,
-            "after_delay_ms": 250,
-            "text": ""
-          }
-        },
-        {
-          "type": "key",
-          "params": {
-            "key": "Escape",
             "hold_ms": 0,
             "after_delay_ms": 250
           }
@@ -3729,6 +3092,103 @@
       ],
       "background": true,
       "notes": ""
+    },
+    {
+      "id": "rule_f7a9ff0e",
+      "name": "一鍵掃蕩",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "一鍵掃蕩",
+            "roi": {
+              "x": 0.8369791666666667,
+              "y": 0.7731481481481481,
+              "w": 0.07447916666666667,
+              "h": 0.06759259259259259,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": {
+              "action": "notify",
+              "message": "",
+              "stop_groups": [
+                "group_39a1b80d"
+              ],
+              "fail_duration_sec": 1.0
+            },
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 100
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
+    },
+    {
+      "id": "rule_4dd40223",
+      "name": "一鍵掃蕩",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "一鍵掃蕩",
+            "roi": {
+              "x": 0.4635416666666667,
+              "y": 0.6768518518518518,
+              "w": 0.0734375,
+              "h": 0.06851851851851852,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "click",
+          "params": {
+            "target": "text_center",
+            "x": 0.0,
+            "y": 0.0,
+            "button": "left",
+            "random_offset": 3,
+            "hold_ms": 0,
+            "after_delay_ms": 100
+          }
+        },
+        {
+          "type": "wait",
+          "params": {
+            "ms": 250
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "Escape",
+            "hold_ms": 0,
+            "after_delay_ms": 100
+          }
+        }
+      ],
+      "background": false,
+      "notes": ""
     }
   ],
   "groups": [
@@ -3757,9 +3217,6 @@
       "between_rounds_sec": 0,
       "rule_ids": [
         "38e067112269",
-        "5c6ec220a8c9",
-        "e78022cd87ba",
-        "ec2a396e3f90",
         "3bb47d51514f"
       ],
       "order": "sequential"
@@ -3775,18 +3232,8 @@
         "94278051661e",
         "c9eb8dec407c",
         "3fcda0b8d285",
-        "ec4875752fe4",
-        "953ba51f72e6",
-        "3802c47ad696",
-        "51015e19256f",
-        "10eb3f3de862",
-        "8280240ec5a5",
-        "d9d439d9e176",
-        "rule_6fc982fe",
-        "a068faa605e9",
-        "82cdad4adbfa",
-        "1e95387f6db1",
-        "rule_c6eef45d"
+        "rule_f7a9ff0e",
+        "rule_4dd40223"
       ],
       "order": "sequential"
     },
@@ -3987,20 +3434,21 @@
     }
   ],
   "_collapsed_groups": [
-    "group_40b2992f",
+    "group_39a1b80d",
     "group_8db83f5b",
-    "group_a1d5b815",
-    "group_e8efb9ff",
-    "group_3c07d078",
+    "group_36068123",
+    "group_2f0c668c",
+    "__default__",
     "group_fdab3a16",
     "group_261f6f66",
-    "group_2f0c668c",
-    "group_f1d46de3",
-    "__default__",
-    "group_36068123",
-    "group_39a1b80d",
+    "group_a1d5b815",
     "group_53eec035",
-    "group_266e1f8c"
+    "group_40b2992f",
+    "group_e8efb9ff",
+    "group_c7a80073",
+    "group_f1d46de3",
+    "group_266e1f8c",
+    "group_3c07d078"
   ],
   "capture_size": [
     1920,
