@@ -59,6 +59,7 @@ class ExecutionLogWidget(QWidget):
             "QTableWidget { font-size: 11px; }QTableWidget::item { padding: 2px 4px; }"
         )
         layout.addWidget(self._table)
+        self._rendered: list[dict] = []
 
     _RESULT_KEYS = {
         "ok": "exec_log.result.ok",
@@ -70,8 +71,19 @@ class ExecutionLogWidget(QWidget):
     }
 
     def _populate(self, entries: list[dict]):
+        # 只補上新增的尾端列。日誌為 deque(maxlen=50) 且每 500ms 全量傳入，
+        # 全量重建（每列 5 個 QTableWidgetItem + ResizeToContents 重算）曾讓
+        # GUI 執行緒吃掉整個行程的 GIL，主循環被餓死（實測 217ms/幀 → 574ms/幀）。
+        n = len(self._rendered)
+        keep = 0
+        while keep < n and keep < len(entries) and self._rendered[keep] == entries[keep]:
+            keep += 1
+        if keep < n:
+            self._table.setRowCount(keep)
+            del self._rendered[keep:]
         self._table.setRowCount(len(entries))
-        for row, e in enumerate(entries):
+        for row in range(keep, len(entries)):
+            e = entries[row]
             result = e.get("result", "")
             result_label = T(self._RESULT_KEYS.get(result, result))
             detail = e.get("detail", "")
@@ -103,8 +115,64 @@ class ExecutionLogWidget(QWidget):
                 elif result == "wait":
                     item.setForeground(QColor(140, 140, 140))
                 self._table.setItem(row, col, item)
+            self._rendered.append(e)
         if entries:
             self._table.scrollToBottom()
 
     def _clear(self):
         self._table.setRowCount(0)
+        self._rendered.clear()
+
+
+if __name__ == "__main__":
+    import os
+    import sys
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication([])
+    w = ExecutionLogWidget()
+
+    def entry(ts, result="ok", step_idx=0, step_type="detect"):
+        return {
+            "ts": ts,
+            "rule_name": "測試規則",
+            "step_idx": step_idx,
+            "step_type": step_type,
+            "result": result,
+            "detail": "",
+        }
+
+    one = [entry("1")]
+    w._populate(one)
+    assert w._table.rowCount() == 1, w._table.rowCount()
+    print("  [OK] 初次填入 1 列")
+
+    two = one + [entry("2", "completed", -1, "completed")]
+    w._populate(two)
+    assert w._table.rowCount() == 2, w._table.rowCount()
+    assert w._table.item(0, 0).text() == "1", w._table.item(0, 0).text()
+    assert w._table.item(1, 0).text() == "2", w._table.item(1, 0).text()
+    print("  [OK] 增量附加保留既有列")
+
+    w._populate(two)
+    assert w._table.rowCount() == 2, w._table.rowCount()
+    assert w._table.item(0, 0).text() == "1", w._table.item(0, 0).text()
+    print("  [OK] 內容未變不動既有列")
+
+    w._populate(two[1:])
+    assert w._table.rowCount() == 1, w._table.rowCount()
+    assert w._table.item(0, 0).text() == "2", w._table.item(0, 0).text()
+    print("  [OK] 前端被丟棄（deque maxlen）時截斷")
+
+    w._clear()
+    assert w._table.rowCount() == 0, w._table.rowCount()
+    w._populate(two)
+    assert w._table.rowCount() == 2, w._table.rowCount()
+    assert w._table.item(0, 0).text() == "1", w._table.item(0, 0).text()
+    print("  [OK] 清除後可重新填入")
+
+    print("\n=== All ExecutionLogWidget checks passed ===")
+    raise SystemExit(0)
