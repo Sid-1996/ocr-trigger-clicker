@@ -238,6 +238,12 @@ class MainLoop:
         }
         self._frame_prewarm_ms: float = 0.0
         self._frame_count = 0  # 本輪實際處理的幀數（停止摘要用；效能 A/B 的硬指標）
+        # 逐幀階段耗時累加器（每 _PERF_LOG_SEC 輸出一次，見 _flush_perf_phases）
+        self._phase_sums: dict[str, float] = dict.fromkeys(
+            ("iter", "capture", "total", "prewarm", "background", "groups"), 0.0
+        )
+        self._phase_frames = 0
+        self._phase_since = 0.0
         self._notified_conditions: set[str] = set()
         self._frame_cache_hits_before: int = 0
         # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
@@ -1972,8 +1978,10 @@ class MainLoop:
         if self._has_detect_rules:
             self._prewarm_ocr_clusters(img, rect)
         self._frame_prewarm_ms = (time.monotonic() - prewarm_started) * 1000
+        self._phase_sums["prewarm"] += self._frame_prewarm_ms
 
         # ponytail: run all background rules each frame; jumps are cancelled
+        phase_started = time.monotonic()
         for rule in rules_snapshot:
             if rule.enabled and rule.background:
                 self._process_counter += 1
@@ -1990,6 +1998,8 @@ class MainLoop:
                 self._rule_pointer = saved_ptr
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
+        self._phase_sums["background"] += (time.monotonic() - phase_started) * 1000
+        phase_started = time.monotonic()
         for g in self._groups:
             if (
                 g.enabled
@@ -2000,6 +2010,7 @@ class MainLoop:
                 self._run_parallel_group(g, img, rect)
 
         # ── Group-based rule pointer (sequential / once / repeat) ──
+        self._phase_sums["groups"] += (time.monotonic() - phase_started) * 1000
         group = self._current_group()
         if group is None:
             return
@@ -2181,6 +2192,31 @@ class MainLoop:
                 break
             time.sleep(0.5)
 
+    _PERF_LOG_SEC = 60.0
+
+    def _flush_perf_phases(self) -> None:
+        """每 _PERF_LOG_SEC 輸出一次逐幀階段平均耗時（0 = 不輸出），供實機定位慢幀。"""
+        now = time.monotonic()
+        if self._phase_frames == 0 or self._phase_since == 0.0:
+            self._phase_since = now
+            return
+        span = now - self._phase_since
+        if span < self._PERF_LOG_SEC:
+            return
+        s = self._phase_sums
+        n = self._phase_frames
+        rest = s["total"] - s["prewarm"] - s["background"] - s["groups"]
+        self._log(
+            f"[perf] {span:.0f}s {n}幀: 幀耗={s['iter'] / n:.0f}ms"
+            f" (擷取={s['capture'] / n:.0f}ms 處理={s['total'] / n:.0f}ms)"
+            f" | 預熱={s['prewarm'] / n:.0f} 背景={s['background'] / n:.0f}"
+            f" 平行群組={s['groups'] / n:.0f} 佇列/其他={rest / n:.0f}"
+        )
+        for k in self._phase_sums:
+            self._phase_sums[k] = 0.0
+        self._phase_frames = 0
+        self._phase_since = now
+
     def _loop(self):
         iteration = 0
         try:
@@ -2230,7 +2266,9 @@ class MainLoop:
                         self._stop_event.wait(self._interval)
                         continue
                     mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                    cap_started = time.monotonic()
                     img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
+                    phase_capture_ms = (time.monotonic() - cap_started) * 1000
                     if img is None:
                         if iteration % 30 == 0:
                             self._log(f"所有截圖方式皆失敗: {title}")
@@ -2269,6 +2307,11 @@ class MainLoop:
                     ocr_ms = (t3 - t2) * 1000
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
+                    self._phase_sums["total"] += ocr_ms
+                    self._phase_sums["capture"] += phase_capture_ms
+                    self._phase_sums["iter"] += loop_elapsed
+                    self._phase_frames += 1
+                    self._flush_perf_phases()
 
                     # 過慢判定：扣除刻意等待（wait/動作後延遲）與驗證阻塞——
                     # 驗證等待是故意的，只記錄不告警，避免重蹈 verify 誤報
@@ -2328,6 +2371,10 @@ class MainLoop:
         self._last_completed_log.clear()
         self._black_streak = 0
         self._frame_count = 0
+        for k in self._phase_sums:
+            self._phase_sums[k] = 0.0
+        self._phase_frames = 0
+        self._phase_since = 0.0
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -2530,6 +2577,11 @@ if __name__ == "__main__":
     ml._execution_log = deque(maxlen=50)
     ml._last_exec_log = {}
     ml._frame_count = 0
+    ml._phase_sums = dict.fromkeys(
+        ("iter", "capture", "total", "prewarm", "background", "groups"), 0.0
+    )
+    ml._phase_frames = 0
+    ml._phase_since = 0.0
     ml._notified_conditions = set()
     ml._rule_completed = set()
     ml._last_completed_log = {}
@@ -3450,4 +3502,47 @@ if __name__ == "__main__":
     assert "ad_selfcheck2:1" not in ml._last_exec_log, "中斷後尾隨步驟不應執行"
     print("  [OK] after_delay_ms: 中斷時跳過後續步驟")
 
-    print("\n=== All 30 tests passed ===")
+    # ── Test 33: 逐幀階段累加器與週期輸出 (_flush_perf_phases) ──
+    _perf_logs: list[str] = []
+    ml._log = lambda msg, dedup_key=None: _perf_logs.append(msg)
+    for k in ml._phase_sums:
+        ml._phase_sums[k] = 0.0
+    ml._phase_frames = 0
+    ml._phase_since = time.monotonic() - ml._PERF_LOG_SEC - 1  # 假裝已過一個週期
+
+    # 未滿一幀 → 不輸出，且重新起算
+    ml._flush_perf_phases()
+    assert _perf_logs == [], "沒有幀就不該輸出階段統計"
+
+    ml._phase_sums.update(iter=600.0, capture=19.0, total=400.0, prewarm=50.0)
+    ml._phase_sums["background"] = 30.0
+    ml._phase_sums["groups"] = 120.0
+    ml._phase_frames = 2
+    ml._phase_since = time.monotonic() - ml._PERF_LOG_SEC - 1
+    ml._flush_perf_phases()
+    assert len(_perf_logs) == 1, f"應輸出一行階段統計，got {_perf_logs}"
+    _line = _perf_logs[0]
+    assert "幀耗=300ms" in _line, _line  # iter 600/2
+    assert "處理=200ms" in _line, _line  # total 400/2
+    assert "擷取=10ms" in _line, _line  # capture 19/2 → 9.5 → 10
+    assert "預熱=25" in _line and "背景=15" in _line and "平行群組=60" in _line, _line
+    assert "佇列/其他=100" in _line, _line  # (400-50-30-120)/2
+    assert ml._phase_frames == 0 and all(v == 0.0 for v in ml._phase_sums.values()), (
+        "輸出後累加器應歸零"
+    )
+
+    # 未過週期 → 累加但不輸出
+    ml._phase_sums["total"] = 100.0
+    ml._phase_frames = 1
+    ml._phase_since = time.monotonic()
+    ml._flush_perf_phases()
+    assert len(_perf_logs) == 1 and ml._phase_frames == 1, "未過週期不輸出且保留累加值"
+
+    # 首幀（_phase_since 未起算）→ 不輸出誇張的開機以來秒數
+    ml._phase_since = 0.0
+    ml._phase_frames = 1
+    ml._flush_perf_phases()
+    assert len(_perf_logs) == 1 and ml._phase_since > 0.0, "首幀只起算不輸出"
+    print("  [OK] _flush_perf_phases: 週期輸出、歸零、未滿週期只累加、首幀只起算")
+
+    print("\n=== All 33 tests passed ===")

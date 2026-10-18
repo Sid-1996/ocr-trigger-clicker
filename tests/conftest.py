@@ -26,6 +26,11 @@ def make_main_loop():
     ml._window_title = "測試視窗"
     ml._frame_chrome = None
     ml._frame_count = 0
+    ml._phase_sums = dict.fromkeys(
+        ("iter", "capture", "total", "prewarm", "background", "groups"), 0.0
+    )
+    ml._phase_frames = 0
+    ml._phase_since = 0.0
     ml._notified_conditions = set()
     ml._window_hwnd = None
     ml._dpi_scale = 1.0
