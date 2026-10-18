@@ -248,6 +248,11 @@ class MainLoop:
                 "pre",
                 "pre_cpu",
                 "pre_thr",
+                "pre_set",
+                "pre_lock",
+                "pre_minz",
+                "pre_rect",
+                "pre_fg",
                 "mid",
                 "total",
                 "prewarm",
@@ -2224,7 +2229,10 @@ class MainLoop:
             f"[perf] {span:.0f}s {n}幀: 幀耗={s['iter'] / n:.0f}ms"
             f" (行程CPU={s['cpu'] / n:.0f} 執行緒CPU={s['cpu_thr'] / n:.0f})"
             f" | 前處理={s['pre'] / n:.0f}ms"
-            f"(行程CPU={s['pre_cpu'] / n:.0f} 執行緒CPU={s['pre_thr'] / n:.0f})"
+            f"(行程CPU={s['pre_cpu'] / n:.0f} 執行緒CPU={s['pre_thr'] / n:.0f}"
+            f" 設定={s['pre_set'] / n:.0f} 鎖={s['pre_lock'] / n:.0f}"
+            f" 最小化={s['pre_minz'] / n:.0f} 矩形={s['pre_rect'] / n:.0f}"
+            f" 前景={s['pre_fg'] / n:.0f})"
             f" 擷取={s['capture'] / n:.0f} 黑幕/差異={s['mid'] / n:.0f}"
             f" 處理={s['total'] / n:.0f}"
             f" | 預熱={s['prewarm'] / n:.0f} 背景={s['background'] / n:.0f}"
@@ -2250,6 +2258,7 @@ class MainLoop:
                     self._rule_config_ctrl.get_setting(self, "scan_interval_ms") / 1000.0,
                     _MIN_INTERVAL_SEC,
                 )
+                ph_int = time.monotonic()
                 try:
                     if self._pause_event.is_set():
                         self._stop_event.wait(0.1)
@@ -2258,6 +2267,7 @@ class MainLoop:
 
                     with self._window_lock:
                         title = self._window_title
+                    ph_lock = time.monotonic()
                     if self._window_hwnd is None:
                         with self._window_lock:
                             self._window_hwnd = get_window_hwnd_orig(title)
@@ -2266,7 +2276,9 @@ class MainLoop:
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
+                    ph_minz = time.monotonic()
                     rect = get_window_rect(title)
+                    ph_rect = time.monotonic()
                     if rect is None:
                         self._wait_window_recover(title)
                         self._perf.record_frame()
@@ -2289,6 +2301,11 @@ class MainLoop:
                     phase_pre_ms = (time.monotonic() - loop_start) * 1000
                     phase_pre_cpu_ms = (time.process_time() - loop_cpu_start) * 1000
                     phase_pre_thr_ms = (time.thread_time() - loop_thr_start) * 1000
+                    self._phase_sums["pre_set"] += (ph_int - loop_start) * 1000
+                    self._phase_sums["pre_lock"] += (ph_lock - ph_int) * 1000
+                    self._phase_sums["pre_minz"] += (ph_minz - ph_lock) * 1000
+                    self._phase_sums["pre_rect"] += (ph_rect - ph_minz) * 1000
+                    self._phase_sums["pre_fg"] += (time.monotonic() - ph_rect) * 1000
                     cap_started = time.monotonic()
                     img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
                     phase_capture_ms = (time.monotonic() - cap_started) * 1000
@@ -2616,6 +2633,11 @@ if __name__ == "__main__":
             "pre",
             "pre_cpu",
             "pre_thr",
+            "pre_set",
+            "pre_lock",
+            "pre_minz",
+            "pre_rect",
+            "pre_fg",
             "mid",
             "total",
             "prewarm",
