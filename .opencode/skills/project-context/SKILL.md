@@ -277,6 +277,8 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 14. **效能檔位功能評估後不實作（2026-08-11）**：曾被提案加入「效能檔位」（節能/均衡/高效能，三檔一鍵調整 + 進階微調），評估後拒絕（YAGNI、刪除優先）。理由：實際可調的全局效能參數僅 `scan_interval_ms`（偵測頻率，`06_gui_main.py:2880`）＋ `max_cps`（點擊上限，`06_gui_main.py:2874`）兩顆，皆早已在設定頁可見——三檔只是重打包既有旋鈕，無實質增值。補充佐證：主循環 OCR 完全不縮圖（見第 8 條），高效能檔沒有更快空間；模板 scale 候選數（`11_template_matching.py` 13/5 個）是唯一「強硬體可多做工」的旋鈕，但影響有限不開放；內部常數（`_MIN_INTERVAL_SEC`、GPU provider、`_RATE_LIMIT_*`）屬實作細節或反作弊保護，不開放。
 
+15. **效能回歸：兩個 GIL 凍結陷阱（v0.4.7 修復，勿再犯）**：v0.4.3 之後的版本主循環被拖慢約 2 倍（實機 574ms/幀 vs v0.4.3 的 323ms），兩個獨立成因各自都能拖垮整個行程——(a) `ExecutionLogWidget._populate` 每 500ms 全量重建 50 列（250 個 `QTableWidgetItem`＋`ResizeToContents` 重算），GUI 執行緒佔 23% 取樣；(b) 每幀 `get_window_rect(title)` 走 pygetwindow 列舉全桌面並逐視窗 `GetWindowText`（跨行程同步送訊、持 GIL，受擠壓時單次阻塞 145ms）。修法：面板改增量附加（`tests/test_execution_log_widget.py` 以「重複 `_populate` 時 item 物件身分不變」把關）、熱路徑改 `get_window_rect_hwnd()`＋`MainLoop._chrome()` 每幀快取。**症狀辨識**：`[perf]` 某階段耗時暴增但 `執行緒CPU≈0` = GIL 被別條執行緒霸佔（不是 loop 沒被排程）。紅線、診斷手法（faulthandler 逐執行緒堆疊）與真機 A/B 協定見 `AGENTS.md:效能紅線` 與 `docs/dev/TECHNICAL.md`「GIL 凍結兩案」。
+
 ## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267` + `eda47c2`）
 
 **病灶**：`MainLoop` 執行中每 20 次迭代（或停止時），若 `_rules_dirty=True`（規則觸發時設定），會用自己記憶體中的 `self._rules` 快照直接呼叫 `save_rules()` 覆寫任務檔（此邏輯已於 commit `eda47c2` 完全移除，不再存在於目前的 `05_main_loop.py`）。GUI 端的一般規則編輯（`_save_current_rule`）在 loop 執行中會被 UI disabled 擋住，但 `_on_background_changed`（勾選「常駐監控」）沒有這層防護，可以在 loop 執行中直接存檔。GUI 的 `save_task()`/`save_groups()` 呼叫與 loop 的週期性存檔之間存在檔案層級的 write-write race：GUI 剛寫入的新規則，可能在下一瞬間被 loop 用舊快照覆寫掉。症狀：新建立的「常駐監控」規則，在 loop 執行過幾輪、且使用者編輯過後，重啟工具即消失。
@@ -385,37 +387,12 @@ AHK 移除後，`clicker.ahk` datas 已刪除。新增 `pynput`、`dxcam`、`com
 
 ## Release Notes 寫法規範
 
-Release notes 必須分兩層，先一般使用者後技術細節，中間用 `---` 分隔：
+**白話、面向一般玩家、只講使用者有感的結果**（單人維護，2026-10-18 起廢除「給開發者／技術細節」區塊）：
 
-1. **一般使用者摘要** — 白話、功能角度，不說內部機制。用「你可以…」「適合用來…」這類表達。條列 3~5 項重點。
-2. **技術細節** — 提交類型分類（`✨ 新功能` / `🔧 修正` / `🚀 改善`），附 commit hash。寫給貢獻者與進階使用者看。
-
-範例結構：
-
-```
-## vX.Y.Z 更新內容
-
-### 🎯 一般使用者更新摘要
-
-**功能 A**
-一句話說明做了什麼、對使用者有什麼好處。
-
-**功能 B**
-同上。
-
----
-
-### 🔧 技術細節
-
-### ✨ 新功能
-- 功能（commit `xxxxxxx`）
-
-### 🔧 修正
-- 修正（commit `xxxxxxx`）
-
-### 🚀 改善
-- 改善（commit `xxxxxxx`）
-```
+1. 頂部一行「請下載 XXX（檔名）」，再以分類標題（`### 性能優化`／`### 問題修復`／`### 新功能`）條列。
+2. 每條講「使用者看到什麼變化」，不寫模組名、函式名、毫秒數字（要數字就給體感量級，如「快約 2.6 倍」）。
+3. 主要改版（安裝方式變更等）頂部以引用塊標註英日文下載提示（`> **🌐 English**: ...` ／ `> **🌐 日本語**: ...`），直接展開顯示，無需收合。
+4. 實作細節留 commit message 與 `docs/dev/TECHNICAL.md`，不進 CHANGELOG。來源＝`docs/dev/CHANGELOG.md` 的 `## [v$x.y.z]` 區塊，由 `release.ps1` 解析後寫入 GitHub release；寫法規範見 `AGENTS.md:CHANGELOG 維護`。
 
 ---
 

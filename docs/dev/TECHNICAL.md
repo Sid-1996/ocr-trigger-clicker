@@ -118,6 +118,10 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 
 診斷手法：`faulthandler.dump_traceback_later(2, repeat=True)` 每 2 秒傾印全執行緒堆疊，再統計各執行緒的堆疊簽章分佈，即可直接看到誰在吃 GIL。
 
+**真機 A/B 協定（不照做會得到反向結論）**：不要用無 GUI 的 harness 或單元測試比較版本——那正好移除 GUI 執行緒的 GIL 競爭，曾據此誤判「master 比 v0.4.3 快」（實機相反）。做法：同機同遊戲、真 app（`uv run python gui/06_gui_main.py --debug`）、F8 驅動，兩版連續交替各跑 90 秒以上，比較 `[perf]` 的幀耗／`執行緒CPU`。**不要看「循環停止」的平均幀耗**——它含 `scan_interval_ms` 的等待（工作 130ms + 間隔 250ms ≈ 顯示 395ms；v0.4.3 為 339+250≈589ms）。
+
+**紅線（改動前檢查）**：① GUI 每個 tick 的工作量 ∝ 新增資料、不得 ∝ 總量（面板一律增量附加）；② 每幀熱路徑禁列舉視窗／跨行程同步送訊（矩形走 `get_window_rect_hwnd()`、chrome offset 走 `MainLoop._chrome()` 每幀快取）；③ `[perf]` 出現「階段耗時暴增 + `執行緒CPU≈0`」即為 GIL 爭用，先以 faulthandler 找出燒 GIL 的執行緒，不要歸因於排程。
+
 ### 命中率切換草案（未實作，待未來評估）
 
 並行預算在**命中密集場景**會略慢於純順序，因為順序靠 `break-on-first-hit` 短路（掃到命中就停），平行卻「全算再取第一個命中」。現況 N=21 下此劣勢無感（每幀差 ~2ms，500ms 掃描間隔下佔 0.4%），但 N 擴充到 80+ 且命中密集時可能微感。

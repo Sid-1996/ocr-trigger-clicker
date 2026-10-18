@@ -26,4 +26,3 @@ def build_id() -> str:
         return out.stdout.strip() if out.returncode == 0 else ""
     except Exception:
         return ""
-
