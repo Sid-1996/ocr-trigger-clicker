@@ -206,6 +206,7 @@ class MainLoop:
     ):
         self._rules_path = rules_path
         self._window_title = window_title
+        self._frame_chrome: tuple[int, int] | None = None
         self._config_path = config_path
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
         self._max_cps = max_cps
@@ -689,6 +690,12 @@ class MainLoop:
                     profile["max_pixels"] = pixels
                     profile["max_rect"] = rect
 
+    def _chrome(self) -> tuple[int, int]:
+        """每幀只查一次客戶區 offset（列舉視窗約 1ms，逐規則查會吃掉 2 成幀耗時）。"""
+        if self._frame_chrome is None:
+            self._frame_chrome = get_window_client_offset(self._window_title) or (0, 0)
+        return self._frame_chrome
+
     def _resolve_roi(self, roi: dict, rect: dict, chrome: tuple | None = None) -> dict:
         x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
         if x == 0 and y == 0 and w == 0 and h == 0:
@@ -700,7 +707,7 @@ class MainLoop:
             if roi.get("roi_coord") == "client":
                 # ponytail: chrome 可由呼叫端預算後傳入，避免平行預算時 N 次重複 Win32 呼叫
                 if chrome is None:
-                    chrome = get_window_client_offset(self._window_title) or (0, 0)
+                    chrome = self._chrome() or (0, 0)
                 cx, cy = chrome
                 client_w = W - cx
                 client_h = H - cy
@@ -728,7 +735,7 @@ class MainLoop:
             return int(px), int(py)
         if px <= 1.0 and py <= 1.0:
             if roi_coord == "client":
-                chrome = get_window_client_offset(self._window_title) or (0, 0)
+                chrome = self._chrome() or (0, 0)
                 cx, cy = chrome
                 client_w = W - cx
                 client_h = H - cy
@@ -783,7 +790,7 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.template_empty"))
 
         capture_size = get_capture_size(self._rules_path)
-        chrome = get_window_client_offset(self._window_title)
+        chrome = self._chrome()
         if chrome:
             current_size = [ctx.rect["w"] - chrome[0], ctx.rect["h"] - chrome[1]]
         else:
@@ -1328,7 +1335,7 @@ class MainLoop:
             if not template_data.strip() and not template_path.strip():
                 return False
             capture_size = get_capture_size(self._rules_path)
-            chrome = get_window_client_offset(self._window_title)
+            chrome = self._chrome()
             if chrome:
                 current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
             else:
@@ -1929,6 +1936,7 @@ class MainLoop:
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()
+        self._frame_chrome = None  # 每幀重算一次客戶區 offset（見 _chrome）
         self._frame_ocr_profile = {
             "calls": 0,
             "ms": 0.0,
@@ -2022,7 +2030,7 @@ class MainLoop:
             # ponytail: 共享預算——capture_size/chrome/current_size 主線程只算一次，
             # 各 worker 不再各自讀檔/呼叫 Win32（否則 N 次/幀的重複 I/O 是變慢元兇）。
             capture_size = get_capture_size(self._rules_path)
-            chrome = get_window_client_offset(self._window_title)
+            chrome = self._chrome()
             if chrome:
                 current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
             else:
