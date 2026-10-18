@@ -1,20 +1,21 @@
 
 
-## [v0.4.7] - 2026-10-17
+## [v0.4.7] - 2026-10-18
 
 ### 給使用者
 
 **請下載 OCRTriggerClicker-win-Setup.exe**（安裝版，自動更新）：
 
-#### 改善
+#### 修正
 
-- **主循環更省資源**：移除會與主執行緒搶 CPU 的跨群組平行預比對，改走跨幀快取；背景規則 OCR 加入容差閘門，靜態畫面直接複用上次結果。實測幀耗時中位數約減半、慢速警告明顯減少，辨識與觸發行為不變。
+- **修復 v0.4.3 之後版本的自動操作變慢**：偵測循環被兩處背景工作拖累——執行記錄面板每 0.5 秒重建整張表、每幀以標題逐視窗比對取得視窗位置。現在只補上新進紀錄，並改用視窗代號直接查詢位置。實測幀耗 574ms → 177ms（v0.4.3 為 323ms），每秒處理幀數提升約 3 倍，CPU 用量同步下降。
 
 ### 給開發者
 
-- `core/05_main_loop.py` 移除跨群組投機 prematch：`_prematch_pure`／`_submit_parallel_group_prematches`／`_prematch_pool`／`StepContext.prematch`（真任務 A/B 證明在低核數機器上為負效益，`_tmpl_cache` 即時計算更快）。
-- 新增背景規則 gated OCR（`_crop_signature`／`_gated_ocr`）：ROI 指紋變化在容差內即複用上次 OCR 結果。
-- 移除 `tests/test_prematch_equiv.py` 及 `tests/conftest.py` 對應 fixture 欄位。
+- `gui/execution_log_widget.py`：`_populate` 改增量附加（前綴比對、只建新列），移除每 500ms 全量重建 50 列（250 個 `QTableWidgetItem` + `ResizeToContents` 重算）。GUI 執行緒曾因此佔用 23% 取樣，主循環被 GIL 餓死（loop 執行緒 67ms/幀 → 10ms/幀）。
+- `core/01_screenshot.py`：新增 `get_window_rect_hwnd()`；`capture()`／`capture_frame()` 新增 `rect`／`hwnd` 參數。原本每幀 `get_window_rect(title)` 走 pygetwindow `EnumWindows` + 逐視窗 `GetWindowText`（跨行程同步送訊且持 GIL），在 GIL 擠壓下單次阻塞 145ms。
+- 主循環還原至 v0.4.6（回復跨群組平行預比對）：前一版條目所述「移除平行預比對對低核數機器為負效益」為誤判，真因即上述兩點；`_gated_ocr`／`_crop_signature` 一併移除。
+- 保留逐階段計時輸出（`[perf]`：幀耗／前處理細分／預熱／背景／平行群組／行程CPU／執行緒CPU）。
 
 ## [v0.4.6] - 2026-10-15
 

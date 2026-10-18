@@ -109,6 +109,15 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 
 同類陷阱：`_activate_window()` 在 pynput 模式原本每次動作都呼叫 `activate_window()`（同樣列舉視窗＋搶焦點），已改為已在前景即早退。
 
+### GIL 凍結兩案（已實作）
+
+單一 Python 執行緒的密集工作會拖垮整個行程的 wall time，而它自己的 CPU 時間看起來很低（等待 GIL），極易誤判為「loop 執行緒沒被排程」：
+
+- **GUI 全表重建**：`ExecutionLogWidget._populate` 每 500ms 重建 50 列（250 個 `QTableWidgetItem`＋`ResizeToContents` 重算），GUI 執行緒佔 23% 取樣；loop 執行緒 CPU 由 67ms/幀掉到 10ms/幀，所有階段一起膨脹約 2 倍。改為增量附加（前綴比對＋只建新列）後，幀耗 574ms → 177ms（v0.4.3 為 323ms）。
+- **每幀標題列舉**：`get_window_rect(title)` 走 pygetwindow `EnumWindows` + 每個頂層視窗 `GetWindowText`（跨行程同步送訊、持 GIL）。在 GIL 擠壓下單次可阻塞 145ms（`[perf]` 前處理細分顯示 145ms 全落在「矩形」且執行緒 CPU=0）。每幀熱路徑改用 `get_window_rect_hwnd()`（`GetWindowRect` 讀核心共享資料），`capture_frame()` 可收 `rect`／`hwnd` 避免重複列舉。
+
+診斷手法：`faulthandler.dump_traceback_later(2, repeat=True)` 每 2 秒傾印全執行緒堆疊，再統計各執行緒的堆疊簽章分佈，即可直接看到誰在吃 GIL。
+
 ### 命中率切換草案（未實作，待未來評估）
 
 並行預算在**命中密集場景**會略慢於純順序，因為順序靠 `break-on-first-hit` 短路（掃到命中就停），平行卻「全算再取第一個命中」。現況 N=21 下此劣勢無感（每幀差 ~2ms，500ms 掃描間隔下佔 0.4%），但 N 擴充到 80+ 且命中密集時可能微感。
