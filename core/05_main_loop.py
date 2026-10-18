@@ -109,6 +109,7 @@ class StepContext:
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
     ocr_cache_hit: bool = False
+    matched_ns: int = 0
     prematch: Optional[dict] = None
 
 
@@ -236,6 +237,7 @@ class MainLoop:
             "max_rect": None,
         }
         self._frame_prewarm_ms: float = 0.0
+        self._notified_conditions: set[str] = set()
         self._frame_cache_hits_before: int = 0
         # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
         # key=(x,y,w,h) value=(crop_hash, results)；有界 LRU，視窗縮放會因 rect 不同自動 miss。
@@ -507,9 +509,11 @@ class MainLoop:
     def _activate_window(self) -> bool:
         """Activate window using the appropriate method based on interaction mode."""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        # 已在前景就免再激活：pynput 模式下這個檢查原本只在前景之外的模式生效，
+        # 導致每次動作都白呼叫 activate_window（列舉視窗＋搶焦點）。
+        if self._window_hwnd and is_window_foreground(self._window_hwnd):
+            return True
         if mode and mode != "pynput":
-            if self._window_hwnd and is_window_foreground(self._window_hwnd):
-                return True  # 已在前景（如 hybrid focus_guard 激活過），免重複激活
             return _screenshot.activate_window_bg(self._window_title)
         return _screenshot.activate_window(self._window_title)
 
@@ -1287,10 +1291,15 @@ class MainLoop:
 
     def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         msg = params.get("message", "")
+        # 同一匹配畫面只通知一次；偵測步驟失敗時於 _run_rule 重新武裝（見 _notified_conditions）
+        if ctx.matched_ns and rule.id in self._notified_conditions:
+            return StepResult("continue")
         if msg:
             self._log(f"規則「{rule.name}」通知：{msg}")
             if self.on_warning:
                 self.on_warning(msg)
+            if ctx.matched_ns:
+                self._notified_conditions.add(rule.id)
         return StepResult("continue")
 
     def _check_verify_condition(self, verify: dict, img: np.ndarray, rect: dict) -> bool:
@@ -1532,6 +1541,14 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
+            if (
+                i == 0
+                and step.type in self._DETECT_STEP_TYPES
+                and (result.action != "continue" or ctx.on_fail_fired)
+            ):
+                self._notified_conditions.discard(rule.id)
+            if step.type in self._DETECT_STEP_TYPES and result.action == "continue":
+                ctx.matched_ns = time.monotonic_ns()
             ms = step.params.get("after_delay_ms", 0) or 0
             if (
                 step.type in ("click", "key", "drag", "scroll", "detect", "match_image")
@@ -2507,6 +2524,7 @@ if __name__ == "__main__":
     ml._tmpl_cache_max = 64
     ml._execution_log = deque(maxlen=50)
     ml._last_exec_log = {}
+    ml._notified_conditions = set()
     ml._rule_completed = set()
     ml._last_completed_log = {}
     ml._action_log_ts = {}

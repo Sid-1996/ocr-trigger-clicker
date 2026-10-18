@@ -25,6 +25,7 @@ def make_main_loop():
     ml._rules_path = ""
     ml._window_title = "測試視窗"
     ml._frame_chrome = None
+    ml._notified_conditions = set()
     ml._window_hwnd = None
     ml._dpi_scale = 1.0
     ml._interval = 0.5

@@ -800,6 +800,7 @@ uv run python -m pytest                # 含覆蓋報告
 | `test_i18n.py` | 程式碼用到的靜態 `T("key")` 逐語言檢查、各語言 key 集合一致性、系統語言映射 |
 | `test_recorder_convert.py` | 錄製 session → 規則轉換（OCR 錨點 / 模板錨點 / wait+click 三層、座標比例、群組結構） |
 | `test_ocr_merge.py` | OCR 合併快取 vs 逐 ROI 等價（需本機 RapidOCR model，無則 skip） |
+| `test_prematch_equiv.py` | 並行 prematch vs 循序等價 |
 | `test_template_cache.py` | 模板解碼 LRU 快取等價/命中/清除 |
 | `test_verify.py` | 驗證條件、重試、取消、正規化與 GUI 編輯行為 |
 | `test_verify_log_translations.py` | 三語驗證逾時與失敗處理日誌格式 |
@@ -814,13 +815,13 @@ uv run python -m pytest                # 含覆蓋報告
 
 ### 共用與 fixture 資料
 
-- `tests/conftest.py`：`tmp_tasks_dir` fixture（把任務目錄指向暫存），與 `make_main_loop()`——以 `__new__` 建立不觸發 `__init__` 的 MainLoop 測試實例，供 `test_main_loop` 等共用；`MainLoop.__init__` 新增屬性時必須同步。
+- `tests/conftest.py`：`tmp_tasks_dir` fixture（把任務目錄指向暫存），與 `make_main_loop()`——以 `__new__` 建立不觸發 `__init__` 的 MainLoop 測試實例，`test_main_loop` / `test_prematch_equiv` 共用；`MainLoop.__init__` 新增屬性時必須同步。
 - `tests/data/test*.png`：實境遊戲幀（1920×1080），作 OCR／模板比對的回歸基準。
 - `tests/data/fixture_task.json`：**快照**自 `docs/tasks/StarSavior-跑馬輔助.json`。整合測試吃這份固定快照、不讀活任務——任務內容更新不會弄紅測試；需同步新任務時重新複製覆寫即可。
 
 ### 注意
 
-- 整合測試（`test_ocr_merge` / `test_template_cache`）需本機 `custom_models/chinese_cht_rec_mobile.onnx` 才真正執行，無 model 環境自動 skip。
+- 整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 `custom_models/chinese_cht_rec_mobile.onnx` 才真正執行，無 model 環境自動 skip。
 - Win32 截圖、真實遊戲輸入及完整 GUI 操作仍需環境實測；部分純邏輯與 GUI 元件已有上表 pytest，不能把測試通過視為真實遊戲端到端驗證。
 - 舊自製 updater 與 `test_updater_delta.py`／`test_updater_process.py` 已退役，不代表現行更新流程仍受這些測試涵蓋。Velopack 安裝／更新／重啟流程依 `AGENTS.md` 的測試庫 E2E 清單驗證。
 

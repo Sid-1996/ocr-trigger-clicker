@@ -53,7 +53,7 @@
    ```powershell
    uv run python -m pytest --no-cov -q
    ```
-   改 `core/` 邏輯後不跑 pytest 視為未完成。對應範圍除了實體 import，也含 `tests/conftest.py` 的 fixture／factory（`make_main_loop` / `tmp_tasks_dir`）落點；改含 `T()` 的 `.py` 或 `i18n/*.json` 時加跑 `tests/test_i18n.py`。整合測試（`test_ocr_merge` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip；對應測試因環境 skip 時改用該模組 self-check 補位並在回覆明說，不當作綠燈。
+   改 `core/` 邏輯後不跑 pytest 視為未完成。對應範圍除了實體 import，也含 `tests/conftest.py` 的 fixture／factory（`make_main_loop` / `tmp_tasks_dir`）落點；改含 `T()` 的 `.py` 或 `i18n/*.json` 時加跑 `tests/test_i18n.py`。整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip；對應測試因環境 skip 時改用該模組 self-check 補位並在回覆明說，不當作綠燈。
 
 3. **add + commit + push**（一次完成）：
    ```powershell

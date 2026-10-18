@@ -94,18 +94,34 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 
 ## Performance Notes
 
-### 背景規則與並行群組的跨幀快取（現行）
+### 並行群組 match_image 預算（已實作）
 
-背景規則與 `order: parallel` 群組的 `match_image` 步驟，一律在各自群組內**即時**計算，靠兩層跨幀快取攤平成本，不做跨群組投機平行預算：
+`core/05_main_loop.py` 的 `_run_parallel_group` 對並行（`order: parallel`）群組內所有 `match_image` 規則做**平行預算**——主線程一次算好 `capture_size` / `chrome` / `current_size` / `roi`，worker（`_prematch_pure` 模組級純函式）只跑 `match_template`，不碰執行個體狀態、不讀檔、不呼叫 Win32。結果由 `_handle_match_image` 消費（step 0 命中 `ctx.prematch`）。
 
-- **`_tmpl_cache`**：`_handle_match_image` 以「搜尋區內容指紋＋模板＋門檻＋顏色參數」為 key，命中即重用上次 `match_template` 結果（`matchTemplate` 對相同輸入 deterministic）。
-- **gated OCR**：背景 `detect`/`compare` 規則走 `_gated_ocr`，ROI 指紋變化在容差內即複用上次 OCR 結果，避免對靜態 HUD 反覆 OCR。
+- **適用對象**：僅 `match_image` 步驟（純計算、執行緒安全）。`detect`/`compare` 走 OCR，維持順序（已有同幀 OCR 合併快取，不平行）。
+- **行為等價**：warning/log/on_fail/triggered/順序全由原 `_run_rule` 處理，命中哪條規則仍依 `rule_ids` 順序決定——使用者零感知（無新設定、無新 UI）。
+- **效益**：等待狀態（全不命中）下 N 條 match 從 O(N) 壓成 bounded；N=21 約 33ms → 16ms（~2 倍）。
+- **退化教訓**：曾誤讓 worker 各自讀檔/呼叫 Win32，N=21 反而 123ms（慢 4 倍）——已修正為主線程共享預算。
 
-### 移除跨群組投機 prematch（v0.4.7）
+### 客戶區 offset 每幀快取（已實作）
 
-曾以 `ThreadPoolExecutor`（模組級純函式 `_prematch_pure`）對所有 parallel 群組一次性平行預算首個 `match_image`，結果經 `StepContext.prematch` 由 `_handle_match_image` 消費。真任務 A/B（4 核、StarSavior）顯示此投機平行化會與主執行緒搶 CPU，反而拖慢背景規則／loop 階段；移除後改走 `_tmpl_cache` 即時計算：幀耗時中位數 72.8 → 36.1ms、OCR 預熱中位數 49.6 → 13.1ms、慢速警告 14 → 0，命中行為不變（觸發數相同、命中率 48~49% 一致）。
+`MainLoop._chrome()`：客戶區比例規則每條都要 chrome offset，原本每條規則各自呼叫 `get_window_client_offset()`，而每次都會經 pygetwindow 列舉全部視窗（實測 25 秒內 `foreach_window` 125 萬次、`_getAllTitles` 4807 次），佔總幀耗時約 20%。改為每幀只查一次（`_process_rules` 開頭重設 `_frame_chrome`），本機受控 A/B：process_rules 504ms → 384ms（-24%）。
 
-- **教訓**：推測性平行工作只有在「主執行緒正在等待」時才划算；當主執行緒本身是瓶頸（OCR/template 已吃滿 CPU），平行化只製造 GIL/CPU 競爭。先量測、再平行化。
+同類陷阱：`_activate_window()` 在 pynput 模式原本每次動作都呼叫 `activate_window()`（同樣列舉視窗＋搶焦點），已改為已在前景即早退。
+
+### 命中率切換草案（未實作，待未來評估）
+
+並行預算在**命中密集場景**會略慢於純順序，因為順序靠 `break-on-first-hit` 短路（掃到命中就停），平行卻「全算再取第一個命中」。現況 N=21 下此劣勢無感（每幀差 ~2ms，500ms 掃描間隔下佔 0.4%），但 N 擴充到 80+ 且命中密集時可能微感。
+
+**觸發條件（未來若需實作）**：
+- 用滑動窗口追蹤最近 N 幀的命中率（命中幀 / 總幀）
+- 命中率 > 閾值（如 60%）持續 M 幀 → 切回順序（享受 break 短路）
+- 命中率 < 閾值持續 M 幀 → 切回平行（享受 O(N) 壓縮）
+- 需滯後（hysteresis）避免狀態擺盪
+
+**邊界**：N 小（如 ≤21）不值得切換（差距無感）；N 大且命中密集才有感。命中率切換的複雜度（狀態 + 滯後）在 N 小時是過度設計。
+
+**現況判斷**：N=21 實測良好，不需命中率切換。等使用者擴充規則到 80+ 且命中密集期有感再評估。
 
 ---
 
