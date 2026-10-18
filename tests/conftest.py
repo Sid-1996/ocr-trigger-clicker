@@ -14,7 +14,7 @@ if str(_root) not in sys.path:
 def make_main_loop():
     """Bare MainLoop instance bypassing __init__, with all required attrs.
 
-    共用 factory：test_main_loop 等共用，避免重複。
+    共用 factory：test_main_loop / test_prematch_equiv 共用，避免 50 行重複。
     MainLoop.__init__ 新增屬性時，必須同步此處（這是刻意的壞掉信號）。
     """
     from _loader import load_sibling
@@ -50,10 +50,6 @@ def make_main_loop():
     ml._ocr_cache_hits = 0
     ml._xframe_ocr_cache = OrderedDict()
     ml._xframe_ocr_cache_max = 64
-    ml._gated_ocr_cache = OrderedDict()
-    ml._gated_ocr_cache_max = 64
-    ml._gated_ocr_threshold = 2.0
-    ml._gated_ocr_hits = 0
     ml._tmpl_cache = OrderedDict()
     ml._tmpl_cache_max = 64
     ml._logger = logging.getLogger("main_loop_test")
@@ -72,12 +68,12 @@ def make_main_loop():
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
     ml._slow_loop_warned = False
-    ml._slow_frame_snapshots_saved = 0
     ml._frame_waited_ms = 0.0
     ml._verify_blocked_ms = 0.0
     ml._black_streak = 0
     ml._last_frida_err_ts = 0.0
     ml._FRIDA_ERR_THROTTLE_SEC = 30.0
+    ml._prematch_pool = None
     ml.on_error = None
     ml.on_warning = None
     ml.on_bg_fail = None

@@ -1,12 +1,14 @@
 import contextlib
 import hashlib
 import logging
+import os
 import random
 import re
 import sys as _sys
 import threading
 import time
 from collections import OrderedDict, deque
+from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +19,7 @@ import numpy as np
 
 _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _loader import load_sibling  # noqa: E402
-from _version import __version__, build_id  # noqa: E402
+from _version import __version__  # noqa: E402
 from i18n import T  # noqa: E402
 
 _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
@@ -78,17 +80,6 @@ def log_main(msg: str):
     _ensure_main_logger().info(msg)
 
 
-def _write_slow_frame_snapshot(img: np.ndarray, path: Path, logger: logging.Logger) -> None:
-    try:
-        ok = cv2.imwrite(str(path), img, [cv2.IMWRITE_PNG_COMPRESSION, 1])
-        if ok:
-            logger.info("慢循環畫面快照已保存：%s", path)
-        else:
-            logger.warning("慢循環畫面快照保存失敗：%s", path)
-    except Exception:
-        logger.exception("慢循環畫面快照保存異常：%s", path)
-
-
 def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
     h, w = img.shape[:2]
     x1 = max(0, int(roi["x"]))
@@ -118,10 +109,7 @@ class StepContext:
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
     ocr_cache_hit: bool = False
-    frame_captured_ns: int = 0
-    matched_ns: int = 0
-    rule_started_ns: int = 0
-    intentional_wait_ms: float = 0.0
+    prematch: Optional[dict] = None
 
 
 @dataclass
@@ -131,36 +119,39 @@ class StepResult:
     detail: str = ""
 
 
+def _prematch_pure(
+    img: np.ndarray,
+    template_path: str,
+    roi: dict | None,
+    threshold: float,
+    template_data: str | None,
+    capture_size,
+    current_size,
+    match_color: bool,
+    color_tolerance,
+):
+    """執行緒池純計算函式：只跑 match_template，不碰任何執行個體狀態、不讀檔、
+    不呼叫 Win32。capture_size/current_size/roi 皆由主執行緒預算後傳入，避免
+    N 次/幀的重複 I/O（變慢元兇）。回傳 match_template(return_best=True) 原始結果。
+    """
+    return match_template(
+        img,
+        template_path,
+        roi,
+        threshold,
+        template_data=template_data,
+        capture_size=capture_size,
+        current_size=current_size,
+        match_color=match_color,
+        color_tolerance=color_tolerance,
+        return_best=True,
+    )
+
+
 def _crop_hash(crop: np.ndarray) -> bytes:
     """ROI 裁切內容指紋（blake2b-16B）。RapidOCR 對相同輸入 deterministic，
     故逐位元相同的裁切可直接複用上次辨識結果而不需重跑 OCR。"""
     return hashlib.blake2b(np.ascontiguousarray(crop).tobytes(), digest_size=16).digest()
-
-
-_SIG_BLOCK = 8  # 簽章區塊均值降採樣邊長（px）
-_SIG_MAX_DIM = 64  # 簽章最大邊（超過先整數降採樣以控成本）
-
-
-def _crop_signature(crop: np.ndarray) -> np.ndarray:
-    """ROI 裁切的粗粒度像素簽章（區塊均值），供背景規則的容差閘門使用。
-
-    與 _crop_hash 不同：hash 只認逐位元相同，任何動畫都會 miss。簽章允許小幅差異，
-    且是相對「上次實際辨識」比對——慢速變化會持續累積，一旦超過閾值便被迫重跑 OCR，
-    藉此把漏判風險限界在一個閾值內（見 MainLoop._gated_ocr）。"""
-    g = crop
-    if g.ndim == 3:
-        g = g.mean(axis=2)
-    g = g.astype(np.float32)
-    step = max(1, max(g.shape[0], g.shape[1]) // _SIG_MAX_DIM)
-    if step > 1:
-        g = g[::step, ::step]
-    h, w = g.shape[:2]
-    ph = (-h) % _SIG_BLOCK
-    pw = (-w) % _SIG_BLOCK
-    if ph or pw:
-        g = np.pad(g, ((0, ph), (0, pw)), mode="edge")
-    bh, bw = g.shape[0] // _SIG_BLOCK, g.shape[1] // _SIG_BLOCK
-    return g.reshape(bh, _SIG_BLOCK, bw, _SIG_BLOCK).mean(axis=(1, 3))
 
 
 _VERIFY_LOOP_WARN_SEC = (
@@ -244,21 +235,11 @@ class MainLoop:
             "max_rect": None,
         }
         self._frame_prewarm_ms: float = 0.0
-        self._frame_phase_timings: list[str] = []
-        self._notified_conditions: set[str] = set()
         self._frame_cache_hits_before: int = 0
         # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
         # key=(x,y,w,h) value=(crop_hash, results)；有界 LRU，視窗縮放會因 rect 不同自動 miss。
         self._xframe_ocr_cache: OrderedDict = OrderedDict()
         self._xframe_ocr_cache_max = 64
-
-        # ponytail: 背景規則容差閘門——cluster 內容相對「上次實際辨識」近乎沒變 → 複用上次
-        # OCR 結果，省下每幀重跑動畫 HUD 的 OCR（見 _gated_ocr）。只作用於背景規則，前景
-        # 規則維持逐幀精確 OCR，避免漏判影響主流程。key=cluster_rect value=(signature, results)。
-        self._gated_ocr_cache: OrderedDict = OrderedDict()
-        self._gated_ocr_cache_max = 64
-        self._gated_ocr_threshold = 2.0  # 區塊均值絕對差（0-255）閾值，越小越敏感
-        self._gated_ocr_hits: int = 0
 
         # ponytail: match_image 搜尋區跨幀快取——搜尋區像素＋模板＋參數皆同 → 比對結果必同
         # （matchTemplate deterministic），直接複用。key 詳見 _handle_match_image。
@@ -277,7 +258,6 @@ class MainLoop:
         self._detect_warn_counter: dict[str, int] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
-        self._slow_frame_snapshots_saved: int = 0
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
         # _handle_wait/_run_rule 累加；過慢判定需扣除，避免長等待被誤判為偵測過慢
         self._frame_waited_ms: float = 0.0
@@ -325,6 +305,8 @@ class MainLoop:
 
         # 平行預算執行緒池：供並行群組平行計算各規則的 match_image 結果。
         # ponytail: 只在此類群組真正需要時才建立，避免背景全部開一條 pool。
+        self._prematch_pool: Optional[ThreadPoolExecutor] = None
+
         self._rules: list[Rule] = []
         self._logger = _ensure_main_logger()
         # Shadow Observation stats (debug only, aggregated)
@@ -333,11 +315,8 @@ class MainLoop:
         self._obs_last_diff_log: dict[str, float] = {}
         self._load_rules()
         init_engine()
-        _build = build_id()
-        _build_tag = f"+{_build}" if _build else ""
         log_main(
-            f"應用啟動 v{__version__}{_build_tag}，目標視窗「{window_title}」，"
-            f"載入 {len(self._rules)} 條規則"
+            f"應用啟動 v{__version__}，目標視窗「{window_title}」，載入 {len(self._rules)} 條規則"
         )
 
     def _is_obs_shadow_enabled(self) -> bool:
@@ -416,80 +395,6 @@ class MainLoop:
                 return
             self._action_log_ts[dedup_key] = now
         self._logger.info(msg)
-
-    def _log_dispatch_latency(
-        self,
-        ctx: StepContext,
-        rule: Rule,
-        action: str,
-        *,
-        dispatch_ns: int | None = None,
-        stage_ms: dict[str, float] | None = None,
-    ) -> None:
-        """Record match-to-input timing only for actions following a successful match."""
-        if not ctx.matched_ns or not ctx.frame_captured_ns:
-            return
-        dispatch_ns = dispatch_ns or time.monotonic_ns()
-        rule_started_ns = ctx.rule_started_ns or ctx.matched_ns
-        frame_no = getattr(self, "_diagnostic_frame_no", 0)
-        phase = "startup" if frame_no <= 3 else "steady"
-        profile = getattr(self, "_frame_ocr_profile", {})
-        stages = (
-            ""
-            if not stage_ms
-            else " " + " ".join(f"{name}={elapsed:.1f}" for name, elapsed in stage_ms.items())
-        )
-        self._logger.info(
-            "偵測延遲 phase=%s frame=%s rule=%s step=%s action=%s "
-            "capture_to_dispatch_ms=%.1f prewarm_ms=%.1f rule_queue_ms=%.1f "
-            "rule_to_match_ms=%.1f match_to_dispatch_ms=%.1f intentional_wait_ms=%.1f "
-            "ocr_calls=%s ocr_ms=%.1f ocr_pixels=%s "
-            "gated_ocr_hits=%s prior_phases=%s%s diff=%.4f",
-            phase,
-            frame_no,
-            rule.name,
-            ctx.step_idx,
-            action,
-            (dispatch_ns - ctx.frame_captured_ns) / 1_000_000,
-            getattr(self, "_frame_prewarm_ms", 0.0),
-            max(0, (rule_started_ns - ctx.frame_captured_ns) / 1_000_000),
-            max(0, (ctx.matched_ns - rule_started_ns) / 1_000_000),
-            (dispatch_ns - ctx.matched_ns) / 1_000_000,
-            ctx.intentional_wait_ms,
-            profile.get("calls", 0),
-            profile.get("ms", 0.0),
-            profile.get("pixels", 0),
-            getattr(self, "_gated_ocr_hits", 0),
-            ",".join(getattr(self, "_frame_phase_timings", [])) or "none",
-            stages,
-            getattr(self, "_frame_diff_ratio", 0.0),
-        )
-
-    def _save_slow_frame_snapshot(self, img: np.ndarray, frame_no: int) -> Path | None:
-        """Save a bounded, lossless copy of a frame that caused a slow-loop warning."""
-        saved = getattr(self, "_slow_frame_snapshots_saved", 0)
-        if saved >= 5:
-            return None
-        try:
-            folder = _logging_config.get_log_dir() / "slow_frames"
-            folder.mkdir(parents=True, exist_ok=True)
-            stamp = time.strftime("%Y%m%d-%H%M%S")
-            subsecond = time.time_ns() % 1_000_000_000
-            path = folder / f"slow-{stamp}-{subsecond:09d}-frame-{frame_no:06d}.png"
-            self._slow_frame_snapshots_saved = saved + 1
-            # cv2 encoding and disk I/O run off the detection thread so the diagnostic
-            # capture does not add its own delay to the next frame.
-            threading.Thread(
-                target=_write_slow_frame_snapshot,
-                args=(img.copy(), path, self._logger),
-                name="slow-frame-snapshot",
-                daemon=True,
-            ).start()
-            self._logger.info("慢循環畫面快照排程中：%s", path)
-            return path
-        except Exception:
-            self._logger.exception("慢循環畫面快照無法排程")
-            return None
 
     _DETECT_STEP_TYPES = frozenset({"detect", "compare", "match_image"})
 
@@ -601,9 +506,9 @@ class MainLoop:
     def _activate_window(self) -> bool:
         """Activate window using the appropriate method based on interaction mode."""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        if self._window_hwnd and is_window_foreground(self._window_hwnd):
-            return True
         if mode and mode != "pynput":
+            if self._window_hwnd and is_window_foreground(self._window_hwnd):
+                return True  # 已在前景（如 hybrid focus_guard 激活過），免重複激活
             return _screenshot.activate_window_bg(self._window_title)
         return _screenshot.activate_window(self._window_title)
 
@@ -768,36 +673,6 @@ class MainLoop:
             self._xframe_ocr_cache.popitem(last=False)
         return results
 
-    def _gated_ocr(self, img: np.ndarray, key: tuple, roi: dict) -> None:
-        """背景規則 OCR 容差閘門：cluster 內容相對上次實際辨識近乎沒變 → 複用上次結果。
-
-        命中時把上次結果放進本幀快取，讓後續背景規則的 detect 路徑（superset/rect 命中）
-        等同本幀真的 OCR 過；未命中才實際 OCR 並更新簽章。簽章以「上次辨識當下」為基準，
-        故慢速變化會累積到超過閾值而被迫重跑，漏判風險因此有界（見 _crop_signature）。
-        """
-        h, w = img.shape[:2]
-        x1 = max(0, int(roi["x"]))
-        y1 = max(0, int(roi["y"]))
-        x2 = min(w, int(roi["x"]) + int(roi["w"]))
-        y2 = min(h, int(roi["y"]) + int(roi["h"]))
-        if x2 <= x1 or y2 <= y1:
-            return
-        rect = (x1, y1, x2 - x1, y2 - y1)
-        if rect in self._frame_ocr_cache:
-            return  # 本幀已 OCR 過同一 rect（cluster 去重）
-        sig = _crop_signature(img[y1:y2, x1:x2])
-        entry = self._gated_ocr_cache.get(key)
-        if entry is not None and entry[0].shape == sig.shape:
-            if float(np.abs(entry[0] - sig).mean()) <= self._gated_ocr_threshold:
-                self._gated_ocr_hits += 1
-                self._frame_ocr_cache[rect] = entry[1]
-                return
-        results = self._ocr_region(img, roi)
-        self._gated_ocr_cache[key] = (sig, results)
-        self._gated_ocr_cache.move_to_end(key)
-        while len(self._gated_ocr_cache) > self._gated_ocr_cache_max:
-            self._gated_ocr_cache.popitem(last=False)
-
     def _profiled_recognize(self, crop: np.ndarray, rect: tuple[int, int, int, int]) -> list:
         started = time.monotonic()
         try:
@@ -883,31 +758,17 @@ class MainLoop:
         t_ocr = time.monotonic()
         hits_before = self._ocr_cache_hits
         results = self._ocr_region(ctx.img, roi)
-        ocr_lookup_ms = (time.monotonic() - t_ocr) * 1000
         ctx.ocr_cache_hit = self._ocr_cache_hits > hits_before
         if roi_is_empty and ctx.img.shape[1] > 800:
-            ctx.ocr_elapsed_ms = ocr_lookup_ms
-        if ocr_lookup_ms >= 10:
-            phase_timings = getattr(self, "_frame_phase_timings", None)
-            if phase_timings is not None:
-                phase_timings.append(
-                    f"ocr_lookup:{rule.name}={ocr_lookup_ms:.1f}ms"
-                    f"({'cache' if ctx.ocr_cache_hit else 'run'})"
-                )
+            ctx.ocr_elapsed_ms = (time.monotonic() - t_ocr) * 1000
         # Shadow: pure translation check (zero impact on StepResult)
         self._shadow_check_ocr(results, roi, rule, ctx.step_idx)
         if not results:
             return self._handle_on_fail(params, ctx, rule)
 
-        t_match = time.monotonic()
         matches = find_text(
             results, text, params.get("match_mode", "fuzzy"), params.get("fuzzy_threshold", 0.8)
         )
-        match_ms = (time.monotonic() - t_match) * 1000
-        if match_ms >= 5:
-            phase_timings = getattr(self, "_frame_phase_timings", None)
-            if phase_timings is not None:
-                phase_timings.append(f"text_match:{rule.name}={match_ms:.1f}ms")
         if not matches:
             return self._handle_on_fail(params, ctx, rule)
 
@@ -944,48 +805,56 @@ class MainLoop:
         threshold = params.get("threshold", 0.8)
         match_color = params.get("match_color", False)
         color_tolerance = params.get("color_tolerance", 100)
-        # 跨幀快取：搜尋區像素＋模板＋比對參數皆同 → 結果必同（matchTemplate deterministic）
-        h_img, w_img = ctx.img.shape[:2]
-        if any(roi.get(k, 0) != 0 for k in ("w", "h")):
-            rx1, ry1 = max(0, int(roi["x"])), max(0, int(roi["y"]))
-            rx2 = min(w_img, int(roi["x"]) + int(roi["w"]))
-            ry2 = min(h_img, int(roi["y"]) + int(roi["h"]))
-            region = ctx.img[ry1:ry2, rx1:rx2] if rx2 > rx1 and ry2 > ry1 else ctx.img
+        # 若並行群組已為本 step（index 0）平行預算好 match_template，直接消費，
+        # 省去重複的找圖計算；步進>0或無預算時一律照舊即時計算。
+        # prematch 只對應第 0 步（並行群組預算的結果），非第 0 步或已消費後一律
+        # 即時計算，避免後續 match_image 步驟誤用第 0 步的 ROI/範本比對結果。
+        if ctx.step_idx == 0 and ctx.prematch and 0 in ctx.prematch:
+            results, best_below = ctx.prematch[0]
+            ctx.prematch = None
         else:
-            region = ctx.img
-        cache_key = (
-            "mi",
-            _crop_hash(region),
-            template_data or template_path,
-            threshold,
-            match_color,
-            color_tolerance,
-        )
-        cached = self._tmpl_cache.get(cache_key)
-        if cached is not None:
-            self._tmpl_cache.move_to_end(cache_key)
-            self._ocr_cache_hits += 1
-            results, best_below = cached
-        else:
-            results = match_template(
-                ctx.img,
-                template_path,
-                roi,
+            # 跨幀快取：搜尋區像素＋模板＋比對參數皆同 → 結果必同（matchTemplate deterministic）
+            h_img, w_img = ctx.img.shape[:2]
+            if any(roi.get(k, 0) != 0 for k in ("w", "h")):
+                rx1, ry1 = max(0, int(roi["x"])), max(0, int(roi["y"]))
+                rx2 = min(w_img, int(roi["x"]) + int(roi["w"]))
+                ry2 = min(h_img, int(roi["y"]) + int(roi["h"]))
+                region = ctx.img[ry1:ry2, rx1:rx2] if rx2 > rx1 and ry2 > ry1 else ctx.img
+            else:
+                region = ctx.img
+            cache_key = (
+                "mi",
+                _crop_hash(region),
+                template_data or template_path,
                 threshold,
-                template_data=template_data or None,
-                capture_size=capture_size,
-                current_size=current_size,
-                match_color=match_color,
-                color_tolerance=color_tolerance,
-                return_best=True,
+                match_color,
+                color_tolerance,
             )
-            best_below = -1.0
-            if isinstance(results, tuple):
-                results, best_below = results
-            self._tmpl_cache[cache_key] = (results, best_below)
-            self._tmpl_cache.move_to_end(cache_key)
-            while len(self._tmpl_cache) > self._tmpl_cache_max:
-                self._tmpl_cache.popitem(last=False)
+            cached = self._tmpl_cache.get(cache_key)
+            if cached is not None:
+                self._tmpl_cache.move_to_end(cache_key)
+                self._ocr_cache_hits += 1
+                results, best_below = cached
+            else:
+                results = match_template(
+                    ctx.img,
+                    template_path,
+                    roi,
+                    threshold,
+                    template_data=template_data or None,
+                    capture_size=capture_size,
+                    current_size=current_size,
+                    match_color=match_color,
+                    color_tolerance=color_tolerance,
+                    return_best=True,
+                )
+                best_below = -1.0
+                if isinstance(results, tuple):
+                    results, best_below = results
+                self._tmpl_cache[cache_key] = (results, best_below)
+                self._tmpl_cache.move_to_end(cache_key)
+                while len(self._tmpl_cache) > self._tmpl_cache_max:
+                    self._tmpl_cache.popitem(last=False)
         if not results:
             ctx.best_confidence = best_below
             return self._handle_on_fail(params, ctx, rule)
@@ -1247,7 +1116,6 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
-            self._log_dispatch_latency(ctx, rule, "click")
             ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
         if ok:
             self._perf.record_click()
@@ -1266,22 +1134,15 @@ class MainLoop:
         if not key:
             return StepResult("stop", detail=T("exec_log.detail.key_empty"))
 
-        checks_started_ns = time.monotonic_ns()
         if not self._can_perform_action():
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
-        checks_ms = (time.monotonic_ns() - checks_started_ns) / 1_000_000
 
-        focus_started_ns = time.monotonic_ns()
         with self._focus_guard() as focus_ok:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
-            focus_ms = (time.monotonic_ns() - focus_started_ns) / 1_000_000
-            activate_started_ns = time.monotonic_ns()
             self._activate_window()
-            activate_ms = (time.monotonic_ns() - activate_started_ns) / 1_000_000
-            dispatch_ns = time.monotonic_ns()
 
             hold_ms = params.get("hold_ms", 0)
             if hold_ms > 0:
@@ -1293,19 +1154,6 @@ class MainLoop:
                     ok = _input_mod.send_hold_key(key, hold_ms)
             else:
                 ok = self._send_key(key)
-            input_call_ms = (time.monotonic_ns() - dispatch_ns) / 1_000_000
-            self._log_dispatch_latency(
-                ctx,
-                rule,
-                "key",
-                dispatch_ns=dispatch_ns,
-                stage_ms={
-                    "action_checks_ms": checks_ms,
-                    "focus_guard_ms": focus_ms,
-                    "window_activation_ms": activate_ms,
-                    "input_call_ms": input_call_ms,
-                },
-            )
         if ok:
             self._perf.record_click()
             ctx.triggered = True
@@ -1348,7 +1196,6 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
-            self._log_dispatch_latency(ctx, rule, "drag")
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
             if mode == "frida" and self._window_hwnd:
                 _bg_input.set_method(mode)
@@ -1387,7 +1234,6 @@ class MainLoop:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
             for _ in range(amount):
-                self._log_dispatch_latency(ctx, rule, "scroll")
                 ok = self._send_scroll(direction)
                 if not ok:
                     return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
@@ -1434,14 +1280,10 @@ class MainLoop:
 
     def _handle_notify(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         msg = params.get("message", "")
-        if ctx.matched_ns and rule.id in self._notified_conditions:
-            return StepResult("continue")
         if msg:
             self._log(f"規則「{rule.name}」通知：{msg}")
             if self.on_warning:
                 self.on_warning(msg)
-            if ctx.matched_ns:
-                self._notified_conditions.add(rule.id)
         return StepResult("continue")
 
     def _check_verify_condition(self, verify: dict, img: np.ndarray, rect: dict) -> bool:
@@ -1671,14 +1513,8 @@ class MainLoop:
         ctx: StepContext | None = None,
         background: bool = False,
     ) -> None:
-        if not hasattr(self, "_notified_conditions"):
-            self._notified_conditions = set()
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
-        if not ctx.frame_captured_ns:
-            ctx.frame_captured_ns = getattr(self, "_frame_captured_ns", 0)
-        if not ctx.rule_started_ns:
-            ctx.rule_started_ns = time.monotonic_ns()
         i = 0
         while i < len(rule.steps):
             ctx.step_idx = i
@@ -1689,14 +1525,6 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
-            if (
-                i == 0
-                and step.type in self._DETECT_STEP_TYPES
-                and (result.action != "continue" or ctx.on_fail_fired)
-            ):
-                self._notified_conditions.discard(rule.id)
-            if step.type in self._DETECT_STEP_TYPES and result.action == "continue":
-                ctx.matched_ns = time.monotonic_ns()
             ms = step.params.get("after_delay_ms", 0) or 0
             if (
                 step.type in ("click", "key", "drag", "scroll", "detect", "match_image")
@@ -1709,7 +1537,6 @@ class MainLoop:
                 if self._stop_event.wait(timeout=ms / 1000.0):
                     return StepResult("stop", detail=T("exec_log.detail.interrupted"))
                 self._frame_waited_ms += ms  # 刻意等待：過慢判定時扣除
-                ctx.intentional_wait_ms += ms
             # Verify: optional post-condition on new frames (not ctx.img) — 僅動作四類（追溯 ADR-0005）
             if (
                 step.type in ("click", "key", "drag", "scroll")
@@ -2019,42 +1846,36 @@ class MainLoop:
                     )
         return ""
 
-    def _prewarm_ocr_clusters(
-        self,
-        img: np.ndarray,
-        rect: dict,
-        rule_ids: set[str] | None = None,
-        *,
-        defer: bool = False,
-    ) -> None:
-        """預聚類指定規則的 step-0 detect/compare ROI，每個重疊叢集只 OCR 一次。
+    def _prewarm_ocr_clusters(self, img: np.ndarray, rect: dict) -> None:
+        """方案 B：本幀會執行的 step-0 detect/compare ROI 預聚類，每叢集 bbox 只 OCR 一次，
+        寫入 _frame_ocr_cache，規則執行時走既有 superset 過濾路徑（05_main_loop.py:408）。
+        行為等價（OCR 大區域→過濾到子區域，與 ee08013 union-merge 同類語義），
+        每幀 OCR 呼叫數從 ~N 降到 ~叢集數。
 
-        未指定 rule_ids 時保留全幀候選收集行為；正常主循環會傳入當下必須檢查的
-        規則，避免尚未輪到或前面命中後不會執行的規則阻塞目前的操作。
+        ponytail: 只收 step-0（step>0 是條件觸發，預先 OCR 是浪費）；收集對象為
+        背景規則 + loop+parallel 群組規則 + 當前群組當前規則——即本幀實際會執行的規則。
         """
         with self._rules_lock:
             rules = list(self._rules)
         if not rules:
             return
-        if rule_ids is None:
-            rule_ids = set()
-            for r in rules:
-                if r.enabled and r.background:
-                    rule_ids.add(r.id)
-            for g in self._groups:
-                if (
-                    g.enabled
-                    and g.id in self._active_group_ids
-                    and g.mode == "loop"
-                    and g.order == "parallel"
-                ):
-                    rule_ids.update(g.rule_ids)
-            cur = self._current_group()
-            if cur is not None and self._rule_in_group_ptr < len(cur.rule_ids):
-                rule_ids.add(cur.rule_ids[self._rule_in_group_ptr])
+        rule_ids: set[str] = set()
+        for r in rules:
+            if r.enabled and r.background:
+                rule_ids.add(r.id)
+        for g in self._groups:
+            if (
+                g.enabled
+                and g.id in self._active_group_ids
+                and g.mode == "loop"
+                and g.order == "parallel"
+            ):
+                rule_ids.update(g.rule_ids)
+        cur = self._current_group()
+        if cur is not None and self._rule_in_group_ptr < len(cur.rule_ids):
+            rule_ids.add(cur.rule_ids[self._rule_in_group_ptr])
 
         rects: list[tuple[int, int, int, int]] = []
-        rect_rule_ids: dict[tuple[int, int, int, int], list[str]] = {}
         for r in rules:
             if r.id not in rule_ids or not r.enabled or not r.steps:
                 continue
@@ -2068,12 +1889,9 @@ class MainLoop:
             if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
                 continue
             rk = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
-            if rk[2] <= 0 or rk[3] <= 0:
+            if rk[2] <= 0 or rk[3] <= 0 or rk in rects:
                 continue
-            if rk not in rect_rule_ids:
-                rects.append(rk)
-                rect_rule_ids[rk] = []
-            rect_rule_ids[rk].append(r.id)
+            rects.append(rk)
         if not rects:
             return
 
@@ -2102,54 +1920,14 @@ class MainLoop:
         clusters: dict[int, list[tuple[int, int, int, int]]] = {}
         for i, rk in enumerate(rects):
             clusters.setdefault(_find(i), []).append(rk)
-        cluster_by_rule: dict[str, tuple[tuple[int, int, int, int], dict]] = {}
         for members in clusters.values():
             x1 = min(r[0] for r in members)
             y1 = min(r[1] for r in members)
             x2 = max(r[0] + r[2] for r in members)
             y2 = max(r[1] + r[3] for r in members)
-            cluster_rect = (x1, y1, x2 - x1, y2 - y1)
-            roi = {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
-            for rk in members:
-                for rid in rect_rule_ids[rk]:
-                    cluster_by_rule[rid] = (cluster_rect, roi)
-            if not defer:
-                self._ocr_region(img, roi)
-        if defer:
-            self._frame_ocr_cluster_by_rule = cluster_by_rule
-            self._frame_ocr_prewarmed = set()
-
-    def _prewarm_ocr_rules(
-        self, img: np.ndarray, rect: dict, rule_ids: set[str], *, gate: bool = False
-    ) -> None:
-        """Prewarm only the OCR rules that must be checked before the next action boundary.
-
-        gate=True 時（供背景規則使用）走容差閘門，內容近乎沒變的 cluster 直接複用上次結果。
-        """
-        if not rule_ids or not self._has_detect_rules:
-            return
-        cluster_by_rule = getattr(self, "_frame_ocr_cluster_by_rule", {})
-        prewarmed = getattr(self, "_frame_ocr_prewarmed", set())
-        clusters = {}
-        for rid, (key, roi) in cluster_by_rule.items():
-            if rid in rule_ids and key not in prewarmed:
-                clusters[key] = roi
-        if not clusters:
-            return
-        started = time.monotonic()
-        for key, roi in clusters.items():
-            if gate:
-                self._gated_ocr(img, key, roi)
-            else:
-                self._ocr_region(img, roi)
-            prewarmed.add(key)
-        self._frame_ocr_prewarmed = prewarmed
-        elapsed_ms = (time.monotonic() - started) * 1000
-        self._frame_prewarm_ms = getattr(self, "_frame_prewarm_ms", 0.0) + elapsed_ms
-        self._frame_phase_timings.append(f"ocr_prewarm={elapsed_ms:.1f}")
+            self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
-        self._diagnostic_frame_no = getattr(self, "_diagnostic_frame_no", 0) + 1
         self._frame_ocr_cache.clear()
         self._frame_ocr_profile = {
             "calls": 0,
@@ -2158,53 +1936,31 @@ class MainLoop:
             "max_pixels": 0,
             "max_rect": None,
         }
-        self._gated_ocr_hits = 0
-        self._frame_phase_timings = []
         self._frame_cache_hits_before = self._ocr_cache_hits
-        self._frame_ocr_cluster_by_rule = {}
-        self._frame_ocr_prewarmed = set()
+        prewarm_started = time.monotonic()
         with self._rules_lock:
             rules_snapshot = list(self._rules)
         if not rules_snapshot:
             return
-        self._frame_prewarm_ms = 0.0
         if self._has_detect_rules:
-            self._prewarm_ocr_clusters(img, rect, defer=True)
-
-        self._prewarm_ocr_rules(
-            img,
-            rect,
-            {rule.id for rule in rules_snapshot if rule.enabled and rule.background},
-            gate=True,
-        )
+            self._prewarm_ocr_clusters(img, rect)
+        self._frame_prewarm_ms = (time.monotonic() - prewarm_started) * 1000
 
         # ponytail: run all background rules each frame; jumps are cancelled
-        background_started = time.monotonic()
         for rule in rules_snapshot:
             if rule.enabled and rule.background:
                 self._process_counter += 1
                 saved_ptr = self._rule_pointer
                 bg_ctx = StepContext(img=img, rect=rect)
-                rule_started = time.monotonic()
                 try:
                     self._run_rule(rule, img, rect, bg_ctx, background=True)
                 except Exception as e:
                     self._logger.exception("背景規則「%s」異常: %s", rule.name, e)
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
-                finally:
-                    rule_elapsed_ms = (time.monotonic() - rule_started) * 1000
-                    if rule_elapsed_ms >= 10:
-                        self._frame_phase_timings.append(
-                            f"background_rule:{rule.name}={rule_elapsed_ms:.1f}"
-                        )
                 if bg_ctx.triggered:
                     self._log_exec(rule.name, 0, "background", "triggered")
                 self._rule_pointer = saved_ptr
-        if any(rule.enabled and rule.background for rule in rules_snapshot):
-            self._frame_phase_timings.append(
-                f"background={((time.monotonic() - background_started) * 1000):.1f}"
-            )
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
         for g in self._groups:
@@ -2214,11 +1970,7 @@ class MainLoop:
                 and g.mode == "loop"
                 and g.order == "parallel"
             ):
-                group_started = time.monotonic()
                 self._run_parallel_group(g, img, rect)
-                self._frame_phase_timings.append(
-                    f"loop:{g.name}={((time.monotonic() - group_started) * 1000):.1f}"
-                )
 
         # ── Group-based rule pointer (sequential / once / repeat) ──
         group = self._current_group()
@@ -2226,11 +1978,7 @@ class MainLoop:
             return
 
         if group.order == "parallel":
-            group_started = time.monotonic()
             self._run_parallel_group(group, img, rect)
-            self._frame_phase_timings.append(
-                f"queue:{group.name}={((time.monotonic() - group_started) * 1000):.1f}"
-            )
             return
 
         if self._rule_in_group_ptr >= len(group.rule_ids):
@@ -2242,9 +1990,6 @@ class MainLoop:
         if rule is None or not rule.enabled:
             self._advance_rule_in_group()
             return
-
-        if rule.steps and rule.steps[0].type in ("detect", "compare"):
-            self._prewarm_ocr_rules(img, rect, {rule.id})
 
         self._process_counter += 1
         ctx = StepContext(img=img, rect=rect)
@@ -2263,12 +2008,54 @@ class MainLoop:
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
-    def _run_parallel_group(
-        self,
-        group: RuleGroup,
-        img: np.ndarray,
-        rect: dict,
-    ) -> None:
+    def _run_parallel_group(self, group: RuleGroup, img: np.ndarray, rect: dict) -> None:
+        # 平行預算：收集本群組各規則第一個 match_image step 的參數（主執行緒解析），
+        # 把純 match_template 計算丟進執行緒池平行跑，結果以 rule_id 為鍵存入手稿 ctx.prematch。
+        # ponytail: 不跳過任何規則、不改執行路徑（warning/log/on_fail 仍由 _run_rule 依序處理），
+        # 只把「找圖計算」平行化後由 _handle_match_image 消費——行為完全等價。
+        pending: dict[str, object] = {}
+        pool = getattr(self, "_prematch_pool", None)
+        if pool is not None or len(group.rule_ids) >= 2:
+            if pool is None:
+                pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
+                self._prematch_pool = pool
+            # ponytail: 共享預算——capture_size/chrome/current_size 主線程只算一次，
+            # 各 worker 不再各自讀檔/呼叫 Win32（否則 N 次/幀的重複 I/O 是變慢元兇）。
+            capture_size = get_capture_size(self._rules_path)
+            chrome = get_window_client_offset(self._window_title)
+            if chrome:
+                current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
+            else:
+                current_size = [rect["w"], rect["h"]]
+            for rid in group.rule_ids:
+                r = self._rule_map.get(rid)
+                if r is None or not r.enabled or not r.steps:
+                    continue
+                if r.steps[0].type != "match_image":
+                    continue
+                p = r.steps[0].params
+                tdata = p.get("template_data", "")
+                tpath = p.get("template", "")
+                if not tdata.strip() and not tpath.strip():
+                    continue
+                roi = self._resolve_roi(p.get("roi", {}), rect, chrome)
+                try:
+                    pending[rid] = pool.submit(
+                        _prematch_pure,
+                        img,
+                        tpath,
+                        roi,
+                        p.get("threshold", 0.8),
+                        tdata or None,
+                        capture_size,
+                        current_size,
+                        p.get("match_color", False),
+                        p.get("color_tolerance", 100),
+                    )
+                except RuntimeError:
+                    # 池已被外部 shutdown：本幀退回循序匹配，不讓主循環掛掉
+                    break
+
         triggered = False
         for rid in group.rule_ids:
             if triggered:
@@ -2276,20 +2063,20 @@ class MainLoop:
             r = self._rule_map.get(rid)
             if r is None or not r.enabled:
                 continue
-            if r.steps and r.steps[0].type in ("detect", "compare"):
-                self._prewarm_ocr_rules(img, rect, {rid})
             r_ctx = StepContext(img=img, rect=rect)
+            if rid in pending:
+                fut = pending[rid]
+                try:
+                    r_ctx.prematch = {0: fut.result()}
+                except Exception:
+                    r_ctx.prematch = None
             self._process_counter += 1
-            rule_started = time.monotonic()
             try:
                 self._run_rule(r, img, rect, r_ctx)
             except Exception as e:
                 self._logger.exception("並行規則「%s」異常: %s", r.name, e)
                 if self.on_warning:
                     self.on_warning(f"並行規則「{r.name}」異常: {e}")
-            rule_elapsed_ms = (time.monotonic() - rule_started) * 1000
-            if rule_elapsed_ms >= 10:
-                self._frame_phase_timings.append(f"rule:{r.name}={rule_elapsed_ms:.1f}")
             if r_ctx.triggered:
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.id)
@@ -2422,7 +2209,6 @@ class MainLoop:
                             self._log(f"所有截圖方式皆失敗: {title}")
                         self._perf.record_frame()
                         continue
-                    self._frame_captured_ns = time.monotonic_ns()
 
                     if self._check_black_frame(img, mode != "pynput"):
                         self._perf.record_frame()
@@ -2464,10 +2250,6 @@ class MainLoop:
                         if not self._slow_loop_warned:
                             self._slow_loop_warned = True
                             profile = self._frame_ocr_profile
-                            phase_timings = getattr(self, "_frame_phase_timings", [])
-                            phase_detail = ",".join(phase_timings[:20])
-                            if len(phase_timings) > 20:
-                                phase_detail += f",…(+{len(phase_timings) - 20})"
                             max_rect = profile["max_rect"]
                             max_roi = (
                                 f"{max_rect[2]}x{max_rect[3]}@{max_rect[0]},{max_rect[1]}"
@@ -2481,9 +2263,8 @@ class MainLoop:
                                 f"OCR診斷: recognize={profile['calls']}次/{profile['ms']:.0f}ms，"
                                 f"ROI像素={profile['pixels']}，最大ROI={max_roi}，"
                                 f"快取重用={self._ocr_cache_hits - self._frame_cache_hits_before}，"
-                                f"預熱={self._frame_prewarm_ms:.0f}ms，階段={phase_detail or 'none'})"
+                                f"預熱={self._frame_prewarm_ms:.0f}ms)"
                             )
-                            self._save_slow_frame_snapshot(img, iteration)
                             if self.on_warning:
                                 self.on_warning(
                                     f"偵測執行太慢：本次花費{detect_elapsed:.0f} 毫秒"
@@ -2503,6 +2284,11 @@ class MainLoop:
 
                 self._stop_event.wait(self._interval)
         finally:
+            # ponytail: pool 只在 loop 執行緒使用，由擁有者在此關閉，
+            # 避免 stop()（GUI 執行緒）在 loop 仍 submit 時 shutdown 造成競態崩潰。
+            if self._prematch_pool is not None:
+                self._prematch_pool.shutdown(wait=False)
+                self._prematch_pool = None
             if self.on_finished:
                 self.on_finished()
 
@@ -2514,7 +2300,6 @@ class MainLoop:
         self._rule_completed.clear()
         self._last_completed_log.clear()
         self._black_streak = 0
-        self._slow_frame_snapshots_saved = 0
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -3632,62 +3417,5 @@ if __name__ == "__main__":
     ml._run_rule(_ad_rule2, _ad_ctx.img, _ad_ctx.rect, _ad_ctx)
     assert "ad_selfcheck2:1" not in ml._last_exec_log, "中斷後尾隨步驟不應執行"
     print("  [OK] after_delay_ms: 中斷時跳過後續步驟")
-
-    # ── Test 33: 背景規則 OCR 容差閘門 (_crop_signature / _gated_ocr) ──
-    _gs = _crop_signature(np.zeros((40, 60, 3), dtype=np.uint8))
-    assert _gs.ndim == 2 and _gs.shape[0] >= 1 and _gs.shape[1] >= 1, "簽章應為 2D 區塊均值"
-    assert float(np.abs(_gs - _crop_signature(np.zeros((40, 60, 3), np.uint8))).mean()) == 0.0
-    assert (
-        float(np.abs(_gs - _crop_signature(np.full((40, 60, 3), 120, dtype=np.uint8))).mean()) > 2.0
-    ), "明顯不同的裁切簽章差應過閾值"
-    print("  [OK] _crop_signature: 相同=0，明顯不同>閾值")
-
-    _ml_g = MainLoop.__new__(MainLoop)
-    _ml_g._frame_ocr_cache = {}
-    _ml_g._ocr_cache_hits = 0
-    _ml_g._frame_ocr_profile = {
-        "calls": 0,
-        "ms": 0.0,
-        "pixels": 0,
-        "max_pixels": 0,
-        "max_rect": None,
-    }
-    _ml_g._xframe_ocr_cache = OrderedDict()
-    _ml_g._xframe_ocr_cache_max = 64
-    _ml_g._gated_ocr_cache = OrderedDict()
-    _ml_g._gated_ocr_cache_max = 64
-    _ml_g._gated_ocr_threshold = 2.0
-    _ml_g._gated_ocr_hits = 0
-    _gcalls = {"n": 0}
-    _g_orig_rec = recognize
-
-    def _g_fake_reco(bx, roi_offset=None, preprocess=False, max_side_len=0, min_confidence=0.25):
-        _gcalls["n"] += 1
-        return []
-
-    recognize = _g_fake_reco
-    _roi_g = {"x": 5, "y": 5, "w": 50, "h": 40}
-    _g_key = (5, 5, 50, 40)
-    _gimg_a = np.zeros((80, 80, 3), dtype=np.uint8)
-    _gimg_noise = _gimg_a.copy()
-    _gimg_noise[5:20, 5:20] = 1  # 微幅變化（低於閾值）
-    _gimg_b = np.full((80, 80, 3), 200, dtype=np.uint8)
-
-    _ml_g._gated_ocr(_gimg_a, _g_key, _roi_g)  # 首次無簽章 → 實際 OCR
-    assert _gcalls["n"] == 1 and _ml_g._gated_ocr_hits == 0
-    _ml_g._frame_ocr_cache = {}
-    _ml_g._gated_ocr(_gimg_a, _g_key, _roi_g)  # 同內容 → 閘門命中
-    assert _gcalls["n"] == 1, "內容相同應複用上次 OCR 結果"
-    assert _ml_g._gated_ocr_hits == 1
-    assert _g_key in _ml_g._frame_ocr_cache, "命中時應回填本幀快取"
-    _ml_g._frame_ocr_cache = {}
-    _ml_g._gated_ocr(_gimg_noise, _g_key, _roi_g)  # 微幅變化 → 仍命中（容差）
-    assert _gcalls["n"] == 1, "低於閾值的變化應仍複用"
-    assert _ml_g._gated_ocr_hits == 2
-    _ml_g._frame_ocr_cache = {}
-    _ml_g._gated_ocr(_gimg_b, _g_key, _roi_g)  # 大幅變化 → 強制重跑
-    assert _gcalls["n"] == 2, "內容大幅變化應重新 OCR"
-    print("  [OK] _gated_ocr: 靜態/微變複用、大幅變化重跑")
-    recognize = _g_orig_rec
 
     print("\n=== All 30 tests passed ===")

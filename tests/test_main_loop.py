@@ -51,195 +51,6 @@ def test_step_context():
     assert ctx.matched_text.text == "test"
 
 
-def test_slow_frame_snapshots_are_saved_off_thread_and_bounded(monkeypatch, tmp_path):
-    ml = _make_ml()
-    writes = []
-
-    class ImmediateThread:
-        def __init__(self, *, target, args, **kwargs):
-            self.target = target
-            self.args = args
-
-        def start(self):
-            self.target(*self.args)
-
-    monkeypatch.setattr(_ml_mod.threading, "Thread", ImmediateThread)
-    monkeypatch.setattr(_ml_mod._logging_config, "get_log_dir", lambda: tmp_path)
-    monkeypatch.setattr(
-        _ml_mod.cv2,
-        "imwrite",
-        lambda path, image, options: writes.append((Path(path), image, options)) or True,
-    )
-
-    frame = np.zeros((8, 8, 3), dtype=np.uint8)
-    saved_paths = [ml._save_slow_frame_snapshot(frame, i) for i in range(1, 7)]
-
-    assert len(writes) == 5
-    assert all(path.parent == tmp_path / "slow_frames" for path in saved_paths[:5])
-    assert saved_paths[5] is None
-    assert all(path.suffix == ".png" for path, _, _ in writes)
-    assert all(options == [_ml_mod.cv2.IMWRITE_PNG_COMPRESSION, 1] for _, _, options in writes)
-    assert all(image is not frame for _, image, _ in writes)
-
-
-def test_activate_window_skips_reactivation_when_target_is_foreground(monkeypatch):
-    ml = _make_ml()
-    ml._window_hwnd = 123
-    activations = []
-    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda hwnd: hwnd == 123)
-    monkeypatch.setattr(
-        _ml_mod._screenshot,
-        "activate_window",
-        lambda title: activations.append(title) or True,
-    )
-
-    assert _ml_mod.MainLoop._activate_window(ml)
-    assert activations == []
-
-    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda _hwnd: False)
-    assert _ml_mod.MainLoop._activate_window(ml)
-    assert activations == ["測試視窗"]
-
-
-def test_parallel_group_prewarm_is_lazy_and_stops_after_trigger(monkeypatch):
-    rules = [
-        Rule("ocr-before", "OCR before", True, [Step("detect", {"text": "first"})]),
-        Rule("image-hit", "Image hit", True, [Step("match_image", {"template_data": "data"})]),
-        Rule("ocr-after", "OCR after", True, [Step("detect", {"text": "later"})]),
-    ]
-    ml = _make_ml()
-    ml._rule_map = {rule.id: rule for rule in rules}
-    ml._rules_path = "task.json"
-    ml._frame_phase_timings = []
-    ml._resolve_roi = lambda *_args: {"x": 0, "y": 0, "w": 10, "h": 10}
-    events = []
-    ml._prewarm_ocr_rules = lambda _img, _rect, ids: events.append(("prewarm", ids))
-
-    def run_rule(rule, _img, _rect, ctx):
-        events.append(("run", rule.id))
-        ctx.triggered = rule.id == "image-hit"
-
-    ml._run_rule = run_rule
-    monkeypatch.setattr(_ml_mod, "get_capture_size", lambda _path: [100, 100])
-    monkeypatch.setattr(_ml_mod, "get_window_client_offset", lambda _title: None)
-    group = RuleGroup(
-        id="ordered",
-        name="Ordered",
-        mode="loop",
-        order="parallel",
-        rule_ids=[rule.id for rule in rules],
-    )
-
-    _ml_mod.MainLoop._run_parallel_group(
-        ml, group, np.zeros((20, 20, 3), dtype=np.uint8), {"w": 20, "h": 20}
-    )
-
-    assert events == [
-        ("prewarm", {"ocr-before"}),
-        ("run", "ocr-before"),
-        ("run", "image-hit"),
-    ]
-
-
-def test_process_rules_records_slow_background_rule_phase():
-    from time import sleep
-
-    rule = Rule("background", "Slow background", True, [Step("wait", {})], background=True)
-    ml = _make_ml()
-    ml._rules = [rule]
-    ml._rule_map = {rule.id: rule}
-    ml._groups = []
-    ml._active_group_ids = []
-    ml._has_detect_rules = False
-    ml._current_group = lambda: None
-    ml._run_rule = lambda *_args, **_kwargs: sleep(0.02)
-
-    ml._process_rules(
-        np.zeros((10, 10, 3), dtype=np.uint8),
-        {"x": 0, "y": 0, "w": 10, "h": 10},
-    )
-
-    assert any(
-        phase.startswith("background_rule:Slow background=") for phase in ml._frame_phase_timings
-    )
-
-
-def test_lazy_ocr_prewarm_reuses_overlapping_cluster():
-    rules = [
-        Rule(
-            "ocr-a",
-            "OCR A",
-            True,
-            [Step("detect", {"text": "first", "roi": {"x": 0, "y": 0, "w": 30, "h": 10}})],
-        ),
-        Rule(
-            "ocr-b",
-            "OCR B",
-            True,
-            [Step("detect", {"text": "second", "roi": {"x": 20, "y": 0, "w": 30, "h": 10}})],
-        ),
-    ]
-    ml = _make_ml()
-    ml._rules = rules
-    ml._groups = [
-        RuleGroup(
-            id="g", name="Group", mode="loop", order="parallel", rule_ids=[r.id for r in rules]
-        )
-    ]
-    ml._active_group_ids = ["g"]
-    ml._has_detect_rules = True
-    ml._frame_phase_timings = []
-    ml._frame_prewarm_ms = 0.0
-    ml._resolve_roi = lambda roi, _rect: roi
-    calls = []
-    ml._ocr_region = lambda _img, roi: calls.append(roi) or []
-    img = np.zeros((20, 60, 3), dtype=np.uint8)
-    rect = {"w": 60, "h": 20}
-
-    _ml_mod.MainLoop._prewarm_ocr_clusters(ml, img, rect, defer=True)
-    assert calls == []
-
-    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"ocr-a"})
-    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"ocr-b"})
-
-    assert calls == [{"x": 0, "y": 0, "w": 50, "h": 10}]
-
-
-def test_gated_ocr_reuses_unchanged_background_cluster():
-    rules = [
-        Rule(
-            "bg",
-            "BG",
-            True,
-            [Step("detect", {"text": "x", "roi": {"x": 0, "y": 0, "w": 40, "h": 20}})],
-            background=True,
-        ),
-    ]
-    ml = _make_ml()
-    ml._rules = rules
-    ml._groups = []
-    ml._active_group_ids = []
-    ml._has_detect_rules = True
-    ml._resolve_roi = lambda roi, _rect: roi
-    ml._frame_phase_timings = []
-    ml._frame_prewarm_ms = 0.0
-    calls = []
-    ml._ocr_region = lambda _img, roi: calls.append(dict(roi)) or []
-    img = np.zeros((20, 40, 3), dtype=np.uint8)
-    rect = {"w": 40, "h": 20}
-
-    _ml_mod.MainLoop._prewarm_ocr_clusters(ml, img, rect, defer=True)
-    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"bg"}, gate=True)
-    assert len(calls) == 1, "首次背景 prewarm 應實際 OCR"
-
-    ml._frame_ocr_cache = {}  # 模擬下一幀（幀快取重置）
-    ml._gated_ocr_hits = 0
-    _ml_mod.MainLoop._prewarm_ocr_clusters(ml, img, rect, defer=True)
-    _ml_mod.MainLoop._prewarm_ocr_rules(ml, img, rect, {"bg"}, gate=True)
-    assert len(calls) == 1, "內容未變應複用上次結果，不再 OCR"
-    assert ml._gated_ocr_hits == 1, "應記錄一次閘門命中"
-
-
 # ── _to_screen_coords ──
 
 
@@ -358,34 +169,6 @@ def test_handle_detect_empty_text():
     )
     result = ml._handle_detect({"text": "", "roi": None}, ctx, test_rule)
     assert result.action == "stop"
-
-
-def test_handle_detect_profiles_ocr_lookup_and_text_match(monkeypatch):
-    ml = _make_ml()
-    ml._frame_phase_timings = []
-    ml._ocr_cache_hits = 0
-    result_box = _ml_mod.OcrResult(text="other", x=1, y=1, w=3, h=3, confidence=0.9)
-
-    def slow_ocr_lookup(*_args):
-        time.sleep(0.02)
-        return [result_box]
-
-    def slow_text_match(*_args):
-        time.sleep(0.02)
-        return []
-
-    monkeypatch.setattr(ml, "_ocr_region", slow_ocr_lookup)
-    monkeypatch.setattr(_ml_mod, "find_text", slow_text_match)
-    rule = Rule(id="rule_profile", name="診斷拆分", enabled=True, steps=[])
-    ctx = StepContext(
-        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 10, "h": 10}
-    )
-
-    result = ml._handle_detect({"text": "target", "roi": {}}, ctx, rule)
-
-    assert result.action == "stop"
-    assert any(t.startswith("ocr_lookup:診斷拆分=") for t in ml._frame_phase_timings)
-    assert any(t.startswith("text_match:診斷拆分=") for t in ml._frame_phase_timings)
 
 
 # ── _ocr_region cache-hit marker ──
@@ -1164,7 +947,7 @@ def test_should_process_static_frame():
     assert not ml._should_process_static_frame()
 
 
-def test_loop_notifies_once_per_continuous_match(monkeypatch):
+def test_loop_triggers_rule_on_second_static_game_frame(monkeypatch):
     frame_path = Path(__file__).parent / "data" / "starsavior_training_live.png"
     frame = cv2.imread(str(frame_path))
     assert frame is not None, f"missing captured game frame: {frame_path}"
@@ -1203,7 +986,7 @@ def test_loop_notifies_once_per_continuous_match(monkeypatch):
             }[key]
         },
     )()
-    ml._prewarm_ocr_clusters = lambda *_args, **_kwargs: None
+    ml._prewarm_ocr_clusters = lambda _img, _rect: None
     ml.on_finished = None
     errors = []
     ml.on_error = errors.append
@@ -1224,27 +1007,24 @@ def test_loop_notifies_once_per_continuous_match(monkeypatch):
     def fake_ocr(img, _roi):
         assert img is frame
         ocr_calls.append(1)
-        if len(ocr_calls) in (1, 4):
+        if len(ocr_calls) == 1:
             return []
-        result = [_ml_mod.OcrResult(text="55%", x=1680, y=300, w=60, h=30, confidence=1.0)]
-        if len(ocr_calls) == 5:
-            ml._stop_event.set()
-        return result
+        return [_ml_mod.OcrResult(text="55%", x=1680, y=300, w=60, h=30, confidence=1.0)]
 
     ml._ocr_region = fake_ocr
     notifications = []
 
     def on_warning(message):
         notifications.append(message)
+        if message == "game-frame-triggered":
+            ml._stop_event.set()
 
     ml.on_warning = on_warning
     ml._loop()
 
-    assert len(captured) == 5, "loop should keep checking across match loss and reappearance"
-    assert len(ocr_calls) == 5, "detect rules must be rechecked on every frame"
-    assert notifications == ["game-frame-triggered", "game-frame-triggered"], (
-        "notify once for a continuous match, then rearm after the condition disappears"
-    )
+    assert len(captured) == 2, "loop should inspect the unchanged game frame again"
+    assert len(ocr_calls) == 2, "detect rules must be rechecked on static frames"
+    assert notifications == ["game-frame-triggered"]
     assert errors == [], f"main loop reported an error: {errors}"
 
 
