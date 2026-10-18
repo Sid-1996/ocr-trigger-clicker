@@ -55,7 +55,7 @@
    ```
    改 `core/` 邏輯後不跑 pytest 視為未完成。對應範圍除了實體 import，也含 `tests/conftest.py` 的 fixture／factory（`make_main_loop` / `tmp_tasks_dir`）落點；改含 `T()` 的 `.py` 或 `i18n/*.json` 時加跑 `tests/test_i18n.py`。整合測試（`test_ocr_merge` / `test_prematch_equiv` / `test_template_cache`）需本機 RapidOCR model 且在無 model 環境會自動 skip；對應測試因環境 skip 時改用該模組 self-check 補位並在回覆明說，不當作綠燈。
 
-測試速度紅線：整套 `pytest` 的標準時間約 1 分鐘。實境截圖幀清單集中在 `tests/data_frames.py`（新增截圖：ASCII 檔名 → 加入 `ALL_FRAMES`），**預設只跑 `CORE_FRAMES`**；全量 12 幀會讓 OCR 整合測試約翻倍（約 +50s），只在需要時設 `OTC_FULL_FRAMES=1` 跑，不要讓預設路徑變慢。
+測試速度紅線：整套 `pytest` 的標準時間約 1 分鐘。實境截圖幀清單集中在 `tests/data_frames.py`（新增截圖：ASCII 檔名 → 加入 `ALL_FRAMES`；截圖不入版控，只在本地），**預設只跑 `CORE_FRAMES`**；全量 12 幀會讓 OCR 整合測試約翻倍（約 +50s），只在需要時設 `OTC_FULL_FRAMES=1` 跑，不要讓預設路徑變慢。
 
 3. **add + commit + push**（一次完成）：
    ```powershell

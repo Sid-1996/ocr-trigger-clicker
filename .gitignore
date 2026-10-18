@@ -24,3 +24,5 @@ tasks/
 /stderr.txt
 /config.json
 __pipeline_*.png
+# 本地實境截圖（單張約 3MB；OCR 全量模擬測試 OTC_FULL_FRAMES=1 用，不入版控）
+/tests/data/test[0-9]*.png
