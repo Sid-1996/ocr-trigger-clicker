@@ -156,6 +156,12 @@ if ((Get-Content -Path $pyprojectPath -Raw -Encoding utf8) -notmatch ('version =
 
 # ---- 取回前版資產（供 Velopack 計算 delta；首次發布無前版時允許失敗） ----
 
+# 同版號重發（-Force -FeedTest）：先刪掉沙箱上同版 release，否則 vpk download
+# 會把同版資產抓回 Releases/，vpk pack 以 "equal or greater version" 硬失敗。
+if ($Force -and $FeedTest) {
+    gh release delete $tagName -R $ghRepo --yes --cleanup-tag 2>$null
+}
+
 Remove-Item -Path Releases -Recurse -Force -ErrorAction SilentlyContinue
 vpk download github --repoUrl $repoUrl
 if ($LASTEXITCODE -ne 0) {
