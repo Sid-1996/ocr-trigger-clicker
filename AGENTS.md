@@ -252,6 +252,18 @@ uv run ruff format "C:\Code play first\ocr-trigger-clicker"
 uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路徑>', run_name='__main__')"
 ```
 
+### 任務模擬器（`sim_task.py`）
+以固定 seed 隨機切換 `tests/data` 實境幀，餵給真規則引擎（`MainLoop._process_rules`），動作只計數不執行（`_send_click/_send_key/_send_scroll/_activate_window` 全為 stub，不碰真滑鼠與真視窗），輸出幀耗／OCR 成本／每規則命中、從未命中、從未被評估清單。
+
+```powershell
+uv run python sim_task.py --frames 40 --seed 1          # 核心 4 幀
+uv run python sim_task.py --frames 120 --seed 7 --full  # 全 12 幀（含本地截圖）
+uv run python sim_task.py --out sim.json                # 另存統計，供跨版本／跨 seed 比較
+uv run python sim_task.py --self-check                  # 只驗統計邏輯（不載模型）
+```
+
+同 seed 可重現；換 seed 換一組抽樣。首幀含模型暖機，看「穩態平均」別看 avg。隨機換幀無時間鄰近性（實機同場景多為連續相似幀），數字屬壓力情境、偏悲觀。
+
 ---
 
 ## 版本管理與發行流程
