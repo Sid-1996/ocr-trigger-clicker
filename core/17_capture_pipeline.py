@@ -28,8 +28,10 @@ def _pad_to_full(img: np.ndarray, title: str) -> np.ndarray:
     return img
 
 
-def _capture_foreground(title: str) -> np.ndarray | None:
-    img = _screenshot.capture(title)
+def _capture_foreground(
+    title: str, rect: dict | None = None, hwnd: int | None = None
+) -> np.ndarray | None:
+    img = _screenshot.capture(title, rect, hwnd)
     if img is not None:
         return img
     img = _screenshot.capture_window_content(title)
@@ -45,11 +47,17 @@ def _capture_background(title: str, hwnd: int | None) -> np.ndarray | None:
     return _capture_foreground(title)
 
 
-def capture_frame(mode: str, title: str, hwnd: int | None = None) -> np.ndarray | None:
-    """依 interaction_mode 取得全視窗 BGR 影像（含黑邊填補）。"""
+def capture_frame(
+    mode: str, title: str, hwnd: int | None = None, rect: dict | None = None
+) -> np.ndarray | None:
+    """依 interaction_mode 取得全視窗 BGR 影像（含黑邊填補）。
+
+    rect/hwnd 由呼叫端提供時，前景路徑不需再做標題列舉（避開跨行程
+    GetWindowText 阻塞整個行程的 GIL）。
+    """
     if mode != "pynput":
         return _capture_background(title, hwnd)
-    return _capture_foreground(title)
+    return _capture_foreground(title, rect, hwnd)
 
 
 if __name__ == "__main__":

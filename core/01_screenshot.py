@@ -45,6 +45,8 @@ _user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 _user32.GetClientRect.restype = wintypes.BOOL
 _user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 _user32.GetWindowRect.restype = wintypes.BOOL
+_user32.IsIconic.argtypes = [wintypes.HWND]
+_user32.IsIconic.restype = wintypes.BOOL
 _user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
 _user32.ClientToScreen.restype = wintypes.BOOL
 _user32.GetDC.argtypes = [wintypes.HWND]
@@ -175,6 +177,24 @@ def get_window_rect(title: str) -> dict | None:
         return None
 
 
+def get_window_rect_hwnd(hwnd: int) -> dict | None:
+    """以已知 hwnd 取視窗矩形（不列舉標題、不跨行程送訊息）。
+
+    pygetwindow 的標題比對會對桌面上每個頂層視窗呼叫 GetWindowText，
+    那是跨行程同步送訊且持 GIL；目標視窗忙於繪製時單次可阻塞上百毫秒，
+    凍結整個行程。每幀熱路徑改用本函式（GetWindowRect 讀核心共享資料）。
+    """
+    try:
+        if not hwnd or _user32.IsIconic(hwnd):
+            return None
+        rc = wintypes.RECT()
+        if not _user32.GetWindowRect(hwnd, ctypes.byref(rc)):
+            return None
+        return {"x": rc.left, "y": rc.top, "w": rc.right - rc.left, "h": rc.bottom - rc.top}
+    except Exception:
+        return None
+
+
 def _get_dxcam_output(window_rect: dict) -> int:
     try:
         user32 = _user32
@@ -269,8 +289,9 @@ def _capture_mss(title: str, rect: dict) -> np.ndarray | None:
         return None
 
 
-def capture(title: str) -> np.ndarray | None:
-    rect = get_window_rect(title)
+def capture(title: str, rect: dict | None = None, hwnd: int | None = None) -> np.ndarray | None:
+    if rect is None:
+        rect = get_window_rect_hwnd(hwnd) if hwnd else get_window_rect(title)
     if rect is None:
         return None
     img = _capture_mss(title, rect)

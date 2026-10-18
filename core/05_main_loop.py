@@ -42,6 +42,7 @@ _BLACK_STREAK_WARN = 3  # 後台連續全黑幀數達標才警告（避開單帧
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
+get_window_rect_hwnd = getattr(_screenshot, "get_window_rect_hwnd", lambda hwnd: None)
 get_dpi_scaling_factor = getattr(_screenshot, "get_dpi_scaling_factor", lambda hwnd: 1.0)
 capture = _screenshot.capture
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
@@ -2277,7 +2278,11 @@ class MainLoop:
                         self._stop_event.wait(self._interval)
                         continue
                     ph_minz = time.monotonic()
-                    rect = get_window_rect(title)
+                    rect = (
+                        get_window_rect_hwnd(self._window_hwnd)
+                        if self._window_hwnd
+                        else get_window_rect(title)
+                    )
                     ph_rect = time.monotonic()
                     if rect is None:
                         self._wait_window_recover(title)
@@ -2307,7 +2312,7 @@ class MainLoop:
                     self._phase_sums["pre_rect"] += (ph_rect - ph_minz) * 1000
                     self._phase_sums["pre_fg"] += (time.monotonic() - ph_rect) * 1000
                     cap_started = time.monotonic()
-                    img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
+                    img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd, rect=rect)
                     phase_capture_ms = (time.monotonic() - cap_started) * 1000
                     if img is None:
                         if iteration % 30 == 0:
