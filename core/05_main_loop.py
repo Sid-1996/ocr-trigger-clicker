@@ -237,6 +237,7 @@ class MainLoop:
             "max_rect": None,
         }
         self._frame_prewarm_ms: float = 0.0
+        self._frame_count = 0  # 本輪實際處理的幀數（停止摘要用；效能 A/B 的硬指標）
         self._notified_conditions: set[str] = set()
         self._frame_cache_hits_before: int = 0
         # ponytail: 跨幀內容快取——ROI 裁切逐位元相同 → 直接複用上次 OCR 結果。
@@ -1954,6 +1955,7 @@ class MainLoop:
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._frame_ocr_cache.clear()
         self._frame_chrome = None  # 每幀重算一次客戶區 offset（見 _chrome）
+        self._frame_count += 1
         self._frame_ocr_profile = {
             "calls": 0,
             "ms": 0.0,
@@ -2325,6 +2327,7 @@ class MainLoop:
         self._rule_completed.clear()
         self._last_completed_log.clear()
         self._black_streak = 0
+        self._frame_count = 0
         self._stop_event.clear()
         self._pause_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -2332,9 +2335,11 @@ class MainLoop:
 
     def stop(self) -> None:
         elapsed = time.monotonic() - self._started_at if self._started_at else 0.0
+        frames = self._frame_count
+        avg_ms = (elapsed * 1000 / frames) if frames else 0.0
         log_main(
-            f"循環停止：執行 {elapsed:.0f} 秒，點擊 {self._perf.get_total_clicks()} 次，"
-            f"規則 {len(self._rules)} 條"
+            f"循環停止：執行 {elapsed:.0f} 秒，幀數 {frames}（平均 {avg_ms:.0f}ms/幀），"
+            f"點擊 {self._perf.get_total_clicks()} 次，規則 {len(self._rules)} 條"
         )
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
@@ -2524,6 +2529,7 @@ if __name__ == "__main__":
     ml._tmpl_cache_max = 64
     ml._execution_log = deque(maxlen=50)
     ml._last_exec_log = {}
+    ml._frame_count = 0
     ml._notified_conditions = set()
     ml._rule_completed = set()
     ml._last_completed_log = {}
