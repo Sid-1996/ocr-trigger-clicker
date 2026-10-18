@@ -2,6 +2,8 @@ import importlib
 import sys
 from pathlib import Path
 
+import pytest
+
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
@@ -70,3 +72,37 @@ def test_focus_guard_allows_foreground_target(monkeypatch):
 
     with _hybrid.focus_guard("game", lambda _title: True, 42) as ready:
         assert ready is True
+
+
+def _restore_recorder(monkeypatch):
+    restored = []
+    monkeypatch.setattr(_hybrid, "save_state", lambda: (99, 5, 6))
+    monkeypatch.setattr(_hybrid, "restore_state", lambda state: restored.append(state))
+    return restored
+
+
+def test_focus_guard_restores_state_when_body_raises(monkeypatch):
+    """區塊內例外仍須還原使用者游標與前景視窗（滑鼠卡住是最痛的體感故障）。"""
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
+    monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
+    restored = _restore_recorder(monkeypatch)
+
+    with pytest.raises(RuntimeError):
+        with _hybrid.focus_guard("game", lambda _title: True, 42):
+            raise RuntimeError("動作失敗")
+
+    assert restored == [(99, 5, 6)]
+
+
+def test_focus_guard_restores_state_when_activation_raises(monkeypatch):
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
+    monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
+    restored = _restore_recorder(monkeypatch)
+
+    def _boom(_title):
+        raise OSError("activate 失敗")
+
+    with _hybrid.focus_guard("game", _boom, 42) as ready:
+        assert ready is False, "激活抛錯應視為未就緒，不讓呼叫端做物理輸入"
+
+    assert restored == [(99, 5, 6)]
