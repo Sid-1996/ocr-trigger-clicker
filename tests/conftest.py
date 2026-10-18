@@ -30,9 +30,11 @@ def make_main_loop():
         (
             "iter",
             "cpu",
+            "cpu_thr",
             "capture",
             "pre",
             "pre_cpu",
+            "pre_thr",
             "mid",
             "total",
             "prewarm",

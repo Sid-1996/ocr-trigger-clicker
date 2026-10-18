@@ -243,9 +243,11 @@ class MainLoop:
             (
                 "iter",
                 "cpu",
+                "cpu_thr",
                 "capture",
                 "pre",
                 "pre_cpu",
+                "pre_thr",
                 "mid",
                 "total",
                 "prewarm",
@@ -2219,8 +2221,10 @@ class MainLoop:
         n = self._phase_frames
         rest = s["total"] - s["prewarm"] - s["background"] - s["groups"]
         self._log(
-            f"[perf] {span:.0f}s {n}幀: 幀耗={s['iter'] / n:.0f}ms (CPU={s['cpu'] / n:.0f}ms)"
-            f" | 前處理={s['pre'] / n:.0f}ms(CPU={s['pre_cpu'] / n:.0f}ms)"
+            f"[perf] {span:.0f}s {n}幀: 幀耗={s['iter'] / n:.0f}ms"
+            f" (行程CPU={s['cpu'] / n:.0f} 執行緒CPU={s['cpu_thr'] / n:.0f})"
+            f" | 前處理={s['pre'] / n:.0f}ms"
+            f"(行程CPU={s['pre_cpu'] / n:.0f} 執行緒CPU={s['pre_thr'] / n:.0f})"
             f" 擷取={s['capture'] / n:.0f} 黑幕/差異={s['mid'] / n:.0f}"
             f" 處理={s['total'] / n:.0f}"
             f" | 預熱={s['prewarm'] / n:.0f} 背景={s['background'] / n:.0f}"
@@ -2240,6 +2244,7 @@ class MainLoop:
                 iteration += 1
                 loop_start = time.monotonic()
                 loop_cpu_start = time.process_time()
+                loop_thr_start = time.thread_time()
                 # 讀取掃描間隔設定（允許即時生效）
                 self._interval = max(
                     self._rule_config_ctrl.get_setting(self, "scan_interval_ms") / 1000.0,
@@ -2283,6 +2288,7 @@ class MainLoop:
                     mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
                     phase_pre_ms = (time.monotonic() - loop_start) * 1000
                     phase_pre_cpu_ms = (time.process_time() - loop_cpu_start) * 1000
+                    phase_pre_thr_ms = (time.thread_time() - loop_thr_start) * 1000
                     cap_started = time.monotonic()
                     img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
                     phase_capture_ms = (time.monotonic() - cap_started) * 1000
@@ -2329,7 +2335,9 @@ class MainLoop:
                     self._phase_sums["capture"] += phase_capture_ms
                     self._phase_sums["pre"] += phase_pre_ms
                     self._phase_sums["pre_cpu"] += phase_pre_cpu_ms
+                    self._phase_sums["pre_thr"] += phase_pre_thr_ms
                     self._phase_sums["cpu"] += (time.process_time() - loop_cpu_start) * 1000
+                    self._phase_sums["cpu_thr"] += (time.thread_time() - loop_thr_start) * 1000
                     self._phase_sums["mid"] += phase_mid_ms
                     self._phase_sums["iter"] += loop_elapsed
                     self._phase_frames += 1
@@ -2603,9 +2611,11 @@ if __name__ == "__main__":
         (
             "iter",
             "cpu",
+            "cpu_thr",
             "capture",
             "pre",
             "pre_cpu",
+            "pre_thr",
             "mid",
             "total",
             "prewarm",
@@ -3551,9 +3561,11 @@ if __name__ == "__main__":
     ml._phase_sums.update(
         iter=600.0,
         cpu=200.0,
+        cpu_thr=80.0,
         capture=19.0,
         pre=14.0,
         pre_cpu=2.0,
+        pre_thr=1.0,
         mid=6.0,
         total=400.0,
         prewarm=50.0,
@@ -3565,10 +3577,12 @@ if __name__ == "__main__":
     ml._flush_perf_phases()
     assert len(_perf_logs) == 1, f"應輸出一行階段統計，got {_perf_logs}"
     _line = _perf_logs[0]
-    assert "幀耗=300ms" in _line and "CPU=100ms" in _line, _line  # iter 600/2, cpu 200/2
+    assert "幀耗=300ms (行程CPU=100 執行緒CPU=40)" in _line, (
+        _line
+    )  # iter 600/2, cpu 200/2, thr 80/2
     assert "處理=200" in _line, _line  # total 400/2
     assert "擷取=10" in _line, _line  # capture 19/2 → 9.5 → 10
-    assert "前處理=7ms(CPU=1ms)" in _line, _line  # pre 14/2, pre_cpu 2/2
+    assert "前處理=7ms(行程CPU=1 執行緒CPU=0)" in _line, _line  # pre 14/2, pre_cpu 2/2, pre_thr 1/2
     assert "黑幕/差異=3" in _line, _line  # mid 6/2
     assert "預熱=25" in _line and "背景=15" in _line and "平行群組=60" in _line, _line
     assert "佇列/其他=100" in _line, _line  # (400-50-30-120)/2
