@@ -240,7 +240,8 @@ class MainLoop:
         self._frame_count = 0  # 本輪實際處理的幀數（停止摘要用；效能 A/B 的硬指標）
         # 逐幀階段耗時累加器（每 _PERF_LOG_SEC 輸出一次，見 _flush_perf_phases）
         self._phase_sums: dict[str, float] = dict.fromkeys(
-            ("iter", "capture", "total", "prewarm", "background", "groups"), 0.0
+            ("iter", "capture", "pre", "mid", "total", "prewarm", "background", "groups"),
+            0.0,
         )
         self._phase_frames = 0
         self._phase_since = 0.0
@@ -2208,7 +2209,8 @@ class MainLoop:
         rest = s["total"] - s["prewarm"] - s["background"] - s["groups"]
         self._log(
             f"[perf] {span:.0f}s {n}幀: 幀耗={s['iter'] / n:.0f}ms"
-            f" (擷取={s['capture'] / n:.0f}ms 處理={s['total'] / n:.0f}ms)"
+            f" (前處理={s['pre'] / n:.0f} 擷取={s['capture'] / n:.0f}"
+            f" 黑幕/差異={s['mid'] / n:.0f} 處理={s['total'] / n:.0f})"
             f" | 預熱={s['prewarm'] / n:.0f} 背景={s['background'] / n:.0f}"
             f" 平行群組={s['groups'] / n:.0f} 佇列/其他={rest / n:.0f}"
         )
@@ -2266,6 +2268,7 @@ class MainLoop:
                         self._stop_event.wait(self._interval)
                         continue
                     mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                    phase_pre_ms = (time.monotonic() - loop_start) * 1000
                     cap_started = time.monotonic()
                     img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
                     phase_capture_ms = (time.monotonic() - cap_started) * 1000
@@ -2301,6 +2304,7 @@ class MainLoop:
                     t2 = time.monotonic()
                     self._frame_waited_ms = 0.0
                     self._verify_blocked_ms = 0.0
+                    phase_mid_ms = (t2 - cap_started - phase_capture_ms / 1000.0) * 1000
                     self._process_rules(img, rect)
                     t3 = time.monotonic()
 
@@ -2309,6 +2313,8 @@ class MainLoop:
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
                     self._phase_sums["total"] += ocr_ms
                     self._phase_sums["capture"] += phase_capture_ms
+                    self._phase_sums["pre"] += phase_pre_ms
+                    self._phase_sums["mid"] += phase_mid_ms
                     self._phase_sums["iter"] += loop_elapsed
                     self._phase_frames += 1
                     self._flush_perf_phases()
@@ -2578,7 +2584,7 @@ if __name__ == "__main__":
     ml._last_exec_log = {}
     ml._frame_count = 0
     ml._phase_sums = dict.fromkeys(
-        ("iter", "capture", "total", "prewarm", "background", "groups"), 0.0
+        ("iter", "capture", "pre", "mid", "total", "prewarm", "background", "groups"), 0.0
     )
     ml._phase_frames = 0
     ml._phase_since = 0.0
@@ -3514,7 +3520,7 @@ if __name__ == "__main__":
     ml._flush_perf_phases()
     assert _perf_logs == [], "沒有幀就不該輸出階段統計"
 
-    ml._phase_sums.update(iter=600.0, capture=19.0, total=400.0, prewarm=50.0)
+    ml._phase_sums.update(        iter=600.0, capture=19.0, pre=14.0, mid=6.0, total=400.0, prewarm=50.0)
     ml._phase_sums["background"] = 30.0
     ml._phase_sums["groups"] = 120.0
     ml._phase_frames = 2
@@ -3523,8 +3529,9 @@ if __name__ == "__main__":
     assert len(_perf_logs) == 1, f"應輸出一行階段統計，got {_perf_logs}"
     _line = _perf_logs[0]
     assert "幀耗=300ms" in _line, _line  # iter 600/2
-    assert "處理=200ms" in _line, _line  # total 400/2
-    assert "擷取=10ms" in _line, _line  # capture 19/2 → 9.5 → 10
+    assert "處理=200" in _line, _line  # total 400/2
+    assert "擷取=10" in _line, _line  # capture 19/2 → 9.5 → 10
+    assert "前處理=7" in _line and "黑幕/差異=3" in _line, _line  # pre 14/2, mid 6/2
     assert "預熱=25" in _line and "背景=15" in _line and "平行群組=60" in _line, _line
     assert "佇列/其他=100" in _line, _line  # (400-50-30-120)/2
     assert ml._phase_frames == 0 and all(v == 0.0 for v in ml._phase_sums.values()), (
