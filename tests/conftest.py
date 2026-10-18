@@ -27,7 +27,19 @@ def make_main_loop():
     ml._frame_chrome = None
     ml._frame_count = 0
     ml._phase_sums = dict.fromkeys(
-        ("iter", "capture", "pre", "mid", "total", "prewarm", "background", "groups"), 0.0
+        (
+            "iter",
+            "cpu",
+            "capture",
+            "pre",
+            "pre_cpu",
+            "mid",
+            "total",
+            "prewarm",
+            "background",
+            "groups",
+        ),
+        0.0,
     )
     ml._phase_frames = 0
     ml._phase_since = 0.0
