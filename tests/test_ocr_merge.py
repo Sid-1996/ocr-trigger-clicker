@@ -28,7 +28,8 @@ ROOT = _ROOT
 DATA = Path(__file__).resolve().parent / "data"
 # 快照自 docs/tasks/StarSavior-跑馬輔助.json — 固定基準，任務內容更新不影響回歸測試
 JOB = DATA / "fixture_task.json"
-FRAMES = ["test.png", "test2.png", "test3.png", "starsavior_training_live.png"]
+from data_frames import FRAMES  # noqa: E402
+
 WIN = (1920.0, 1080.0)
 
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
