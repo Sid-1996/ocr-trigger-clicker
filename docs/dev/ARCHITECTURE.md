@@ -168,6 +168,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `wait` | 固定等待 | `ms` |
 | `jump` | 跳轉至另一規則（限同群組） | `rule_id` |
 | `compare` | ROI 內數值比對 | `pattern`, `operator`, `value`, `on_fail`（stop/key/skip/jump/advance/notify + fail_duration_sec） |
+| `sum` | ROI 內整數快照加總，結果經 `on_sum` 顯示浮層（無條件回 `continue`） | `roi`（必填；未設定則略過） |
 | `notify` | 右下角疊加通知提示（經 `on_warning` → GUI `NotificationStack` 顯示；回 `continue`，不設 `ctx.triggered`，不影響規則流程） | `message` |
 | `scroll` | 滑鼠滾輪（設 `ctx.triggered = True） | `direction`, `amount`, `delay_ms`, `after_delay_ms` |
 | `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`, `dx`, `dy`, `button`, `after_delay_ms` |

@@ -50,6 +50,7 @@ _STEP_DEFAULTS = {
         "after_delay_ms": 0,
     },
     "notify": {"message": ""},
+    "sum": {"roi": {"x": 0, "y": 0, "w": 0, "h": 0}},
 }
 
 
@@ -272,6 +273,8 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
         base["operator"] = str(base.get("operator", ">="))
         base["value"] = _as_float(base.get("value", 0.0), 0.0)
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
+    elif step_type == "sum":
+        base["roi"] = _sanitize_roi(base.get("roi"))
     elif step_type == "match_image":
         base["template"] = str(base.get("template", "")).strip()
         base["template_data"] = str(base.get("template_data", ""))

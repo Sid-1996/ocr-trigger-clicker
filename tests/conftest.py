@@ -94,6 +94,7 @@ def make_main_loop():
     ml._action_log_ts = {}
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
+    ml._sum_warn_counter = {}
     ml._slow_loop_warned = False
     ml._frame_waited_ms = 0.0
     ml._verify_blocked_ms = 0.0
@@ -106,6 +107,7 @@ def make_main_loop():
     ml.on_bg_fail = None
     ml.on_black_fail = None
     ml.on_info = None
+    ml.on_sum = None
     ml.on_window_lost = None
     ml.on_window_recovered = None
     ml.on_emergency = None

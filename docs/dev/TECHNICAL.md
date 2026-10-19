@@ -12,7 +12,7 @@
   - **Naming note** — The UI calls this feature and its captured screenshot simply「圖片」(image), but under the hood it is *feature matching*, not pixel-exact comparison: `TM_CCOEFF_NORMED` (normalized cross-correlation) scores similarity 0–1 with a confidence threshold (default 0.85), defaulting to grayscale so lighting/shade shifts tolerate well; optional `match_color` keeps BGR and adds a per-channel tolerance filter. A captured image therefore keeps matching across minor rendering variations — it behaves like a visual signature, not a literal picture compare
 - **Window-Ratio Coordinates** — All coordinates stored as 0–1 ratios (relative to window size); compatible across 1080p, 4K, 150% DPI scaling, and window resizing
 - **Group Rule Management** — Drag-and-drop sorting, loop / run-once / repeat-N-times execution modes, sequential or parallel group processing
-- **Step System** — Rules composed of ordered steps: detect, click, key, wait, jump, compare, match_image, notify, scroll, drag; supports conditional branching and complex workflows
+- **Step System** — Rules composed of ordered steps: detect, click, key, wait, jump, compare, sum, match_image, notify, scroll, drag; supports conditional branching and complex workflows
 - **Background (Daemon) Monitoring** — Rules marked as background run every frame independently of group flow; suitable for error interception and always-on alerts
 - **Foreground Protection & Safety** — Optional foreground-only execution, configurable rate limiting, emergency stop, and on_fail actions (stop rule / stop group / send notification)
 - **Multi-Task Management** — Independent task files with JSON import/export; quick switch between different scenarios

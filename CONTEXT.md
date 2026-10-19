@@ -19,7 +19,7 @@ _Avoid_: 分類、collection
 _Avoid_: 條件式、macro
 
 **步驟 (Step)**:
-規則內的單一動作，共十種：detect / click / key / wait / jump / drag / scroll / match_image / compare / notify。
+規則內的單一動作，共十一種：detect / click / key / wait / jump / drag / scroll / match_image / compare / notify / sum。
 _Avoid_: 指令、action（泛稱時）
 
 ### 偵測與比對
@@ -40,6 +40,18 @@ _Avoid_: 模板比對、範本、模板、圖示辨識、以圖找字
 
 **修剪圖片**:
 對已截取圖片做逐像素微調的對話框，把範圍剪到最準再比對。
+
+**數字加總 (Sum)**:
+把加總區域內目前看到的整數相加並顯示總和的步驟類型；不累積、不做跨幀記憶。放在偵測步驟之後，僅在該幀觸發時計算；沒有數字時不顯示也不失敗。只接受整數，含英文字母、小數或百分比的 token 會略過。
+_Avoid_: 累計、計數器、自動統計
+
+**加總區域 (Sum ROI)**:
+數字加總步驟指定的畫面範圍，必須設定；未設定時步驟略過。框選時只能包含要相加的數字，排名、血量等無關數字會一起被加總。
+_Avoid_: 全視窗加總
+
+**數字加總浮層 (Sum Overlay)**:
+顯示加總結果的置頂、點擊穿透小標籤，出現在加總區域上方（空間不足時改下方）；每次成功讀取重置 5 秒計時，時間到淡出。
+_Avoid_: 視窗、面板、notification
 
 ### 互動方法
 

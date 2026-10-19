@@ -203,6 +203,7 @@ _STEP_TYPE_ICONS = {
     "detect": "🔍",
     "match_image": "🖼",
     "compare": "🔢",
+    "sum": "🧮",
     "click": "🖱",
     "key": "⌨",
     "wait": "⏱",
@@ -216,6 +217,7 @@ _STEP_TYPE_LABELS = {
     "detect": "step_form.step_detect",
     "match_image": "step_form.step_match_image",
     "compare": "step_form.step_compare",
+    "sum": "step_form.step_sum",
     "click": "step_form.step_click",
     "key": "step_form.step_key",
     "wait": "step_form.step_wait",
@@ -232,6 +234,7 @@ _STEP_COLORS = {
     "wait": "#95A5A6",
     "jump": "#9B59B6",
     "compare": "#1ABC9C",
+    "sum": "#8E44AD",
     "match_image": "#E91E63",
     "notify": "#F1C40F",
     "scroll": "#2C3E50",
@@ -401,6 +404,11 @@ def _step_summary(step, rules_provider=None) -> str:
     if t == "notify":
         msg = p.get("message", "")
         return T("summary.format_notify", msg=msg) if msg else T("summary.format_notify_empty")
+    if t == "sum":
+        roi = p.get("roi", {})
+        zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        roi_str = T("summary.not_set") if zero_roi else _fmt_roi(roi)
+        return T("summary.sum_roi", roi=roi_str)
     return t
 
 
@@ -955,6 +963,8 @@ class _StepListWidget(QWidget):
                 step_count=len(self._steps),
                 groups_provider=self._groups_provider,
             )
+        if t == "sum":
+            return _SumStepForm(self, step, idx, self._roi_callback)
         if t == "notify":
             return _NotifyStepForm(self, step, idx)
         return None
@@ -3640,6 +3650,68 @@ class _CompareStepForm(QWidget):
         _set_form_row_visible(self._of_form, self._of_notify_groups, is_notify)
 
 
+class _SumStepForm(QWidget):
+    def __init__(self, parent_list, step, idx, roi_cb):
+        super().__init__()
+        self._list = parent_list
+        self._step = step
+        self._idx = idx
+        self._roi_cb = roi_cb
+        p = step.params
+        form = QFormLayout(self)
+        form.setContentsMargins(12, 6, 12, 6)
+
+        roi = p.get("roi", {})
+        self._roi = {
+            "x": roi.get("x", 0),
+            "y": roi.get("y", 0),
+            "w": roi.get("w", 0),
+            "h": roi.get("h", 0),
+        }
+        if "roi_coord" in roi:
+            self._roi["roi_coord"] = roi["roi_coord"]
+        self._roi_label = QLabel(
+            T("summary.not_set")
+            if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+            else _fmt_roi(roi)
+        )
+        self._roi_btn = QPushButton(T("step_form.detect_roi"))
+        self._roi_btn.setToolTip(T("tooltip.sum_roi"))
+        self._roi_btn.clicked.connect(self._pick_roi)
+        roi_row = QWidget()
+        rr = QHBoxLayout(roi_row)
+        rr.setContentsMargins(0, 0, 0, 0)
+        rr.addWidget(self._roi_label)
+        rr.addWidget(self._roi_btn)
+        form.addRow(T("step_form.sum_region"), roi_row)
+
+        hint = QLabel(T("step_form.sum_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        form.addRow(hint)
+
+    def _pick_roi(self):
+        if not self._roi_cb:
+            return
+        result = self._roi_cb()
+        if result:
+            self._roi = dict(result)
+            z = all(v == 0 for v in self._roi.values())
+            self._roi_label.setText(T("summary.not_set") if z else _fmt_roi(self._roi))
+            self.save()
+            self._list.steps_changed.emit()
+
+    def save(self):
+        self._step.params["roi"] = {
+            "x": self._roi.get("x", 0),
+            "y": self._roi.get("y", 0),
+            "w": self._roi.get("w", 0),
+            "h": self._roi.get("h", 0),
+        }
+        if "roi_coord" in self._roi:
+            self._step.params["roi"]["roi_coord"] = self._roi["roi_coord"]
+
+
 class _KeyStepForm(QWidget):
     def __init__(
         self,
@@ -3928,6 +4000,9 @@ _StopGroupsPicker = _stop_groups_mod.StopGroupsPicker
 _notification_mod = load_sibling("notification_stack", "gui/notification_stack.py")
 NotificationStack = _notification_mod.NotificationStack
 
+_sum_overlay_mod = load_sibling("sum_overlay", "gui/sum_overlay.py")
+SumOverlay = _sum_overlay_mod.SumOverlay
+
 _group_settings_mod = load_sibling("group_settings_controller", "gui/group_settings_controller.py")
 GroupSettingsController = _group_settings_mod.GroupSettingsController
 
@@ -4019,6 +4094,7 @@ class WorkerSignals(QObject):
     black_fail_signal = pyqtSignal()
     window_recovered_signal = pyqtSignal()
     test_done_signal = pyqtSignal(dict)
+    sum_signal = pyqtSignal(int, int, int, int, int, int)
     finished = pyqtSignal(bool, str)
 
 
@@ -4065,6 +4141,9 @@ class InitWorker(QThread):
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
             loop.on_emergency = lambda: self._signals.emergency_signal.emit()
             loop.on_finished = lambda: self._signals.finished.emit(True, "")
+            loop.on_sum = lambda x, y, w, h, total, count: self._signals.sum_signal.emit(
+                x, y, w, h, total, count
+            )
             loop.start()
             self.loop = loop
             self.finished.emit(True, "")
@@ -4399,6 +4478,7 @@ class MainWindow(QMainWindow):
             self._suppress_collapse = False
             self._is_starting = False
             self._notif_stack = NotificationStack()
+            self._sum_overlay = SumOverlay()
             self._updating = False
             self._downloading = False
             self._pending_update_ver = ""
@@ -4760,6 +4840,7 @@ class MainWindow(QMainWindow):
             ("detect", T("step.detect_label"), T("step_form.step_detect_desc")),
             ("match_image", T("step.match_image_label"), T("step_form.step_match_image_desc")),
             ("compare", T("step.compare_label"), T("step_form.step_compare_desc")),
+            ("sum", T("step.sum_label"), T("step_form.step_sum_desc")),
             ("click", T("step.click_label"), T("step_form.step_click_desc")),
             ("key", T("step.key_label"), T("step_form.step_key_desc")),
             ("drag", T("step.drag_label"), T("step_form.step_drag_desc")),
@@ -4894,6 +4975,7 @@ class MainWindow(QMainWindow):
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
         self._signals.emergency_signal.connect(self._emergency_stop)
         self._signals.test_done_signal.connect(self._show_test_result)
+        self._signals.sum_signal.connect(self._on_sum_result)
         self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
         self._signals.warning_signal.connect(
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)
@@ -4914,6 +4996,9 @@ class MainWindow(QMainWindow):
 
     def _on_ocr_health(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
+
+    def _on_sum_result(self, x: int, y: int, w: int, h: int, total: int, count: int):
+        self._sum_overlay.show_sum(x, y, w, h, T("sum_overlay.text", total=total, count=count))
 
     def _on_resource_warning(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 5000)
@@ -7067,6 +7152,7 @@ class MainWindow(QMainWindow):
     def _stop_loop(self):
         self._is_starting = False
         self._status_timer.stop()
+        self._sum_overlay.hide_now()
         if hasattr(self, "_exec_log_timer"):
             self._exec_log_timer.stop()
         if self._loop:

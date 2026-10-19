@@ -71,6 +71,8 @@ match_template = _tmpl.match_template
 img_to_b64 = _tmpl.img_to_b64
 _logging_config = load_sibling("logging_config", "core/00_logging_config.py")
 _obs_mod = load_sibling("observation", "core/observation.py")
+_number_sum = load_sibling("number_sum", "core/21_number_sum.py")
+sum_numbers = _number_sum.sum_numbers
 
 
 def _ensure_main_logger() -> logging.Logger:
@@ -112,6 +114,8 @@ class StepContext:
     ocr_cache_hit: bool = False
     matched_ns: int = 0
     prematch: Optional[dict] = None
+    sum_total: int = 0
+    sum_count: int = 0
 
 
 @dataclass
@@ -286,6 +290,7 @@ class MainLoop:
         self._process_counter: int = 0
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
+        self._sum_warn_counter: dict[str, int] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
@@ -324,6 +329,8 @@ class MainLoop:
         self.on_window_recovered: Optional[Callable[[], None]] = None
         self.on_emergency: Optional[Callable[[], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
+        # 數字加總結果通知（區域螢幕座標 x, y, w, h, 總和, 個數）；GUI 負責顯示浮層
+        self.on_sum: Optional[Callable[[int, int, int, int, int, int], None]] = None
 
         self._rule_config_ctrl = RuleConfigController()
 
@@ -482,6 +489,7 @@ class MainLoop:
             self._group_rounds_completed.clear()
             self._match_image_warn_counter.clear()
             self._detect_warn_counter.clear()
+            self._sum_warn_counter.clear()
             self._xframe_ocr_cache.clear()
             self._tmpl_cache.clear()
             self._fail_since.clear()
@@ -955,6 +963,30 @@ class MainLoop:
             "number": num,
             "text": combined[:64],
         }
+        return StepResult("continue")
+
+    def _handle_sum(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        ctx.sum_total = 0
+        ctx.sum_count = 0
+        raw_roi = params.get("roi", {})
+        if all(raw_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+            last = self._sum_warn_counter.get(rule.id, 0)
+            self._sum_warn_counter[rule.id] = last + 1
+            if last % 30 == 0:
+                self._log(f"⚠ 規則「{rule.name}」數字加總未設定區域，已略過")
+            return StepResult("continue")
+
+        roi = self._resolve_roi(raw_roi, ctx.rect)
+        results = self._ocr_region(ctx.img, roi)
+        total, count = sum_numbers(" ".join(r.text for r in results))
+        if count == 0:
+            return StepResult("continue")
+
+        ctx.sum_total = total
+        ctx.sum_count = count
+        if self.on_sum:
+            sx, sy = self._to_screen_coords(ctx.rect, int(roi["x"]), int(roi["y"]))
+            self.on_sum(sx, sy, int(roi["w"]), int(roi["h"]), total, count)
         return StepResult("continue")
 
     def _build_notify_text(self, message: str, rule: Rule, stopped_groups: list[str]) -> str:
@@ -1541,6 +1573,7 @@ class MainLoop:
             "scroll": self._handle_scroll,
             "match_image": self._handle_match_image,
             "compare": self._handle_compare,
+            "sum": self._handle_sum,
             "notify": self._handle_notify,
         }
         handler = handlers.get(step.type)
@@ -1879,6 +1912,13 @@ class MainLoop:
             dx = step.params.get("dx", 0)
             dy = step.params.get("dy", 0)
             return T("exec_log.detail.drag_offset", dx=f"{dx:+d}", dy=f"{dy:+d}")
+        if t == "sum":
+            if ctx.sum_count > 0:
+                return T("exec_log.detail.sum_result", total=ctx.sum_total, count=ctx.sum_count)
+            raw_roi = step.params.get("roi", {})
+            if all(raw_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
+                return T("exec_log.detail.sum_no_roi")
+            return ""
         if ctx.on_fail_fired:
             on_fail = step.params.get("on_fail", "stop")
             if isinstance(on_fail, dict) and on_fail.get("action") == "key":
@@ -2659,6 +2699,7 @@ if __name__ == "__main__":
     ml._action_log_ts = {}
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
+    ml._sum_warn_counter = {}
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
     ml._black_streak = 0
@@ -2704,6 +2745,7 @@ if __name__ == "__main__":
         "scroll",
         "match_image",
         "compare",
+        "sum",
         "notify",
     ]:
         step = _rule.Step(type=hn, params={})
@@ -3609,7 +3651,7 @@ if __name__ == "__main__":
     )  # iter 600/2, cpu 200/2, thr 80/2
     assert "處理=200" in _line, _line  # total 400/2
     assert "擷取=10" in _line, _line  # capture 19/2 → 9.5 → 10
-    assert "前處理=7ms(行程CPU=1 執行緒CPU=0)" in _line, _line  # pre 14/2, pre_cpu 2/2, pre_thr 1/2
+    assert "前處理=7ms(行程CPU=1 執行緒CPU=0" in _line, _line  # pre 14/2, pre_cpu 2/2, pre_thr 1/2
     assert "黑幕/差異=3" in _line, _line  # mid 6/2
     assert "預熱=25" in _line and "背景=15" in _line and "平行群組=60" in _line, _line
     assert "佇列/其他=100" in _line, _line  # (400-50-30-120)/2
