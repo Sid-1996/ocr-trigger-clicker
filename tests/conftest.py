@@ -98,6 +98,7 @@ def make_main_loop():
     ml._sum_candidate = {}
     ml._sum_active_rule = None
     ml._sum_seen = None
+    ml._sum_visual = {}
     ml._slow_loop_warned = False
     ml._frame_waited_ms = 0.0
     ml._verify_blocked_ms = 0.0

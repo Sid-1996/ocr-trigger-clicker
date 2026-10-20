@@ -41,6 +41,13 @@ _CPS_WINDOW_SEC = 1.0
 _BLACK_STREAK_WARN = 3  # 後台連續全黑幀數達標才警告（避開單帧 GDI 抖動誤報）
 # 數字加總需連續穩定這麼久才顯示，避免畫面切換／數字動畫中的中途總和一閃而過
 _SUM_CONFIRM_SEC = 0.35
+# 加總 ROI 視覺指紋：縮圖後比對，容忍整體雜訊但抓得到局部數字變化
+_SUM_FP_SIZE = (32, 96)  # cv2.resize 的 (w, h)
+_SUM_FP_MEAN_MAX = 2.0
+_SUM_FP_BLOCK_MAX = 12.0
+_SUM_FP_BLOCKS = (8, 8)
+_SUM_FP_MAX_ENTRIES = 8
+_SUM_FP_REVALIDATE_HITS = 10  # 連續命中這麼多次就強制 OCR 一次，避免指紋誤判卡住
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -298,6 +305,8 @@ class MainLoop:
         self._sum_candidate: dict[str, tuple[int, int, float]] = {}
         self._sum_active_rule: str | None = None
         self._sum_seen: set[str] | None = None
+        # rule_id → [ {rect, sig, total, count, hits, last} ]，前置條件失效時整個 rule 清空
+        self._sum_visual: dict[str, list[dict]] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
@@ -502,6 +511,7 @@ class MainLoop:
             self._sum_candidate.clear()
             self._sum_active_rule = None
             self._sum_seen = None
+            self._sum_visual.clear()
             self._xframe_ocr_cache.clear()
             self._tmpl_cache.clear()
             self._fail_since.clear()
@@ -992,33 +1002,156 @@ class MainLoop:
             return StepResult("continue")
 
         roi = self._resolve_roi(raw_roi, ctx.rect)
+        rect = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
+        sig = self._sum_signature(ctx.img, roi)
+        now = time.monotonic()
+
+        cached = self._sum_lookup(rule.id, rect, sig, now)
+        if cached is not None:
+            # 同組數字（視覺指紋近乎相同）直接復用，跳過 OCR 與求和
+            total, count = cached["total"], cached["count"]
+            ctx.sum_total = total
+            ctx.sum_count = count
+            if self._sum_seen is not None:
+                self._sum_seen.add(rule.id)
+            self._update_sum(rule, ctx, roi, total, count, sig, already_confirmed=True)
+            return StepResult("continue")
+
         results = self._ocr_region(ctx.img, roi)
         total, count = sum_numbers(" ".join(r.text for r in results))
         if count == 0:
             self._clear_sum(rule.id)
             return StepResult("continue")
 
+        self._sum_revoke_false_hit(rule.id, rect, sig, total, count)
         ctx.sum_total = total
         ctx.sum_count = count
         if self._sum_seen is not None:
             self._sum_seen.add(rule.id)
-        self._update_sum(rule, ctx, roi, total, count)
+        self._update_sum(rule, ctx, roi, total, count, sig)
         return StepResult("continue")
 
-    def _update_sum(self, rule: Rule, ctx: StepContext, roi: dict, total: int, count: int) -> None:
+    def _update_sum(
+        self,
+        rule: Rule,
+        ctx: StepContext,
+        roi: dict,
+        total: int,
+        count: int,
+        sig: np.ndarray | None = None,
+        already_confirmed: bool = False,
+    ) -> None:
         """只顯示穩定後的總和；數字還在變動時先讓舊浮層淡出。"""
         now = time.monotonic()
-        prev = self._sum_candidate.get(rule.id)
-        if prev is None or prev[0] != total or prev[1] != count:
+        if already_confirmed:
+            # 快取命中的組合先前已確認過，直接顯示
             self._sum_candidate[rule.id] = (total, count, now)
-            self._hide_sum(rule.id)
-            return
-        if now - prev[2] < _SUM_CONFIRM_SEC:
-            return
+        else:
+            prev = self._sum_candidate.get(rule.id)
+            if prev is None or prev[0] != total or prev[1] != count:
+                self._sum_candidate[rule.id] = (total, count, now)
+                self._hide_sum(rule.id)
+                return
+            if now - prev[2] < _SUM_CONFIRM_SEC:
+                return
         if self.on_sum:
             sx, sy = self._to_screen_coords(ctx.rect, int(roi["x"]), int(roi["y"]))
             self.on_sum(sx, sy, int(roi["w"]), int(roi["h"]), total, count)
         self._sum_active_rule = rule.id
+        if not already_confirmed:
+            rect = (int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"]))
+            self._sum_store(rule.id, rect, sig, total, count, now)
+
+    def _sum_signature(self, img: np.ndarray, roi: dict) -> np.ndarray | None:
+        """ROI 縮圖指紋：容忍整體雜訊，但局部數字變化會超過區塊門檻。"""
+        h, w = img.shape[:2]
+        x1 = max(0, int(roi["x"]))
+        y1 = max(0, int(roi["y"]))
+        x2 = min(w, int(roi["x"]) + int(roi["w"]))
+        y2 = min(h, int(roi["y"]) + int(roi["h"]))
+        if x2 <= x1 or y2 <= y1:
+            return None
+        crop = img[y1:y2, x1:x2]
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if crop.ndim == 3 else crop
+        return cv2.resize(gray, _SUM_FP_SIZE, interpolation=cv2.INTER_AREA)
+
+    @staticmethod
+    def _sum_sig_match(a: np.ndarray | None, b: np.ndarray | None) -> bool:
+        if a is None or b is None or a.shape != b.shape:
+            return False
+        diff = cv2.absdiff(a, b)
+        if float(diff.mean()) > _SUM_FP_MEAN_MAX:
+            return False
+        bh, bw = _SUM_FP_BLOCKS
+        h, w = diff.shape[:2]
+        if h % bh or w % bw:
+            return False
+        blocks = diff.reshape(bh, h // bh, bw, w // bw).mean(axis=(1, 3))
+        return float(blocks.max()) <= _SUM_FP_BLOCK_MAX
+
+    def _sum_lookup(
+        self, rule_id: str, rect: tuple[int, int, int, int], sig: np.ndarray | None, now: float
+    ) -> dict | None:
+        if sig is None:
+            return None
+        for entry in self._sum_visual.get(rule_id, ()):
+            if entry["rect"] != rect or not self._sum_sig_match(sig, entry["sig"]):
+                continue
+            entry["hits"] += 1
+            entry["last"] = now
+            if entry["hits"] >= _SUM_FP_REVALIDATE_HITS:
+                entry["hits"] = 0
+                return None  # 定期強制 OCR，避免指紋誤判一直复用
+            return entry
+        return None
+
+    def _sum_store(
+        self,
+        rule_id: str,
+        rect: tuple[int, int, int, int],
+        sig: np.ndarray | None,
+        total: int,
+        count: int,
+        now: float,
+    ) -> None:
+        if sig is None:
+            return
+        entries = self._sum_visual.setdefault(rule_id, [])
+        for entry in entries:
+            if entry["rect"] == rect and self._sum_sig_match(sig, entry["sig"]):
+                entry["total"] = total
+                entry["count"] = count
+                entry["sig"] = sig
+                entry["hits"] = 0
+                entry["last"] = now
+                return
+        entries.append(
+            {"rect": rect, "sig": sig, "total": total, "count": count, "hits": 0, "last": now}
+        )
+        entries.sort(key=lambda e: e["last"])
+        del entries[:-_SUM_FP_MAX_ENTRIES]
+
+    def _sum_revoke_false_hit(
+        self,
+        rule_id: str,
+        rect: tuple[int, int, int, int],
+        sig: np.ndarray | None,
+        total: int,
+        count: int,
+    ) -> None:
+        """OCR 結果與快取不符時撤掉那筆，避免下一次又命中同一個錯誤總和。"""
+        entries = self._sum_visual.get(rule_id)
+        if not entries or sig is None:
+            return
+        self._sum_visual[rule_id] = [
+            e
+            for e in entries
+            if not (
+                e["rect"] == rect
+                and (e["total"], e["count"]) != (total, count)
+                and self._sum_sig_match(sig, e["sig"])
+            )
+        ]
 
     def _hide_sum(self, rule_id: str) -> None:
         """淡出目前顯示中的加總；不是這條規則擁有的浮層就不動它。"""
@@ -1028,16 +1161,18 @@ class MainLoop:
         if self.on_sum_hide:
             self.on_sum_hide()
 
-    def _clear_sum(self, rule_id: str) -> None:
-        """前置條件失效：丟掉候選值並淡出該規則的浮層。"""
+    def _clear_sum(self, rule_id: str, *, drop_cache: bool = False) -> None:
+        """丟掉候選值並淡出浮層；前置條件失效時一併清空該規則的視覺快取。"""
         self._sum_candidate.pop(rule_id, None)
+        if drop_cache:
+            self._sum_visual.pop(rule_id, None)
         self._hide_sum(rule_id)
 
     def _sum_frame_start(self) -> None:
-        """新幀開始：上一幀沒再評估加總的規則，其浮層視為失效。"""
+        """新幀開始：上一幀沒再評估加總的規則，其浮層與快取視為失效。"""
         prev = self._sum_seen
         if prev is not None and self._sum_active_rule and self._sum_active_rule not in prev:
-            self._clear_sum(self._sum_active_rule)
+            self._clear_sum(self._sum_active_rule, drop_cache=True)
         self._sum_seen = set()
 
     def _build_notify_text(self, message: str, rule: Rule, stopped_groups: list[str]) -> str:
@@ -1853,7 +1988,7 @@ class MainLoop:
                         self._rule_completed.discard(rule.id)
                     else:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
-                self._clear_sum(rule.id)
+                self._clear_sum(rule.id, drop_cache=True)
                 return
             elif result.action == "jump_step":
                 idx = result.step_index
@@ -2519,6 +2654,10 @@ class MainLoop:
         self._last_completed_log.clear()
         self._black_streak = 0
         self._frame_count = 0
+        self._sum_candidate.clear()
+        self._sum_active_rule = None
+        self._sum_seen = None
+        self._sum_visual.clear()
         for k in self._phase_sums:
             self._phase_sums[k] = 0.0
         self._phase_frames = 0
@@ -2759,6 +2898,7 @@ if __name__ == "__main__":
     ml._sum_candidate = {}
     ml._sum_active_rule = None
     ml._sum_seen = None
+    ml._sum_visual = {}
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
     ml._black_streak = 0
