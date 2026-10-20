@@ -33,11 +33,46 @@ WINDOW_TITLE = "OCR 座標校正目標"
 TASK_NAME = "座標校正測試"
 SIZE_PRESETS = {"1600 × 900": (1600, 900), "1920 × 1080": (1920, 1080)}
 TARGETS = (
-    {"id": "CENTER", "token": "CENTER 1042 READY", "x": 0.5, "y": 0.5, "kind": "cursor"},
-    {"id": "A", "token": "A-6318 READY", "x": 0.2, "y": 0.2, "kind": "custom"},
-    {"id": "B", "token": "B-7824 READY", "x": 0.8, "y": 0.2, "kind": "custom"},
-    {"id": "C", "token": "C-9051 READY", "x": 0.2, "y": 0.8, "kind": "custom"},
-    {"id": "D", "token": "D-3167 READY", "x": 0.8, "y": 0.8, "kind": "custom"},
+    {
+        "id": "CENTER",
+        "token": "CENTER 1042 READY",
+        "detect_text": "1042",
+        "x": 0.5,
+        "y": 0.5,
+        "kind": "cursor",
+    },
+    {
+        "id": "A",
+        "token": "A-6318 READY",
+        "detect_text": "6318",
+        "x": 0.2,
+        "y": 0.2,
+        "kind": "custom",
+    },
+    {
+        "id": "B",
+        "token": "B-7824 READY",
+        "detect_text": "7824",
+        "x": 0.8,
+        "y": 0.2,
+        "kind": "custom",
+    },
+    {
+        "id": "C",
+        "token": "C-9051 READY",
+        "detect_text": "9051",
+        "x": 0.2,
+        "y": 0.8,
+        "kind": "custom",
+    },
+    {
+        "id": "D",
+        "token": "D-3167 READY",
+        "detect_text": "3167",
+        "x": 0.8,
+        "y": 0.8,
+        "kind": "custom",
+    },
 )
 CARD_WIDTH = 330
 CARD_HEIGHT = 132
@@ -63,7 +98,7 @@ def build_task() -> dict:
                     {
                         "type": "detect",
                         "params": {
-                            "text": target["token"],
+                            "text": target["detect_text"],
                             "match_mode": "contains",
                             "roi": {
                                 "x": max(0.0, x - 0.13),
@@ -219,14 +254,18 @@ class CalibrationSurface(QWidget):
             painter.setBrush(QColor("#174a3b" if hit else "#243646"))
             painter.drawRoundedRect(rect, 12, 12)
             painter.setPen(QColor("#ffffff"))
-            painter.setFont(QFont("Consolas", 19, QFont.Weight.Bold))
-            text = f"HIT {target['id']}" if hit else target["token"]
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
-
-            cx, cy = rect.center().x(), rect.center().y()
-            painter.setPen(QPen(QColor("#ff5c5c"), 2))
-            painter.drawLine(round(cx) - 12, round(cy), round(cx) + 12, round(cy))
-            painter.drawLine(round(cx), round(cy) - 12, round(cx), round(cy) + 12)
+            painter.setFont(QFont("Consolas", 13, QFont.Weight.Bold))
+            painter.drawText(
+                QRectF(rect.left() + 16, rect.top() + 9, rect.width() - 32, 24),
+                Qt.AlignmentFlag.AlignCenter,
+                f"HIT {target['id']}" if hit else target["id"],
+            )
+            painter.setFont(QFont("Consolas", 25, QFont.Weight.Bold))
+            painter.drawText(
+                QRectF(rect.left() + 12, rect.top() + 34, rect.width() - 24, 65),
+                Qt.AlignmentFlag.AlignCenter,
+                target["detect_text"],
+            )
 
         if self._last_click:
             x, y, target_id, dx, dy = self._last_click
@@ -322,12 +361,196 @@ def _self_check():
         center = _card_rect(1600, 900, target).center()
         assert abs(center.x() / 1600 - target["x"]) < 0.001
         assert abs(center.y() / 900 - target["y"]) < 0.001
+    _check_production_coordinate_math()
     print("coordinate calibration self-check passed")
+
+
+def _check_production_coordinate_math():
+    """Exercise the real MainLoop converters for framed and borderless sizes."""
+    from _loader import load_sibling
+
+    main_loop = load_sibling("main_loop", "core/05_main_loop.py")
+    loop = main_loop.MainLoop.__new__(main_loop.MainLoop)
+    for width, height in ((1600, 900), (1920, 1080)):
+        for chrome in ((8, 31), (0, 0)):
+            loop._frame_chrome = chrome
+            rect = {"x": 120, "y": 75, "w": width, "h": height}
+            client_w, client_h = width - chrome[0], height - chrome[1]
+            for target in TARGETS:
+                px, py = target["x"], target["y"]
+                expected_point = (
+                    int(round(px * client_w)) + chrome[0],
+                    int(round(py * client_h)) + chrome[1],
+                )
+                assert loop._resolve_point(px, py, rect, "client") == expected_point
+                roi = {
+                    "x": max(0.0, px - 0.13),
+                    "y": max(0.0, py - 0.09),
+                    "w": 0.26,
+                    "h": 0.18,
+                    "roi_coord": "client",
+                }
+                resolved = loop._resolve_roi(roi, rect, chrome=chrome)
+                assert resolved == {
+                    "x": int(round(roi["x"] * client_w)) + chrome[0],
+                    "y": int(round(roi["y"] * client_h)) + chrome[1],
+                    "w": int(round(roi["w"] * client_w)),
+                    "h": int(round(roi["h"] * client_h)),
+                }
+
+
+def _diagnose():
+    """Run captures, OCR, production coordinate conversion, and safe input routing.
+
+    Input backends are stubbed only at the final dispatch call, so this reports
+    where each mode would click without sending clicks to the desktop.
+    """
+    from _loader import load_sibling
+
+    screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+    capture_pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+    ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+    main_loop = load_sibling("main_loop", "core/05_main_loop.py")
+
+    hwnd = screenshot.get_window_hwnd(WINDOW_TITLE)
+    if not hwnd:
+        raise RuntimeError(f"找不到測試視窗：{WINDOW_TITLE}。請先啟動校正視窗。")
+    rect = screenshot.get_window_rect_hwnd(hwnd)
+    if not rect:
+        raise RuntimeError("無法取得測試視窗尺寸；請確認視窗沒有最小化。")
+    chrome = screenshot.get_window_client_offset(WINDOW_TITLE) or (0, 0)
+    foreground = main_loop.is_window_foreground(hwnd)
+    print("座標校正自動診斷")
+    print(f"目標：{WINDOW_TITLE}，外框 {rect['w']}×{rect['h']}，客戶區偏移 {chrome}")
+    print(f"目標目前在最前面：{'是' if foreground else '否'}")
+    print("點擊安全模式：只記錄即將送出的座標，不會真的操作滑鼠或遊戲。")
+
+    ml = main_loop.MainLoop.__new__(main_loop.MainLoop)
+    ml._window_title = WINDOW_TITLE
+    ml._frame_chrome = chrome
+    ml._window_hwnd = hwnd
+    ml._rule_config_ctrl = type(
+        "_ModeConfig",
+        (),
+        {
+            "get_setting": lambda _self, _loop, key, default=None: (
+                mode if key == "interaction_mode" else default
+            )
+        },
+    )()
+
+    original_send_click = main_loop._input_mod.send_click
+    original_bg_click = main_loop._bg_input.click
+    original_bg_method = getattr(main_loop._bg_input, "get_method", lambda: "pynput")()
+    failures = []
+    try:
+        for mode in ("pynput", "frida", "hybrid"):
+            print(f"\n[{mode}]")
+            frame = capture_pipeline.capture_frame(mode, WINDOW_TITLE, hwnd, rect)
+            if frame is None:
+                print("  截圖：失敗（後台模式需提升權限或目標不支援 PrintWindow）")
+                print("  OCR：跳過（沒有影像）")
+                failures.append(f"{mode}: 無法截圖")
+            else:
+                print(f"  截圖：成功 {frame.shape[1]}×{frame.shape[0]}")
+                detected = set()
+                anchors = {}
+                ml._ocr_region = lambda img, roi: ocr.recognize(
+                    main_loop.crop_roi(img, roi),
+                    roi_offset={"x": roi["x"], "y": roi["y"]},
+                    preprocess=False,
+                    max_side_len=0,
+                    min_confidence=0.25,
+                )
+                ml._ocr_cache_hits = 0
+                ml._detect_warn_counter = {}
+                ml._fail_since = {}
+                for rule_data, target in zip(build_task()["rules"], TARGETS, strict=True):
+                    ctx = main_loop.StepContext(img=frame, rect=rect, step_idx=0)
+                    rule = main_loop.Rule(
+                        id=rule_data["id"],
+                        name=rule_data["name"],
+                        enabled=True,
+                        steps=[],
+                    )
+                    result = ml._handle_detect(rule_data["steps"][0]["params"], ctx, rule)
+                    if result.action == "continue" and ctx.matched_text:
+                        detected.add(target["id"])
+                        anchors[target["id"]] = ctx.matched_text
+                print(
+                    f"  正式辨識流程：通過 {len(detected)}/5 個標記 "
+                    f"({', '.join(sorted(detected)) or '無'})"
+                )
+                if len(detected) != len(TARGETS):
+                    failures.append(
+                        f"{mode}: OCR 僅辨識 {len(detected)}/5；檢查視窗遮擋、截圖與 OCR"
+                    )
+                anchors_ok = 0
+                for target in TARGETS:
+                    anchor = anchors.get(target["id"])
+                    px, py = ml._resolve_point(target["x"], target["y"], rect, "client")
+                    if anchor is None:
+                        print(f"  畫面定位 {target['id']}：找不到文字錨點")
+                        failures.append(f"{mode}: {target['id']} 無法取得畫面座標錨點")
+                        continue
+                    dx = anchor.center_x - px
+                    dy = anchor.center_y - py
+                    aligned = abs(dx) <= 18 and abs(dy) <= 18
+                    anchors_ok += int(aligned)
+                    print(
+                        f"  畫面定位 {target['id']}：{'對齊' if aligned else '偏移'} "
+                        f"Δx={dx:+d}, Δy={dy:+d} px"
+                    )
+                    if not aligned:
+                        failures.append(f"{mode}: {target['id']} OCR 位置與點擊座標偏差超過 18 px")
+                print(f"  畫面座標對齊：{anchors_ok}/5")
+
+            actual = []
+            main_loop._input_mod.send_click = lambda x, y, button="left", hold_ms=0: (
+                actual.append(("screen", x, y)) or True
+            )
+            main_loop._bg_input.click = lambda _hwnd, x, y, button="left", hold_ms=0: (
+                actual.append(("client", x, y)) or True
+            )
+            for target in TARGETS[1:]:
+                cx, cy = ml._resolve_point(target["x"], target["y"], rect, "client")
+                screen_x, screen_y = ml._to_screen_coords(rect, cx, cy)
+                ok = ml._send_click(screen_x, screen_y, "left")
+                route, sent_x, sent_y = actual[-1]
+                expected = (
+                    (
+                        "client",
+                        round(target["x"] * (rect["w"] - chrome[0])),
+                        round(target["y"] * (rect["h"] - chrome[1])),
+                    )
+                    if mode == "frida"
+                    else ("screen", screen_x, screen_y)
+                )
+                status = "OK" if ok and (route, sent_x, sent_y) == expected else "異常"
+                print(
+                    f"  點擊 {target['id']}：{status}，送出 ({sent_x},{sent_y})"
+                    f" {route}，預期 ({expected[1]},{expected[2]})"
+                )
+                if status != "OK":
+                    failures.append(f"{mode}: {target['id']} 點擊座標路由不符")
+    finally:
+        main_loop._input_mod.send_click = original_send_click
+        main_loop._bg_input.click = original_bg_click
+        main_loop._bg_input.set_method(original_bg_method)
+    if failures:
+        print("\n結果：未通過")
+        for failure in failures:
+            print(f"- {failure}")
+        raise SystemExit(1)
+    print("\n結果：通過；三種模式的截圖、OCR 與座標路由均符合預期。")
 
 
 def main():
     if "--self-check" in sys.argv:
         _self_check()
+        return
+    if "--diagnose" in sys.argv:
+        _diagnose()
         return
     app = QApplication(sys.argv)
     app.setApplicationName("OCR 座標校正")
