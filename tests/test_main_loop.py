@@ -345,6 +345,7 @@ def test_handle_click_no_match():
 def test_handle_click_cursor_bg():
     ml = _make_ml()
     ml._window_hwnd = 12345
+    ml._client_center_offset = lambda _rect: (398, 300)
     ml._rule_config_ctrl = type(
         "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
     )()
@@ -362,7 +363,7 @@ def test_handle_click_cursor_bg():
         {"target": "cursor", "button": "right", "hold_ms": 150}, ctx, test_rule
     )
     assert result.action == "continue"
-    assert captured["x"] == 100 + 400
+    assert captured["x"] == 100 + 398
     assert captured["y"] == 200 + 300
     assert captured["button"] == "right"
     assert captured["hold_ms"] == 150

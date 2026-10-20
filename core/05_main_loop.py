@@ -164,6 +164,16 @@ def _crop_hash(crop: np.ndarray) -> bytes:
     return hashlib.blake2b(np.ascontiguousarray(crop).tobytes(), digest_size=16).digest()
 
 
+def _client_center_offset(
+    window_rect: dict, client_origin_screen: tuple[int, int], client_size: tuple[int, int]
+) -> tuple[int, int]:
+    """客戶區中心相對於整個視窗左上角的位置。"""
+    return (
+        client_origin_screen[0] - window_rect["x"] + client_size[0] // 2,
+        client_origin_screen[1] - window_rect["y"] + client_size[1] // 2,
+    )
+
+
 _VERIFY_LOOP_WARN_SEC = (
     8  # 循環群組長驗證警告閾值（秒）：與 GUI preset 反推一致（>=8000ms 視為 long）
 )
@@ -595,6 +605,28 @@ class MainLoop:
 
     def _to_screen_coords(self, rect: dict, x: int, y: int) -> tuple[int, int]:
         return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
+
+    def _client_center_offset(self, rect: dict) -> tuple[int, int] | None:
+        """Return the client-area center relative to the outer window's top-left."""
+        if not self._window_hwnd:
+            return None
+        try:
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            client = wintypes.RECT()
+            if not user32.GetClientRect(self._window_hwnd, ctypes.byref(client)):
+                return None
+            origin = wintypes.POINT(0, 0)
+            if not user32.ClientToScreen(self._window_hwnd, ctypes.byref(origin)):
+                return None
+            return _client_center_offset(
+                rect,
+                (origin.x, origin.y),
+                (client.right - client.left, client.bottom - client.top),
+            )
+        except Exception:
+            return None
 
     def _can_perform_action(self) -> bool:
         return self._perf.check_rate_limit()
@@ -1266,8 +1298,12 @@ class MainLoop:
         elif target == "cursor":
             mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
             if mode == "frida" and self._window_hwnd and ctx.rect:
-                cx = ctx.rect["w"] // 2
-                cy = ctx.rect["h"] // 2
+                center = self._client_center_offset(ctx.rect)
+                if center is None:
+                    cx = ctx.rect["w"] // 2
+                    cy = ctx.rect["h"] // 2
+                else:
+                    cx, cy = center
             else:
                 import ctypes
 
@@ -2855,6 +2891,8 @@ if __name__ == "__main__":
     )()
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"
+    center = _client_center_offset({"x": 100, "y": 200, "w": 800, "h": 600}, (108, 230), (780, 540))
+    assert center == (398, 300), f"expected client center (398, 300), got {center}"
     print("  [OK] _to_screen_coords")
 
     # ── Test 4: _run_step dispatcher coverage ──
