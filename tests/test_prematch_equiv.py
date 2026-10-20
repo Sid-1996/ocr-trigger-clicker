@@ -73,8 +73,7 @@ def test_prematch_equiv_all_frames():
         img = cv2.imread(str(_ROOT / "tests/data" / fname))
         assert img is not None, f"missing {fname}"
         rect = {"x": 0, "y": 0, "w": img.shape[1], "h": img.shape[0]}
-        # 模擬 _run_parallel_group 主線程的共享預算（capture_size/chrome/current_size 算一次）
-        capture_size = _ml_mod.get_capture_size(ml._rules_path)
+        # 模擬 _run_parallel_group 主線程：chrome/current_size 共享，capture_size 逐規則取
         chrome = _ml_mod.get_window_client_offset(ml._window_title)
         if chrome:
             current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
@@ -82,6 +81,7 @@ def test_prematch_equiv_all_frames():
             current_size = [rect["w"], rect["h"]]
         for rule in rules:
             p = rule.steps[0].params
+            capture_size = _ml_mod.get_effective_capture_size(p, ml._rules_path)
             roi = ml._resolve_roi(p.get("roi", {}), rect, chrome)
             pre = _prematch_pure(
                 img,

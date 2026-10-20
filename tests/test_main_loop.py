@@ -297,6 +297,34 @@ def test_match_image_search_region_cross_frame_cache():
         _ml_mod.match_template = orig
 
 
+def test_match_image_step_capture_size_and_cache(monkeypatch):
+    """模板來源尺寸逐步驟覆寫，且尺寸不同不得共用跨幀快取。"""
+    ml = _make_ml()
+    calls = []
+
+    def fake_match_template(img, template_path, roi, threshold, **kw):
+        calls.append(kw.get("capture_size"))
+        return ([_ml_mod.OcrResult(text="m", x=1, y=1, w=2, h=2, confidence=0.9)], -1.0)
+
+    monkeypatch.setattr(_ml_mod, "match_template", fake_match_template)
+    rule = Rule(id="r1", name="r1", enabled=True, steps=[])
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    ctx = StepContext(img=img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+    params = {"template": "t.png", "capture_size": [1616, 939]}
+    ml._handle_match_image(dict(params), ctx, rule)
+    assert calls[-1] == [1616, 939]
+
+    ctx2 = StepContext(img=img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+    ml._handle_match_image(dict(params), ctx2, rule)
+    assert len(calls) == 1, "同尺寸應命中跨幀快取"
+
+    ctx3 = StepContext(img=img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+    ml._handle_match_image({**params, "capture_size": [1920, 1080]}, ctx3, rule)
+    assert calls[-1] == [1920, 1080]
+    assert len(calls) == 2, "不同來源尺寸不得共用快取"
+
+
 # ── _handle_click without matched_text ──
 
 

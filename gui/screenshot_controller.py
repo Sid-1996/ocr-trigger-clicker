@@ -116,10 +116,16 @@ class ScreenshotController:
             win._status_bar.showMessage(T("screenshot.template_captured"))
             win._edit_stack.setCurrentIndex(1)
             roi_ratio = self._capture_rect_to_roi(rect, title)
+            capture_size = rect.get("capture_size")
             return (
-                {"b64": b64, "roi": roi_ratio, "template_source": ts}
+                {
+                    "b64": b64,
+                    "roi": roi_ratio,
+                    "template_source": ts,
+                    "capture_size": capture_size,
+                }
                 if roi_ratio
-                else {"b64": b64, "template_source": ts}
+                else {"b64": b64, "template_source": ts, "capture_size": capture_size}
             )
         if title:
             rx = rect["x"]

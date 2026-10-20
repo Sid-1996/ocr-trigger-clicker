@@ -96,7 +96,7 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 
 ### 並行群組 match_image 預算（已實作）
 
-`core/05_main_loop.py` 的 `_run_parallel_group` 對並行（`order: parallel`）群組內所有 `match_image` 規則做**平行預算**——主線程一次算好 `capture_size` / `chrome` / `current_size` / `roi`，worker（`_prematch_pure` 模組級純函式）只跑 `match_template`，不碰執行個體狀態、不讀檔、不呼叫 Win32。結果由 `_handle_match_image` 消費（step 0 命中 `ctx.prematch`）。
+`core/05_main_loop.py` 的 `_run_parallel_group` 對並行（`order: parallel`）群組內所有 `match_image` 規則做**平行預算**——主線程一次算好任務級 `capture_size` / `chrome` / `current_size` / `roi`；若個別步驟自帶 `capture_size`（模板來源解析度）則以它覆寫，不額外讀檔。worker（`_prematch_pure` 模組級純函式）只跑 `match_template`，不碰執行個體狀態、不讀檔、不呼叫 Win32。結果由 `_handle_match_image` 消費（step 0 命中 `ctx.prematch`）。
 
 - **適用對象**：僅 `match_image` 步驟（純計算、執行緒安全）。`detect`/`compare` 走 OCR，維持順序（已有同幀 OCR 合併快取，不平行）。
 - **行為等價**：warning/log/on_fail/triggered/順序全由原 `_run_rule` 處理，命中哪條規則仍依 `rule_ids` 順序決定——使用者零感知（無新設定、無新 UI）。

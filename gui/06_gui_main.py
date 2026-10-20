@@ -1361,11 +1361,8 @@ class _MatchImageStepForm(QWidget):
                     else int(roi.get("h", 0)),
                 }
         current_size = [client_w, client_h] if wr else None
-        capture_size = None
-        if self._task_path_cb:
-            task_path = self._task_path_cb()
-            if task_path:
-                capture_size = _rule_mod.get_capture_size(task_path)
+        task_path = self._task_path_cb() if self._task_path_cb else ""
+        capture_size = _rule_mod.get_effective_capture_size(self._step.params, task_path or "")
         results = _tmpl_mod.match_template(
             img,
             tmpl_path,
@@ -1427,12 +1424,17 @@ class _MatchImageStepForm(QWidget):
             self._step.params.pop("template", None)
             if data.get("roi"):
                 self._step.params["roi"] = data["roi"]
+            if data.get("capture_size"):
+                self._step.params["capture_size"] = data["capture_size"]
+            else:
+                self._step.params.pop("capture_size", None)
             self._tmpl_label.setText(T("format.embedded_image"))
             self._update_thumbnail()
             self._list.steps_changed.emit()
         elif data:
             self._step.params["template_data"] = data
             self._step.params.pop("template", None)
+            self._step.params.pop("capture_size", None)
             self._tmpl_label.setText(T("format.embedded_image"))
             self._update_thumbnail()
             self._list.steps_changed.emit()
@@ -1463,12 +1465,17 @@ class _MatchImageStepForm(QWidget):
             live_rules=self._rules_provider() if self._rules_provider else None,
             live_task_name=task_name,
             exclude=(self._exclude_rule_id, self._idx),
+            return_item=True,
         )
-        if not result:
+        if not result or not isinstance(result, dict):
             return
-        self._step.params["template_data"] = result
+        self._step.params["template_data"] = result.get("b64", "")
         self._step.params.pop("template", None)
         self._step.params.pop("template_source", None)
+        if result.get("capture_size"):
+            self._step.params["capture_size"] = result["capture_size"]
+        else:
+            self._step.params.pop("capture_size", None)
         self._tmpl_label.setText(T("format.embedded_image"))
         self._update_thumbnail()
         self._list.steps_changed.emit()
@@ -2746,6 +2753,10 @@ class _VerifyWidget(QWidget):
                 self._step.params["verify"] = v
             v["template_data"] = data.get("b64", "")
             v.pop("template", None)
+            if data.get("capture_size"):
+                v["capture_size"] = data["capture_size"]
+            else:
+                v.pop("capture_size", None)
             self._update_thumb()
             self._validate_verify_input()
         elif data:
@@ -2754,6 +2765,7 @@ class _VerifyWidget(QWidget):
                 v = {}
                 self._step.params["verify"] = v
             v["template_data"] = data
+            v.pop("capture_size", None)
             self._update_thumb()
             self._validate_verify_input()
 
@@ -2764,27 +2776,22 @@ class _VerifyWidget(QWidget):
         except Exception as e:
             logging.getLogger("gui_main").warning("verify pick_template load failed: %s", e)
             return
-        # collect templates from task Management
         try:
-            from core.task_management import collect_templates
-
-            templates = collect_templates()
-        except Exception as e:
-            logging.getLogger("gui_main").warning("verify collect_templates failed: %s", e)
-            templates = {}
-        # let picker choose
-        try:
-            sel = pick_template_dialog(self, templates)
+            sel = pick_template_dialog(self, return_item=True)
         except Exception as e:
             logging.getLogger("gui_main").warning("verify pick_template_dialog failed: %s", e)
             return
-        if sel and sel.get("template_data"):
+        if isinstance(sel, dict) and sel.get("b64"):
             v = self._step.params.get("verify")
             if not isinstance(v, dict):
                 v = {}
                 self._step.params["verify"] = v
-            v["template_data"] = sel["template_data"]
+            v["template_data"] = sel["b64"]
             v.pop("template", None)
+            if sel.get("capture_size"):
+                v["capture_size"] = sel["capture_size"]
+            else:
+                v.pop("capture_size", None)
             self._update_thumb()
             self._validate_verify_input()
 
@@ -6903,6 +6910,7 @@ class MainWindow(QMainWindow):
                     params={
                         "template_data": data.get("template_data", ""),
                         "template_source": _current_template_type(),
+                        "capture_size": data.get("capture_size"),
                         "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                         "threshold": cfg.get("default_template_threshold", 0.85),
                         "match_color": False,
@@ -6967,6 +6975,7 @@ class MainWindow(QMainWindow):
                 params={
                     "template_data": data.get("template_data", ""),
                     "template_source": _current_template_type(),
+                    "capture_size": data.get("capture_size"),
                     "roi": data.get("roi", {"x": 0, "y": 0, "w": 0, "h": 0}),
                     "threshold": cfg.get("default_template_threshold", 0.85),
                     "match_color": False,

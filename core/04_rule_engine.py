@@ -65,6 +65,7 @@ set_task_interaction_mode = _config.set_task_interaction_mode
 get_run_mode = _config.get_run_mode
 set_run_mode = _config.set_run_mode
 get_capture_size = _config.get_capture_size
+get_effective_capture_size = _config.get_effective_capture_size
 set_capture_size = _config.set_capture_size
 
 

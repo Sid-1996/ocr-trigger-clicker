@@ -81,6 +81,19 @@ def _sanitize_roi(roi: dict | None) -> dict:
     return result
 
 
+def _sanitize_capture_size(raw: object) -> list[int] | None:
+    """模板來源解析度；無效值回 None（回退任務級 capture_size）。"""
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        return None
+    try:
+        w, h = int(raw[0]), int(raw[1])
+    except (TypeError, ValueError):
+        return None
+    if not (0 < w <= 100000 and 0 < h <= 100000):
+        return None
+    return [w, h]
+
+
 def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
     action = action if isinstance(action, dict) else {}
     action_type = str(action.get("type", default_type))
@@ -186,6 +199,9 @@ def _normalize_verify(raw: object) -> dict | None:
         result["threshold"] = max(0.0, min(1.0, _as_float(raw.get("threshold", 0.8), 0.8)))
         result["match_color"] = bool(raw.get("match_color", False))
         result["color_tolerance"] = max(0, min(255, _as_int(raw.get("color_tolerance", 100), 100)))
+        cs = _sanitize_capture_size(raw.get("capture_size"))
+        if cs:
+            result["capture_size"] = cs
         if not result["template"].strip() and not result["template_data"].strip():
             return None
     return result
@@ -284,6 +300,9 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
         base["color_tolerance"] = max(0, min(255, _as_int(base.get("color_tolerance", 100), 100)))
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
         base["after_delay_ms"] = max(0, _as_int(base.get("after_delay_ms", 0), 0))
+        cs = _sanitize_capture_size(base.pop("capture_size", None))
+        if cs:
+            base["capture_size"] = cs
         if base["template"] and not base["template_data"]:
             p = Path(base["template"])
             if p.exists():

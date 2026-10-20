@@ -50,7 +50,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `09_ocr_debug.py` | OCR 除錯 | 即時辨識結果、全黑偵測 |
 | `12_log_viewer.py` | LogViewer 日誌檢視器 | `LogViewer(QDialog)` 獨立視窗顯示 `app.log` |
 | `13_gui_click_picker.py` | 點擊座標選取 | 前景螢幕絕對 → 比例座標 |
-| `14_capture_region.py` | 模板擷取 | base64 編碼、capture_size |
+| `14_capture_region.py` | 模板擷取 | base64 編碼、回傳 capture_size（模板來源尺寸） |
 | `15_template_crop.py` | 內嵌模板修剪 | `trim_template_dialog()` 四邊空間化雙向箭頭按鈕（貼圖四側，上/下橫排、左/右直排）＋底部數值行；核心邏輯 `core/11_template_matching.py` `crop_template_b64` + `clamp_margins`（交叉限制，`MIN_TEMPLATE_SIDE=4`） |
 | `group_settings_controller.py` | 群組設定 | 對話框邏輯 |
 | `rule_config_controller.py` | 規則設定 | 對話框邏輯 |
@@ -184,7 +184,7 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 ### 座標
 
-後台模式下的 ROI/點擊比例是相對於客戶區影像像素（無邊框）。`roi_coord: "client"` 標記指示 `_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）需加 `client_offset` 校正。選取流程：前景 selector（`07_gui_roi`/`13_gui_click_picker`/`14_capture_region`）回傳螢幕絕對座標 → `screenshot_controller`/`06_gui_main` 用 `get_window_rect` + `get_window_client_offset` 收斂為含 `roi_coord:"client"` 的客戶區比例座標（模板另由 `14_capture_region` 寫 `capture_size`）。後台模板與執行時截圖來源不同但比對一致（BrownDust II 實測信心 1.0），故不再需要後台 PrintWindow 框選 UI。
+後台模式下的 ROI/點擊比例是相對於客戶區影像像素（無邊框）。`roi_coord: "client"` 標記指示 `_resolve_roi()`（`05_main_loop.py:380`）和 `_resolve_point()`（`05_main_loop.py:408`）需加 `client_offset` 校正。選取流程：前景 selector（`07_gui_roi`/`13_gui_click_picker`/`14_capture_region`）回傳螢幕絕對座標 → `screenshot_controller`/`06_gui_main` 用 `get_window_rect` + `get_window_client_offset` 收斂為含 `roi_coord:"client"` 的客戶區比例座標（模板另由 `14_capture_region` 回傳 `capture_size`，存進該步驟而非改寫任務級）。後台模板與執行時截圖來源不同但比對一致（BrownDust II 實測信心 1.0），故不再需要後台 PrintWindow 框選 UI。
 
 ### 全黑偵測
 
@@ -245,7 +245,7 @@ if change_ratio < 0.02 and not self._should_process_static_frame():
 
 ## 任務檔案格式
 
-JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`groups`（含 `mode`/`rule_ids`/`order` 等）、`window_title`、`capture_size`、`_collapsed_groups`。讀取時自動執行舊格式遷移（`_migrate_v1_to_v2`、`migrate_v2_to_v3`），並依 `capture_size` 將座標轉為比例。寫入採原子寫入（暫存檔 + `os.rename` replace），避免中途崩潰損毀檔案。`import_task()` 的 UUID 重新生成是**可選**（`regenerate_uuids: bool = False`，預設關閉，需呼叫端主動傳 `True`）。
+JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`；`match_image` 步驟可帶自己的 `capture_size`）、`groups`（含 `mode`/`rule_ids`/`order` 等）、`window_title`、`capture_size`（頂層舊任務 fallback）、`_collapsed_groups`。讀取時自動執行舊格式遷移（`_migrate_v1_to_v2`、`migrate_v2_to_v3`），並依 `capture_size` 將座標轉為比例。寫入採原子寫入（暫存檔 + `os.rename` replace），避免中途崩潰損毀檔案。`import_task()` 的 UUID 重新生成是**可選**（`regenerate_uuids: bool = False`，預設關閉，需呼叫端主動傳 `True`）。
 
 ## 已知陷阱（避免誤判）
 
@@ -257,7 +257,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`）、`gro
 
 4. **`skip_to` 是 0-based**：`on_fail` 的 `skip` 動作中 `skip_to` 對應內部 `step_idx`（0-based）。GUI 下拉選單顯示「步驟 N」（1-based），實際儲存 `i-1`。手動編輯 JSON 需注意換算。
 
-5. **`capture_size` 影響模板比對搜尋範圍**：任務檔案若記錄了建立範本時的視窗尺寸（`capture_size`），`match_template()` 會依當前尺寸與 `capture_size` 比值，只在窄範圍尺度（約 0.9~1.1）搜尋，大幅提速；若缺少 `capture_size` 則退回較寬的多尺度範圍，跨解析度時比對結果可能不穩定。
+5. **`capture_size` 影響模板比對搜尋範圍**：優先取步驟層 `match_image.params.capture_size`（模板自己的來源尺寸），沒有才回退任務頂層 `capture_size`（`get_effective_capture_size()`）。`match_template()` 依當前客戶區寬度與來源寬度比值，只在窄範圍尺度（×0.9~×1.1）搜尋；兩者都沒有才退回預設多尺度 `0.7~1.3`。**不同解析度建立的模板不可共用同一個 capture_size**，否則會多縮放一次而漏判。
 
 6. **Qt `model().rowsMoved` 不可靠**：對頂層群組項目的拖曳操作，這個內建訊號可能不觸發或順序不對，導致資料看似拖完了但實際沒存。一律用自訂 `pyqtSignal` 取代，不要依賴它做持久化判斷依據。
 

@@ -311,8 +311,9 @@ def collect_templates(
 ) -> list[dict]:
     """收集所有任務裡 match_image 步驟的內嵌圖片（供「選擇現有圖片」挑選）。
 
-    回傳 [{"task", "rule_id", "rule_name", "step_idx", "b64"}]，任務名排序、
-    檔內規則順序；b64 僅做 base64 結構驗證，能否解碼成影像由呼叫端判斷。
+    回傳 [{"task", "rule_id", "rule_name", "step_idx", "b64", "capture_size"}]，
+    任務名排序、檔內規則順序；b64 僅做 base64 結構驗證，能否解碼成影像由呼叫端判斷。
+    capture_size 是該模板來源解析度，沿用時必須一起帶走，否則會用錯縮放比例。
 
     live_rules + live_task_name：以記憶體中的規則取代該任務的磁碟版本，
     讓尚未存檔的截圖也能被挑選；exclude=(rule_id, step_idx) 排除自身步驟。
@@ -340,6 +341,7 @@ def collect_templates(
                         "rule_name": getattr(r, "name", ""),
                         "step_idx": i,
                         "b64": b64,
+                        "capture_size": (getattr(s, "params", None) or {}).get("capture_size"),
                     }
                 )
 

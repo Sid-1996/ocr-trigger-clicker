@@ -29,12 +29,13 @@ _PREVIEW_MAX = 280
 
 
 class TemplatePickerDialog(QDialog):
-    def __init__(self, items, parent=None):
+    def __init__(self, items, parent=None, return_item: bool = False):
         super().__init__(parent)
         self.setWindowTitle(T("picker.title"))
         self.setModal(True)
         self.setMinimumSize(560, 400)
-        self._result: str | None = None
+        self._return_item = return_item
+        self._result: dict | str | None = None
         self._rows: list[dict] = []  # 與 list rows 對應的可選 items
 
         self._list = QListWidget(self)
@@ -132,7 +133,8 @@ class TemplatePickerDialog(QDialog):
     def _accept(self):
         row = self._list.currentRow()
         if 0 <= row < len(self._rows):
-            self._result = self._rows[row]["b64"]
+            item = self._rows[row]
+            self._result = item if self._return_item else item["b64"]
             self.accept()
 
     def keyPressEvent(self, event):
@@ -147,12 +149,16 @@ def pick_template_dialog(
     live_rules=None,
     live_task_name: str = "",
     exclude=None,
-) -> str | None:
-    """開模態對話框挑選既有圖片，回傳選取的 template_data b64；取消回 None。"""
+    return_item: bool = False,
+) -> dict | str | None:
+    """開模態對話框挑選既有圖片；預設回傳 template_data b64，取消回 None。
+
+    return_item=True 時回傳整個 item（含 capture_size），供沿用模板時帶走來源解析度。
+    """
     tm = load_sibling("task_management", "core/task_management.py")
     items = tm.collect_templates(
         live_rules=live_rules, live_task_name=live_task_name, exclude=exclude
     )
-    dlg = TemplatePickerDialog(items, parent)
+    dlg = TemplatePickerDialog(items, parent, return_item=return_item)
     dlg.exec()
     return dlg._result

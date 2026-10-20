@@ -617,6 +617,19 @@ class OcrDebugPanel(QWidget):
             }
         return roi, px_x, px_y, px_w, px_h
 
+    def _source_capture_size(self):
+        """本次畫面（模板來源）的客戶區尺寸，與 _compute_roi 的座標基準一致。"""
+        img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
+        if img_w < 1 or img_h < 1:
+            return None
+        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
+        cx, cy = chrome
+        is_gdi = self._capture_source == T("ocr_debug.source_gdi")
+        if is_gdi or (cx <= 0 and cy <= 0):
+            return [img_w, img_h]
+        cw, ch = img_w - cx, img_h - cy
+        return [cw, ch] if cw > 0 and ch > 0 else [img_w, img_h]
+
     def _on_add_rule(self):
         result = self._compute_roi()
         if result is None:
@@ -676,6 +689,7 @@ class OcrDebugPanel(QWidget):
                 "template_data": template_b64,
                 "roi": roi,
                 "name": r.text,
+                "capture_size": self._source_capture_size(),
             }
         )
 
@@ -730,6 +744,7 @@ class OcrDebugPanel(QWidget):
                 "template_data": template_b64,
                 "roi": roi,
                 "name": r.text,
+                "capture_size": self._source_capture_size(),
             }
         )
 

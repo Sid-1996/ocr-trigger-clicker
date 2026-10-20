@@ -187,6 +187,28 @@ def test_match_image_verify_dropped_on_normalize():
     assert RuleMig._normalize_verify({"type": "match_image", "template_data": "xyz=="}) is not None
 
 
+def test_match_image_capture_size_preserved_and_sanitized():
+    out = RuleMig._normalize_step_params(
+        "match_image", {"template_data": "abc==", "capture_size": [1616, 939]}
+    )
+    assert out["capture_size"] == [1616, 939]
+
+    for bad in ([0, 939], [-1, 939], ["x", 939], [1616], "1616x939", None):
+        out_bad = RuleMig._normalize_step_params(
+            "match_image", {"template_data": "abc==", "capture_size": bad}
+        )
+        assert "capture_size" not in out_bad, bad
+
+    v = RuleMig._normalize_verify(
+        {"type": "match_image", "template_data": "abc==", "capture_size": [1616, 939]}
+    )
+    assert v is not None and v["capture_size"] == [1616, 939]
+    v_bad = RuleMig._normalize_verify(
+        {"type": "match_image", "template_data": "abc==", "capture_size": [0, 0]}
+    )
+    assert v_bad is not None and "capture_size" not in v_bad
+
+
 def test_backward_compat_no_verify():
     # old task without verify stays unchanged
     out = RuleMig._normalize_step_params("click", {"target": "custom", "x": 0.2, "y": 0.3})

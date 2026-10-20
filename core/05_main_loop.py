@@ -64,7 +64,7 @@ RuleGroup = _rule.RuleGroup
 load_rules = _rule.load_rules
 load_groups = _rule.load_groups
 save_rules = _rule.save_rules
-get_capture_size = _rule.get_capture_size
+get_effective_capture_size = _rule.get_effective_capture_size
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
@@ -828,7 +828,7 @@ class MainLoop:
         if not template_data.strip() and not template_path.strip():
             return StepResult("stop", detail=T("exec_log.detail.template_empty"))
 
-        capture_size = get_capture_size(self._rules_path)
+        capture_size = get_effective_capture_size(params, self._rules_path)
         chrome = self._chrome()
         if chrome:
             current_size = [ctx.rect["w"] - chrome[0], ctx.rect["h"] - chrome[1]]
@@ -875,6 +875,8 @@ class MainLoop:
                 threshold,
                 match_color,
                 color_tolerance,
+                tuple(capture_size) if capture_size else None,
+                tuple(current_size),
             )
             cached = self._tmpl_cache.get(cache_key)
             if cached is not None:
@@ -1402,7 +1404,7 @@ class MainLoop:
             template_path = str(verify.get("template", ""))
             if not template_data.strip() and not template_path.strip():
                 return False
-            capture_size = get_capture_size(self._rules_path)
+            capture_size = get_effective_capture_size(verify, self._rules_path)
             chrome = self._chrome()
             if chrome:
                 current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
@@ -1428,6 +1430,8 @@ class MainLoop:
                 threshold,
                 match_color,
                 color_tolerance,
+                tuple(capture_size) if capture_size else None,
+                tuple(current_size),
             )
             cached = self._tmpl_cache.get(cache_key)
             if cached is not None:
@@ -2117,9 +2121,9 @@ class MainLoop:
             if pool is None:
                 pool = ThreadPoolExecutor(max_workers=min(8, max(1, os.cpu_count() or 1)))
                 self._prematch_pool = pool
-            # ponytail: 共享預算——capture_size/chrome/current_size 主線程只算一次，
-            # 各 worker 不再各自讀檔/呼叫 Win32（否則 N 次/幀的重複 I/O 是變慢元兇）。
-            capture_size = get_capture_size(self._rules_path)
+            # ponytail: 共享預算——task_capture_size/chrome/current_size 主線程只算一次，
+            # 只有步驟自帶 capture_size 時才逐規則覆寫；worker 不再各自讀檔/呼叫 Win32。
+            task_capture_size = get_effective_capture_size({}, self._rules_path)
             chrome = self._chrome()
             if chrome:
                 current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
@@ -2137,6 +2141,7 @@ class MainLoop:
                 if not tdata.strip() and not tpath.strip():
                     continue
                 roi = self._resolve_roi(p.get("roi", {}), rect, chrome)
+                capture_size = get_effective_capture_size(p, "") or task_capture_size
                 try:
                     pending[rid] = pool.submit(
                         _prematch_pure,

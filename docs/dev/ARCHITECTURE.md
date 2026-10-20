@@ -83,7 +83,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/rule_migration.py` | 舊格式遷移 + 步驟正規化 | `_migrate_v1_to_v2()`, `migrate_v2_to_v3()`, `_normalize_step_params()` |
 | `core/rule_serialization.py` | 規則/群組 JSON 序列化 | `load_rules()`, `save_rules()`, `load_groups()`, `save_groups()` |
 | `core/task_management.py` | 任務檔案 CRUD ＋ `collect_templates()` 掃描全部任務（含 live 規則）的內嵌圖片 | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()`, `collect_templates()` |
-| `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()` |
+| `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()`, `get_effective_capture_size()` |
 | `core/group_selection.py` | 啟動群組選擇（記憶上次勾選／skip 旗標） | `should_skip()`, `build_entry()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
 | `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
@@ -614,16 +614,30 @@ MainLoop.emergency_stop()
 }
 ```
 
-### 頂層欄位：capture_size
+### capture_size：模板來源解析度
 
 ```json
 {
   "capture_size": [1920, 1080],
-  "rules": [...]
+  "rules": [
+    {
+      "steps": [
+        {
+          "type": "match_image",
+          "params": {
+            "template_data": "...",
+            "capture_size": [1616, 939]
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
-`capture_size` 為選擇性欄位，記錄截圖當時的視窗解析度 `[寬, 高]`。寫入時機為使用者在 match_image 步驟截圖存模板時自動寫入。用途：`match_image` 執行時若 `capture_size` 存在，則根據當前視窗尺寸計算縮放比例 → 只跑單一 scale；若不存在（舊任務或手動編輯）則以多尺度 (0.8~1.2) fallback。
+`capture_size` 記錄模板擷取當下的視窗客戶區解析度 `[寬, 高]`，**以步驟層為準**：`match_image.params.capture_size`（以及動作後驗證 `verify.capture_size`）由截圖存模板時自動寫入；沿用既有模板時一併帶走。頂層 `capture_size` 僅是舊任務的 fallback，新模板不再改寫它（避免舊模板被一起改壞）。
+
+執行時 `get_effective_capture_size()` 先取步驟層，沒有才回退頂層。有此值時以 `current_width / capture_width` 為中心只跑附近五個 scale（×0.9~×1.1）；完全沒有值（舊任務或手動編輯）才用預設多尺度 `0.7~1.3` fallback。
 
 ### 不存入 JSON 的欄位
 

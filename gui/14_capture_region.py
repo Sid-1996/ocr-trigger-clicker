@@ -183,13 +183,14 @@ def capture_region(parent_window=None, task_path="", window_title="") -> Optiona
         b64 = _extract_template_b64(selector, result)
         if b64:
             result["template_b64"] = b64
-        if task_path:
-            _screenshot_mod = load_sibling("screenshot", "core/01_screenshot.py")
-            _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
-            rect = _screenshot_mod.get_window_rect(window_title)
-            if rect:
-                chrome = _screenshot_mod.get_window_client_offset(window_title) or (0, 0)
-                _rule_mod.set_capture_size(task_path, rect["w"] - chrome[0], rect["h"] - chrome[1])
+        # 模板來源尺寸跟著模板走；不再改寫任務級 capture_size（會害舊模板用錯比例）
+        _screenshot_mod = load_sibling("screenshot", "core/01_screenshot.py")
+        rect = _screenshot_mod.get_window_rect(window_title)
+        if rect:
+            chrome = _screenshot_mod.get_window_client_offset(window_title) or (0, 0)
+            cw, ch = rect["w"] - chrome[0], rect["h"] - chrome[1]
+            if cw > 0 and ch > 0:
+                result["capture_size"] = [cw, ch]
     selector.close()
     selector.deleteLater()
     return result

@@ -187,6 +187,20 @@ def get_capture_size(path: str) -> list | None:
     return list(val) if val else None
 
 
+def get_effective_capture_size(params: dict | None, path: str) -> list | None:
+    """單一步驟的模板來源尺寸優先，舊模板才回退任務級 capture_size。"""
+    if isinstance(params, dict):
+        cs = params.get("capture_size")
+        if isinstance(cs, (list, tuple)) and len(cs) == 2:
+            try:
+                w, h = int(cs[0]), int(cs[1])
+            except (TypeError, ValueError):
+                w = h = 0
+            if w > 0 and h > 0:
+                return [w, h]
+    return get_capture_size(path) if path else None
+
+
 def set_capture_size(path: str, w: int, h: int) -> bool:
     tmp_path: str = ""
     try:

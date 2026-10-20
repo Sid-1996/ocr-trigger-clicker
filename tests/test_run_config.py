@@ -4,6 +4,7 @@ from core import run_config
 from core.run_config import (
     get_capture_size,
     get_config_interaction_mode,
+    get_effective_capture_size,
     get_task_interaction_mode,
     set_capture_size,
     set_task_interaction_mode,
@@ -139,6 +140,25 @@ def test_get_capture_size_cached_until_mtime_changes(tmp_path, monkeypatch):
     monkeypatch.undo()
     set_capture_size(str(task_file), 1920, 1080)
     assert get_capture_size(str(task_file)) == [1920, 1080]
+
+
+def test_effective_capture_size_step_override_and_fallback(tmp_path):
+    task_file = tmp_path / "task.json"
+    set_capture_size(str(task_file), 1920, 1080)
+
+    assert get_effective_capture_size({"capture_size": [1616, 939]}, str(task_file)) == [
+        1616,
+        939,
+    ]
+    assert get_effective_capture_size({}, str(task_file)) == [1920, 1080]
+    assert get_effective_capture_size(None, str(task_file)) == [1920, 1080]
+    for bad in ([0, 939], ["x", 939], [1616], "1616x939", None):
+        assert get_effective_capture_size({"capture_size": bad}, str(task_file)) == [
+            1920,
+            1080,
+        ], bad
+
+    assert get_effective_capture_size({}, str(tmp_path / "missing.json")) is None
 
 
 def test_get_capture_size_invalid_content_not_crash(tmp_path):

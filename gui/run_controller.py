@@ -30,7 +30,6 @@ get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", l
 
 _rule_engine = load_sibling("rule_engine", "core/04_rule_engine.py")
 _get_interaction_mode = _rule_engine.get_config_interaction_mode
-get_capture_size = _rule_engine.get_capture_size
 
 
 def _dry_fail_fate(on_fail_raw):
@@ -569,6 +568,40 @@ class TestRunController:
                             log.append(f"  → {of_hint}")
                         _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
 
+                elif step.type == "sum":
+                    p = step.params
+                    r = _resolve(p.get("roi", {}))
+                    if not any(r.get(k, 0) != 0 for k in ("x", "y", "w", "h")):
+                        log.append(T("test.sum_no_roi", idx=idx + 1))
+                        continue
+                    roi_img = crop_roi(img, r)
+                    if roi_img is None:
+                        log.append(T("test.roi_invalid", idx=idx + 1))
+                        continue
+                    results_ocr = recognize(
+                        roi_img, preprocess=False, max_side_len=0, min_confidence=0.25
+                    )
+                    total, count = _main_loop_mod.sum_numbers(
+                        " ".join(res.text for res in results_ocr)
+                    )
+                    rx, ry = r.get("x", 0), r.get("y", 0)
+                    rw, rh = r.get("w", 0), r.get("h", 0)
+                    markers.append(
+                        {
+                            "step": idx + 1,
+                            "shape": "rect",
+                            "color": (0, 200, 0) if count else (0, 0, 200),
+                            "x": rx,
+                            "y": ry,
+                            "w": rw,
+                            "h": rh,
+                        }
+                    )
+                    if not count:
+                        log.append(T("test.sum_no_number", idx=idx + 1))
+                        continue
+                    log.append(T("test.sum_result", idx=idx + 1, total=total, count=count))
+
                 elif step.type == "key":
                     p = step.params
                     k = p.get("key", "")
@@ -608,7 +641,7 @@ class TestRunController:
                         if win._current_task
                         else None
                     )
-                    cs = get_capture_size(task_path) if task_path else None
+                    cs = _rule_engine.get_effective_capture_size(p, task_path or "")
                     title = win._window_combo.currentText()
                     wr = get_window_rect(title) if title else None
                     chrome = get_window_client_offset(title) or (0, 0) if title else (0, 0)
