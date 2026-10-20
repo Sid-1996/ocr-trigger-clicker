@@ -4102,6 +4102,7 @@ class WorkerSignals(QObject):
     window_recovered_signal = pyqtSignal()
     test_done_signal = pyqtSignal(dict)
     sum_signal = pyqtSignal(int, int, int, int, int, int)
+    sum_hide_signal = pyqtSignal()
     finished = pyqtSignal(bool, str)
 
 
@@ -4151,6 +4152,7 @@ class InitWorker(QThread):
             loop.on_sum = lambda x, y, w, h, total, count: self._signals.sum_signal.emit(
                 x, y, w, h, total, count
             )
+            loop.on_sum_hide = lambda: self._signals.sum_hide_signal.emit()
             loop.start()
             self.loop = loop
             self.finished.emit(True, "")
@@ -4983,6 +4985,7 @@ class MainWindow(QMainWindow):
         self._signals.emergency_signal.connect(self._emergency_stop)
         self._signals.test_done_signal.connect(self._show_test_result)
         self._signals.sum_signal.connect(self._on_sum_result)
+        self._signals.sum_hide_signal.connect(self._sum_overlay.fade_out)
         self._signals.info_signal.connect(lambda msg: self._status_bar.showMessage(msg, 3000))
         self._signals.warning_signal.connect(
             lambda msg: self._status_bar.showMessage(f"⚠ {msg}", 5000)

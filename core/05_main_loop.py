@@ -39,6 +39,8 @@ _MIN_INTERVAL_SEC = 0.1
 _MAX_CPS = 5
 _CPS_WINDOW_SEC = 1.0
 _BLACK_STREAK_WARN = 3  # 後台連續全黑幀數達標才警告（避開單帧 GDI 抖動誤報）
+# 數字加總需連續穩定這麼久才顯示，避免畫面切換／數字動畫中的中途總和一閃而過
+_SUM_CONFIRM_SEC = 0.35
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -291,6 +293,11 @@ class MainLoop:
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
         self._sum_warn_counter: dict[str, int] = {}
+        # 加總浮層狀態：candidate = rule_id → (total, count, 首次看到時間)；
+        # active_rule = 目前浮層顯示中的規則；seen 記錄上一幀有評估加總的規則
+        self._sum_candidate: dict[str, tuple[int, int, float]] = {}
+        self._sum_active_rule: str | None = None
+        self._sum_seen: set[str] | None = None
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
@@ -331,6 +338,8 @@ class MainLoop:
         self.on_finished: Optional[Callable[[], None]] = None
         # 數字加總結果通知（區域螢幕座標 x, y, w, h, 總和, 個數）；GUI 負責顯示浮層
         self.on_sum: Optional[Callable[[int, int, int, int, int, int], None]] = None
+        # 加總浮層該淡出（前置條件失效／數字改動中）；GUI 負責淡出動畫
+        self.on_sum_hide: Optional[Callable[[], None]] = None
 
         self._rule_config_ctrl = RuleConfigController()
 
@@ -490,6 +499,9 @@ class MainLoop:
             self._match_image_warn_counter.clear()
             self._detect_warn_counter.clear()
             self._sum_warn_counter.clear()
+            self._sum_candidate.clear()
+            self._sum_active_rule = None
+            self._sum_seen = None
             self._xframe_ocr_cache.clear()
             self._tmpl_cache.clear()
             self._fail_since.clear()
@@ -976,20 +988,57 @@ class MainLoop:
             self._sum_warn_counter[rule.id] = last + 1
             if last % 30 == 0:
                 self._log(f"⚠ 規則「{rule.name}」數字加總未設定區域，已略過")
+            self._clear_sum(rule.id)
             return StepResult("continue")
 
         roi = self._resolve_roi(raw_roi, ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         total, count = sum_numbers(" ".join(r.text for r in results))
         if count == 0:
+            self._clear_sum(rule.id)
             return StepResult("continue")
 
         ctx.sum_total = total
         ctx.sum_count = count
+        if self._sum_seen is not None:
+            self._sum_seen.add(rule.id)
+        self._update_sum(rule, ctx, roi, total, count)
+        return StepResult("continue")
+
+    def _update_sum(self, rule: Rule, ctx: StepContext, roi: dict, total: int, count: int) -> None:
+        """只顯示穩定後的總和；數字還在變動時先讓舊浮層淡出。"""
+        now = time.monotonic()
+        prev = self._sum_candidate.get(rule.id)
+        if prev is None or prev[0] != total or prev[1] != count:
+            self._sum_candidate[rule.id] = (total, count, now)
+            self._hide_sum(rule.id)
+            return
+        if now - prev[2] < _SUM_CONFIRM_SEC:
+            return
         if self.on_sum:
             sx, sy = self._to_screen_coords(ctx.rect, int(roi["x"]), int(roi["y"]))
             self.on_sum(sx, sy, int(roi["w"]), int(roi["h"]), total, count)
-        return StepResult("continue")
+        self._sum_active_rule = rule.id
+
+    def _hide_sum(self, rule_id: str) -> None:
+        """淡出目前顯示中的加總；不是這條規則擁有的浮層就不動它。"""
+        if self._sum_active_rule != rule_id:
+            return
+        self._sum_active_rule = None
+        if self.on_sum_hide:
+            self.on_sum_hide()
+
+    def _clear_sum(self, rule_id: str) -> None:
+        """前置條件失效：丟掉候選值並淡出該規則的浮層。"""
+        self._sum_candidate.pop(rule_id, None)
+        self._hide_sum(rule_id)
+
+    def _sum_frame_start(self) -> None:
+        """新幀開始：上一幀沒再評估加總的規則，其浮層視為失效。"""
+        prev = self._sum_seen
+        if prev is not None and self._sum_active_rule and self._sum_active_rule not in prev:
+            self._clear_sum(self._sum_active_rule)
+        self._sum_seen = set()
 
     def _build_notify_text(self, message: str, rule: Rule, stopped_groups: list[str]) -> str:
         """組 on_fail notify 的通知文字。
@@ -1804,6 +1853,7 @@ class MainLoop:
                         self._rule_completed.discard(rule.id)
                     else:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
+                self._clear_sum(rule.id)
                 return
             elif result.action == "jump_step":
                 idx = result.step_index
@@ -2023,6 +2073,7 @@ class MainLoop:
             self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
 
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
+        self._sum_frame_start()
         self._frame_ocr_cache.clear()
         self._frame_chrome = None  # 每幀重算一次客戶區 offset（見 _chrome）
         self._frame_count += 1
@@ -2705,6 +2756,9 @@ if __name__ == "__main__":
     ml._match_image_warn_counter = {}
     ml._detect_warn_counter = {}
     ml._sum_warn_counter = {}
+    ml._sum_candidate = {}
+    ml._sum_active_rule = None
+    ml._sum_seen = None
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
     ml._black_streak = 0
@@ -2729,6 +2783,8 @@ if __name__ == "__main__":
     ml.on_info = None
     ml.on_window_lost = None
     ml.on_emergency = None
+    ml.on_sum = None
+    ml.on_sum_hide = None
     ml._rule_config_ctrl = type(
         "FakeRuleConfig",
         (),

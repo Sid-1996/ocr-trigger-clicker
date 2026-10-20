@@ -34,7 +34,7 @@ class SumOverlay(QWidget):
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self._fade_out)
+        self._timer.timeout.connect(self.fade_out)
         self._fade = QPropertyAnimation(self, b"windowOpacity", self)
         self._fade.setDuration(_FADE_MS)
         self._fade.setStartValue(1.0)
@@ -66,7 +66,12 @@ class SumOverlay(QWidget):
         self._fade.stop()
         self.hide()
 
-    def _fade_out(self) -> None:
+    def fade_out(self) -> None:
+        """前置條件失效時立刻淡出，不必等到 5 秒計時。"""
+        self._timer.stop()
+        if not self.isVisible():
+            return
+        self._fade.stop()
         self._fade.start()
 
     @staticmethod
