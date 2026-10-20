@@ -35,17 +35,9 @@ def test_sum_step_normalized():
     assert params["roi"] == {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4, "roi_coord": "client"}
 
 
-def _ctx(rect=None, img=None):
+def _ctx(rect=None):
     rect = rect or {"x": 100, "y": 200, "w": 800, "h": 600}
-    if img is None:
-        img = np.zeros((600, 800, 3), dtype=np.uint8)
-    return _ml.StepContext(img=img, rect=rect)
-
-
-def _ctx_for(value: int, rect=None):
-    img = np.zeros((600, 800, 3), dtype=np.uint8)
-    img[20:70, 10:110] = value
-    return _ctx(rect=rect, img=img)
+    return _ml.StepContext(img=np.zeros((600, 800, 3), dtype=np.uint8), rect=rect)
 
 
 def test_handle_sum_emits_callback(monkeypatch):
@@ -60,13 +52,12 @@ def test_handle_sum_emits_callback(monkeypatch):
     rule = Rule(id="r", name="加總", enabled=True, steps=[])
     now = [100.0]
     monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
-    ctx = _ctx_for(35)
 
-    res = ml._handle_sum({"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}, ctx, rule)
+    res = ml._handle_sum({"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}, _ctx(), rule)
     assert calls == [], "first sighting must wait for confirmation"
 
     now[0] += 0.4
-    res = ml._handle_sum({"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}, ctx, rule)
+    res = ml._handle_sum({"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}, _ctx(), rule)
 
     assert res.action == "continue"
     assert calls == [(110, 220, 100, 50, 35, 2)]
@@ -116,21 +107,20 @@ def test_handle_sum_ignores_transient_totals(monkeypatch):
     now = [100.0]
     monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
     params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
-    ctx = _ctx_for(200)  # 畫面不變，只有 OCR 結果在中途改變
 
-    ml._handle_sum(params, ctx, rule)  # 中途值 35，先不顯示
+    ml._handle_sum(params, _ctx(), rule)  # 中途值 35，先不顯示
     now[0] += 0.2
     current = [_ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)]
-    ml._handle_sum(params, ctx, rule)  # 值變動：舊值淡出，等新值穩定
+    ml._handle_sum(params, _ctx(), rule)  # 值變動：舊值淡出，等新值穩定
     assert calls == []
     assert hides == []
 
     now[0] += 0.2
-    ml._handle_sum(params, ctx, rule)
+    ml._handle_sum(params, _ctx(), rule)
     assert calls == [], "0.2s is shorter than the confirmation window"
 
     now[0] += 0.2
-    ml._handle_sum(params, ctx, rule)
+    ml._handle_sum(params, _ctx(), rule)
     assert calls == [(110, 220, 100, 50, 43, 1)]
 
 
@@ -146,14 +136,13 @@ def test_handle_sum_hides_old_overlay_when_value_changes(monkeypatch):
     monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
     params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
 
-    ml._handle_sum(params, _ctx_for(43), rule)
+    ml._handle_sum(params, _ctx(), rule)
     now[0] += 0.4
-    ml._handle_sum(params, _ctx_for(43), rule)
+    ml._handle_sum(params, _ctx(), rule)
     assert calls == [(110, 220, 100, 50, 43, 1)]
 
-    ml._sum_visual.clear()  # 模擬快取未命中，讓 OCR 重新讀到不同值
     current = [_ocr.OcrResult(text="+10", x=0, y=0, w=10, h=10, confidence=0.9)]
-    ml._handle_sum(params, _ctx_for(43), rule)
+    ml._handle_sum(params, _ctx(), rule)
     assert hides == [True], "changing value must fade the old total immediately"
     assert len(calls) == 1, "new total must wait for confirmation"
 
@@ -161,13 +150,7 @@ def test_handle_sum_hides_old_overlay_when_value_changes(monkeypatch):
 def test_handle_sum_no_numbers_hides_overlay(monkeypatch):
     ml = make_main_loop()
     current = [_ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)]
-    ocr_calls = []
-
-    def _fake_ocr(img, roi):
-        ocr_calls.append(1)
-        return current
-
-    ml._ocr_region = _fake_ocr
+    ml._ocr_region = lambda img, roi: current
     hides = []
     ml.on_sum = lambda *args: None
     ml.on_sum_hide = lambda: hides.append(True)
@@ -176,173 +159,16 @@ def test_handle_sum_no_numbers_hides_overlay(monkeypatch):
     monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
     params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
 
-    ml._handle_sum(params, _ctx_for(43), rule)
+    ml._handle_sum(params, _ctx(), rule)
     now[0] += 0.4
-    ml._handle_sum(params, _ctx_for(43), rule)
+    ml._handle_sum(params, _ctx(), rule)
     assert ml._sum_active_rule == "r"
-    assert "r" in ml._sum_visual
-    assert len(ocr_calls) == 2
 
     current = [_ocr.OcrResult(text="RANK", x=0, y=0, w=10, h=10, confidence=0.9)]
-    ml._handle_sum(params, _ctx_for(0), rule)  # 畫面變動：先跳過 OCR 並淡出
-    now[0] += 0.4
-    ml._handle_sum(params, _ctx_for(0), rule)  # 畫面穩定後才 OCR
+    ml._handle_sum(params, _ctx(), rule)
     assert hides == [True]
-    assert len(ocr_calls) == 3, "穩定的新畫面仍應 OCR 一次"
     assert ml._sum_active_rule is None
     assert "r" not in ml._sum_candidate
-    assert "r" in ml._sum_visual, "短暫讀不到數字不該丟掉已確認的組合快取"
-
-
-def test_sum_visual_cache_reuses_same_group(monkeypatch):
-    ml = make_main_loop()
-    ocr_calls = []
-    results = [_ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)]
-
-    def _fake_ocr(img, roi):
-        ocr_calls.append(1)
-        return results
-
-    ml._ocr_region = _fake_ocr
-    calls = []
-    ml.on_sum = lambda *args: calls.append(args)
-    rule = Rule(id="r", name="加總", enabled=True, steps=[])
-    now = [100.0]
-    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
-    params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
-    ctx = _ctx_for(200)
-
-    ml._handle_sum(params, ctx, rule)
-    now[0] += 0.4
-    ml._handle_sum(params, ctx, rule)
-    assert len(ocr_calls) == 2
-    assert calls == [(110, 220, 100, 50, 43, 1)]
-    assert "r" in ml._sum_visual
-
-    ml._handle_sum(params, ctx, rule)
-    assert len(ocr_calls) == 2, "same fingerprint must skip OCR"
-    assert len(calls) == 2, "cached group should display immediately"
-
-    noisy = _ctx_for(200)
-    noisy.img = noisy.img + 1  # 整體 +1：容忍雜訊，仍應命中
-    ml._handle_sum(params, noisy, rule)
-    assert len(ocr_calls) == 2
-
-    changed = _ctx_for(200)
-    changed.img[25:45, 25:45] = 0  # 局部變化：先視為畫面變動而跳過 OCR
-    ml._handle_sum(params, changed, rule)
-    assert len(ocr_calls) == 2
-
-    now[0] += 0.4
-    ml._handle_sum(params, changed, rule)  # 畫面穩定且快取未命中，才重新 OCR
-    assert len(ocr_calls) == 3
-
-
-def test_sum_visual_cache_cleared_on_precondition_failure(monkeypatch):
-    ml = make_main_loop()
-    ml._ocr_region = lambda img, roi: [
-        _ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)
-    ]
-    ml.on_sum = lambda *args: None
-    rule = Rule(id="r", name="加總", enabled=True, steps=[])
-    now = [100.0]
-    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
-    params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
-    ctx = _ctx_for(200)
-
-    ml._handle_sum(params, ctx, rule)
-    now[0] += 0.4
-    ml._handle_sum(params, ctx, rule)
-    assert "r" in ml._sum_visual
-
-    ml._clear_sum("r", drop_cache=True)
-    assert "r" not in ml._sum_visual
-    assert ml._sum_active_rule is None
-
-
-def test_sum_visual_cache_revalidates_periodically(monkeypatch):
-    ml = make_main_loop()
-    ocr_calls = []
-    ml._ocr_region = lambda img, roi: (
-        ocr_calls.append(1) or [_ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)]
-    )
-    ml.on_sum = lambda *args: None
-    rule = Rule(id="r", name="加總", enabled=True, steps=[])
-    now = [100.0]
-    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
-    monkeypatch.setattr(_ml, "_SUM_FP_REVALIDATE_HITS", 2)
-    params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
-    ctx = _ctx_for(200)
-
-    ml._handle_sum(params, ctx, rule)
-    now[0] += 0.4
-    ml._handle_sum(params, ctx, rule)
-    assert len(ocr_calls) == 2
-
-    ml._handle_sum(params, ctx, rule)  # hit #1
-    assert len(ocr_calls) == 2
-    ml._handle_sum(params, ctx, rule)  # hit #2 → 強制 OCR
-    assert len(ocr_calls) == 3
-
-
-def test_sum_motion_skips_ocr_and_hides(monkeypatch):
-    ml = make_main_loop()
-    ocr_calls = []
-    ml._ocr_region = lambda img, roi: (
-        ocr_calls.append(1) or [_ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)]
-    )
-    calls, hides = [], []
-    ml.on_sum = lambda *args: calls.append(args)
-    ml.on_sum_hide = lambda: hides.append(True)
-    rule = Rule(id="r", name="加總", enabled=True, steps=[])
-    now = [100.0]
-    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
-    params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
-    ctx = _ctx_for(200)
-
-    ml._handle_sum(params, ctx, rule)
-    now[0] += 0.4
-    ml._handle_sum(params, ctx, rule)
-    assert len(ocr_calls) == 2
-    assert calls == [(110, 220, 100, 50, 43, 1)]
-
-    changed = _ctx_for(200)
-    changed.img[25:45, 25:45] = 0  # 捲動／動畫：內容還在變
-    ml._handle_sum(params, changed, rule)
-    assert len(ocr_calls) == 2, "畫面變動時應跳過 OCR"
-    assert hides == [True], "內容變動時舊總和應立即淡出"
-    assert ml._sum_active_rule is None
-    assert "r" not in ml._sum_candidate
-    assert "r" in ml._sum_visual, "快取保留，畫面停下後可重用"
-
-
-def test_sum_motion_forces_ocr_after_timeout(monkeypatch):
-    ml = make_main_loop()
-    ocr_calls = []
-    ml._ocr_region = lambda img, roi: (
-        ocr_calls.append(1) or [_ocr.OcrResult(text="+43", x=0, y=0, w=10, h=10, confidence=0.9)]
-    )
-    ml.on_sum = lambda *args: None
-    rule = Rule(id="r", name="加總", enabled=True, steps=[])
-    now = [100.0]
-    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
-    monkeypatch.setattr(_ml, "_SUM_MOTION_FORCE_OCR_SEC", 0.5)
-    params = {"roi": {"x": 10, "y": 20, "w": 100, "h": 50}}
-
-    a = _ctx_for(200)
-    b = _ctx_for(200)
-    b.img[25:45, 25:45] = 0
-    c = _ctx_for(200)
-    c.img[25:45, 25:45] = 1
-
-    ml._handle_sum(params, a, rule)  # 首幀：OCR
-    now[0] += 0.1
-    ml._handle_sum(params, b, rule)  # 變動中：跳過
-    assert len(ocr_calls) == 1
-
-    now[0] += 0.6
-    ml._handle_sum(params, c, rule)  # 持續變動超過門檻：強制 OCR
-    assert len(ocr_calls) == 2
 
 
 def test_sum_frame_start_hides_rule_not_evaluated():
