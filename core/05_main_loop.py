@@ -48,6 +48,7 @@ _SUM_FP_BLOCK_MAX = 12.0
 _SUM_FP_BLOCKS = (8, 8)
 _SUM_FP_MAX_ENTRIES = 8
 _SUM_FP_REVALIDATE_HITS = 10  # 連續命中這麼多次就強制 OCR 一次，避免指紋誤判卡住
+_SUM_MOTION_FORCE_OCR_SEC = 1.0  # 畫面持續變動時，最多隔這麼久仍 OCR 一次，避免完全看不到總和
 
 list_windows = _screenshot.list_windows
 get_window_rect = _screenshot.get_window_rect
@@ -307,6 +308,9 @@ class MainLoop:
         self._sum_seen: set[str] | None = None
         # rule_id → [ {rect, sig, total, count, hits, last} ]，前置條件失效時整個 rule 清空
         self._sum_visual: dict[str, list[dict]] = {}
+        # rule_id → 上一幀的 ROI 指紋；用來判斷數字是否還在變動（捲動／動畫）
+        self._sum_prev_sig: dict[str, np.ndarray] = {}
+        self._sum_motion_since: dict[str, float] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
@@ -512,6 +516,8 @@ class MainLoop:
             self._sum_active_rule = None
             self._sum_seen = None
             self._sum_visual.clear()
+            self._sum_prev_sig.clear()
+            self._sum_motion_since.clear()
             self._xframe_ocr_cache.clear()
             self._tmpl_cache.clear()
             self._fail_since.clear()
@@ -1008,7 +1014,11 @@ class MainLoop:
 
         cached = self._sum_lookup(rule.id, rect, sig, now)
         if cached is not None:
-            # 同組數字（視覺指紋近乎相同）直接復用，跳過 OCR 與求和
+            # 同組數字（視覺指紋近乎相同）直接復用，跳過 OCR 與求和；
+            # 即使前一幀還在捲動，只要這一幀與已知組合一致就立即顯示
+            if sig is not None:
+                self._sum_prev_sig[rule.id] = sig
+                self._sum_motion_since.pop(rule.id, None)
             total, count = cached["total"], cached["count"]
             ctx.sum_total = total
             ctx.sum_count = count
@@ -1016,6 +1026,22 @@ class MainLoop:
                 self._sum_seen.add(rule.id)
             self._update_sum(rule, ctx, roi, total, count, sig, already_confirmed=True)
             return StepResult("continue")
+
+        # 數字還在捲動／跳動時跳過 OCR：只等它停下來再辨識一次。
+        # 畫面持續變動超過 _SUM_MOTION_FORCE_OCR_SEC 仍強制辨識一次，避免完全沒有結果。
+        if sig is not None:
+            prev_sig = self._sum_prev_sig.get(rule.id)
+            self._sum_prev_sig[rule.id] = sig
+            if prev_sig is not None and not self._sum_sig_match(sig, prev_sig):
+                since = self._sum_motion_since.setdefault(rule.id, now)
+                if now - since < _SUM_MOTION_FORCE_OCR_SEC:
+                    if self._sum_seen is not None:
+                        self._sum_seen.add(rule.id)
+                    self._clear_sum(rule.id)
+                    return StepResult("continue")
+                self._sum_motion_since[rule.id] = now
+            else:
+                self._sum_motion_since.pop(rule.id, None)
 
         results = self._ocr_region(ctx.img, roi)
         total, count = sum_numbers(" ".join(r.text for r in results))
@@ -1166,6 +1192,8 @@ class MainLoop:
         self._sum_candidate.pop(rule_id, None)
         if drop_cache:
             self._sum_visual.pop(rule_id, None)
+            self._sum_prev_sig.pop(rule_id, None)
+            self._sum_motion_since.pop(rule_id, None)
         self._hide_sum(rule_id)
 
     def _sum_frame_start(self) -> None:
@@ -2658,6 +2686,8 @@ class MainLoop:
         self._sum_active_rule = None
         self._sum_seen = None
         self._sum_visual.clear()
+        self._sum_prev_sig.clear()
+        self._sum_motion_since.clear()
         for k in self._phase_sums:
             self._phase_sums[k] = 0.0
         self._phase_frames = 0
@@ -2899,6 +2929,8 @@ if __name__ == "__main__":
     ml._sum_active_rule = None
     ml._sum_seen = None
     ml._sum_visual = {}
+    ml._sum_prev_sig = {}
+    ml._sum_motion_since = {}
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
     ml._black_streak = 0
