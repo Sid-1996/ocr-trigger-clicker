@@ -5008,7 +5008,10 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"⚠ {msg}", 8000)
 
     def _on_sum_result(self, x: int, y: int, w: int, h: int, total: int, count: int):
-        self._sum_overlay.show_sum(x, y, w, h, T("sum_overlay.text", total=total, count=count))
+        hwnd = getattr(self._loop, "_window_hwnd", None) if self._loop else None
+        self._sum_overlay.show_sum(
+            x, y, w, h, T("sum_overlay.text", total=total, count=count), hwnd
+        )
 
     def _on_resource_warning(self, msg: str):
         self._status_bar.showMessage(f"⚠ {msg}", 5000)
