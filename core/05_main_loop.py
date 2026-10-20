@@ -118,6 +118,8 @@ class StepContext:
     prematch: Optional[dict] = None
     sum_total: int = 0
     sum_count: int = 0
+    sum_stable: bool = False
+    sum_foreground: bool = False
 
 
 @dataclass
@@ -296,6 +298,7 @@ class MainLoop:
         # 加總浮層狀態：candidate = rule_id → (total, count, 首次看到時間)；
         # active_rule = 目前浮層顯示中的規則；seen 記錄上一幀有評估加總的規則
         self._sum_candidate: dict[str, tuple[int, int, float]] = {}
+        self._last_sum_report: dict[str, dict[int, tuple[int, int]]] = {}
         self._sum_active_rule: str | None = None
         self._sum_seen: set[str] | None = None
         self._verify_warn_counter: dict[str, int] = {}
@@ -500,6 +503,7 @@ class MainLoop:
             self._detect_warn_counter.clear()
             self._sum_warn_counter.clear()
             self._sum_candidate.clear()
+            self._last_sum_report.clear()
             self._sum_active_rule = None
             self._sum_seen = None
             self._xframe_ocr_cache.clear()
@@ -982,6 +986,8 @@ class MainLoop:
     def _handle_sum(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         ctx.sum_total = 0
         ctx.sum_count = 0
+        ctx.sum_stable = False
+        ctx.sum_foreground = False
         raw_roi = params.get("roi", {})
         if all(raw_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
             last = self._sum_warn_counter.get(rule.id, 0)
@@ -993,7 +999,8 @@ class MainLoop:
 
         roi = self._resolve_roi(raw_roi, ctx.rect)
         results = self._ocr_region(ctx.img, roi)
-        total, count = sum_numbers(" ".join(r.text for r in results))
+        text = " ".join(r.text for r in results)
+        total, count = sum_numbers(text)
         if count == 0:
             self._clear_sum(rule.id)
             return StepResult("continue")
@@ -1002,11 +1009,19 @@ class MainLoop:
         ctx.sum_count = count
         if self._sum_seen is not None:
             self._sum_seen.add(rule.id)
-        self._update_sum(rule, ctx, roi, total, count)
+        self._update_sum(rule, ctx, roi, total, count, text)
         return StepResult("continue")
 
-    def _update_sum(self, rule: Rule, ctx: StepContext, roi: dict, total: int, count: int) -> None:
-        """只顯示穩定後的總和；數字還在變動時先讓舊浮層淡出。"""
+    def _update_sum(
+        self,
+        rule: Rule,
+        ctx: StepContext,
+        roi: dict,
+        total: int,
+        count: int,
+        text: str,
+    ) -> None:
+        """穩定後寫日誌；前景模式才顯示浮層。"""
         now = time.monotonic()
         prev = self._sum_candidate.get(rule.id)
         if prev is None or prev[0] != total or prev[1] != count:
@@ -1015,10 +1030,55 @@ class MainLoop:
             return
         if now - prev[2] < _SUM_CONFIRM_SEC:
             return
+        ctx.sum_stable = True
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        self._log_sum_result(rule, ctx, roi, total, count, text, mode)
+        if not self._sum_overlay_enabled(rule, mode):
+            self._hide_sum(rule.id)
+            return
+        ctx.sum_foreground = True
         if self.on_sum:
             sx, sy = self._to_screen_coords(ctx.rect, int(roi["x"]), int(roi["y"]))
             self.on_sum(sx, sy, int(roi["w"]), int(roi["h"]), total, count)
         self._sum_active_rule = rule.id
+
+    @staticmethod
+    def _sum_overlay_enabled(rule: Rule, mode: str) -> bool:
+        return mode == "pynput" and not rule.background
+
+    def _log_sum_result(
+        self,
+        rule: Rule,
+        ctx: StepContext,
+        roi: dict,
+        total: int,
+        count: int,
+        text: str,
+        mode: str,
+    ) -> None:
+        key = (total, count)
+        per_rule = self._last_sum_report.setdefault(rule.id, {})
+        if per_rule.get(ctx.step_idx) == key:
+            return
+        per_rule[ctx.step_idx] = key
+        numbers = _number_sum.parse_numbers(text)
+        numbers_text = str(numbers[:50]) + ("..." if len(numbers) > 50 else "")
+        roi_text = (
+            f"{int(roi.get('x', 0))},{int(roi.get('y', 0))},"
+            f"{int(roi.get('w', 0))},{int(roi.get('h', 0))}"
+        )
+        self._logger.info(
+            "[sum] mode=%s rule=%s id=%s step=%s total=%d count=%d roi=(%s) numbers=%s text=%r",
+            mode,
+            rule.name,
+            rule.id,
+            ctx.step_idx,
+            total,
+            count,
+            roi_text,
+            numbers_text,
+            text[:200],
+        )
 
     def _hide_sum(self, rule_id: str) -> None:
         """淡出目前顯示中的加總；不是這條規則擁有的浮層就不動它。"""
@@ -1029,8 +1089,9 @@ class MainLoop:
             self.on_sum_hide()
 
     def _clear_sum(self, rule_id: str) -> None:
-        """前置條件失效：丟掉候選值並淡出該規則的浮層。"""
+        """前置條件失效：丟掉候選值與去重狀態，並淡出該規則的浮層。"""
         self._sum_candidate.pop(rule_id, None)
+        self._last_sum_report.pop(rule_id, None)
         self._hide_sum(rule_id)
 
     def _sum_frame_start(self) -> None:
@@ -1894,7 +1955,8 @@ class MainLoop:
                 continue
             else:
                 detail = self._build_ok_detail(step, ctx)
-                if not background:
+                # 非前景的加總只寫檔案日誌（_log_sum_result），不進執行日誌面板
+                if not background and (step.type != "sum" or ctx.sum_foreground):
                     if ctx.on_fail_fired:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
                     else:
@@ -1967,7 +2029,7 @@ class MainLoop:
             dy = step.params.get("dy", 0)
             return T("exec_log.detail.drag_offset", dx=f"{dx:+d}", dy=f"{dy:+d}")
         if t == "sum":
-            if ctx.sum_count > 0:
+            if ctx.sum_foreground:
                 return T("exec_log.detail.sum_result", total=ctx.sum_total, count=ctx.sum_count)
             raw_roi = step.params.get("roi", {})
             if all(raw_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
@@ -2757,6 +2819,7 @@ if __name__ == "__main__":
     ml._detect_warn_counter = {}
     ml._sum_warn_counter = {}
     ml._sum_candidate = {}
+    ml._last_sum_report = {}
     ml._sum_active_rule = None
     ml._sum_seen = None
     ml._last_active_rule_id = None

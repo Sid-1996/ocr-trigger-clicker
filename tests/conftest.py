@@ -96,6 +96,7 @@ def make_main_loop():
     ml._detect_warn_counter = {}
     ml._sum_warn_counter = {}
     ml._sum_candidate = {}
+    ml._last_sum_report = {}
     ml._sum_active_rule = None
     ml._sum_seen = None
     ml._slow_loop_warned = False

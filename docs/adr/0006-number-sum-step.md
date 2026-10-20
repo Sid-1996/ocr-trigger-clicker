@@ -1,6 +1,6 @@
 # 數字加總採獨立 `sum` 步驟：觸發後對當前幀做快照加總
 
-Status: accepted（2026-10-20）
+Status: accepted（2026-10-20；同日 amended：浮層僅前景顯示，非前景只寫日誌）
 
 ## 問題
 
@@ -31,3 +31,10 @@ Status: accepted（2026-10-20）
 - `core/05_main_loop.py:_handle_sum` 經 `on_sum` 回呼把區域螢幕座標與結果送到 GUI、`on_sum_hide` 通知淡出；`gui/sum_overlay.py` 只負責顯示與淡出
 - 舊任務不含 `sum`，完全向下相容；加總區域為必填，未設定時步驟略過並在執行日誌提示
 - 浮層必須落在加總區域之外，避免被下一次截圖／OCR 讀到自己的文字
+
+## Amendment（2026-10-20）
+
+- **顯示範圍**：數字加總浮層只在互動方法為前景（`pynput`）且規則非背景規則（`rule.background=False`）時顯示；後台（`frida`）、混合（`hybrid`）與背景規則不顯示浮層。
+- **日誌**：所有模式在總和穩定 0.35 秒且變動時，寫入 `app.log` 的 `[sum]` 行，內含 mode／rule／step／total／count／ROI／OCR 原文／解析後數字；前景的執行日誌面板只在穩定後顯示合計。
+- **理由**：後台模式不應在桌面留下浮層；`app.log` 可在沒有畫面提示時追查 OCR／解析錯誤。
+- **高 DPI**：前景浮層的 Qt 邏輯座標換算另案處理，不在本次 amendment 範圍。
