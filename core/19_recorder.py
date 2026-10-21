@@ -30,6 +30,7 @@ _pipeline = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
 
 # ── Win32 常數 ──
 WH_MOUSE_LL = 14
+GA_ROOT = 2
 
 WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
@@ -170,6 +171,10 @@ _user32.PostThreadMessageW.argtypes = [
 _user32.PostThreadMessageW.restype = wintypes.BOOL
 _user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(_RECT)]
 _user32.GetWindowRect.restype = wintypes.BOOL
+_user32.WindowFromPoint.argtypes = [_POINT]
+_user32.WindowFromPoint.restype = wintypes.HWND
+_user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+_user32.GetAncestor.restype = wintypes.HWND
 _user32.GetForegroundWindow.restype = wintypes.HWND
 _user32.IsIconic.argtypes = [wintypes.HWND]
 _user32.IsIconic.restype = wintypes.BOOL
@@ -204,6 +209,16 @@ def _virtual_screen_bounds() -> dict:
         "w": _user32.GetSystemMetrics(_SM_CXVIRTUALSCREEN),
         "h": _user32.GetSystemMetrics(_SM_CYVIRTUALSCREEN),
     }
+
+
+def _window_from_point(x: int, y: int) -> int:
+    return int(_user32.WindowFromPoint(_POINT(int(x), int(y))) or 0)
+
+
+def _window_root(hwnd: int) -> int:
+    if not hwnd:
+        return 0
+    return int(_user32.GetAncestor(wintypes.HWND(hwnd), GA_ROOT) or hwnd)
 
 
 class Recorder:
@@ -274,6 +289,7 @@ class Recorder:
             _user32.PostThreadMessageW(tid, WM_QUIT, 0, 0)
         if self._thread:
             self._thread.join(timeout=5)
+        self._blocked_buttons.clear()
         self._write_session()
 
     @property
@@ -355,10 +371,15 @@ class Recorder:
                 return _user32.CallNextHookEx(self._hook, n_code, w_param, l_param)
             button = _DOWN.get(msg)
             if button is not None:
-                if self._in_window(info.pt.x, info.pt.y):
+                if self._in_window(info.pt.x, info.pt.y) and self._is_target_click(
+                    info.pt.x, info.pt.y
+                ):
                     self._blocked_buttons.add(button)
                     self._handle_down(button, info.pt.x, info.pt.y)
                     return 1  # 阻擋：遊戲不會直接收到原始事件
+                # 快速點擊時 up 可能在 hook 忙碌期間遺失；新的一次非目標 down
+                # 代表舊手勢已結束，清掉殘留以免吞掉 GUI 的 up。
+                self._blocked_buttons.discard(button)
                 return _user32.CallNextHookEx(self._hook, n_code, w_param, l_param)
             up_button = _UP.get(msg)
             if up_button is not None:
@@ -378,6 +399,16 @@ class Recorder:
         if not _user32.GetWindowRect(self._hwnd, ctypes.byref(rect)):
             return False
         return rect.left <= sx < rect.right and rect.top <= sy < rect.bottom
+
+    def _is_target_click(self, sx: int, sy: int) -> bool:
+        """Only record clicks on the target window itself.
+
+        A coordinate can be inside the target rect while the tool GUI or another
+        app is on top (common when both windows overlap). WindowFromPoint keeps
+        those clicks usable instead of swallowing them as game input.
+        """
+        hwnd = _window_from_point(sx, sy)
+        return bool(hwnd) and _window_root(hwnd) == _window_root(self._hwnd)
 
     def _handle_down(self, button: str, sx: int, sy: int) -> None:
         # 前景漂移 → 重新激活目標視窗（罕見；重送才會打到對的窗）
