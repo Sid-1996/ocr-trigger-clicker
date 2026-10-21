@@ -276,6 +276,16 @@ def _fmt_roi(roi: dict) -> str:
     return f"({int(x)},{int(y)}) {int(w)}×{int(h)}"
 
 
+def _fmt_capture_size(capture_size) -> str | None:
+    if not isinstance(capture_size, (list, tuple)) or len(capture_size) != 2:
+        return None
+    try:
+        w, h = int(capture_size[0]), int(capture_size[1])
+    except (TypeError, ValueError):
+        return None
+    return f"{w}×{h}" if w > 0 and h > 0 else None
+
+
 def _fmt_point(px, py) -> str:
     if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
         return f"({px:.0%},{py:.0%})"
@@ -1015,14 +1025,23 @@ class _MatchImageStepForm(QWidget):
         )
         self._thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
         tmpl_layout.addWidget(self._thumb)
-        tmpl_path = p.get("template", "")
-        tmpl_data = p.get("template_data", "")
+        tmpl_path = p.get("template") or ""
+        tmpl_data = p.get("template_data") or ""
         label_text = (
             Path(tmpl_path).stem
             if tmpl_path.strip()
             else (T("step_form.embedded_image") if tmpl_data.strip() else T("ui.no_group"))
         )
         self._tmpl_label = QLabel(label_text)
+        self._source_label = QLabel("")
+        self._source_label.setStyleSheet("color:#888; font-size:11px;")
+        self._source_label.setVisible(False)
+        name_col = QWidget()
+        name_layout = QVBoxLayout(name_col)
+        name_layout.setContentsMargins(0, 0, 0, 0)
+        name_layout.setSpacing(0)
+        name_layout.addWidget(self._tmpl_label)
+        name_layout.addWidget(self._source_label)
         self._capture_btn = QPushButton(T("step_form.capture_region"))
         self._capture_btn.clicked.connect(self._capture_template)
         self._pick_btn = QPushButton(T("step_form.pick_existing_image"))
@@ -1033,7 +1052,7 @@ class _MatchImageStepForm(QWidget):
         self._img_compare_btn = QPushButton(T("step_form.compare_image"))
         self._img_compare_btn.clicked.connect(self._img_compare_match)
         self._img_compare_result = QLabel("")
-        tmpl_layout.addWidget(self._tmpl_label, 1)
+        tmpl_layout.addWidget(name_col, 1)
         tmpl_layout.addWidget(self._capture_btn)
         tmpl_layout.addWidget(self._pick_btn)
         tmpl_layout.addWidget(self._trim_btn)
@@ -1244,7 +1263,8 @@ class _MatchImageStepForm(QWidget):
                 self._of_skip_combo.setCurrentIndex(idx_s)
 
     def _update_thumbnail(self):
-        data = self._step.params.get("template_data", "")
+        has_image = False
+        data = self._step.params.get("template_data") or ""
         if data.strip():
             pix = QPixmap()
             if pix.loadFromData(base64.b64decode(data)):
@@ -1256,21 +1276,40 @@ class _MatchImageStepForm(QWidget):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 )
-                return
-        path = self._step.params.get("template", "")
-        if path and Path(path).exists():
-            pix = QPixmap(path)
-            if not pix.isNull():
-                self._thumb.setPixmap(
-                    pix.scaled(
-                        64,
-                        64,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
+                has_image = True
+        if not has_image:
+            path = self._step.params.get("template") or ""
+            if path and Path(path).exists():
+                pix = QPixmap(path)
+                if not pix.isNull():
+                    self._thumb.setPixmap(
+                        pix.scaled(
+                            64,
+                            64,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation,
+                        )
                     )
-                )
-                return
-        self._thumb.clear()
+                    has_image = True
+        if not has_image:
+            self._thumb.clear()
+        self._update_source_label(has_image)
+
+    def _update_source_label(self, has_image: bool):
+        if not has_image:
+            self._source_label.clear()
+            self._source_label.setVisible(False)
+            return
+        size = _fmt_capture_size(self._step.params.get("capture_size"))
+        self._source_label.setVisible(True)
+        if size:
+            self._source_label.setText(T("step_form.template_source", size=size))
+            self._source_label.setStyleSheet("color:#888; font-size:11px;")
+            self._source_label.setToolTip(T("step_form.template_source_tip"))
+        else:
+            self._source_label.setText(T("step_form.template_source_missing"))
+            self._source_label.setStyleSheet("color:#e67e22; font-size:11px;")
+            self._source_label.setToolTip(T("step_form.template_source_missing_tip"))
 
     def _img_compare_match(self):
         title = self._window_title_cb() if self._window_title_cb else ""
