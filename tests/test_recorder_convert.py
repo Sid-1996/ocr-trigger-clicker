@@ -2,6 +2,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
@@ -251,6 +253,40 @@ def test_convert_uses_event_window_size_not_clipped_frame_size(tmp_path):
     click = [s for s in res["rules"][0].steps if s.type == "click"][0]
     assert abs(click.params["x"] - 0.5) < 1e-3
     assert abs(click.params["y"] - 0.5) < 1e-3
+
+
+def test_convert_uses_anchor_when_frame_matches_window(tmp_path, monkeypatch):
+    """幀尺寸等於視窗尺寸時，維持原本錨點路徑。"""
+    sd = _blank_session(tmp_path, n=1)
+    data = json.loads((sd / "events.json").read_text(encoding="utf-8"))
+    data["events"][0]["window_size"] = [800, 600]
+    (sd / "events.json").write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(
+        _conv, "_find_anchor", lambda *a, **k: ("確認", {"x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2})
+    )
+
+    res = convert_sessions([sd])
+
+    assert res["stats"]["anchored"] == 1
+    assert res["rules"][0].steps[0].type == "detect"
+
+
+def test_convert_skips_anchor_and_template_for_clipped_frame(tmp_path, monkeypatch):
+    """舊 session 的裁切幀原點未知；不可用錯位影像產生錨點/模板規則。"""
+    sd = _blank_session(tmp_path, n=1)
+    data = json.loads((sd / "events.json").read_text(encoding="utf-8"))
+    data["events"][0]["window_size"] = [1000, 800]
+    (sd / "events.json").write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(_conv, "_find_anchor", lambda *a, **k: pytest.fail("裁切幀不該找錨點"))
+    monkeypatch.setattr(_conv, "_make_template", lambda *a, **k: pytest.fail("裁切幀不該做模板"))
+
+    res = convert_sessions([sd])
+
+    assert res["stats"]["timing"] == 1
+    assert res["stats"]["anchored"] == res["stats"]["template"] == 0
+    click = [s for s in res["rules"][0].steps if s.type == "click"][0]
+    assert abs(click.params["x"] - 0.4) < 1e-3
+    assert abs(click.params["y"] - 0.375) < 1e-3
 
 
 def test_convert_keeps_timing_event_without_frame_if_window_size_known(tmp_path):

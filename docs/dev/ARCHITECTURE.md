@@ -406,7 +406,7 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 
 - **後台模式**（`mode != "pynput"`）：`capture_print_window_hwnd()`（或依 title 查 hwnd）→ PrintWindow 全視窗影像；失敗 fallback 到前景管線
 - **前景模式**（`mode == "pynput"`）三層備援：
-  1. `capture()`（mss 擷取全視窗，含 DPI 縮放與多螢幕裁切）
+  1. `capture()`（mss 擷取全視窗，含 DPI 縮放；跨螢幕時依與視窗交集裁切後由 `_pad_to_window()` 補黑回全視窗尺寸，維持影像原點 = 視窗原點）
   2. `_capture_dxcam()`（mss 失敗時 DXGI 底層，相容性較高）
   3. `capture_window_content()`（GDI PrintWindow/BitBlt 僅 client area）→ `_pad_to_full()` 填補黑邊至全視窗大小
 

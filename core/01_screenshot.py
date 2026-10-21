@@ -292,6 +292,23 @@ def _get_dxcam_output(window_rect: dict) -> int:
 _get_dxcam_output.factory = None
 
 
+def _pad_to_window(img: np.ndarray, rect: dict, ox: int, oy: int) -> np.ndarray:
+    """把被螢幕邊界裁切的擷取結果補回整個視窗（黑邊 = 螢幕外）。
+
+    ox/oy 是影像左上角在視窗內的位移。下游（主循環點擊、錄製轉換、客戶區
+    換算）都假設影像座標 = 視窗座標，裁切後不補齊會整體偏移。
+    """
+    full_w, full_h = int(rect["w"]), int(rect["h"])
+    h, w = img.shape[:2]
+    if (w, h) == (full_w, full_h):
+        return img
+    if w > full_w or h > full_h or ox < 0 or oy < 0:
+        return img  # ponytail: 非預期尺寸/位移時保留原圖，交由呼叫端判定
+    padded = np.zeros((full_h, full_w, img.shape[2]), dtype=img.dtype)
+    padded[oy : oy + h, ox : ox + w] = img
+    return padded
+
+
 def _capture_dxcam(title: str, rect: dict) -> np.ndarray | None:
     import dxcam
 
@@ -316,7 +333,9 @@ def _capture_dxcam(title: str, rect: dict) -> np.ndarray | None:
             _dxcam_tls.cameras[out_idx] = dxcam.create(output_idx=out_idx, output_color="BGR")
         camera = _dxcam_tls.cameras[out_idx]
         img = camera.grab(region=(left, top, right, bottom))
-        return img
+        if img is None:
+            return None
+        return _pad_to_window(img, rect, left - rect["x"], top - rect["y"])
     except Exception:
         logging.warning("dxcam capture failed for '%s'", title, exc_info=True)
         return None
@@ -350,7 +369,7 @@ def _capture_mss(title: str, rect: dict) -> np.ndarray | None:
         region = {"left": x1, "top": y1, "width": x2 - x1, "height": y2 - y1}
         img = sct.grab(region)
         arr = np.array(img)
-        return arr[:, :, :3]
+        return _pad_to_window(arr[:, :, :3], rect, x1 - left, y1 - top)
     except Exception:
         logging.warning("mss capture failed for '%s'", title, exc_info=True)
         return None

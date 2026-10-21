@@ -83,7 +83,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 `17_capture_pipeline.py` `capture_frame(mode, title, hwnd)` 是**全應用唯一的截圖入口**（commit `cc0bcf1`），依 `interaction_mode`（config.json 中 `"pynput"`=前景 / 其他=後台）選擇路徑：
 
 **前景**（`_capture_foreground`，`17_capture_pipeline.py:31`）：
-1. **mss** — 跨平台截圖，含邊框（`_capture_mss`）
+1. **mss** — 跨平台截圖，含邊框（`_capture_mss`）；被螢幕邊界裁切時由 `_pad_to_window()` 補黑回全視窗尺寸（影像原點必須等於視窗原點，主循環/錄製/客戶區換算都依賴此契約）
 2. **DXGI mss** — mss 改用 DXGI backend（`__mss_get_backend` runtime monkey-patch）
 3. 若 1+2 皆失敗 → 呼叫 `capture_window_content()` 作為最後 GDI 備援（PrintWindow → BitBlt），只取客戶區，會自動填補黑邊到全視窗大小
 

@@ -104,6 +104,57 @@ def test_capture_falls_back_to_dxcam_when_mss_returns_none(monkeypatch):
     assert _shot.capture("t")[0, 0, 0] == 7
 
 
+class _FakeGrab:
+    def __init__(self, arr):
+        self._arr = arr
+
+    def __array__(self, dtype=None, copy=None):
+        return self._arr if dtype is None else self._arr.astype(dtype)
+
+
+class _FakeMSS:
+    def __init__(self, arr, monitor):
+        self._arr = arr
+        self.monitors = [{}, monitor]
+        self.region = None
+
+    def grab(self, region):
+        self.region = region
+        return _FakeGrab(self._arr)
+
+
+def test_pad_to_window_noop_when_full_size():
+    img = np.ones((6, 8, 3), np.uint8)
+    assert _shot._pad_to_window(img, {"x": 0, "y": 0, "w": 8, "h": 6}, 0, 0) is img
+
+
+def test_capture_mss_pads_left_clipped_window(monkeypatch):
+    """視窗左側在螢幕外：影像必須補回全視窗尺寸，內容貼在正確的視窗座標。"""
+    grabbed = np.full((40, 50, 4), 7, np.uint8)
+    fake = _FakeMSS(grabbed, {"left": 0, "top": 0, "width": 100, "height": 100})
+    monkeypatch.setattr(_shot, "_get_mss", lambda: fake)
+
+    img = _shot._capture_mss("t", {"x": -20, "y": 0, "w": 70, "h": 40})
+
+    assert fake.region == {"left": 0, "top": 0, "width": 50, "height": 40}
+    assert img.shape == (40, 70, 3)
+    assert (img[:, 20:] == 7).all(), "可見內容應位移 +20 對齊視窗座標"
+    assert img[:, :20].max() == 0, "螢幕外區域補黑"
+
+
+def test_capture_mss_pads_top_clipped_window(monkeypatch):
+    grabbed = np.full((30, 40, 4), 9, np.uint8)
+    fake = _FakeMSS(grabbed, {"left": 0, "top": 0, "width": 100, "height": 100})
+    monkeypatch.setattr(_shot, "_get_mss", lambda: fake)
+
+    img = _shot._capture_mss("t", {"x": 0, "y": -10, "w": 40, "h": 40})
+
+    assert fake.region == {"left": 0, "top": 0, "width": 40, "height": 30}
+    assert img.shape == (40, 40, 3)
+    assert (img[10:] == 9).all()
+    assert img[:10].max() == 0
+
+
 def test_capture_foreground_falls_back_to_client_capture_and_pads(monkeypatch):
     assert _pipe._screenshot is _shot, "管線與測試須共用同一模組物件，patch 才生效"
     monkeypatch.setattr(_shot, "capture", lambda title, rect=None, hwnd=None: None)

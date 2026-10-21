@@ -359,8 +359,12 @@ def _session_to_rules(session_dir: Path, defaults: dict | None = None) -> tuple[
         if win_w > 0 and win_h > 0:
             known_w, known_h = win_w, win_h
 
+        # 舊 session 的幀被螢幕邊界裁切時無法還原影像原點，錨點/模板會錯位；
+        # 一律退回計時規則（比例座標本來就正確）。
+        frame_exact = img_w > 0 and img_h > 0 and img_w == win_w and img_h == win_h
+
         anchored = False
-        if img_w > 0 and img_h > 0:
+        if frame_exact:
             anchor = _find_anchor(img, wx, wy, win_w, win_h)
             if anchor is not None:
                 keyword, roi = anchor
@@ -368,7 +372,7 @@ def _session_to_rules(session_dir: Path, defaults: dict | None = None) -> tuple[
                 stats["anchored"] += 1
                 anchored = True
 
-        if not anchored and img_w > 0 and img_h > 0:
+        if not anchored and frame_exact:
             tpl = _make_template(img, wx, wy, win_w, win_h)
             if tpl is not None:
                 b64, roi = tpl
