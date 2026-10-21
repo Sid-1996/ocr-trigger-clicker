@@ -413,7 +413,7 @@
   "img_compare.miss": "❌ No match (best {top_pct}%)",
   "img_compare.source_unknown": "not recorded",
   "img_compare.scale_diag": "↳ Template source {source} | Current window {current} | Scales tried: {scales}{hint}",
-  "img_compare.scale_hint": " (1.00 not tried; source size may be wrong)",
+  "img_compare.scale_hint": " (1.00 not tried; normal across resolutions, recapture only if same-size also fails)",
   "start.hard_problems_msg": "These rules have incomplete steps, please fix first:\n{items}",
   "bg_capture.black_admin_warn": "Background capture failed: try running as Administrator!",
   "bg_capture.black_admin_title": "Background capture failed",

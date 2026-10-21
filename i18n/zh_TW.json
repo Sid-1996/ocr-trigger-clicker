@@ -413,7 +413,7 @@
   "img_compare.miss": "❌ 未命中（最高 {top_pct}%）",
   "img_compare.source_unknown": "未記錄",
   "img_compare.scale_diag": "↳ 模板來源 {source}｜目前視窗 {current}｜嘗試比例 {scales}{hint}",
-  "img_compare.scale_hint": "（未含 1.00，來源尺寸可能不符）",
+  "img_compare.scale_hint": "（未含 1.00；跨解析度正常，同尺寸失敗才需重截）",
   "start.hard_problems_msg": "以下規則有未完成的步驟，請先修正：\n{items}",
   "bg_capture.black_admin_warn": "後台截圖失敗：請嘗試以系統管理員啟動！",
   "bg_capture.black_admin_title": "後台截圖失敗",

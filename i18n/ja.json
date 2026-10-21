@@ -419,7 +419,7 @@
   "img_compare.miss": "❌ マッチなし（最高 {top_pct}%）",
   "img_compare.source_unknown": "未記録",
   "img_compare.scale_diag": "↳ テンプレート元 {source}｜現在のウィンドウ {current}｜試行倍率 {scales}{hint}",
-  "img_compare.scale_hint": "（1.00 を含まない。元サイズが不一致の可能性）",
+  "img_compare.scale_hint": "（1.00 を含まない。解像度違いでは正常。同サイズで失敗時のみ再取得）",
   "start.hard_problems_msg": "以下のルールに不完全なステップがあります。先に修正してください:\n{items}",
   "bg_capture.black_admin_warn": "バックグラウンドキャプチャに失敗しました。管理者として実行してみてください！",
   "bg_capture.black_admin_title": "バックグラウンドキャプチャに失敗",
