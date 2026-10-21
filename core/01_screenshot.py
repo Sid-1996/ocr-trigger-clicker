@@ -49,6 +49,14 @@ _user32.IsIconic.argtypes = [wintypes.HWND]
 _user32.IsIconic.restype = wintypes.BOOL
 _user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
 _user32.ClientToScreen.restype = wintypes.BOOL
+_user32.ScreenToClient.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+_user32.ScreenToClient.restype = wintypes.BOOL
+_user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.ShowWindow.restype = wintypes.BOOL
+_user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+_user32.SetForegroundWindow.restype = wintypes.BOOL
+_user32.BringWindowToTop.argtypes = [wintypes.HWND]
+_user32.BringWindowToTop.restype = wintypes.BOOL
 _user32.GetDC.argtypes = [wintypes.HWND]
 _user32.GetDC.restype = wintypes.HDC
 _user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
@@ -122,20 +130,79 @@ def get_window_hwnd(title: str) -> int | None:
     return getattr(matches[0], "_hWnd", None)
 
 
-def get_window_client_offset(title: str) -> tuple[int, int] | None:
+def get_client_offset_hwnd(hwnd: int) -> tuple[int, int] | None:
     """Returns (offset_x, offset_y) from window top-left to client area top-left."""
     try:
-        hwnd = get_window_hwnd(title)
-        if hwnd is None:
-            return None
-
         pt = wintypes.POINT(0, 0)
-        _user32.ClientToScreen(hwnd, ctypes.byref(pt))
+        if not _user32.ClientToScreen(hwnd, ctypes.byref(pt)):
+            return None
         window_rect = wintypes.RECT()
-        _user32.GetWindowRect(hwnd, ctypes.byref(window_rect))
+        if not _user32.GetWindowRect(hwnd, ctypes.byref(window_rect)):
+            return None
         return (pt.x - window_rect.left, pt.y - window_rect.top)
     except Exception:
         return None
+
+
+def get_window_client_offset(title: str) -> tuple[int, int] | None:
+    hwnd = get_window_hwnd(title)
+    return get_client_offset_hwnd(hwnd) if hwnd else None
+
+
+def get_client_size_hwnd(hwnd: int) -> tuple[int, int] | None:
+    """Return the client-area size in physical pixels (excludes borders/title bar)."""
+    try:
+        rect = wintypes.RECT()
+        if not _user32.GetClientRect(hwnd, ctypes.byref(rect)):
+            return None
+        width, height = rect.right - rect.left, rect.bottom - rect.top
+        return (width, height) if width > 0 and height > 0 else None
+    except Exception:
+        return None
+
+
+def get_window_client_size(title: str) -> tuple[int, int] | None:
+    hwnd = get_window_hwnd(title)
+    return get_client_size_hwnd(hwnd) if hwnd else None
+
+
+def get_window_client_rect(title: str) -> tuple[int, int, int, int] | None:
+    """(offset_x, offset_y, client_w, client_h) in physical pixels."""
+    chrome = get_window_client_offset(title)
+    size = get_window_client_size(title)
+    if chrome is None or size is None:
+        return None
+    return (chrome[0], chrome[1], size[0], size[1])
+
+
+def get_client_rect_for_image(
+    title: str, img_w: int, img_h: int
+) -> tuple[int, int, int, int] | None:
+    """Client rect scaled to a captured image's pixel space."""
+    base = get_window_client_rect(title)
+    rect = get_window_rect(title)
+    if base is None or not rect or rect["w"] <= 0 or rect["h"] <= 0:
+        return None
+    scale_x = img_w / rect["w"]
+    scale_y = img_h / rect["h"]
+    return (
+        round(base[0] * scale_x),
+        round(base[1] * scale_y),
+        round(base[2] * scale_x),
+        round(base[3] * scale_y),
+    )
+
+
+def activate_window_hwnd(hwnd: int) -> bool:
+    """Bring an exact window handle to the foreground (no title lookup)."""
+    if not hwnd:
+        return False
+    try:
+        _user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        _user32.BringWindowToTop(hwnd)
+        return bool(_user32.SetForegroundWindow(hwnd))
+    except Exception:
+        return False
 
 
 def activate_window(title: str) -> bool:

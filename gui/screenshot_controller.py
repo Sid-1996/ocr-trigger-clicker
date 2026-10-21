@@ -6,6 +6,7 @@ activate_window = _main_loop_mod.activate_window
 activate_window_bg = getattr(_main_loop_mod, "activate_window_bg", lambda title: False)
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
+get_window_client_size = getattr(_main_loop_mod, "get_window_client_size", lambda title: None)
 capture = _main_loop_mod.capture
 
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
@@ -60,8 +61,8 @@ class ScreenshotController:
         if wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
             cx, cy = chrome
-            client_w = wr["w"] - cx
-            client_h = wr["h"] - cy
+            client = get_window_client_size(title)
+            client_w, client_h = client if client else (wr["w"] - 2 * cx, wr["h"] - 2 * cy)
             if client_w > 0 and client_h > 0:
                 result = {
                     "x": max(0.0, (result["x"] - cx) / client_w),
@@ -92,8 +93,10 @@ class ScreenshotController:
         chrome = get_window_client_offset(title) or (0, 0)
         client_px = px - chrome[0]
         client_py = py - chrome[1]
-        client_w = wr["w"] - chrome[0]
-        client_h = wr["h"] - chrome[1]
+        client = get_window_client_size(title)
+        client_w, client_h = (
+            client if client else (wr["w"] - 2 * chrome[0], wr["h"] - 2 * chrome[1])
+        )
         if client_w <= 0 or client_h <= 0:
             return _pixels_to_ratio_expanded(px, py, pw, ph, wr["w"], wr["h"])
         roi = _pixels_to_ratio_expanded(client_px, client_py, pw, ph, client_w, client_h)
@@ -140,8 +143,10 @@ class ScreenshotController:
                 chrome = get_window_client_offset(title) or (0, 0)
                 client_rx = rx - chrome[0]
                 client_ry = ry - chrome[1]
-                client_w = wr["w"] - chrome[0]
-                client_h = wr["h"] - chrome[1]
+                client = get_window_client_size(title)
+                client_w, client_h = (
+                    client if client else (wr["w"] - 2 * chrome[0], wr["h"] - 2 * chrome[1])
+                )
                 if client_w > 0 and client_h > 0:
                     roi_ratio = _pixels_to_ratio_expanded(
                         client_rx, client_ry, rw, rh, client_w, client_h

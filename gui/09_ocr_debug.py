@@ -594,10 +594,9 @@ class OcrDebugPanel(QWidget):
         px_w = min(img_w - px_x, r.w + pad * 2)
         px_h = min(img_h - px_y, r.h + pad * 2)
 
-        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
-        cx, cy = chrome
+        client_rect = _screenshot.get_client_rect_for_image(self._window_title, img_w, img_h)
         is_gdi = self._capture_source == T("ocr_debug.source_gdi")
-        if is_gdi or (cx <= 0 and cy <= 0):
+        if is_gdi or client_rect is None:
             roi = {
                 "x": px_x / img_w,
                 "y": px_y / img_h,
@@ -606,8 +605,7 @@ class OcrDebugPanel(QWidget):
                 "roi_coord": "client",
             }
         else:
-            client_w = img_w - cx
-            client_h = img_h - cy
+            cx, cy, client_w, client_h = client_rect
             roi = {
                 "x": max(0.0, (px_x - cx) / client_w) if client_w > 0 else 0.0,
                 "y": max(0.0, (px_y - cy) / client_h) if client_h > 0 else 0.0,
@@ -622,13 +620,11 @@ class OcrDebugPanel(QWidget):
         img_h, img_w = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
         if img_w < 1 or img_h < 1:
             return None
-        chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
-        cx, cy = chrome
+        client_rect = _screenshot.get_client_rect_for_image(self._window_title, img_w, img_h)
         is_gdi = self._capture_source == T("ocr_debug.source_gdi")
-        if is_gdi or (cx <= 0 and cy <= 0):
+        if is_gdi or client_rect is None:
             return [img_w, img_h]
-        cw, ch = img_w - cx, img_h - cy
-        return [cw, ch] if cw > 0 and ch > 0 else [img_w, img_h]
+        return [client_rect[2], client_rect[3]]
 
     def _on_add_rule(self):
         result = self._compute_roi()

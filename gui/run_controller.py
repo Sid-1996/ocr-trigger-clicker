@@ -27,6 +27,9 @@ find_text = _main_loop_mod.find_text
 crop_roi = _main_loop_mod.crop_roi
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
+get_client_rect_for_image = getattr(
+    _main_loop_mod, "get_client_rect_for_image", lambda title, img_w, img_h: None
+)
 
 _rule_engine = load_sibling("rule_engine", "core/04_rule_engine.py")
 _get_interaction_mode = _rule_engine.get_config_interaction_mode
@@ -178,9 +181,12 @@ class TestRunController:
                 return roi
             if x <= 1.0 and y <= 1.0 and w <= 1.0 and h <= 1.0:
                 if roi.get("roi_coord") == "client":
-                    cx, cy = _chrome_offset
-                    client_w = W - cx
-                    client_h = H - cy
+                    if _client_rect:
+                        cx, cy, client_w, client_h = _client_rect
+                    else:
+                        cx, cy = _chrome_offset
+                        client_w = W - 2 * cx
+                        client_h = H - 2 * cy
                     if client_w > 0 and client_h > 0:
                         px = {
                             "x": int(round(x * client_w)) + cx,
@@ -197,14 +203,20 @@ class TestRunController:
             W, H = img.shape[1], img.shape[0]
             if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
                 if roi_coord == "client":
-                    cx, cy = _chrome_offset
-                    client_w = W - cx
-                    client_h = H - cy
+                    if _client_rect:
+                        cx, cy, client_w, client_h = _client_rect
+                    else:
+                        cx, cy = _chrome_offset
+                        client_w = W - 2 * cx
+                        client_h = H - 2 * cy
                     if client_w > 0 and client_h > 0:
                         return int(round(px * client_w)) + cx, int(round(py * client_h)) + cy
                 return int(round(px * W)), int(round(py * H))
             return int(px), int(py)
 
+        _client_rect = get_client_rect_for_image(
+            win._window_combo.currentText(), img.shape[1], img.shape[0]
+        )
         _chrome_offset = get_window_client_offset(win._window_combo.currentText()) or (0, 0)
         markers = []
         log = []

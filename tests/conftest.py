@@ -25,6 +25,7 @@ def make_main_loop():
     ml._rules_path = ""
     ml._window_title = "測試視窗"
     ml._frame_chrome = None
+    ml._frame_client_size = None
     ml._frame_count = 0
     ml._phase_sums = dict.fromkeys(
         (

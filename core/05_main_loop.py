@@ -55,6 +55,12 @@ is_black_capture = _pw.is_black_capture
 is_admin = _pw.is_admin
 activate_window = _screenshot.activate_window
 get_window_client_offset = getattr(_screenshot, "get_window_client_offset", lambda title: None)
+get_window_client_size = getattr(_screenshot, "get_window_client_size", lambda title: None)
+get_window_client_rect = getattr(_screenshot, "get_window_client_rect", lambda title: None)
+get_client_rect_for_image = getattr(
+    _screenshot, "get_client_rect_for_image", lambda title, img_w, img_h: None
+)
+get_client_size_hwnd = getattr(_screenshot, "get_client_size_hwnd", lambda hwnd: None)
 is_window_foreground = _perf.is_window_foreground
 is_window_minimized = _perf.is_window_minimized
 OcrResult = _ocr.OcrResult
@@ -227,6 +233,7 @@ class MainLoop:
         self._rules_path = rules_path
         self._window_title = window_title
         self._frame_chrome: tuple[int, int] | None = None
+        self._frame_client_size: tuple[int, int] | None = None
         self._config_path = config_path
         self._interval = max(interval_ms / 1000.0, _MIN_INTERVAL_SEC)
         self._max_cps = max_cps
@@ -783,6 +790,21 @@ class MainLoop:
             self._frame_chrome = get_window_client_offset(self._window_title) or (0, 0)
         return self._frame_chrome
 
+    def _client_size(self, rect: dict) -> tuple[int, int]:
+        """客戶區尺寸：優先問作業系統，避免把左上 offset 當成雙邊框總寬。"""
+        size = getattr(self, "_frame_client_size", None)
+        hwnd = getattr(self, "_window_hwnd", None)
+        if size is None and hwnd:
+            size = get_client_size_hwnd(hwnd)
+            self._frame_client_size = size
+        if size is None and getattr(self, "_window_title", ""):
+            size = get_window_client_size(self._window_title)
+            self._frame_client_size = size
+        if size:
+            return size
+        cx, cy = self._chrome() or (0, 0)
+        return max(1, rect["w"] - 2 * cx), max(1, rect["h"] - 2 * cy)
+
     def _resolve_roi(self, roi: dict, rect: dict, chrome: tuple | None = None) -> dict:
         x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
         if x == 0 and y == 0 and w == 0 and h == 0:
@@ -796,8 +818,7 @@ class MainLoop:
                 if chrome is None:
                     chrome = self._chrome() or (0, 0)
                 cx, cy = chrome
-                client_w = W - cx
-                client_h = H - cy
+                client_w, client_h = self._client_size(rect)
                 if client_w > 0 and client_h > 0:
                     result = {
                         "x": int(round(x * client_w)) + cx,
@@ -824,8 +845,7 @@ class MainLoop:
             if roi_coord == "client":
                 chrome = self._chrome() or (0, 0)
                 cx, cy = chrome
-                client_w = W - cx
-                client_h = H - cy
+                client_w, client_h = self._client_size(rect)
                 if client_w > 0 and client_h > 0:
                     return int(round(px * client_w)) + cx, int(round(py * client_h)) + cy
             return int(round(px * W)), int(round(py * H))
@@ -877,11 +897,7 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.template_empty"))
 
         capture_size = get_effective_capture_size(params, self._rules_path)
-        chrome = self._chrome()
-        if chrome:
-            current_size = [ctx.rect["w"] - chrome[0], ctx.rect["h"] - chrome[1]]
-        else:
-            current_size = [ctx.rect["w"], ctx.rect["h"]]
+        current_size = list(self._client_size(ctx.rect))
         roi = self._resolve_roi(params.get("roi", {}), ctx.rect)
         roi_is_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         if roi_is_empty and ctx.img.shape[1] > 800:
@@ -1551,11 +1567,7 @@ class MainLoop:
             if not template_data.strip() and not template_path.strip():
                 return False
             capture_size = get_effective_capture_size(verify, self._rules_path)
-            chrome = self._chrome()
-            if chrome:
-                current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
-            else:
-                current_size = [rect["w"], rect["h"]]
+            current_size = list(self._client_size(rect))
             roi = self._resolve_roi(verify.get("roi", {}), rect)
             threshold = verify.get("threshold", 0.8)
             match_color = verify.get("match_color", False)
@@ -2174,6 +2186,7 @@ class MainLoop:
         self._sum_frame_start()
         self._frame_ocr_cache.clear()
         self._frame_chrome = None  # 每幀重算一次客戶區 offset（見 _chrome）
+        self._frame_client_size = None
         self._frame_count += 1
         self._frame_ocr_profile = {
             "calls": 0,
@@ -2274,10 +2287,7 @@ class MainLoop:
             # 只有步驟自帶 capture_size 時才逐規則覆寫；worker 不再各自讀檔/呼叫 Win32。
             task_capture_size = get_effective_capture_size({}, self._rules_path)
             chrome = self._chrome()
-            if chrome:
-                current_size = [rect["w"] - chrome[0], rect["h"] - chrome[1]]
-            else:
-                current_size = [rect["w"], rect["h"]]
+            current_size = list(self._client_size(rect))
             for rid in group.rule_ids:
                 r = self._rule_map.get(rid)
                 if r is None or not r.enabled or not r.steps:
@@ -2680,6 +2690,8 @@ class MainLoop:
             self._window_hwnd = get_window_hwnd_orig(title)
             self._dpi_scale = get_dpi_scaling_factor(self._window_hwnd)
             self._tracking_hwnd = self._window_hwnd
+            self._frame_chrome = None
+            self._frame_client_size = None
             return True
 
     def set_tool_hwnd(self, hwnd: int) -> None:

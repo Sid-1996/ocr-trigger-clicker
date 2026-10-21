@@ -188,7 +188,8 @@ def capture_region(parent_window=None, task_path="", window_title="") -> Optiona
         rect = _screenshot_mod.get_window_rect(window_title)
         if rect:
             chrome = _screenshot_mod.get_window_client_offset(window_title) or (0, 0)
-            cw, ch = rect["w"] - chrome[0], rect["h"] - chrome[1]
+            client = _screenshot_mod.get_window_client_size(window_title)
+            cw, ch = client if client else (rect["w"] - 2 * chrome[0], rect["h"] - 2 * chrome[1])
             if cw > 0 and ch > 0:
                 result["capture_size"] = [cw, ch]
     selector.close()

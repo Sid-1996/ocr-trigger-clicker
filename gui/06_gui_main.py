@@ -1333,10 +1333,14 @@ class _MatchImageStepForm(QWidget):
             color_tolerance,
         )
         wr = get_window_rect(title)
-        chrome = get_window_client_offset(title) or (0, 0)
-        cx, cy = chrome
-        client_w = wr["w"] - cx if wr else w
-        client_h = wr["h"] - cy if wr else h
+        client_rect = get_client_rect_for_image(title, w, h) if title else None
+        if client_rect:
+            cx, cy, client_w, client_h = client_rect
+        else:
+            chrome = get_window_client_offset(title) or (0, 0)
+            cx, cy = chrome
+            client_w = (wr["w"] - 2 * cx) if wr else w
+            client_h = (wr["h"] - 2 * cy) if wr else h
         if roi and any(isinstance(v, float) for v in roi.values()):
             if roi.get("roi_coord") == "client":
                 roi = {
@@ -3952,6 +3956,10 @@ activate_window = _main_loop_mod.activate_window
 activate_window_bg = getattr(_main_loop_mod, "activate_window_bg", lambda title: False)
 get_window_rect = _main_loop_mod.get_window_rect
 get_window_client_offset = getattr(_main_loop_mod, "get_window_client_offset", lambda title: None)
+get_window_client_size = getattr(_main_loop_mod, "get_window_client_size", lambda title: None)
+get_client_rect_for_image = getattr(
+    _main_loop_mod, "get_client_rect_for_image", lambda title, img_w, img_h: None
+)
 recognize = _main_loop_mod.recognize
 find_text = _main_loop_mod.find_text
 crop_roi = _main_loop_mod.crop_roi
@@ -6711,8 +6719,8 @@ class MainWindow(QMainWindow):
         if wr and wr["w"] > 0 and wr["h"] > 0:
             chrome = get_window_client_offset(title) or (0, 0)
             cx, cy = chrome
-            client_w = wr["w"] - cx
-            client_h = wr["h"] - cy
+            client = get_window_client_size(title)
+            client_w, client_h = client if client else (wr["w"] - 2 * cx, wr["h"] - 2 * cy)
             if client_w > 0 and client_h > 0:
                 result = (
                     max(0.0, (result[0] - cx) / client_w),

@@ -6,8 +6,13 @@
 
 from __future__ import annotations
 
+import atexit
 import json
+import os
+import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 from PyQt6.QtCore import QRectF, Qt, QTimer
@@ -77,11 +82,96 @@ TARGETS = (
 CARD_WIDTH = 330
 CARD_HEIGHT = 132
 
+STATUS_PATH = Path(tempfile.gettempdir()) / "otc_calibration_status.json"
+STATUS_SCHEMA = 1
+CLICK_TOLERANCE_PX = 3
+
 
 def _card_rect(width: int, height: int, target: dict) -> QRectF:
     cx = width * target["x"]
     cy = height * target["y"]
     return QRectF(cx - CARD_WIDTH / 2, cy - CARD_HEIGHT / 2, CARD_WIDTH, CARD_HEIGHT)
+
+
+def _card_hit(x: float, y: float, width: int, height: int) -> dict | None:
+    """Return the hit record for a client-area click, or None for a miss."""
+    for target in TARGETS:
+        rect = _card_rect(width, height, target)
+        if rect.left() <= x <= rect.right() and rect.top() <= y <= rect.bottom():
+            return {
+                "id": target["id"],
+                "x": int(round(x)),
+                "y": int(round(y)),
+                "dx": int(round(x - rect.center().x())),
+                "dy": int(round(y - rect.center().y())),
+            }
+    return None
+
+
+def _status_payload(
+    *,
+    session: str,
+    seq: int,
+    frame_size: tuple[int, int],
+    client_size: tuple[int, int],
+    dpi: float,
+    hits: list[dict],
+    misses: int,
+    last_click: dict | None,
+    closed: bool = False,
+    hwnd: int = 0,
+) -> dict:
+    return {
+        "schema": STATUS_SCHEMA,
+        "session": session,
+        "pid": os.getpid(),
+        "hwnd": int(hwnd),
+        "seq": seq,
+        "timestamp": round(time.time(), 3),
+        "window": {
+            "frame_w": int(frame_size[0]),
+            "frame_h": int(frame_size[1]),
+            "client_w": int(client_size[0]),
+            "client_h": int(client_size[1]),
+        },
+        "dpi": round(float(dpi), 3),
+        "hits": list(hits),
+        "hit_ids": [hit["id"] for hit in hits],
+        "misses": int(misses),
+        "last_click": last_click,
+        "closed": bool(closed),
+    }
+
+
+def _write_status_file(path: Path, payload: dict) -> None:
+    """直接覆寫，不用 os.replace：Windows 上讀者開著檔案時 replace 會失敗而靜默丟失狀態。"""
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    for attempt in range(20):
+        try:
+            path.write_text(data, encoding="utf-8")
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.005)
+
+
+def _arg_value(name: str, default: str | None = None) -> str | None:
+    try:
+        return sys.argv[sys.argv.index(name) + 1]
+    except (ValueError, IndexError):
+        return default
+
+
+def _parse_size(text: str | None) -> tuple[int, int]:
+    if not text:
+        return SIZE_PRESETS["1600 × 900"]
+    normalized = text.lower().replace("×", "x").replace(" ", "")
+    for label, size in SIZE_PRESETS.items():
+        if label.lower().replace("×", "x").replace(" ", "") == normalized:
+            return size
+    width, _, height = normalized.partition("x")
+    return int(width), int(height)
 
 
 def build_task() -> dict:
@@ -170,20 +260,49 @@ def install_task() -> tuple[Path, bool]:
 
 
 class CalibrationSurface(QWidget):
-    def __init__(self):
+    def __init__(self, session: str = "", status_path: Path = STATUS_PATH):
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumSize(900, 600)
         self.setMouseTracking(True)
+        self._session = session
+        self._status_path = status_path
+        self._seq = 0
         self._hits: set[str] = set()
+        self._hit_records: dict[str, dict] = {}
         self._misses = 0
-        self._last_click: tuple[int, int, str, int, int] | None = None
+        self._last_click: dict | None = None
+        self._write_status()
 
     def reset(self):
         self._hits.clear()
+        self._hit_records.clear()
         self._misses = 0
         self._last_click = None
+        self._write_status()
         self.update()
+
+    def _write_status(self, closed: bool = False):
+        if not self._status_path:
+            return
+        self._seq += 1
+        frame = self.frameGeometry()
+        payload = _status_payload(
+            session=self._session,
+            seq=self._seq,
+            frame_size=(frame.width(), frame.height()),
+            client_size=(self.width(), self.height()),
+            dpi=self.devicePixelRatioF(),
+            hits=list(self._hit_records.values()),
+            misses=self._misses,
+            last_click=self._last_click,
+            closed=closed,
+            hwnd=int(self.winId()),
+        )
+        try:
+            _write_status_file(self._status_path, payload)
+        except OSError:
+            pass
 
     def apply_preset(self, size: tuple[int, int], borderless: bool):
         flags = Qt.WindowType.Window
@@ -195,12 +314,7 @@ class CalibrationSurface(QWidget):
         QTimer.singleShot(100, lambda: self._resize_outer(size))
 
     def _resize_outer(self, size: tuple[int, int]):
-        outer = self.frameGeometry()
-        inner = self.geometry()
-        self.resize(
-            max(1, size[0] - (outer.width() - inner.width())),
-            max(1, size[1] - (outer.height() - inner.height())),
-        )
+        self.resize(*size)  # Qt 頂層視窗的 resize 即客戶區尺寸，與比例座標基準一致
         screen = QApplication.primaryScreen()
         if screen:
             bounds = screen.geometry()
@@ -208,6 +322,7 @@ class CalibrationSurface(QWidget):
                 bounds.x() + (bounds.width() - size[0]) // 2,
                 bounds.y() + (bounds.height() - size[1]) // 2,
             )
+        QTimer.singleShot(120, self._write_status)
 
     def _targets(self):
         return [(target, _card_rect(self.width(), self.height(), target)) for target in TARGETS]
@@ -215,18 +330,27 @@ class CalibrationSurface(QWidget):
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton:
             return
-        x, y = round(event.position().x()), round(event.position().y())
-        for target, rect in self._targets():
-            if rect.contains(event.position()):
-                self._hits.add(target["id"])
-                dx = round(x - rect.center().x())
-                dy = round(y - rect.center().y())
-                self._last_click = (x, y, target["id"], dx, dy)
-                self.update()
-                return
-        self._misses += 1
-        self._last_click = (x, y, "MISS", 0, 0)
+        x, y = event.position().x(), event.position().y()
+        record = _card_hit(x, y, self.width(), self.height())
+        if record is not None:
+            self._hits.add(record["id"])
+            self._hit_records[record["id"]] = record
+            self._last_click = record
+        else:
+            self._misses += 1
+            self._last_click = {
+                "id": "MISS",
+                "x": int(round(x)),
+                "y": int(round(y)),
+                "dx": 0,
+                "dy": 0,
+            }
+        self._write_status()
         self.update()
+
+    def closeEvent(self, event):
+        self._write_status(closed=True)
+        super().closeEvent(event)
 
     def paintEvent(self, _event):
         painter = QPainter(self)
@@ -268,12 +392,16 @@ class CalibrationSurface(QWidget):
             )
 
         if self._last_click:
-            x, y, target_id, dx, dy = self._last_click
+            click = self._last_click
+            x, y = click["x"], click["y"]
             painter.setPen(QPen(QColor("#ff4d6d"), 5))
             painter.drawEllipse(x - 10, y - 10, 20, 20)
             painter.setPen(QColor("#ffffff"))
             painter.setFont(QFont("Consolas", 13, QFont.Weight.Bold))
-            detail = f"最近點擊 {target_id} @ ({x}, {y})  偏差 Δx={dx:+d}, Δy={dy:+d}"
+            detail = (
+                f"最近點擊 {click['id']} @ ({x}, {y})  "
+                f"偏差 Δx={click['dx']:+d}, Δy={click['dy']:+d}"
+            )
             painter.drawText(QRectF(20, self.height() - 42, self.width() - 40, 28), detail)
 
 
@@ -361,6 +489,24 @@ def _self_check():
         center = _card_rect(1600, 900, target).center()
         assert abs(center.x() / 1600 - target["x"]) < 0.001
         assert abs(center.y() / 900 - target["y"]) < 0.001
+    assert _card_hit(800, 450, 1600, 900)["id"] == "CENTER"
+    assert _card_hit(320, 180, 1600, 900)["id"] == "A"
+    assert _card_hit(10, 10, 1600, 900) is None
+    assert _parse_size("1600x900") == (1600, 900)
+    assert _parse_size("1920×1080") == (1920, 1080)
+    payload = _status_payload(
+        session="self-check",
+        seq=1,
+        frame_size=(1616, 908),
+        client_size=(1600, 900),
+        dpi=1.0,
+        hits=[{"id": "A", "dx": 1, "dy": -2}],
+        misses=0,
+        last_click=None,
+    )
+    assert payload["schema"] == STATUS_SCHEMA
+    assert payload["window"]["client_w"] == 1600
+    assert payload["hit_ids"] == ["A"]
     _check_production_coordinate_math()
     print("coordinate calibration self-check passed")
 
@@ -371,11 +517,13 @@ def _check_production_coordinate_math():
 
     main_loop = load_sibling("main_loop", "core/05_main_loop.py")
     loop = main_loop.MainLoop.__new__(main_loop.MainLoop)
+    loop._window_hwnd = None
+    loop._frame_client_size = None
     for width, height in ((1600, 900), (1920, 1080)):
         for chrome in ((8, 31), (0, 0)):
             loop._frame_chrome = chrome
             rect = {"x": 120, "y": 75, "w": width, "h": height}
-            client_w, client_h = width - chrome[0], height - chrome[1]
+            client_w, client_h = max(1, width - 2 * chrome[0]), max(1, height - 2 * chrome[1])
             for target in TARGETS:
                 px, py = target["x"], target["y"]
                 expected_point = (
@@ -399,6 +547,41 @@ def _check_production_coordinate_math():
                 }
 
 
+def _autostart_window() -> int:
+    """啟動一個自己的校正視窗，讓 --diagnose 不需人工先開窗。"""
+    session = f"diagnose-{time.time_ns()}"
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--session",
+            session,
+            "--size",
+            "1600x900",
+        ],
+        cwd=str(ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    def _cleanup():
+        _stop_process_tree(proc)
+        _wait_window_gone()
+
+    atexit.register(_cleanup)
+    status = _wait_for_status(session, timeout=20)
+    if not status:
+        _cleanup()
+        raise RuntimeError("自動啟動校正視窗失敗（狀態檔未更新）")
+    time.sleep(1.2)
+    status = _read_status() or status
+    hwnd = int(status.get("hwnd") or 0)
+    if not hwnd:
+        _cleanup()
+        raise RuntimeError("自動啟動校正視窗失敗（沒有視窗代碼）")
+    return hwnd
+
+
 def _diagnose():
     """Run captures, OCR, production coordinate conversion, and safe input routing.
 
@@ -414,11 +597,12 @@ def _diagnose():
 
     hwnd = screenshot.get_window_hwnd(WINDOW_TITLE)
     if not hwnd:
-        raise RuntimeError(f"找不到測試視窗：{WINDOW_TITLE}。請先啟動校正視窗。")
+        print("找不到測試視窗，自動啟動一個…")
+        hwnd = _autostart_window()
     rect = screenshot.get_window_rect_hwnd(hwnd)
     if not rect:
         raise RuntimeError("無法取得測試視窗尺寸；請確認視窗沒有最小化。")
-    chrome = screenshot.get_window_client_offset(WINDOW_TITLE) or (0, 0)
+    chrome = screenshot.get_client_offset_hwnd(hwnd) or (0, 0)
     foreground = main_loop.is_window_foreground(hwnd)
     print("座標校正自動診斷")
     print(f"目標：{WINDOW_TITLE}，外框 {rect['w']}×{rect['h']}，客戶區偏移 {chrome}")
@@ -428,6 +612,7 @@ def _diagnose():
     ml = main_loop.MainLoop.__new__(main_loop.MainLoop)
     ml._window_title = WINDOW_TITLE
     ml._frame_chrome = chrome
+    ml._frame_client_size = None
     ml._window_hwnd = hwnd
     ml._rule_config_ctrl = type(
         "_ModeConfig",
@@ -512,20 +697,33 @@ def _diagnose():
             main_loop._bg_input.click = lambda _hwnd, x, y, button="left", hold_ms=0: (
                 actual.append(("client", x, y)) or True
             )
-            for target in TARGETS[1:]:
-                cx, cy = ml._resolve_point(target["x"], target["y"], rect, "client")
-                screen_x, screen_y = ml._to_screen_coords(rect, cx, cy)
+            for target in TARGETS:
+                if target["kind"] == "cursor":
+                    if mode != "frida":
+                        print("  點擊 CENTER：跳過（前景／混合由 --e2e 驗證實際游標位置）")
+                        continue
+                    center = ml._client_center_offset(rect)
+                    if center is None:
+                        print("  點擊 CENTER：異常，無法取得客戶區中心")
+                        failures.append(f"{mode}: CENTER 無法取得客戶區中心")
+                        continue
+                    cx, cy = center
+                    screen_x, screen_y = ml._to_screen_coords(rect, cx, cy)
+                    expected = ("client", cx - chrome[0], cy - chrome[1])
+                else:
+                    cx, cy = ml._resolve_point(target["x"], target["y"], rect, "client")
+                    screen_x, screen_y = ml._to_screen_coords(rect, cx, cy)
+                    if mode == "frida":
+                        client_w, client_h = ml._client_size(rect)
+                        expected = (
+                            "client",
+                            round(target["x"] * client_w),
+                            round(target["y"] * client_h),
+                        )
+                    else:
+                        expected = ("screen", screen_x, screen_y)
                 ok = ml._send_click(screen_x, screen_y, "left")
                 route, sent_x, sent_y = actual[-1]
-                expected = (
-                    (
-                        "client",
-                        round(target["x"] * (rect["w"] - chrome[0])),
-                        round(target["y"] * (rect["h"] - chrome[1])),
-                    )
-                    if mode == "frida"
-                    else ("screen", screen_x, screen_y)
-                )
                 status = "OK" if ok and (route, sent_x, sent_y) == expected else "異常"
                 print(
                     f"  點擊 {target['id']}：{status}，送出 ({sent_x},{sent_y})"
@@ -545,6 +743,269 @@ def _diagnose():
     print("\n結果：通過；三種模式的截圖、OCR 與座標路由均符合預期。")
 
 
+def _read_status(path: Path = STATUS_PATH) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _wait_for_status(session: str, timeout: float = 15.0) -> dict | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = _read_status()
+        if status and status.get("session") == session:
+            return status
+        time.sleep(0.05)
+    return None
+
+
+def _wait_for_window(timeout: float = 20.0) -> int | None:
+    from _loader import load_sibling
+
+    screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        hwnd = screenshot.get_window_hwnd(WINDOW_TITLE)
+        if hwnd:
+            return hwnd
+        time.sleep(0.1)
+    return None
+
+
+def _wait_window_gone(timeout: float = 5.0) -> bool:
+    from _loader import load_sibling
+
+    screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not screenshot.get_window_hwnd(WINDOW_TITLE):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _wait_for_hit(
+    session: str,
+    target_id: str,
+    after_seq: int,
+    timeout: float = 5.0,
+) -> dict | None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = _read_status()
+        if status and status.get("session") == session and status.get("seq", 0) > after_seq:
+            last = status.get("last_click") or {}
+            if last.get("id") == "MISS":
+                return None
+            if last.get("id") == target_id:
+                for hit in status.get("hits", []):
+                    if hit.get("id") == target_id:
+                        return hit
+                return last
+        time.sleep(0.03)
+    return None
+
+
+class _ModeConfig:
+    def __init__(self, mode: str):
+        self.mode = mode
+
+    def get_setting(self, _win, key, default=None):
+        return self.mode if key == "interaction_mode" else default
+
+
+class _FakePerf:
+    def check_rate_limit(self) -> bool:
+        return True
+
+    def record_click(self) -> None:
+        pass
+
+
+def _set_cursor(x: int, y: int) -> None:
+    import ctypes
+
+    ctypes.windll.user32.SetCursorPos(int(x), int(y))
+
+
+def _prepare_loop(mode: str, hwnd: int, chrome: tuple[int, int], main_loop):
+    ml = main_loop.MainLoop.__new__(main_loop.MainLoop)
+    ml._window_title = WINDOW_TITLE
+    ml._window_hwnd = hwnd
+    ml._frame_chrome = chrome
+    ml._frame_client_size = None
+    ml._tool_hwnd = None
+    ml._rule_config_ctrl = _ModeConfig(mode)
+    ml._perf = _FakePerf()
+    ml._last_frida_err_ts = 0.0
+    ml._FRIDA_ERR_THROTTLE_SEC = 30.0
+    ml.on_bg_fail = None
+    ml._log = lambda *args, **kwargs: None
+    return ml
+
+
+def _stop_process_tree(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            capture_output=True,
+            timeout=10,
+        )
+    except Exception:
+        proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _e2e_run(mode: str, size_label: str, borderless: bool) -> dict:
+    from _loader import load_sibling
+
+    screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+    main_loop = load_sibling("main_loop", "core/05_main_loop.py")
+    bg_input = load_sibling("bg_input", "core/16_bg_input.py")
+
+    label = f"{mode}-{size_label}-{'borderless' if borderless else 'framed'}"
+    session = f"{label}-{time.time_ns()}"
+    args = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--session",
+        session,
+        "--size",
+        size_label,
+    ]
+    if borderless:
+        args.append("--borderless")
+    proc = subprocess.Popen(
+        args,
+        cwd=str(Path(__file__).resolve().parents[1]),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    started = time.monotonic()
+    try:
+        status = _wait_for_status(session, timeout=15)
+        if status is None:
+            return {"label": label, "ok": False, "error": "校正狀態檔未更新"}
+        time.sleep(1.2)  # 等 apply_preset 的 resize/move 與狀態寫入穩定
+        status = _read_status() or status
+        if status.get("session") != session:
+            return {"label": label, "ok": False, "error": "校正狀態檔被其他視窗覆寫"}
+        hwnd = int(status.get("hwnd") or 0) or _wait_for_window()
+        if not hwnd:
+            return {"label": label, "ok": False, "error": "校正視窗未出現"}
+        rect = screenshot.get_window_rect_hwnd(hwnd)
+        if not rect:
+            return {"label": label, "ok": False, "error": "無法取得校正視窗尺寸"}
+        chrome = screenshot.get_client_offset_hwnd(hwnd) or (0, 0)
+        ml = _prepare_loop(mode, hwnd, chrome, main_loop)
+        task = build_task()
+        max_delta = 0
+        for rule_data, target in zip(task["rules"], TARGETS, strict=True):
+            before = _read_status() or {}
+            if before.get("session") != session:
+                before = _wait_for_status(session) or {}
+            seq = before.get("seq", 0)
+            if mode != "frida":
+                screenshot.activate_window_hwnd(hwnd)
+                time.sleep(0.35)
+                if not main_loop.is_window_foreground(hwnd):
+                    return {"label": label, "ok": False, "error": "無法把校正視窗帶到前景"}
+            if target["kind"] == "cursor" and mode != "frida":
+                cx, cy = ml._resolve_point(target["x"], target["y"], rect, "client")
+                sx, sy = ml._to_screen_coords(rect, cx, cy)
+                _set_cursor(sx, sy)
+                time.sleep(0.05)
+            click_params = rule_data["steps"][1]["params"]
+            if mode != "frida" and target["kind"] != "cursor":
+                cx, cy = ml._resolve_point(target["x"], target["y"], rect, "client")
+                sx, sy = ml._to_screen_coords(rect, cx, cy)
+                if not (
+                    rect["x"] <= sx < rect["x"] + rect["w"]
+                    and rect["y"] <= sy < rect["y"] + rect["h"]
+                ):
+                    return {"label": label, "ok": False, "error": f"{target['id']} 點擊點超出視窗"}
+            ctx = main_loop.StepContext(img=None, rect=rect, step_idx=0)
+            rule = main_loop.Rule(
+                id=rule_data["id"], name=rule_data["name"], enabled=True, steps=[]
+            )
+            ml._handle_click(click_params, ctx, rule)
+            hit = _wait_for_hit(session, target["id"], seq, timeout=5)
+            if hit is None:
+                after = _read_status() or {}
+                detail = after.get("last_click")
+                error = bg_input.last_error() if mode == "frida" else ""
+                return {
+                    "label": label,
+                    "ok": False,
+                    "error": (
+                        f"{target['id']} 未命中（seq={after.get('seq')}, "
+                        f"misses={after.get('misses')}, last={detail}）"
+                        + (f" frida={error}" if error else "")
+                    ),
+                }
+            dx, dy = hit.get("dx", 0), hit.get("dy", 0)
+            max_delta = max(max_delta, abs(dx), abs(dy))
+            if abs(dx) > CLICK_TOLERANCE_PX or abs(dy) > CLICK_TOLERANCE_PX:
+                return {
+                    "label": label,
+                    "ok": False,
+                    "error": f"{target['id']} 偏差 Δx={dx:+d}, Δy={dy:+d} 超過 {CLICK_TOLERANCE_PX}px",
+                }
+        return {
+            "label": label,
+            "ok": True,
+            "hits": len(TARGETS),
+            "max_delta": max_delta,
+            "elapsed": time.monotonic() - started,
+        }
+    finally:
+        if mode == "frida":
+            try:
+                bg_input.detach()
+            except Exception:
+                pass
+        _stop_process_tree(proc)
+        _wait_window_gone()
+
+
+def _e2e(full: bool = False) -> None:
+    """One-click live test: open window, click all targets, assert the status file."""
+    from _loader import load_sibling
+
+    screenshot = load_sibling("screenshot", "core/01_screenshot.py")
+    if screenshot.get_window_hwnd(WINDOW_TITLE):
+        raise SystemExit(f"請先關閉既有「{WINDOW_TITLE}」視窗，避免誤點到舊視窗。")
+
+    runs = [("1600x900", False), ("1600x900", True)]
+    if full:
+        runs.append(("1920x1080", True))
+    print("座標校正真點擊驗證")
+    print("執行期間會移動滑鼠並短暫搶焦點；只點擊校正視窗內的目標。")
+    results = []
+    for size_label, borderless in runs:
+        for mode in ("frida", "pynput", "hybrid"):
+            result = _e2e_run(mode, size_label, borderless)
+            results.append(result)
+            if result["ok"]:
+                print(
+                    f"[PASS] {result['label']}  "
+                    f"{result['hits']}/{len(TARGETS)}  最大偏差 {result['max_delta']}px  "
+                    f"{result['elapsed']:.1f}s"
+                )
+            else:
+                print(f"[FAIL] {result['label']}  {result['error']}")
+    failed = [result for result in results if not result["ok"]]
+    print(f"\n結果：{len(results) - len(failed)}/{len(results)} 通過")
+    if failed:
+        raise SystemExit(1)
+
+
 def main():
     if "--self-check" in sys.argv:
         _self_check()
@@ -552,13 +1013,20 @@ def main():
     if "--diagnose" in sys.argv:
         _diagnose()
         return
+    if "--e2e" in sys.argv:
+        _e2e(full="--full" in sys.argv)
+        return
+    specified_session = _arg_value("--session", "") or ""
+    specified_size = _parse_size(_arg_value("--size"))
+    borderless = "--borderless" in sys.argv
     app = QApplication(sys.argv)
     app.setApplicationName("OCR 座標校正")
-    surface = CalibrationSurface()
+    surface = CalibrationSurface(session=specified_session)
     panel = CalibrationPanel(surface)
     panel.show()
-    surface.apply_preset(SIZE_PRESETS["1600 × 900"], False)
+    surface.apply_preset(specified_size, borderless)
     QTimer.singleShot(250, surface.raise_)
+    print(f"校正狀態檔：{STATUS_PATH}")
     sys.exit(app.exec())
 
 
