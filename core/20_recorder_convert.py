@@ -97,15 +97,30 @@ def _format_ts(dir_name: str) -> str:
     return name
 
 
-def _find_anchor(img_bgr, cx: int, cy: int):
+def _size_pair(value) -> tuple[int, int] | None:
+    """JSON 的 [w, h] → 正整數 tuple；格式不對或非正數回 None。"""
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    try:
+        w, h = int(value[0]), int(value[1])
+    except (TypeError, ValueError):
+        return None
+    return (w, h) if w > 0 and h > 0 else None
+
+
+def _find_anchor(img_bgr, cx: int, cy: int, base_w: int | None = None, base_h: int | None = None):
     """點擊座標是否落在畫面文字區塊內。
 
     回傳 (keyword, roi_ratio) 或 None。roi_ratio 為外擴後文字區塊的視窗比例座標。
     多個區塊重疊時取面積最小者（最貼近點擊位置的單詞）。
+    base_w/base_h 是座標比例的分母（錄製當下的視窗尺寸）；截圖被螢幕邊界裁切時
+    影像尺寸會小於視窗尺寸，不能拿影像尺寸當分母。
     """
     h, w = img_bgr.shape[:2]
     if w <= 0 or h <= 0:
         return None
+    base_w = base_w or w
+    base_h = base_h or h
     x0 = max(0, cx - _ANCHOR_RADIUS)
     y0 = max(0, cy - _ANCHOR_RADIUS)
     x1 = min(w, cx + _ANCHOR_RADIUS)
@@ -153,24 +168,26 @@ def _find_anchor(img_bgr, cx: int, cy: int):
     rx1 = min(w, best.x + best.w + padx)
     ry1 = min(h, best.y + best.h + pady)
     roi = {
-        "x": round(rx0 / w, 4),
-        "y": round(ry0 / h, 4),
-        "w": round((rx1 - rx0) / w, 4),
-        "h": round((ry1 - ry0) / h, 4),
+        "x": round(rx0 / base_w, 4),
+        "y": round(ry0 / base_h, 4),
+        "w": round((rx1 - rx0) / base_w, 4),
+        "h": round((ry1 - ry0) / base_h, 4),
     }
     return best.text.strip(), roi
 
 
-def _make_template(img_bgr, cx: int, cy: int):
+def _make_template(img_bgr, cx: int, cy: int, base_w: int | None = None, base_h: int | None = None):
     """以點擊座標為中心向外擴張，裁出有紋理的特徵方塊作為模板。
 
     由小到大逐級外擴，選取第一個「完整位於視窗內且灰階 std 達標」的最小方塊；
     被視窗邊緣裁剪或全為純色（無特徵）時回傳 None → 呼叫端退回計時規則。
-    回傳 (base64 模板, 搜尋 ROI 視窗比例座標)。
+    回傳 (base64 模板, 搜尋 ROI 視窗比例座標)。base_w/base_h 同 _find_anchor。
     """
     h, w = img_bgr.shape[:2]
     if w <= 0 or h <= 0:
         return None
+    base_w = base_w or w
+    base_h = base_h or h
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     for r in range(_TMPL_MIN_RADIUS, _TMPL_MAX_RADIUS + 1, _TMPL_STEP):
         if cx - r < 0 or cy - r < 0 or cx + r > w or cy + r > h:
@@ -185,10 +202,10 @@ def _make_template(img_bgr, cx: int, cy: int):
         sx0, sy0 = max(0, x0 - padx), max(0, y0 - pady)
         sx1, sy1 = min(w, x1 + padx), min(h, y1 + pady)
         roi = {
-            "x": round(sx0 / w, 4),
-            "y": round(sy0 / h, 4),
-            "w": round((sx1 - sx0) / w, 4),
-            "h": round((sy1 - sy0) / h, 4),
+            "x": round(sx0 / base_w, 4),
+            "y": round(sy0 / base_h, 4),
+            "w": round((sx1 - sx0) / base_w, 4),
+            "h": round((sy1 - sy0) / base_h, 4),
         }
         return b64, roi
     return None
@@ -231,7 +248,12 @@ def _build_anchored_rule(
 
 
 def _build_template_rule(
-    idx: int, b64: str, roi: dict, button: str, defaults: dict | None = None
+    idx: int,
+    b64: str,
+    roi: dict,
+    button: str,
+    defaults: dict | None = None,
+    capture_size: tuple[int, int] | None = None,
 ) -> Rule:
     mt_params = {
         "template_data": b64,
@@ -239,6 +261,8 @@ def _build_template_rule(
         "threshold": _resolved(defaults, "template_threshold", _TMPL_THRESHOLD),
         "on_fail": "stop",
     }
+    if capture_size and capture_size[0] > 0 and capture_size[1] > 0:
+        mt_params["capture_size"] = [int(capture_size[0]), int(capture_size[1])]
     # 顏色容差僅在設定窗有提供時寫入（0 = 不啟用顏色過濾）
     ct = _resolved(defaults, "color_tolerance", None)
     if ct is not None:
@@ -326,24 +350,33 @@ def _session_to_rules(session_dir: Path, defaults: dict | None = None) -> tuple[
                 if fp.exists():
                     img = cv2.imread(str(fp))
                     frame_cache[frame_name] = img
-        h, w = img.shape[:2] if img is not None and img.size > 0 else (0, 0)
-        if w > 0 and h > 0:
-            known_w, known_h = w, h
+        img_h, img_w = img.shape[:2] if img is not None and img.size > 0 else (0, 0)
+        # 比例座標的分母是「錄製當下視窗尺寸」，不是截圖尺寸；視窗跨螢幕時
+        # mss 只會截到單一螢幕，影像會比視窗小。舊 session 沒有 window_size
+        # 時才退回影像尺寸（與舊行為相同）。
+        win_w, win_h = _size_pair(ev.get("window_size")) or (img_w, img_h)
+        client_size = _size_pair(ev.get("client_size"))
+        if win_w > 0 and win_h > 0:
+            known_w, known_h = win_w, win_h
 
         anchored = False
-        if w > 0 and h > 0:
-            anchor = _find_anchor(img, wx, wy)
+        if img_w > 0 and img_h > 0:
+            anchor = _find_anchor(img, wx, wy, win_w, win_h)
             if anchor is not None:
                 keyword, roi = anchor
                 rules.append(_build_anchored_rule(len(rules), keyword, roi, button, defaults))
                 stats["anchored"] += 1
                 anchored = True
 
-        if not anchored and w > 0 and h > 0:
-            tpl = _make_template(img, wx, wy)
+        if not anchored and img_w > 0 and img_h > 0:
+            tpl = _make_template(img, wx, wy, win_w, win_h)
             if tpl is not None:
                 b64, roi = tpl
-                rules.append(_build_template_rule(len(rules), b64, roi, button, defaults))
+                rules.append(
+                    _build_template_rule(
+                        len(rules), b64, roi, button, defaults, capture_size=client_size
+                    )
+                )
                 stats["template"] += 1
                 anchored = True
 
@@ -549,10 +582,18 @@ if __name__ == "__main__":
         # 無 defaults → 維持既有常數、不寫 color_tolerance
         a0 = _build_anchored_rule(3, "確認", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left")
         assert a0.steps[0].params["fuzzy_threshold"] == _FUZZY_THRESHOLD
-        assert "after_delay_ms" not in a0.steps[1].params
+        assert a0.steps[1].params["after_delay_ms"] == _RECORD_AFTER_DELAY_MS
         t0 = _build_template_rule(3, "b64", {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05}, "left")
         assert t0.steps[0].params["threshold"] == _TMPL_THRESHOLD
         assert "color_tolerance" not in t0.steps[0].params
+        t1 = _build_template_rule(
+            3,
+            "b64",
+            {"x": 0.2, "y": 0.3, "w": 0.1, "h": 0.05},
+            "left",
+            capture_size=(1600, 900),
+        )
+        assert t1.steps[0].params["capture_size"] == [1600, 900]
         print(
             "  [OK] 設定窗預設套用（random_offset / after_delay_ms / thresholds / color_tolerance）"
         )

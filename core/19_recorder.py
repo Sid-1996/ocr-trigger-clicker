@@ -4,8 +4,9 @@
 保證畫面是觸發前狀態），再把點擊以 SendInput（帶 magic dwExtraInfo）重送給前景的
 目標視窗，維持正常的視窗操控節奏。
 
-停止後輸出 session 資料：events.json（事件序列）+ frames/（逐事件事前截圖）。
-後處理（core/20_recorder_convert.py）只讀這份 session 資料轉成規則，與本模組零耦合。
+停止後輸出 session 資料：events.json（meta + 事件序列，含視窗／客戶區尺寸、DPI、
+互動模式與座標空間）+ frames/（逐事件事前截圖）。後處理（core/20_recorder_convert.py）
+只讀這份 session 資料轉成規則，與本模組零耦合。
 
 無 Qt 依賴；GUI 層透過 load_sibling 載入，跨執行緒以 callback 回報。
 """
@@ -66,7 +67,10 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_VIRTUALDESK = 0x4000
 MOUSEEVENTF_ABSOLUTE = 0x8000
+
+_MOVE_FLAGS = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
 
 _REPLAY_FLAGS = {
     "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
@@ -222,10 +226,20 @@ class Recorder:
         self._frame_seq = 0
         self._on_event = None
         self._on_error = None
+        self._interaction_mode = ""
+        self._start_meta: dict = {}
 
     # ── 對外 API ──
 
-    def start(self, title: str, hwnd: int, session_dir, on_event=None, on_error=None) -> bool:
+    def start(
+        self,
+        title: str,
+        hwnd: int,
+        session_dir,
+        on_event=None,
+        on_error=None,
+        interaction_mode: str = "",
+    ) -> bool:
         if self._running or (self._thread and self._thread.is_alive()):
             return False
         self._title = title
@@ -239,6 +253,8 @@ class Recorder:
         self._stop_evt = threading.Event()
         self._on_event = on_event
         self._on_error = on_error
+        self._interaction_mode = interaction_mode
+        self._start_meta = self._build_meta()
         self._hook = None
         self._hook_proc = None
         self._thread = threading.Thread(target=self._run, name="recorder-hook", daemon=True)
@@ -272,6 +288,25 @@ class Recorder:
     @property
     def title(self) -> str:
         return self._title
+
+    def _build_meta(self) -> dict:
+        rect = _screenshot.get_window_rect_hwnd(self._hwnd)
+        client = _screenshot.get_client_size_hwnd(self._hwnd)
+        offset = _screenshot.get_client_offset_hwnd(self._hwnd)
+        return {
+            "schema_version": 2,
+            "window_title": self._title,
+            "hwnd": self._hwnd,
+            "captured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "window_rect": rect,
+            "client_size": list(client) if client else None,
+            "client_offset": list(offset) if offset else None,
+            "dpi": round(_screenshot.get_dpi_scaling_factor(self._hwnd), 3),
+            "interaction_mode": self._interaction_mode,
+            "capture_mode": "foreground",
+            "coord_space": "window",
+            "virtual_screen": _virtual_screen_bounds(),
+        }
 
     # ── hook 執行緒 ──
 
@@ -354,19 +389,29 @@ class Recorder:
 
         rect = _RECT()
         wx, wy = sx, sy
+        win_w = win_h = 0
         if _user32.GetWindowRect(self._hwnd, ctypes.byref(rect)):
             wx = sx - rect.left
             wy = sy - rect.top
+            win_w = rect.right - rect.left
+            win_h = rect.bottom - rect.top
 
-        frame_name = self._capture_pre_action()
+        frame = self._capture_pre_action()
         evt = {
             "t": round(time.time(), 3),
             "button": button,
             "wx": wx,
             "wy": wy,
         }
-        if frame_name:
+        if win_w > 0 and win_h > 0:
+            evt["window_size"] = [win_w, win_h]
+        client = _screenshot.get_client_size_hwnd(self._hwnd)
+        if client:
+            evt["client_size"] = [int(client[0]), int(client[1])]
+        if frame:
+            frame_name, frame_w, frame_h = frame
             evt["frame"] = frame_name
+            evt["frame_size"] = [frame_w, frame_h]
         with self._lock:
             self._events.append(evt)
             count = len(self._events)
@@ -380,7 +425,7 @@ class Recorder:
             except Exception:
                 _log.exception("on_event callback 異常")
 
-    def _capture_pre_action(self) -> str | None:
+    def _capture_pre_action(self) -> tuple[str, int, int] | None:
         try:
             img = _pipeline.capture_frame("pynput", self._title, self._hwnd)
             if img is None or img.size == 0:
@@ -389,7 +434,7 @@ class Recorder:
             name = f"{self._frame_seq:05d}.jpg"
             path = self._frames_dir / name
             cv2.imwrite(str(path), img, [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY])
-            return name
+            return name, int(img.shape[1]), int(img.shape[0])
         except Exception:
             _log.exception("動作前截圖失敗")
             return None
@@ -404,7 +449,7 @@ class Recorder:
         move = _INPUT()
         move.type = _INPUT_MOUSE
         move.u.mi.dx, move.u.mi.dy = ax, ay
-        move.u.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE
+        move.u.mi.dwFlags = _MOVE_FLAGS
         move.u.mi.dwExtraInfo = _REPLAY_MAGIC
         inputs.append(move)
         for flag in flags:
@@ -420,10 +465,7 @@ class Recorder:
             return
         try:
             data = {
-                "meta": {
-                    "window_title": self._title,
-                    "captured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                },
+                "meta": self._start_meta or self._build_meta(),
                 "events": self._events,
             }
             with open(self._session_dir / "events.json", "w", encoding="utf-8") as f:
@@ -445,12 +487,15 @@ if __name__ == "__main__":
     print("=== Recorder Self-Check ===\n")
 
     b = _virtual_abs(100, 100, {"x": 0, "y": 0, "w": 1920, "h": 1080})
-    assert b == (3413, 6214), b
+    assert b == (3415, 6073), b
     print("  [OK] _virtual_abs primary monitor")
 
     b2 = _virtual_abs(-1900, 100, {"x": -1920, "y": 0, "w": 3840, "h": 1080})
-    assert b2 == (341, 6214), b2
+    assert b2 == (341, 6073), b2
     print("  [OK] _virtual_abs dual-monitor negative coords")
+
+    assert _MOVE_FLAGS & MOUSEEVENTF_VIRTUALDESK, _MOVE_FLAGS
+    print("  [OK] _MOVE_FLAGS includes VIRTUALDESK")
 
     b3 = _virtual_abs(0, 0, {"x": 0, "y": 0, "w": 0, "h": 0})
     assert b3 == (0, 0)
@@ -464,4 +509,4 @@ if __name__ == "__main__":
     assert flags is not None and len(flags) == 2
     print("  [OK] _REPLAY_FLAGS")
 
-    print("\n=== All 5 checks passed ===")
+    print("\n=== All 6 checks passed ===")

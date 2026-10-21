@@ -5324,6 +5324,7 @@ class MainWindow(QMainWindow):
             str(session_dir),
             on_event=lambda n: self._record_signals.count_changed.emit(n),
             on_error=lambda msg: self._record_signals.error.emit(msg),
+            interaction_mode=_get_interaction_mode(),
         )
         if not ok:
             QMessageBox.warning(self, T("dialog.warning"), T("record.start_failed"))

@@ -225,6 +225,49 @@ def test_build_template_rule_applies_threshold_and_color(tmp_path):
     assert "color_tolerance" not in r0.steps[0].params
 
 
+def test_build_template_rule_writes_capture_size():
+    """錄製模板要帶自己的來源尺寸，避免 runtime 誤用任務層或退化多尺度。"""
+    r = _conv._build_template_rule(
+        0,
+        "b64",
+        {"x": 0, "y": 0, "w": 0.1, "h": 0.1},
+        "left",
+        capture_size=(1600, 900),
+    )
+    assert r.steps[0].params["capture_size"] == [1600, 900]
+
+
+def test_convert_uses_event_window_size_not_clipped_frame_size(tmp_path):
+    """視窗跨螢幕時截圖會被裁切；比例分母要用事件記錄的視窗尺寸。"""
+    sd = _blank_session(tmp_path)
+    data = json.loads((sd / "events.json").read_text(encoding="utf-8"))
+    for ev in data["events"]:
+        ev["window_size"] = [1000, 800]
+        ev["wx"] = 500
+        ev["wy"] = 400
+    (sd / "events.json").write_text(json.dumps(data), encoding="utf-8")
+
+    res = convert_sessions([sd])
+    click = [s for s in res["rules"][0].steps if s.type == "click"][0]
+    assert abs(click.params["x"] - 0.5) < 1e-3
+    assert abs(click.params["y"] - 0.5) < 1e-3
+
+
+def test_convert_keeps_timing_event_without_frame_if_window_size_known(tmp_path):
+    """截圖失敗但事件有 window_size 時，仍可轉成計時規則，不應被跳過。"""
+    sd = tmp_path / "session-20260812-140001"
+    sd.mkdir()
+    events = [
+        {"t": 100.0, "button": "left", "wx": 400, "wy": 300, "window_size": [800, 600]},
+    ]
+    (sd / "events.json").write_text(json.dumps({"meta": {}, "events": events}), encoding="utf-8")
+    res = convert_sessions([sd])
+    assert res["stats"]["timing"] == 1
+    click = [s for s in res["rules"][0].steps if s.type == "click"][0]
+    assert click.params["x"] == 0.5
+    assert click.params["y"] == 0.5
+
+
 def test_build_anchored_rule_applies_fuzzy_threshold():
     """錨點規則套用 fuzzy_threshold；match_mode 固定 fuzzy（錨點設計）。"""
     r = _conv._build_anchored_rule(
