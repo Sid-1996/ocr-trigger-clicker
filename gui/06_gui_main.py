@@ -1052,13 +1052,22 @@ class _MatchImageStepForm(QWidget):
         self._img_compare_btn = QPushButton(T("step_form.compare_image"))
         self._img_compare_btn.clicked.connect(self._img_compare_match)
         self._img_compare_result = QLabel("")
+        self._img_compare_result.setWordWrap(True)
+        self._img_compare_result.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        self._img_compare_result.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        self._img_compare_result.setContentsMargins(0, 4, 0, 0)
+        self._img_compare_result.setVisible(False)
         tmpl_layout.addWidget(name_col, 1)
         tmpl_layout.addWidget(self._capture_btn)
         tmpl_layout.addWidget(self._pick_btn)
         tmpl_layout.addWidget(self._trim_btn)
         tmpl_layout.addWidget(self._img_compare_btn)
-        tmpl_layout.addWidget(self._img_compare_result)
         form.addRow(T("step_form.template_image"), tmpl_row)
+        form.addRow("", self._img_compare_result)
         self._update_thumbnail()
 
         # ROI
@@ -1311,17 +1320,24 @@ class _MatchImageStepForm(QWidget):
             self._source_label.setStyleSheet("color:#e67e22; font-size:11px;")
             self._source_label.setToolTip(T("step_form.template_source_missing_tip"))
 
+    def _show_compare_result(self, text: str, style: str):
+        self._img_compare_result.setText(text)
+        self._img_compare_result.setStyleSheet(style)
+        self._img_compare_result.setVisible(True)
+
     def _img_compare_match(self):
         title = self._window_title_cb() if self._window_title_cb else ""
         if not title:
-            self._img_compare_result.setText(T("img_compare.no_window"))
-            self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            self._show_compare_result(
+                T("img_compare.no_window"), "color: #e67e22; font-weight: bold;"
+            )
             return
         tmpl_data = self._step.params.get("template_data", "")
         tmpl_path = self._step.params.get("template", "")
         if not tmpl_data.strip() and not tmpl_path.strip():
-            self._img_compare_result.setText(T("img_compare.no_template"))
-            self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            self._show_compare_result(
+                T("img_compare.no_template"), "color: #e67e22; font-weight: bold;"
+            )
             return
         roi = self._step.params.get("roi", {})
         threshold = self._threshold.value()
@@ -1354,8 +1370,9 @@ class _MatchImageStepForm(QWidget):
         else:
             img = capture_frame(mode, title, hwnd=hwnd)
         if img is None:
-            self._img_compare_result.setText(T("img_compare.capture_failed"))
-            self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            self._show_compare_result(
+                T("img_compare.capture_failed"), "color: #e67e22; font-weight: bold;"
+            )
             return
         # 後台模式截圖全黑 + 非系統管理員 → 併入靜默警告
         if mode != "pynput" and is_black_capture(img) and not is_admin():
@@ -1425,13 +1442,11 @@ class _MatchImageStepForm(QWidget):
                 best.confidence,
                 pct,
             )
-            self._img_compare_result.setText(
-                T("img_compare.hit", pct=pct) + (f"\n{_mode_warn}" if _mode_warn else "")
-            )
-            self._img_compare_result.setStyleSheet(
+            self._show_compare_result(
+                T("img_compare.hit", pct=pct) + (f"\n{_mode_warn}" if _mode_warn else ""),
                 "color: #e67e22; font-weight: bold;"
                 if _mode_warn
-                else "color: #4caf50; font-weight: bold;"
+                else "color: #4caf50; font-weight: bold;",
             )
         else:
             fallback = _tmpl_mod.match_template(
@@ -1475,15 +1490,13 @@ class _MatchImageStepForm(QWidget):
                 scales=scale_text,
                 hint=hint,
             )
-            self._img_compare_result.setText(
+            self._show_compare_result(
                 T("img_compare.miss", top_pct=top_pct)
                 + (f"\n{_mode_warn}" if _mode_warn else "")
-                + f"\n{diag}"
-            )
-            self._img_compare_result.setStyleSheet(
+                + f"\n{diag}",
                 "color: #e67e22; font-weight: bold;"
                 if _mode_warn
-                else "color: #e53935; font-weight: bold;"
+                else "color: #e53935; font-weight: bold;",
             )
 
     def _capture_template(self):
@@ -1514,8 +1527,9 @@ class _MatchImageStepForm(QWidget):
     def _trim_template(self):
         tmpl_data = self._step.params.get("template_data", "")
         if not tmpl_data.strip():
-            self._img_compare_result.setText(T("template_crop.no_template"))
-            self._img_compare_result.setStyleSheet("color: #e67e22; font-weight: bold;")
+            self._show_compare_result(
+                T("template_crop.no_template"), "color: #e67e22; font-weight: bold;"
+            )
             return
         result = trim_template_dialog(self, tmpl_data)
         if result is None:
