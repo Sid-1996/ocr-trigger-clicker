@@ -183,6 +183,28 @@ def test_capture_size_cross_res():
     assert len(cross) >= 1
 
 
+def test_capture_size_cross_res_aspect():
+    source = np.zeros((180, 320, 3), dtype=np.uint8)
+    cv2.rectangle(source, (40, 40), (100, 100), (100, 150, 200), -1)
+    cv2.rectangle(source, (55, 55), (85, 85), (30, 40, 50), -1)
+    target = cv2.resize(source, (400, 225), interpolation=cv2.INTER_LINEAR)
+    cropped = source[40:101, 40:101].copy()
+    _, buf = cv2.imencode(".png", cropped)
+    tpl_b64 = base64.b64encode(buf).decode("ascii")
+
+    results = match_template(
+        target,
+        "",
+        threshold=0.5,
+        template_data=tpl_b64,
+        capture_size=[320, 180],
+        current_size=[400, 225],
+    )
+    assert len(results) >= 1
+    assert abs(results[0].center_x - 87) <= 3
+    assert abs(results[0].center_y - 87) <= 3
+
+
 def test_capture_size_no_current():
     high_res_img = np.zeros((200, 200, 3), dtype=np.uint8)
     cv2.rectangle(high_res_img, (40, 40), (80, 80), (100, 150, 200), -1)

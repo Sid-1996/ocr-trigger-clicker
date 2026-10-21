@@ -62,12 +62,32 @@
    uv run python devtools/coordinate_calibration.py --self-check
    uv run python devtools/coordinate_calibration.py --diagnose
    ```
-   `--diagnose` 是安全層：只驗證實際客戶區尺寸下的座標數學與三模式路由，不碰滑鼠。若改動涉及真點擊、前景/hybrid 激活或 input 路徑，**加跑真點擊驗證**（會移動滑鼠、短暫搶焦點約 35 秒）：
+   `--diagnose` 是安全層：只驗證實際客戶區尺寸下的座標數學與三模式路由，不碰滑鼠。若改動涉及真點擊、前景/hybrid 激活或 input 路徑，**依風險加跑真點擊驗證**（會移動滑鼠、短暫搶焦點）：
    ```powershell
-   uv run python devtools/coordinate_calibration.py --e2e        # 三模式 × 1600x900 有框/無框
-   uv run python devtools/coordinate_calibration.py --e2e --full # 另加 1920x1080 無框
+   uv run python devtools/coordinate_calibration.py --e2e             # T2：1600x900 有框/無框 × 3 模式 = 6
+   uv run python devtools/coordinate_calibration.py --e2e --cross-res # T3：1600/1920 有框/無框 × 3 模式 = 12
+   uv run python devtools/coordinate_calibration.py --e2e --full      # 發版：1280/1600/1920 有框/無框 × 3 模式 = 18
    ```
    狀態檔在 `%TEMP%\otc_calibration_status.json`；exit code 非 0 即未完成。三模式需要 Frida 環境，失敗時先跑 `--diagnose` 區分「座標數學」與「注入/前景」問題。
+
+### 測試分級（同比例跨解析度）
+
+產品合約：16:9 的 `1280×720`、`1600×900`、`1920×1080` 必須能互相替換；其他長寬比列 best-effort，不作為阻擋條件。
+
+核心不變量：
+
+1. 比例座標（ROI／點擊）在三個代表尺寸間映射誤差 **≤3px**，且不得出現誤點。
+2. 模板 `capture_size` 是「擷取當下客戶區尺寸」；跨解析度時以 `capture_size` 對 `current_size` 換算，不可用被裁切影像或 ROI 寬度推算。
+3. 錄製輸出全視窗比例；轉換出的模板步驟寫入客戶區 `capture_size`；前景 selector 建立的 ROI／點擊維持 `roi_coord:"client"`。
+
+分級與適用時機：
+
+- **T0 文件／文案**：不跑 pytest；有改 `.py` 才跑 ruff。
+- **T1 座標數學／解析**：self-check + pytest + `--self-check` + `--diagnose`。一般座標重構、轉換器、模板尺度邏輯至少到這層。
+- **T2 真輸入／焦點／截圖**：`--e2e` 6 組。改 input 分派、前景/hybrid 激活、截圖客戶區時必跑。
+- **T3 跨解析度／發版**：`--e2e --cross-res` 12 組；發版候選跑 `--full` 18 組。DPI 125%/150% 與多螢幕列手動驗證，不進自動矩陣。
+
+通過標準：所有組 0 miss、偏差 ≤3px、三模式不得 fallback；模板尺度維持 5 段候選，不因跨解析度退化成 13 段全掃。Bug fix 必須先重現失敗案例，再補對應 T 層；只跑 T1 不可宣稱跨解析度已修好。
 
 4. **add + commit + push**（一次完成）：
    ```powershell

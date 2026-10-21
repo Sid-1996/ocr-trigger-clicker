@@ -36,7 +36,11 @@ if str(ROOT) not in sys.path:
 
 WINDOW_TITLE = "OCR 座標校正目標"
 TASK_NAME = "座標校正測試"
-SIZE_PRESETS = {"1600 × 900": (1600, 900), "1920 × 1080": (1920, 1080)}
+SIZE_PRESETS = {
+    "1280 × 720": (1280, 720),
+    "1600 × 900": (1600, 900),
+    "1920 × 1080": (1920, 1080),
+}
 TARGETS = (
     {
         "id": "CENTER",
@@ -494,6 +498,10 @@ def _self_check():
     assert _card_hit(10, 10, 1600, 900) is None
     assert _parse_size("1600x900") == (1600, 900)
     assert _parse_size("1920×1080") == (1920, 1080)
+    assert _parse_size("1280x720") == (1280, 720)
+    assert len(_e2e_runs()) * 3 == 6
+    assert len(_e2e_runs(cross_res=True)) * 3 == 12
+    assert len(_e2e_runs(full=True)) * 3 == 18
     payload = _status_payload(
         session="self-check",
         seq=1,
@@ -519,7 +527,7 @@ def _check_production_coordinate_math():
     loop = main_loop.MainLoop.__new__(main_loop.MainLoop)
     loop._window_hwnd = None
     loop._frame_client_size = None
-    for width, height in ((1600, 900), (1920, 1080)):
+    for width, height in ((1280, 720), (1600, 900), (1920, 1080)):
         for chrome in ((8, 31), (0, 0)):
             loop._frame_chrome = chrome
             rect = {"x": 120, "y": 75, "w": width, "h": height}
@@ -604,6 +612,10 @@ def _diagnose():
         raise RuntimeError("無法取得測試視窗尺寸；請確認視窗沒有最小化。")
     chrome = screenshot.get_client_offset_hwnd(hwnd) or (0, 0)
     foreground = main_loop.is_window_foreground(hwnd)
+    if not foreground:
+        screenshot.activate_window_hwnd(hwnd)
+        time.sleep(0.35)
+        foreground = main_loop.is_window_foreground(hwnd)
     print("座標校正自動診斷")
     print(f"目標：{WINDOW_TITLE}，外框 {rect['w']}×{rect['h']}，客戶區偏移 {chrome}")
     print(f"目標目前在最前面：{'是' if foreground else '否'}")
@@ -974,7 +986,18 @@ def _e2e_run(mode: str, size_label: str, borderless: bool) -> dict:
         _wait_window_gone()
 
 
-def _e2e(full: bool = False) -> None:
+def _e2e_runs(full: bool = False, cross_res: bool = False) -> list[tuple[str, bool]]:
+    """Return (size, borderless) runs; each run covers all three input modes."""
+    if full:
+        sizes = ("1280x720", "1600x900", "1920x1080")
+    elif cross_res:
+        sizes = ("1600x900", "1920x1080")
+    else:
+        sizes = ("1600x900",)
+    return [(size, borderless) for size in sizes for borderless in (False, True)]
+
+
+def _e2e(full: bool = False, cross_res: bool = False) -> None:
     """One-click live test: open window, click all targets, assert the status file."""
     from _loader import load_sibling
 
@@ -982,9 +1005,7 @@ def _e2e(full: bool = False) -> None:
     if screenshot.get_window_hwnd(WINDOW_TITLE):
         raise SystemExit(f"請先關閉既有「{WINDOW_TITLE}」視窗，避免誤點到舊視窗。")
 
-    runs = [("1600x900", False), ("1600x900", True)]
-    if full:
-        runs.append(("1920x1080", True))
+    runs = _e2e_runs(full=full, cross_res=cross_res)
     print("座標校正真點擊驗證")
     print("執行期間會移動滑鼠並短暫搶焦點；只點擊校正視窗內的目標。")
     results = []
@@ -1014,7 +1035,7 @@ def main():
         _diagnose()
         return
     if "--e2e" in sys.argv:
-        _e2e(full="--full" in sys.argv)
+        _e2e(full="--full" in sys.argv, cross_res="--cross-res" in sys.argv)
         return
     specified_session = _arg_value("--session", "") or ""
     specified_size = _parse_size(_arg_value("--size"))
