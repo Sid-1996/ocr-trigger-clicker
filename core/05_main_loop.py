@@ -76,6 +76,7 @@ get_effective_capture_size = _rule.get_effective_capture_size
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 MatchResult = _tmpl.MatchResult
 match_template = _tmpl.match_template
+scale_candidates = _tmpl.scale_candidates
 img_to_b64 = _tmpl.img_to_b64
 _logging_config = load_sibling("logging_config", "core/00_logging_config.py")
 _obs_mod = load_sibling("observation", "core/observation.py")

@@ -257,7 +257,7 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`；`match_
 
 4. **`skip_to` 是 0-based**：`on_fail` 的 `skip` 動作中 `skip_to` 對應內部 `step_idx`（0-based）。GUI 下拉選單顯示「步驟 N」（1-based），實際儲存 `i-1`。手動編輯 JSON 需注意換算。
 
-5. **`capture_size` 影響模板比對搜尋範圍**：優先取步驟層 `match_image.params.capture_size`（模板自己的來源尺寸），沒有才回退任務頂層 `capture_size`（`get_effective_capture_size()`）。`match_template()` 依當前客戶區寬度與來源寬度比值，只在窄範圍尺度（×0.9~×1.1）搜尋；兩者都沒有才退回預設多尺度 `0.7~1.3`。**不同解析度建立的模板不可共用同一個 capture_size**，否則會多縮放一次而漏判。
+5. **`capture_size` 影響模板比對搜尋範圍**：優先取步驟層 `match_image.params.capture_size`（模板自己的來源尺寸），沒有才回退任務頂層 `capture_size`（`get_effective_capture_size()`）。`match_template()` 依當前客戶區寬度與來源寬度比值，只在窄範圍尺度（×0.9~×1.1）搜尋；兩者都沒有才退回預設多尺度 `0.7~1.3`。**不同解析度建立的模板不可共用同一個 capture_size**，否則會多縮放一次而漏判。缺少 `current_size` 時以完整影像寬度推算，不可用 ROI 寬度（ROI 只是搜尋範圍，曾造成 0 命中）。
 
 6. **Qt `model().rowsMoved` 不可靠**：對頂層群組項目的拖曳操作，這個內建訊號可能不觸發或順序不對，導致資料看似拖完了但實際沒存。一律用自訂 `pyqtSignal` 取代，不要依賴它做持久化判斷依據。
 

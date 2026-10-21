@@ -131,6 +131,30 @@ def clear_template_cache():
     _decode_template.cache_clear()
 
 
+def scale_candidates(
+    capture_size: Optional[list],
+    current_size: Optional[list],
+    image_width: int,
+    scale_range: Optional[tuple[float, float]] = (0.7, 1.3),
+    scale_step: float = 0.05,
+) -> list[float]:
+    """回傳此幀要嘗試的模板縮放比例。
+
+    缺少 current_size 時用完整影像寬度，不用 ROI 寬度；ROI 只是搜尋範圍，
+    不是目前視窗尺寸。
+    """
+    if capture_size is not None and len(capture_size) == 2 and capture_size[0] > 0:
+        current_w = current_size[0] if current_size else image_width
+        center = current_w / capture_size[0]
+        center = max(0.5, min(2.0, center))
+        scales = [round(center * s, 4) for s in (0.9, 0.95, 1.0, 1.05, 1.1)]
+        return [s for s in scales if 0.5 <= s <= 2.0]
+    if scale_range is None:
+        return [1.0]
+    num = int((scale_range[1] - scale_range[0]) / scale_step) + 1
+    return [round(scale_range[0] + i * scale_step, 4) for i in range(num)]
+
+
 def match_template(
     img: np.ndarray,
     template_path: str,
@@ -191,17 +215,7 @@ def match_template(
         search_img = search_bgr
     min_side = 8
 
-    if capture_size is not None and len(capture_size) == 2 and capture_size[0] > 0:
-        current_w = current_size[0] if current_size else search_bgr.shape[1]
-        center = current_w / capture_size[0]
-        center = max(0.5, min(2.0, center))
-        scales = [round(center * s, 4) for s in (0.9, 0.95, 1.0, 1.05, 1.1)]
-        scales = [s for s in scales if 0.5 <= s <= 2.0]
-    elif scale_range is None:
-        scales = [1.0]
-    else:
-        num = int((scale_range[1] - scale_range[0]) / scale_step) + 1
-        scales = [round(scale_range[0] + i * scale_step, 4) for i in range(num)]
+    scales = scale_candidates(capture_size, current_size, img.shape[1], scale_range, scale_step)
 
     matches = []
     best_below = -1.0

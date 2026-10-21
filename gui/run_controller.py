@@ -742,6 +742,35 @@ class TestRunController:
                                 suffix=of_suffix,
                             )
                         )
+                        scales = _main_loop_mod.scale_candidates(cs, cur_size, img.shape[1])
+                        source_text = f"{cs[0]}×{cs[1]}" if cs else T("img_compare.source_unknown")
+                        current_text = (
+                            f"{cur_size[0]}×{cur_size[1]}"
+                            if cur_size
+                            else f"{img.shape[1]}×{img.shape[0]}"
+                        )
+                        if scales:
+                            scale_text = (
+                                ", ".join(f"{s:.2f}" for s in scales)
+                                if cs
+                                else f"{scales[0]:.2f}~{scales[-1]:.2f}"
+                            )
+                        else:
+                            scale_text = "-"
+                        hint = (
+                            T("img_compare.scale_hint")
+                            if cs and not any(abs(s - 1.0) < 1e-6 for s in scales)
+                            else ""
+                        )
+                        log.append(
+                            T(
+                                "test.template_scale_diag",
+                                source=source_text,
+                                current=current_text,
+                                scales=scale_text,
+                                hint=hint,
+                            )
+                        )
                         if match_color and best_below >= threshold:
                             log.append(T("test.template_color_note", tolerance=color_tolerance))
                         _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))

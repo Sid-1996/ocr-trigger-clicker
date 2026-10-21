@@ -1409,8 +1409,37 @@ class _MatchImageStepForm(QWidget):
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
             logging.debug("img_compare: miss top=%.3f", top)
+            scales = _tmpl_mod.scale_candidates(capture_size, current_size, w)
+            source_text = (
+                f"{capture_size[0]}×{capture_size[1]}"
+                if capture_size
+                else T("img_compare.source_unknown")
+            )
+            current_text = f"{current_size[0]}×{current_size[1]}" if current_size else f"{w}×{h}"
+            if scales:
+                scale_text = (
+                    ", ".join(f"{s:.2f}" for s in scales)
+                    if capture_size
+                    else f"{scales[0]:.2f}~{scales[-1]:.2f}"
+                )
+            else:
+                scale_text = "-"
+            hint = (
+                T("img_compare.scale_hint")
+                if capture_size and not any(abs(s - 1.0) < 1e-6 for s in scales)
+                else ""
+            )
+            diag = T(
+                "img_compare.scale_diag",
+                source=source_text,
+                current=current_text,
+                scales=scale_text,
+                hint=hint,
+            )
             self._img_compare_result.setText(
-                T("img_compare.miss", top_pct=top_pct) + (f"\n{_mode_warn}" if _mode_warn else "")
+                T("img_compare.miss", top_pct=top_pct)
+                + (f"\n{_mode_warn}" if _mode_warn else "")
+                + f"\n{diag}"
             )
             self._img_compare_result.setStyleSheet(
                 "color: #e67e22; font-weight: bold;"

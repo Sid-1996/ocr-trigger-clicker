@@ -203,6 +203,27 @@ def test_capture_size_no_current():
     assert len(no_current) >= 1
 
 
+def test_capture_size_roi_without_current_uses_full_image_width():
+    high_res_img = np.zeros((200, 200, 3), dtype=np.uint8)
+    cv2.rectangle(high_res_img, (40, 40), (80, 80), (100, 150, 200), -1)
+    cv2.rectangle(high_res_img, (50, 50), (70, 70), (30, 40, 50), -1)
+    cropped = high_res_img[40:81, 40:81].copy()
+    low_res_img = cv2.resize(high_res_img, (160, 160), interpolation=cv2.INTER_AREA)
+    _, buf = cv2.imencode(".png", cropped)
+    tpl_b64 = base64.b64encode(buf).decode("ascii")
+
+    results = match_template(
+        low_res_img,
+        "",
+        roi={"x": 20, "y": 20, "w": 100, "h": 100},
+        threshold=0.5,
+        template_data=tpl_b64,
+        capture_size=[200, 200],
+        current_size=None,
+    )
+    assert len(results) >= 1, "缺少 current_size 時應以完整影像寬度推算，而非 ROI 寬度"
+
+
 def test_color_tolerance_same():
     color_img = np.zeros((100, 100, 3), dtype=np.uint8)
     cv2.rectangle(color_img, (10, 10), (30, 30), (180, 200, 220), -1)
