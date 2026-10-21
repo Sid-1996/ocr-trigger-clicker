@@ -220,6 +220,37 @@ def test_timed_capture_timeout_does_not_pile_up_requests(monkeypatch):
         cap.close()
 
 
+def test_timed_capture_fresh_discards_pending_result(monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+    old_frame = np.zeros((2, 2, 3), np.uint8)
+    new_frame = np.ones((2, 2, 3), np.uint8)
+    calls = []
+
+    def fake(*_args, **_kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            started.set()
+            release.wait(2.0)
+            return old_frame
+        return new_frame
+
+    monkeypatch.setattr(_pipe, "capture_frame", fake)
+    cap = _pipe.TimedCapture()
+    try:
+        img, timed_out = cap.capture("frida", "t", timeout=0.01)
+        assert img is None and timed_out
+        assert started.wait(1.0)
+
+        release.set()
+        img, timed_out = cap.capture("frida", "t", timeout=1.0, fresh=True)
+        assert img is new_frame and timed_out is False
+        assert len(calls) == 2
+    finally:
+        release.set()
+        cap.close()
+
+
 def test_timed_capture_close_wakes_waiter(monkeypatch):
     started = threading.Event()
     release = threading.Event()

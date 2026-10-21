@@ -1666,7 +1666,7 @@ class MainLoop:
                 fresh_rect = get_window_rect(self._window_title) or {"x": 0, "y": 0, "w": 0, "h": 0}
             except Exception:
                 fresh_rect = {"x": 0, "y": 0, "w": 0, "h": 0}
-            img = self._capture(mode, self._window_title, hwnd=self._window_hwnd)
+            img = self._capture(mode, self._window_title, hwnd=self._window_hwnd, fresh=True)
             if img is not None and fresh_rect["w"] > 0:
                 # isolate per-poll frame cache to avoid stale superset from previous poll
                 self._frame_ocr_cache.clear()
@@ -2455,7 +2455,7 @@ class MainLoop:
     _CAPTURE_TIMEOUT_SEC = 0.5
     _CAPTURE_TIMEOUT_LOG_SEC = 5.0
 
-    def _capture(self, mode: str, title: str, hwnd=None, rect=None, timeout=None):
+    def _capture(self, mode: str, title: str, hwnd=None, rect=None, timeout=None, fresh=False):
         """Capture without letting a stuck PrintWindow freeze the main loop."""
         if mode == "pynput":
             return capture_frame(mode, title, hwnd=hwnd, rect=rect)
@@ -2464,7 +2464,9 @@ class MainLoop:
             worker = _capture_pipeline.TimedCapture()
             self._capture_worker = worker
         timeout = self._CAPTURE_TIMEOUT_SEC if timeout is None else timeout
-        img, timed_out = worker.capture(mode, title, hwnd=hwnd, rect=rect, timeout=timeout)
+        img, timed_out = worker.capture(
+            mode, title, hwnd=hwnd, rect=rect, timeout=timeout, fresh=fresh
+        )
         if timed_out:
             now = time.monotonic()
             if (

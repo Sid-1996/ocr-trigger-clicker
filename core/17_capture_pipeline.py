@@ -66,7 +66,8 @@ class TimedCapture:
 
     A capture that exceeds ``timeout`` returns ``(None, True)``; the worker keeps
     running and its result is returned by the next call instead of piling up
-    another PrintWindow request.
+    another PrintWindow request. Pass ``fresh=True`` to discard a pending result
+    and wait for a capture taken after the call (used by verify polling).
     """
 
     def __init__(self):
@@ -105,10 +106,26 @@ class TimedCapture:
         hwnd: int | None = None,
         rect: dict | None = None,
         timeout: float = 0.5,
+        fresh: bool = False,
     ) -> tuple[np.ndarray | None, bool]:
         request = (mode, title, hwnd, rect)
         with self._cv:
-            if self._has_result:
+            if self._closed:
+                return None, False
+            if fresh:
+                if self._has_result:
+                    self._result = None
+                    self._has_result = False
+                elif self._busy:
+                    if not self._cv.wait_for(
+                        lambda: self._has_result or self._closed, timeout=timeout
+                    ):
+                        return None, True
+                    if not self._has_result:
+                        return None, False
+                    self._result = None
+                    self._has_result = False
+            elif self._has_result:
                 result = self._result
                 self._result = None
                 self._has_result = False
