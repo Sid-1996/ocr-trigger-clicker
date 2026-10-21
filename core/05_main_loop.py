@@ -373,6 +373,9 @@ class MainLoop:
         # 平行預算執行緒池：供並行群組平行計算各規則的 match_image 結果。
         # ponytail: 只在此類群組真正需要時才建立，避免背景全部開一條 pool。
         self._prematch_pool: Optional[ThreadPoolExecutor] = None
+        # 後台截圖 worker：PrintWindow 偶發卡 2–10 秒，不能讓主循環一起等。
+        self._capture_worker = None
+        self._last_capture_timeout_log = 0.0
 
         self._rules: list[Rule] = []
         self._logger = _ensure_main_logger()
@@ -1663,7 +1666,7 @@ class MainLoop:
                 fresh_rect = get_window_rect(self._window_title) or {"x": 0, "y": 0, "w": 0, "h": 0}
             except Exception:
                 fresh_rect = {"x": 0, "y": 0, "w": 0, "h": 0}
-            img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd)
+            img = self._capture(mode, self._window_title, hwnd=self._window_hwnd)
             if img is not None and fresh_rect["w"] > 0:
                 # isolate per-poll frame cache to avoid stale superset from previous poll
                 self._frame_ocr_cache.clear()
@@ -2449,6 +2452,29 @@ class MainLoop:
         self._phase_frames = 0
         self._phase_since = now
 
+    _CAPTURE_TIMEOUT_SEC = 0.5
+    _CAPTURE_TIMEOUT_LOG_SEC = 5.0
+
+    def _capture(self, mode: str, title: str, hwnd=None, rect=None, timeout=None):
+        """Capture without letting a stuck PrintWindow freeze the main loop."""
+        if mode == "pynput":
+            return capture_frame(mode, title, hwnd=hwnd, rect=rect)
+        worker = getattr(self, "_capture_worker", None)
+        if worker is None:
+            worker = _capture_pipeline.TimedCapture()
+            self._capture_worker = worker
+        timeout = self._CAPTURE_TIMEOUT_SEC if timeout is None else timeout
+        img, timed_out = worker.capture(mode, title, hwnd=hwnd, rect=rect, timeout=timeout)
+        if timed_out:
+            now = time.monotonic()
+            if (
+                now - getattr(self, "_last_capture_timeout_log", 0.0)
+                >= self._CAPTURE_TIMEOUT_LOG_SEC
+            ):
+                self._last_capture_timeout_log = now
+                self._log(f"擷取逾時（超過 {timeout:.1f} 秒），跳過本幀")
+        return img
+
     def _loop(self):
         iteration = 0
         try:
@@ -2517,7 +2543,7 @@ class MainLoop:
                     self._phase_sums["pre_rect"] += (ph_rect - ph_minz) * 1000
                     self._phase_sums["pre_fg"] += (time.monotonic() - ph_rect) * 1000
                     cap_started = time.monotonic()
-                    img = capture_frame(mode, self._window_title, hwnd=self._window_hwnd, rect=rect)
+                    img = self._capture(mode, self._window_title, hwnd=self._window_hwnd, rect=rect)
                     phase_capture_ms = (time.monotonic() - cap_started) * 1000
                     if img is None:
                         if iteration % 30 == 0:
@@ -2621,6 +2647,9 @@ class MainLoop:
             if self._prematch_pool is not None:
                 self._prematch_pool.shutdown(wait=False)
                 self._prematch_pool = None
+            worker = getattr(self, "_capture_worker", None)
+            if worker is not None:
+                worker.close()
             if self.on_finished:
                 self.on_finished()
 
@@ -2651,6 +2680,9 @@ class MainLoop:
             f"點擊 {self._perf.get_total_clicks()} 次，規則 {len(self._rules)} 條"
         )
         self._stop_event.set()
+        worker = getattr(self, "_capture_worker", None)
+        if worker is not None:
+            worker.close()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
         self._perf.stop()

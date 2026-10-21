@@ -8,6 +8,7 @@
 import ctypes
 import ctypes.wintypes as wintypes
 import logging
+import threading
 import types
 
 import numpy as np
@@ -173,3 +174,72 @@ def test_slow_capture_log_is_rate_limited(monkeypatch, caplog):
     slow_logs = [r.getMessage() for r in caplog.records if "PrintWindow 擷取過慢" in r.getMessage()]
     assert len(slow_logs) == 2
     assert "PrintWindow=750ms" in slow_logs[-1]
+
+
+def test_timed_capture_returns_result(monkeypatch):
+    frame = np.ones((2, 2, 3), np.uint8)
+    monkeypatch.setattr(_pipe, "capture_frame", lambda *a, **k: frame)
+    cap = _pipe.TimedCapture()
+    try:
+        img, timed_out = cap.capture("frida", "t", timeout=1.0)
+        assert img is frame
+        assert timed_out is False
+    finally:
+        cap.close()
+
+
+def test_timed_capture_timeout_does_not_pile_up_requests(monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+    frame = np.ones((2, 2, 3), np.uint8)
+    calls = []
+
+    def slow(*_args, **_kwargs):
+        calls.append(1)
+        started.set()
+        release.wait(2.0)
+        return frame
+
+    monkeypatch.setattr(_pipe, "capture_frame", slow)
+    cap = _pipe.TimedCapture()
+    try:
+        img, timed_out = cap.capture("frida", "t", timeout=0.05)
+        assert img is None and timed_out
+        assert started.wait(1.0)
+
+        img, timed_out = cap.capture("frida", "t", timeout=0.05)
+        assert img is None and timed_out
+        assert len(calls) == 1, "worker busy 時不應再排入第二個 PrintWindow"
+
+        release.set()
+        img, timed_out = cap.capture("frida", "t", timeout=1.0)
+        assert img is frame and timed_out is False
+        assert len(calls) == 1
+    finally:
+        release.set()
+        cap.close()
+
+
+def test_timed_capture_close_wakes_waiter(monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+    frame = np.ones((2, 2, 3), np.uint8)
+
+    def slow(*_args, **_kwargs):
+        started.set()
+        release.wait(2.0)
+        return frame
+
+    monkeypatch.setattr(_pipe, "capture_frame", slow)
+    cap = _pipe.TimedCapture()
+    result = []
+    waiter = threading.Thread(target=lambda: result.append(cap.capture("frida", "t", timeout=5.0)))
+    waiter.start()
+    try:
+        assert started.wait(1.0)
+        cap.close()
+        waiter.join(1.0)
+        assert result == [(None, False)]
+    finally:
+        release.set()
+        cap.close()

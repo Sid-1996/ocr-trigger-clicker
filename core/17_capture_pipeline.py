@@ -5,6 +5,7 @@
 """
 
 import logging
+import threading
 
 import numpy as np
 
@@ -58,6 +59,79 @@ def capture_frame(
     if mode != "pynput":
         return _capture_background(title, hwnd)
     return _capture_foreground(title, rect, hwnd)
+
+
+class TimedCapture:
+    """Run background captures on a daemon worker so PrintWindow can't freeze the loop.
+
+    A capture that exceeds ``timeout`` returns ``(None, True)``; the worker keeps
+    running and its result is returned by the next call instead of piling up
+    another PrintWindow request.
+    """
+
+    def __init__(self):
+        self._cv = threading.Condition()
+        self._request = None
+        self._result = None
+        self._has_result = False
+        self._busy = False
+        self._closed = False
+        self._thread = threading.Thread(target=self._run, name="capture-worker", daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        while True:
+            with self._cv:
+                self._cv.wait_for(lambda: self._request is not None or self._closed)
+                if self._closed:
+                    return
+                request = self._request
+                self._request = None
+            try:
+                result = capture_frame(*request)
+            except Exception:
+                _log.exception("background capture failed")
+                result = None
+            with self._cv:
+                self._result = result
+                self._has_result = True
+                self._busy = False
+                self._cv.notify_all()
+
+    def capture(
+        self,
+        mode: str,
+        title: str,
+        hwnd: int | None = None,
+        rect: dict | None = None,
+        timeout: float = 0.5,
+    ) -> tuple[np.ndarray | None, bool]:
+        request = (mode, title, hwnd, rect)
+        with self._cv:
+            if self._has_result:
+                result = self._result
+                self._result = None
+                self._has_result = False
+                return result, False
+            if self._closed:
+                return None, False
+            if not self._busy:
+                self._request = request
+                self._busy = True
+                self._cv.notify()
+            if not self._cv.wait_for(lambda: self._has_result or self._closed, timeout=timeout):
+                return None, True
+            if not self._has_result:
+                return None, False
+            result = self._result
+            self._result = None
+            self._has_result = False
+            return result, False
+
+    def close(self):
+        with self._cv:
+            self._closed = True
+            self._cv.notify_all()
 
 
 if __name__ == "__main__":
