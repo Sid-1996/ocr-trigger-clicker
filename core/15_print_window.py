@@ -2,6 +2,7 @@
 
 import ctypes
 import logging
+import time
 from ctypes import wintypes
 
 import numpy as np
@@ -9,6 +10,9 @@ import numpy as np
 _log = logging.getLogger(__name__)
 
 PW_RENDERFULLCONTENT = 0x00000002
+_SLOW_CAPTURE_MS = 500.0
+_SLOW_CAPTURE_LOG_SEC = 5.0
+_last_slow_capture_log = 0.0
 
 # 獨立 DLL 實例，argtypes/restype 只作用於本模組，不污染 ctypes.windll 全域
 # （避免影響 pygetwindow 等其他未設 argtypes 的 ctypes.windll 呼叫端）
@@ -78,6 +82,25 @@ _gdi32.GetDIBits.argtypes = [
 _gdi32.GetDIBits.restype = ctypes.c_int
 
 
+def _log_slow_capture(
+    hwnd: int, w: int, h: int, total_ms: float, pw_ms: float, dib_ms: float
+) -> None:
+    global _last_slow_capture_log
+    now = time.monotonic()
+    if now - _last_slow_capture_log < _SLOW_CAPTURE_LOG_SEC:
+        return
+    _last_slow_capture_log = now
+    _log.warning(
+        "PrintWindow 擷取過慢: hwnd=%s %dx%d 總計=%.0fms PrintWindow=%.0fms GetDIBits=%.0fms",
+        hwnd,
+        w,
+        h,
+        total_ms,
+        pw_ms,
+        dib_ms,
+    )
+
+
 def capture_print_window_hwnd(hwnd: int) -> np.ndarray | None:
     """透過 PrintWindow 截取指定 hwnd 的視窗內容。
 
@@ -85,6 +108,7 @@ def capture_print_window_hwnd(hwnd: int) -> np.ndarray | None:
         BGR numpy array 或 None（失敗時）
     """
     try:
+        started = time.perf_counter()
         rect = wintypes.RECT()
         if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
             return None
@@ -110,7 +134,9 @@ def capture_print_window_hwnd(hwnd: int) -> np.ndarray | None:
 
         old_bitmap = _gdi32.SelectObject(hdc_mem, h_bitmap)
 
+        t_pw = time.perf_counter()
         result = _user32.PrintWindow(hwnd, hdc_mem, PW_RENDERFULLCONTENT)
+        pw_ms = (time.perf_counter() - t_pw) * 1000
         if not result:
             _log.warning("PrintWindow failed for hwnd=%s", hwnd)
 
@@ -123,7 +149,9 @@ def capture_print_window_hwnd(hwnd: int) -> np.ndarray | None:
         bmi.biCompression = 0  # BI_RGB
 
         buf = ctypes.create_string_buffer(w * h * 4)
+        t_dib = time.perf_counter()
         _gdi32.GetDIBits(hdc_mem, h_bitmap, 0, h, buf, ctypes.byref(bmi), 0)
+        dib_ms = (time.perf_counter() - t_dib) * 1000
 
         _gdi32.SelectObject(hdc_mem, old_bitmap)
         _gdi32.DeleteObject(h_bitmap)
@@ -131,6 +159,9 @@ def capture_print_window_hwnd(hwnd: int) -> np.ndarray | None:
         _user32.ReleaseDC(hwnd, hdc_window)
 
         frame = np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 4)
+        total_ms = (time.perf_counter() - started) * 1000
+        if total_ms >= _SLOW_CAPTURE_MS:
+            _log_slow_capture(hwnd, w, h, total_ms, pw_ms, dib_ms)
         return frame[:, :, :3].copy()  # BGRA → BGR
 
     except Exception as e:

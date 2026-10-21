@@ -2557,14 +2557,16 @@ class MainLoop:
 
                     ocr_ms = (t3 - t2) * 1000
                     loop_elapsed = (time.monotonic() - loop_start) * 1000
+                    loop_cpu_ms = (time.process_time() - loop_cpu_start) * 1000
+                    loop_thr_ms = (time.thread_time() - loop_thr_start) * 1000
                     self._perf.record_frame(ocr_ms=ocr_ms, loop_ms=loop_elapsed)
                     self._phase_sums["total"] += ocr_ms
                     self._phase_sums["capture"] += phase_capture_ms
                     self._phase_sums["pre"] += phase_pre_ms
                     self._phase_sums["pre_cpu"] += phase_pre_cpu_ms
                     self._phase_sums["pre_thr"] += phase_pre_thr_ms
-                    self._phase_sums["cpu"] += (time.process_time() - loop_cpu_start) * 1000
-                    self._phase_sums["cpu_thr"] += (time.thread_time() - loop_thr_start) * 1000
+                    self._phase_sums["cpu"] += loop_cpu_ms
+                    self._phase_sums["cpu_thr"] += loop_thr_ms
                     self._phase_sums["mid"] += phase_mid_ms
                     self._phase_sums["iter"] += loop_elapsed
                     self._phase_frames += 1
@@ -2585,7 +2587,10 @@ class MainLoop:
                             )
                             self._log(
                                 f"偵測循環過慢: {detect_elapsed:.0f}ms"
-                                f" (OCR={ocr_ms:.0f}ms，驗證阻塞={self._verify_blocked_ms:.0f}ms、"
+                                f" (前處理={phase_pre_ms:.0f}ms、擷取={phase_capture_ms:.0f}ms、"
+                                f"黑幕/差異={phase_mid_ms:.0f}ms、處理={ocr_ms:.0f}ms；"
+                                f"本幀CPU={loop_cpu_ms:.0f}ms/執行緒CPU={loop_thr_ms:.0f}ms；"
+                                f"驗證阻塞={self._verify_blocked_ms:.0f}ms、"
                                 f"刻意等待={self._frame_waited_ms:.0f}ms 已排除；"
                                 f"OCR診斷: recognize={profile['calls']}次/{profile['ms']:.0f}ms，"
                                 f"ROI像素={profile['pixels']}，最大ROI={max_roi}，"

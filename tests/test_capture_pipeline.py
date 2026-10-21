@@ -7,6 +7,8 @@
 
 import ctypes
 import ctypes.wintypes as wintypes
+import logging
+import types
 
 import numpy as np
 import pytest
@@ -155,3 +157,19 @@ def test_is_black_capture_detects_zero_bitmap():
     assert _pw.is_black_capture(np.zeros((0, 0, 3), np.uint8)) is False
     assert _pw.is_black_capture(np.zeros((4, 4, 3), np.uint8)) is True
     assert _pw.is_black_capture(np.zeros((4, 4, 3), np.uint8) + 1) is False
+
+
+def test_slow_capture_log_is_rate_limited(monkeypatch, caplog):
+    now = [100.0]
+    monkeypatch.setattr(_pw, "time", types.SimpleNamespace(monotonic=lambda: now[0]))
+    monkeypatch.setattr(_pw, "_last_slow_capture_log", 0.0)
+
+    with caplog.at_level(logging.WARNING, logger=_pw._log.name):
+        _pw._log_slow_capture(1, 10, 10, 600, 550, 40)
+        _pw._log_slow_capture(1, 10, 10, 700, 650, 40)
+        now[0] += _pw._SLOW_CAPTURE_LOG_SEC + 1
+        _pw._log_slow_capture(1, 10, 10, 800, 750, 40)
+
+    slow_logs = [r.getMessage() for r in caplog.records if "PrintWindow 擷取過慢" in r.getMessage()]
+    assert len(slow_logs) == 2
+    assert "PrintWindow=750ms" in slow_logs[-1]
