@@ -57,7 +57,19 @@
 
 測試速度紅線：整套 `pytest` 的標準時間約 1 分鐘。實境截圖幀清單集中在 `tests/data_frames.py`（新增截圖：ASCII 檔名 → 加入 `ALL_FRAMES`；截圖不入版控，只在本地），**預設只跑 `CORE_FRAMES`**；全量 12 幀會讓 OCR 整合測試約翻倍（約 +50s），只在需要時設 `OTC_FULL_FRAMES=1` 跑，不要讓預設路徑變慢。
 
-3. **add + commit + push**（一次完成）：
+3. **座標校正自檢**（本次改到座標換算／輸入分派／截圖客戶區時必跑；純文件/UI 文案跳過）：
+   ```powershell
+   uv run python devtools/coordinate_calibration.py --self-check
+   uv run python devtools/coordinate_calibration.py --diagnose
+   ```
+   `--diagnose` 是安全層：只驗證實際客戶區尺寸下的座標數學與三模式路由，不碰滑鼠。若改動涉及真點擊、前景/hybrid 激活或 input 路徑，**加跑真點擊驗證**（會移動滑鼠、短暫搶焦點約 35 秒）：
+   ```powershell
+   uv run python devtools/coordinate_calibration.py --e2e        # 三模式 × 1600x900 有框/無框
+   uv run python devtools/coordinate_calibration.py --e2e --full # 另加 1920x1080 無框
+   ```
+   狀態檔在 `%TEMP%\otc_calibration_status.json`；exit code 非 0 即未完成。三模式需要 Frida 環境，失敗時先跑 `--diagnose` 區分「座標數學」與「注入/前景」問題。
+
+4. **add + commit + push**（一次完成）：
    ```powershell
    pwsh -Command "
      [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -139,6 +151,8 @@ pwsh -Command "
 | 模板擷取 (capture region) | 螢幕絕對 | (螢幕 - win_rect - chrome) ÷ client_size → 客戶區比例 |
 
 > ROI/點擊/模板選取**統一走前景 selector**（`07_gui_roi`、`13_gui_click_picker`、`14_capture_region`），後台模式也相同（設定時將目標視窗前景化），收斂為客戶區比例。已實測前景(mss)模板與後台執行截圖（PrintWindow）比對一致（BrownDust II 全部信心 1.0），故後台模板不再需要 PrintWindow 框選 UI。
+
+> **客戶區尺寸**一律用 `get_client_size_hwnd()`（GetClientRect）或 `MainLoop._client_size(rect)`。`get_window_client_offset()` 只回傳客戶區左上角 offset，**不可**拿來算 `W - cx`／`H - cy`（有框視窗的右/下邊框會被漏掉，座標系統性偏移）；無 hwnd 的純數學 fallback 僅供測試。
 
 ### 主循環處理
 

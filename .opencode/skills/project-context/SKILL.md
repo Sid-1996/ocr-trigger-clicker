@@ -279,6 +279,10 @@ JSON 結構：`rules`（含 `id`/`name`/`enabled`/`background`/`steps`；`match_
 
 15. **效能回歸：兩個 GIL 凍結陷阱（v0.4.7 修復，勿再犯）**：v0.4.3 之後的版本主循環被拖慢約 2 倍（實機 574ms/幀 vs v0.4.3 的 323ms），兩個獨立成因各自都能拖垮整個行程——(a) `ExecutionLogWidget._populate` 每 500ms 全量重建 50 列（250 個 `QTableWidgetItem`＋`ResizeToContents` 重算），GUI 執行緒佔 23% 取樣；(b) 每幀 `get_window_rect(title)` 走 pygetwindow 列舉全桌面並逐視窗 `GetWindowText`（跨行程同步送訊、持 GIL，受擠壓時單次阻塞 145ms）。修法：面板改增量附加（`tests/test_execution_log_widget.py` 以「重複 `_populate` 時 item 物件身分不變」把關）、熱路徑改 `get_window_rect_hwnd()`＋`MainLoop._chrome()` 每幀快取。**症狀辨識**：`[perf]` 某階段耗時暴增但 `執行緒CPU≈0` = GIL 被別條執行緒霸佔（不是 loop 沒被排程）。紅線、診斷手法（faulthandler 逐執行緒堆疊）與真機 A/B 協定見 `AGENTS.md:效能紅線` 與 `docs/dev/TECHNICAL.md`「GIL 凍結兩案」。
 
+16. **`get_window_client_offset()` 是左上角 offset，不是邊框總和**（2026-10 修復）：有框視窗實測外框 1616×908、客戶區 1600×869、offset `(8,31)`，但下邊框只有 8px。多處曾用 `W - cx`、`H - cy` 算客戶區尺寸，導致客戶區比例座標系統性偏移（x 最多約 8px，CENTER 最多約 4px；無框視窗 offset 為 0 所以測不出來）。正解：`get_client_size_hwnd(hwnd)`（GetClientRect）或 `MainLoop._client_size(rect)`；`core/01_screenshot.py` 另提供 `get_client_offset_hwnd`／`get_window_client_size`／`get_client_rect_for_image`。修正涵蓋 `_resolve_roi`／`_resolve_point` 與 GUI 的 ROI/點擊/模板換算。`devtools/coordinate_calibration.py --e2e` 以真實客戶區尺寸驗證三模式（0px 偏差），可重現此類問題。
+
+17. **Windows 上 `os.replace` 會被開著的讀者擋掉**：校正工具原本用「暫存檔 + `os.replace`」寫狀態，輪詢讀者一開檔就讓 replace 失敗，狀態更新被靜默丟掉，真點擊測試隨機「未命中」。現在 `_write_status_file` 直接覆寫同一路徑（讀者可能讀到半寫 JSON → `_read_status` 回 None 後重試），並在狀態 JSON 帶 `hwnd` 讓測試鎖定同一個視窗。
+
 ## GUI／MainLoop 檔案層級 write-write race（已修復，commit `7974267` + `eda47c2`）
 
 **病灶**：`MainLoop` 執行中每 20 次迭代（或停止時），若 `_rules_dirty=True`（規則觸發時設定），會用自己記憶體中的 `self._rules` 快照直接呼叫 `save_rules()` 覆寫任務檔（此邏輯已於 commit `eda47c2` 完全移除，不再存在於目前的 `05_main_loop.py`）。GUI 端的一般規則編輯（`_save_current_rule`）在 loop 執行中會被 UI disabled 擋住，但 `_on_background_changed`（勾選「常駐監控」）沒有這層防護，可以在 loop 執行中直接存檔。GUI 的 `save_task()`/`save_groups()` 呼叫與 loop 的週期性存檔之間存在檔案層級的 write-write race：GUI 剛寫入的新規則，可能在下一瞬間被 loop 用舊快照覆寫掉。症狀：新建立的「常駐監控」規則，在 loop 執行過幾輪、且使用者編輯過後，重啟工具即消失。
