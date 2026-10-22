@@ -643,6 +643,10 @@ def _diagnose():
     try:
         for mode in ("pynput", "frida", "hybrid"):
             print(f"\n[{mode}]")
+            if mode == "pynput":
+                # 螢幕擷取需要目標真的在最上層；前景可能在啟動後被其他視窗搶走
+                screenshot.activate_window_hwnd(hwnd)
+                time.sleep(0.1)
             frame = capture_pipeline.capture_frame(mode, WINDOW_TITLE, hwnd, rect)
             if frame is None:
                 print("  截圖：失敗（後台模式需提升權限或目標不支援 PrintWindow）")
