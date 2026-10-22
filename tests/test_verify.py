@@ -209,6 +209,44 @@ def test_match_image_capture_size_preserved_and_sanitized():
     assert v_bad is not None and "capture_size" not in v_bad
 
 
+def test_match_image_color_mask_sanitized():
+    out = RuleMig._normalize_step_params(
+        "match_image",
+        {
+            "template_data": "abc==",
+            "color_mask": {
+                "colors": [[10, 20, 30], [10, 20, 30], [300, -5, 999]],
+                "tolerance": 999,
+                "mode": "KEEP",
+            },
+        },
+    )
+    assert out["color_mask"] == {
+        "colors": [[10, 20, 30], [255, 0, 255]],
+        "tolerance": 255,
+        "mode": "keep",
+    }
+
+    bad = RuleMig._normalize_step_params(
+        "match_image",
+        {"template_data": "abc==", "color_mask": {"colors": [[1, 2]], "mode": "weird"}},
+    )
+    assert "color_mask" not in bad, "無效顏色不得寫入任務"
+
+    v = RuleMig._normalize_verify(
+        {
+            "type": "match_image",
+            "template_data": "abc==",
+            "color_mask": {"colors": [[1, 2, 3]], "tolerance": -5, "mode": "weird"},
+        }
+    )
+    assert v is not None and v["color_mask"] == {
+        "colors": [[1, 2, 3]],
+        "tolerance": 0,
+        "mode": "ignore",
+    }
+
+
 def test_backward_compat_no_verify():
     # old task without verify stays unchanged
     out = RuleMig._normalize_step_params("click", {"target": "custom", "x": 0.2, "y": 0.3})

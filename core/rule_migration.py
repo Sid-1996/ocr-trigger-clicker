@@ -94,6 +94,39 @@ def _sanitize_capture_size(raw: object) -> list[int] | None:
     return [w, h]
 
 
+def _sanitize_color_mask(raw: object) -> dict | None:
+    """顏色範圍遮罩（RGB）；無效或空值回 None，不讓匯入任務帶壞資料。"""
+    if not isinstance(raw, dict):
+        return None
+    colors = raw.get("colors")
+    if not isinstance(colors, (list, tuple)):
+        return None
+    result = []
+    seen = set()
+    for color in colors[:8]:
+        if not isinstance(color, (list, tuple)) or len(color) != 3:
+            continue
+        try:
+            r, g, b = (max(0, min(255, int(v))) for v in color)
+        except (TypeError, ValueError):
+            continue
+        key = (r, g, b)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append([r, g, b])
+    if not result:
+        return None
+    mode = str(raw.get("mode", "ignore")).strip().lower()
+    if mode not in ("ignore", "keep"):
+        mode = "ignore"
+    return {
+        "colors": result,
+        "tolerance": max(0, min(255, _as_int(raw.get("tolerance", 30), 30))),
+        "mode": mode,
+    }
+
+
 def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
     action = action if isinstance(action, dict) else {}
     action_type = str(action.get("type", default_type))
@@ -199,6 +232,9 @@ def _normalize_verify(raw: object) -> dict | None:
         result["threshold"] = max(0.0, min(1.0, _as_float(raw.get("threshold", 0.8), 0.8)))
         result["match_color"] = bool(raw.get("match_color", False))
         result["color_tolerance"] = max(0, min(255, _as_int(raw.get("color_tolerance", 100), 100)))
+        cm = _sanitize_color_mask(raw.get("color_mask"))
+        if cm:
+            result["color_mask"] = cm
         cs = _sanitize_capture_size(raw.get("capture_size"))
         if cs:
             result["capture_size"] = cs
@@ -298,6 +334,11 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
         base["threshold"] = max(0.0, min(1.0, _as_float(base.get("threshold", 0.8), 0.8)))
         base["match_color"] = bool(base.get("match_color", False))
         base["color_tolerance"] = max(0, min(255, _as_int(base.get("color_tolerance", 100), 100)))
+        cm = _sanitize_color_mask(base.get("color_mask"))
+        if cm:
+            base["color_mask"] = cm
+        else:
+            base.pop("color_mask", None)
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
         base["after_delay_ms"] = max(0, _as_int(base.get("after_delay_ms", 0), 0))
         cs = _sanitize_capture_size(base.pop("capture_size", None))

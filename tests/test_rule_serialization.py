@@ -37,6 +37,27 @@ def test_dict_to_rule_round_trip():
     assert restored.steps[0].params["text"] == "hello"
 
 
+def test_match_image_color_mask_round_trip():
+    mask = {
+        "colors": [[10, 20, 30], [40, 50, 60]],
+        "tolerance": 20,
+        "mode": "keep",
+    }
+    rule = Rule(
+        id="cm1",
+        name="Color Mask",
+        enabled=True,
+        steps=[
+            Step(
+                type="match_image",
+                params={"template_data": "abc==", "color_mask": mask},
+            )
+        ],
+    )
+    restored = _dict_to_rule(_rule_to_dict(rule))
+    assert restored.steps[0].params["color_mask"] == mask
+
+
 def test_dict_to_rule_quiet_defaults_false():
     restored = _dict_to_rule({"id": "q0", "name": "Q0", "enabled": True, "steps": []})
     assert restored.quiet is False

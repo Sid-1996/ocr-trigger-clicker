@@ -54,3 +54,32 @@ def test_source_label_hidden_without_template():
     form = _make_form({})
     assert form._source_label.isHidden()
     form.deleteLater()
+
+
+def test_color_mask_status_and_toggles():
+    mask = {"colors": [[0, 0, 0]], "tolerance": 10, "mode": "keep"}
+    form = _make_form(
+        {
+            "template_data": _b64_template(),
+            "match_color": True,
+            "color_tolerance": 10,
+            "color_mask": mask,
+        }
+    )
+    expected = _GUI.T("step_form.color_mask_status_keep", n=1)
+    expected += " · " + _GUI.T("step_form.color_mask_check_pct", pct=100)
+    assert form._color_mask_status.text() == expected
+    assert form._color_mask_btn.isEnabled()
+
+    form._match_color.setChecked(False)
+    assert form._color_mask_status.text() == _GUI.T("step_form.color_mask_needs_color")
+    assert not form._color_mask_btn.isEnabled()
+
+    form._match_color.setChecked(True)
+    form._color_tolerance.setValue(0)
+    assert form._color_mask_status.text() == _GUI.T("step_form.color_mask_zero_tolerance")
+
+    form._color_tolerance.setValue(10)
+    form.save()
+    assert form._step.params["color_mask"] == mask
+    form.deleteLater()

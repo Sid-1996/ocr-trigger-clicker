@@ -93,6 +93,7 @@ def test_prematch_equiv_all_frames():
                 current_size,
                 p.get("match_color", False),
                 p.get("color_tolerance", 100),
+                p.get("color_mask"),
             )
             # prematch-consumed path
             ctx_a = StepContext(img=img, rect=rect)

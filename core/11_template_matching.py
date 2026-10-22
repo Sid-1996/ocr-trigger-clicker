@@ -46,6 +46,7 @@ def b64_to_img(data: str) -> Optional[np.ndarray]:
 
 
 MIN_TEMPLATE_SIDE = 4  # 模板裁切最小邊長（px），小於此視為無效
+MAX_COLOR_MASK_COLORS = 8
 
 
 def crop_template_b64(b64: str, x: int, y: int, w: int, h: int) -> Optional[str]:
@@ -155,6 +156,48 @@ def scale_candidates(
     return [round(scale_range[0] + i * scale_step, 4) for i in range(num)]
 
 
+def build_color_mask(template_bgr: np.ndarray, color_mask: Optional[dict]) -> Optional[np.ndarray]:
+    """建立「要檢查顏色」的模板像素遮罩。
+
+    color_mask["colors"] 使用 RGB；template_bgr 是 OpenCV BGR。mode="ignore"
+    表示選取色是背景（排除後只檢查前景），mode="keep" 表示只檢查選取色。
+    無效、沒有顏色、或遮罩內沒有像素時回傳 None，呼叫端退回舊的整張比對。
+    """
+    if not isinstance(color_mask, dict):
+        return None
+    colors = color_mask.get("colors")
+    if not isinstance(colors, (list, tuple)) or not colors:
+        return None
+    mode = str(color_mask.get("mode", "ignore")).strip().lower()
+    if mode not in ("ignore", "keep"):
+        return None
+    try:
+        tolerance = max(0, min(255, int(color_mask.get("tolerance", 0))))
+    except (TypeError, ValueError):
+        return None
+    if (
+        not isinstance(template_bgr, np.ndarray)
+        or template_bgr.ndim != 3
+        or template_bgr.shape[2] != 3
+    ):
+        return None
+    tmpl = template_bgr.astype(np.int16)
+    near = np.zeros(template_bgr.shape[:2], dtype=bool)
+    for color in colors[:MAX_COLOR_MASK_COLORS]:
+        if not isinstance(color, (list, tuple)) or len(color) != 3:
+            continue
+        try:
+            r, g, b = (max(0, min(255, int(v))) for v in color)
+        except (TypeError, ValueError):
+            continue
+        diff = np.abs(tmpl - np.array((b, g, r), dtype=np.int16))
+        near |= diff.max(axis=2) <= tolerance
+    if not near.any():
+        return None
+    check = ~near if mode == "ignore" else near
+    return check if check.any() else None
+
+
 def match_template(
     img: np.ndarray,
     template_path: str,
@@ -168,6 +211,7 @@ def match_template(
     current_size: Optional[list] = None,
     match_color: bool = False,
     color_tolerance: float = 0,
+    color_mask: Optional[dict] = None,
     return_best: bool = False,
 ) -> list[MatchResult] | tuple[list[MatchResult], float]:
     if template_data:
@@ -192,6 +236,9 @@ def match_template(
     else:
         template = template_bgr  # ponytail: 保留 BGR 三通道，顏色差異會影響 TM_CCOEFF_NORMED 信心度
     th, tw = template.shape[:2]
+    color_mask_arr = None
+    if match_color and color_tolerance > 0 and color_mask:
+        color_mask_arr = build_color_mask(template_bgr, color_mask)
 
     if roi is not None and any(roi.get(k, 0) != 0 for k in ("w", "h")):
         h, w = img.shape[:2]
@@ -289,6 +336,10 @@ def match_template(
                     (template_bgr.shape[1], template_bgr.shape[0]),
                 )
             diff = cv2.absdiff(crop, template_bgr)
+            if color_mask_arr is not None and color_mask_arr.shape == diff.shape[:2]:
+                diff = diff[color_mask_arr]
+                if diff.size == 0:
+                    continue
             dist = float(np.mean(diff))
             if dist <= color_tolerance:
                 filtered.append(m)
@@ -506,6 +557,60 @@ if __name__ == "__main__":
     )
     assert len(gray_match) >= 1, "match_color=False should ignore color_tolerance"
     print(f"  [OK] color_tolerance: match_color=False ignores filter ({len(gray_match)} match)")
+
+    # ── color_mask: 只檢查選定顏色，忽略背景 ──
+    bg_rgb = [220, 200, 180]  # template 外框 BGR (180,200,220)
+    fg_rgb = [70, 60, 50]  # template 內框 BGR (50,60,70)
+    ignore_bg = {"colors": [bg_rgb], "tolerance": 10, "mode": "ignore"}
+    masked = match_template(
+        diff_color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=True,
+        color_tolerance=100,
+        color_mask=ignore_bg,
+    )
+    assert len(masked) >= 1, "ignore background should let inner match pass"
+    print(f"  [OK] color_mask: ignore background ({len(masked)} match)")
+
+    keep_fg = {"colors": [fg_rgb], "tolerance": 10, "mode": "keep"}
+    masked_keep = match_template(
+        diff_color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=True,
+        color_tolerance=100,
+        color_mask=keep_fg,
+    )
+    assert len(masked_keep) >= 1, "keep foreground should let inner match pass"
+    print(f"  [OK] color_mask: keep foreground ({len(masked_keep)} match)")
+
+    bad_mask = {"colors": [[255, 255, 255]], "tolerance": 10, "mode": "ignore"}
+    masked_bad = match_template(
+        diff_color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=True,
+        color_tolerance=100,
+        color_mask=bad_mask,
+    )
+    assert len(masked_bad) == 0, (
+        "mask with no matching template pixels must fall back to full check"
+    )
+    print(f"  [OK] color_mask: invalid/empty mask falls back ({len(masked_bad)} match)")
+
+    all_ignored = {"colors": [bg_rgb, fg_rgb], "tolerance": 10, "mode": "ignore"}
+    assert build_color_mask(color_tpl, all_ignored) is None
+    gray_with_mask = match_template(
+        diff_color_img,
+        tmp3_path,
+        threshold=0.5,
+        match_color=False,
+        color_tolerance=100,
+        color_mask=ignore_bg,
+    )
+    assert len(gray_with_mask) >= 1, "color_mask must not affect match_color=False"
+    print("  [OK] color_mask: all-ignored returns None; match_color=False unaffected")
 
     tmp3_path.unlink(missing_ok=True)
 

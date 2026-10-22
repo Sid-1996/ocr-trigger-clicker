@@ -286,3 +286,93 @@ def test_color_tolerance_different():
     )
     assert len(gray_match) >= 1
     tmp3_path.unlink(missing_ok=True)
+
+
+def test_color_mask_ignore_background():
+    tpl = np.zeros((21, 21, 3), dtype=np.uint8)
+    tpl[:] = (100, 100, 100)
+    tpl[5:16, 5:16] = (0, 0, 0)
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    img[:] = (200, 200, 200)
+    img[10:31, 10:31] = (200, 200, 200)
+    img[15:26, 15:26] = (0, 0, 0)
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp.close()
+    cv2.imwrite(tmp.name, tpl)
+    path = Path(tmp.name)
+    try:
+        no_mask = match_template(img, path, threshold=0.5, match_color=True, color_tolerance=10)
+        assert no_mask == [], "背景色差應讓整張模板的顏色驗證失敗"
+        ignore_bg = match_template(
+            img,
+            path,
+            threshold=0.5,
+            match_color=True,
+            color_tolerance=10,
+            color_mask={"colors": [[100, 100, 100]], "tolerance": 10, "mode": "ignore"},
+        )
+        assert len(ignore_bg) >= 1, "忽略背景色後應只檢查前景並通過"
+        keep_fg = match_template(
+            img,
+            path,
+            threshold=0.5,
+            match_color=True,
+            color_tolerance=10,
+            color_mask={"colors": [[0, 0, 0]], "tolerance": 10, "mode": "keep"},
+        )
+        assert len(keep_fg) >= 1, "只保留前景色應通過"
+        keep_bg = match_template(
+            img,
+            path,
+            threshold=0.5,
+            match_color=True,
+            color_tolerance=10,
+            color_mask={"colors": [[100, 100, 100]], "tolerance": 10, "mode": "keep"},
+        )
+        assert keep_bg == [], "只保留背景色時，背景色差不應被忽略"
+        gray = match_template(
+            img,
+            path,
+            threshold=0.5,
+            match_color=False,
+            color_tolerance=10,
+            color_mask={"colors": [[100, 100, 100]], "tolerance": 10, "mode": "ignore"},
+        )
+        assert len(gray) >= 1, "未啟用顏色比對時遮罩不應生效"
+        zero_tol = match_template(
+            img,
+            path,
+            threshold=0.5,
+            match_color=True,
+            color_tolerance=0,
+            color_mask={"colors": [[100, 100, 100]], "tolerance": 10, "mode": "ignore"},
+        )
+        assert len(zero_tol) >= 1, "容差 0 表示停用顏色驗證，遮罩也不應生效"
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_color_mask_invalid_falls_back_to_whole_template():
+    tpl = np.zeros((21, 21, 3), dtype=np.uint8)
+    tpl[:] = (100, 100, 100)
+    tpl[5:16, 5:16] = (0, 0, 0)
+    img = np.zeros((100, 100, 3), dtype=np.uint8)
+    img[:] = (200, 200, 200)
+    img[10:31, 10:31] = (200, 200, 200)
+    img[15:26, 15:26] = (0, 0, 0)
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    tmp.close()
+    cv2.imwrite(tmp.name, tpl)
+    path = Path(tmp.name)
+    try:
+        bad = match_template(
+            img,
+            path,
+            threshold=0.5,
+            match_color=True,
+            color_tolerance=10,
+            color_mask={"colors": [[1, 2]], "tolerance": 10, "mode": "ignore"},
+        )
+        assert bad == [], "無效遮罩應退回整張模板，不能誤放寬顏色驗證"
+    finally:
+        path.unlink(missing_ok=True)

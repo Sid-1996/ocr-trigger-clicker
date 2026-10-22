@@ -648,6 +648,7 @@ class TestRunController:
                     threshold = p.get("threshold", 0.8)
                     match_color = p.get("match_color", False)
                     color_tolerance = p.get("color_tolerance", 100)
+                    color_mask = p.get("color_mask")
                     task_path = (
                         str(_rule_engine.get_tasks_dir() / f"{win._current_task}.json")
                         if win._current_task
@@ -671,6 +672,7 @@ class TestRunController:
                         current_size=cur_size,
                         match_color=match_color,
                         color_tolerance=color_tolerance,
+                        color_mask=color_mask,
                         return_best=True,
                     )
                     tmpl_name = (
@@ -772,7 +774,12 @@ class TestRunController:
                             )
                         )
                         if match_color and best_below >= threshold:
-                            log.append(T("test.template_color_note", tolerance=color_tolerance))
+                            note_key = (
+                                "test.template_color_mask_note"
+                                if color_mask
+                                else "test.template_color_note"
+                            )
+                            log.append(T(note_key, tolerance=color_tolerance))
                         _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
                         markers.append(
                             {

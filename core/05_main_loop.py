@@ -146,6 +146,7 @@ def _prematch_pure(
     current_size,
     match_color: bool,
     color_tolerance,
+    color_mask=None,
 ):
     """執行緒池純計算函式：只跑 match_template，不碰任何執行個體狀態、不讀檔、
     不呼叫 Win32。capture_size/current_size/roi 皆由主執行緒預算後傳入，避免
@@ -161,6 +162,7 @@ def _prematch_pure(
         current_size=current_size,
         match_color=match_color,
         color_tolerance=color_tolerance,
+        color_mask=color_mask,
         return_best=True,
     )
 
@@ -169,6 +171,33 @@ def _crop_hash(crop: np.ndarray) -> bytes:
     """ROI 裁切內容指紋（blake2b-16B）。RapidOCR 對相同輸入 deterministic，
     故逐位元相同的裁切可直接複用上次辨識結果而不需重跑 OCR。"""
     return hashlib.blake2b(np.ascontiguousarray(crop).tobytes(), digest_size=16).digest()
+
+
+def _color_mask_key(color_mask) -> tuple | None:
+    """把 color_mask 正規化成可 hash 的 cache key；無效時回 None（舊行為）。"""
+    if not isinstance(color_mask, dict):
+        return None
+    colors = color_mask.get("colors")
+    if not isinstance(colors, (list, tuple)) or not colors:
+        return None
+    try:
+        tolerance = max(0, min(255, int(color_mask.get("tolerance", 0))))
+    except (TypeError, ValueError):
+        return None
+    color_key = []
+    for color in colors[:8]:
+        if not isinstance(color, (list, tuple)) or len(color) != 3:
+            continue
+        try:
+            color_key.append(tuple(max(0, min(255, int(v))) for v in color))
+        except (TypeError, ValueError):
+            continue
+    if not color_key:
+        return None
+    mode = str(color_mask.get("mode", "ignore")).strip().lower()
+    if mode not in ("ignore", "keep"):
+        return None
+    return (tuple(color_key), tolerance, mode)
 
 
 def _client_center_offset(
@@ -949,6 +978,7 @@ class MainLoop:
         threshold = params.get("threshold", 0.8)
         match_color = params.get("match_color", False)
         color_tolerance = params.get("color_tolerance", 100)
+        color_mask = params.get("color_mask")
         # 若並行群組已為本 step（index 0）平行預算好 match_template，直接消費，
         # 省去重複的找圖計算；步進>0或無預算時一律照舊即時計算。
         # prematch 只對應第 0 步（並行群組預算的結果），非第 0 步或已消費後一律
@@ -973,6 +1003,7 @@ class MainLoop:
                 threshold,
                 match_color,
                 color_tolerance,
+                _color_mask_key(color_mask),
                 tuple(capture_size) if capture_size else None,
                 tuple(current_size),
             )
@@ -992,6 +1023,7 @@ class MainLoop:
                     current_size=current_size,
                     match_color=match_color,
                     color_tolerance=color_tolerance,
+                    color_mask=color_mask,
                     return_best=True,
                 )
                 best_below = -1.0
@@ -1611,6 +1643,7 @@ class MainLoop:
             threshold = verify.get("threshold", 0.8)
             match_color = verify.get("match_color", False)
             color_tolerance = verify.get("color_tolerance", 100)
+            color_mask = verify.get("color_mask")
             # Reuse _tmpl_cache path similar to _handle_match_image
             h_img, w_img = img.shape[:2]
             if any(roi.get(k, 0) != 0 for k in ("w", "h")):
@@ -1627,6 +1660,7 @@ class MainLoop:
                 threshold,
                 match_color,
                 color_tolerance,
+                _color_mask_key(color_mask),
                 tuple(capture_size) if capture_size else None,
                 tuple(current_size),
             )
@@ -1646,6 +1680,7 @@ class MainLoop:
                     current_size=current_size,
                     match_color=match_color,
                     color_tolerance=color_tolerance,
+                    color_mask=color_mask,
                     return_best=True,
                 )
                 best_below = -1.0
@@ -2352,6 +2387,7 @@ class MainLoop:
                         current_size,
                         p.get("match_color", False),
                         p.get("color_tolerance", 100),
+                        p.get("color_mask"),
                     )
                 except RuntimeError:
                     # 池已被外部 shutdown：本幀退回循序匹配，不讓主循環掛掉

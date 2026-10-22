@@ -1107,13 +1107,28 @@ class _MatchImageStepForm(QWidget):
         self._color_tolerance.setValue(p.get("color_tolerance", 100))
         self._color_tolerance.setSuffix(T("step_form.color_suffix_short"))
         self._color_tolerance.setToolTip(T("tooltip.color_tolerance"))
+        form.addRow("", self._color_tolerance)
+
+        self._color_mask = p.get("color_mask")
+        self._color_mask_btn = QPushButton(T("step_form.color_mask_edit"))
+        self._color_mask_btn.setToolTip(T("tooltip.color_mask"))
+        self._color_mask_btn.clicked.connect(self._edit_color_mask)
+        self._color_mask_status = QLabel("")
+        self._color_mask_status.setWordWrap(True)
+        color_mask_row = QWidget()
+        cm_layout = QHBoxLayout(color_mask_row)
+        cm_layout.setContentsMargins(0, 0, 0, 0)
+        cm_layout.addWidget(self._color_mask_btn)
+        cm_layout.addWidget(self._color_mask_status, 1)
+        form.addRow(T("step_form.color_mask"), color_mask_row)
 
         def _on_match_color_toggled(checked):
             self._color_tolerance.setEnabled(checked)
+            self._update_color_mask_status()
 
         self._match_color.toggled.connect(_on_match_color_toggled)
+        self._color_tolerance.valueChanged.connect(self._update_color_mask_status)
         _on_match_color_toggled(self._match_color.isChecked())
-        form.addRow("", self._color_tolerance)
 
         self._after_delay = _NoWheelSpin()
         self._after_delay.setRange(0, 60000)
@@ -1324,6 +1339,69 @@ class _MatchImageStepForm(QWidget):
             self._source_label.setStyleSheet("color:#e67e22; font-size:11px;")
             self._source_label.setToolTip(T("step_form.template_source_missing_tip"))
 
+    def _update_color_mask_status(self):
+        self._color_mask_btn.setEnabled(self._match_color.isChecked())
+        if not self._match_color.isChecked():
+            self._color_mask_status.setText(T("step_form.color_mask_needs_color"))
+            self._color_mask_status.setStyleSheet("color:#888;")
+            return
+        if self._color_tolerance.value() <= 0:
+            self._color_mask_status.setText(T("step_form.color_mask_zero_tolerance"))
+            self._color_mask_status.setStyleSheet("color:#e67e22;")
+            return
+        mask = self._color_mask
+        if not isinstance(mask, dict) or not mask.get("colors"):
+            self._color_mask_status.setText(T("step_form.color_mask_none"))
+            self._color_mask_status.setStyleSheet("color:#888;")
+            return
+        mode = "keep" if mask.get("mode") == "keep" else "ignore"
+        status_key = (
+            "step_form.color_mask_status_keep"
+            if mode == "keep"
+            else "step_form.color_mask_status_ignore"
+        )
+        text = T(status_key, n=len(mask.get("colors") or []))
+        pct = None
+        b64 = self._step.params.get("template_data", "")
+        if b64:
+            try:
+                mask_arr = _tmpl_mod.build_color_mask(_tmpl_mod.b64_to_img(b64), mask)
+            except Exception:
+                mask_arr = None
+            if mask_arr is None:
+                self._color_mask_status.setText(T("step_form.color_mask_invalid"))
+                self._color_mask_status.setStyleSheet("color:#e67e22;")
+                return
+            pct = int(round(float(mask_arr.mean()) * 100))
+            text += " · " + T("step_form.color_mask_check_pct", pct=pct)
+        self._color_mask_status.setText(text)
+        self._color_mask_status.setStyleSheet(
+            "color:#4caf50;" if pct is None or pct >= 5 else "color:#e67e22;"
+        )
+
+    def _edit_color_mask(self):
+        b64 = self._step.params.get("template_data", "")
+        if not b64:
+            self._color_mask_status.setText(T("step_form.color_mask_no_template"))
+            self._color_mask_status.setStyleSheet("color:#e67e22;")
+            return
+        try:
+            result = _template_color_mask_mod.color_mask_dialog(
+                self, b64=b64, current=self._color_mask
+            )
+        except Exception:
+            logging.exception("color_mask_dialog failed")
+            return
+        if result is None:
+            return
+        self._color_mask = result or None
+        self._update_color_mask_status()
+
+    def _clear_color_mask(self):
+        self._color_mask = None
+        self._step.params.pop("color_mask", None)
+        self._update_color_mask_status()
+
     def _show_compare_result(self, text: str, style: str):
         self._img_compare_result.setText(text)
         self._img_compare_result.setStyleSheet(style)
@@ -1347,6 +1425,7 @@ class _MatchImageStepForm(QWidget):
         threshold = self._threshold.value()
         match_color = self._match_color.isChecked()
         color_tolerance = self._color_tolerance.value()
+        color_mask = self._color_mask if match_color and color_tolerance > 0 else None
         mode = _get_interaction_mode()
         hwnd = get_window_hwnd(title) if title else None
         _mode_warn = ""
@@ -1437,6 +1516,7 @@ class _MatchImageStepForm(QWidget):
             current_size=current_size,
             match_color=match_color,
             color_tolerance=color_tolerance,
+            color_mask=color_mask,
         )
         if results:
             best = results[0]
@@ -1462,10 +1542,14 @@ class _MatchImageStepForm(QWidget):
                 capture_size=capture_size,
                 current_size=current_size,
                 match_color=match_color,
-                color_tolerance=color_tolerance,
+                color_tolerance=0 if color_mask else color_tolerance,
+                color_mask=None,
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
             top_pct = int(top * 100)
+            color_note = ""
+            if color_mask and top >= threshold:
+                color_note = "\n" + T("img_compare.color_mask_rejected", pct=top_pct)
             logging.debug("img_compare: miss top=%.3f", top)
             scales = _tmpl_mod.scale_candidates(capture_size, current_size, w)
             source_text = (
@@ -1496,6 +1580,7 @@ class _MatchImageStepForm(QWidget):
             )
             self._show_compare_result(
                 T("img_compare.miss", top_pct=top_pct)
+                + color_note
                 + (f"\n{_mode_warn}" if _mode_warn else "")
                 + f"\n{diag}",
                 "color: #e67e22; font-weight: bold;"
@@ -1519,6 +1604,7 @@ class _MatchImageStepForm(QWidget):
                 self._step.params.pop("capture_size", None)
             self._tmpl_label.setText(T("format.embedded_image"))
             self._update_thumbnail()
+            self._clear_color_mask()
             self._list.steps_changed.emit()
         elif data:
             self._step.params["template_data"] = data
@@ -1526,6 +1612,7 @@ class _MatchImageStepForm(QWidget):
             self._step.params.pop("capture_size", None)
             self._tmpl_label.setText(T("format.embedded_image"))
             self._update_thumbnail()
+            self._clear_color_mask()
             self._list.steps_changed.emit()
 
     def _trim_template(self):
@@ -1542,6 +1629,7 @@ class _MatchImageStepForm(QWidget):
         self._step.params.pop("template", None)
         self._tmpl_label.setText(T("format.embedded_image"))
         self._update_thumbnail()
+        self._clear_color_mask()
         self._list.steps_changed.emit()
 
     def _pick_existing_template(self):
@@ -1568,6 +1656,7 @@ class _MatchImageStepForm(QWidget):
             self._step.params.pop("capture_size", None)
         self._tmpl_label.setText(T("format.embedded_image"))
         self._update_thumbnail()
+        self._clear_color_mask()
         self._list.steps_changed.emit()
 
     def _pick_roi(self):
@@ -1603,6 +1692,10 @@ class _MatchImageStepForm(QWidget):
         p["threshold"] = self._threshold.value()
         p["match_color"] = self._match_color.isChecked()
         p["color_tolerance"] = self._color_tolerance.value()
+        if isinstance(self._color_mask, dict) and self._color_mask.get("colors"):
+            p["color_mask"] = self._color_mask
+        else:
+            p.pop("color_mask", None)
         p["after_delay_ms"] = self._after_delay.value()
         # Verify 已收斂至動作四類（ADR-0005），圖片比對不再處理 verify
         action = self._of_action.currentData()
@@ -4129,6 +4222,7 @@ _template_crop_mod = load_sibling("template_crop", "gui/15_template_crop.py")
 trim_template_dialog = _template_crop_mod.trim_template_dialog
 
 _template_picker_mod = load_sibling("template_picker", "gui/16_template_picker.py")
+_template_color_mask_mod = load_sibling("template_color_mask", "gui/17_template_color_mask.py")
 pick_template_dialog = _template_picker_mod.pick_template_dialog
 
 _updater_mod = load_sibling("updater", "core/12_updater.py")

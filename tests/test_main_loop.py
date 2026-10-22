@@ -298,6 +298,64 @@ def test_match_image_search_region_cross_frame_cache():
         _ml_mod.match_template = orig
 
 
+def test_color_mask_key_normalizes_and_rejects_invalid():
+    key = _ml_mod._color_mask_key(
+        {
+            "colors": [[10, 20, 30], [300, -5, 999], ["bad"], [1, 2, 3]],
+            "tolerance": 300,
+            "mode": "KEEP",
+        }
+    )
+    assert key == (((10, 20, 30), (255, 0, 255), (1, 2, 3)), 255, "keep")
+    assert _ml_mod._color_mask_key({"colors": [], "tolerance": 10}) is None
+    assert _ml_mod._color_mask_key({"colors": [[1, 2]], "tolerance": 10}) is None
+    assert _ml_mod._color_mask_key({"colors": [[1, 2, 3]], "tolerance": "x"}) is None
+    assert _ml_mod._color_mask_key({"colors": [[1, 2, 3]], "tolerance": 10, "mode": "bad"}) is None
+
+
+def test_match_image_color_mask_cache_key_and_passthrough():
+    from collections import OrderedDict
+
+    ml = _make_ml()
+    ml._tmpl_cache = OrderedDict()
+    calls = []
+
+    def fake_match_template(img, template_path, roi, threshold, **kw):
+        calls.append(kw.get("color_mask"))
+        return ([_ml_mod.OcrResult(text="m", x=1, y=1, w=2, h=2, confidence=0.9)], -1.0)
+
+    orig = _ml_mod.match_template
+    _ml_mod.match_template = fake_match_template
+    try:
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        base = {
+            "template": "t.png",
+            "match_color": True,
+            "color_tolerance": 10,
+            "color_mask": {"colors": [[10, 20, 30]], "tolerance": 10, "mode": "ignore"},
+        }
+        rule = Rule(id="r1", name="r1", enabled=True, steps=[])
+        ctx = StepContext(img=img, rect={"x": 0, "y": 0, "w": 100, "h": 100})
+
+        ml._handle_match_image(dict(base), ctx, rule)
+        assert calls[-1] == base["color_mask"], "color_mask 應原樣傳入 match_template"
+
+        ml._handle_match_image(dict(base), ctx, rule)
+        assert len(calls) == 1, "同 color_mask 應命中快取"
+
+        changed = {
+            **base,
+            "color_mask": {"colors": [[10, 20, 30]], "tolerance": 20, "mode": "ignore"},
+        }
+        ml._handle_match_image(changed, ctx, rule)
+        assert len(calls) == 2, "不同容差必須重算"
+
+        ml._handle_match_image({**base, "color_mask": None}, ctx, rule)
+        assert len(calls) == 3, "移除遮罩必須重算"
+    finally:
+        _ml_mod.match_template = orig
+
+
 def test_match_image_step_capture_size_and_cache(monkeypatch):
     """模板來源尺寸逐步驟覆寫，且尺寸不同不得共用跨幀快取。"""
     ml = _make_ml()
