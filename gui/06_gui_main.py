@@ -5374,15 +5374,25 @@ class MainWindow(QMainWindow):
                 shutil.rmtree(empty, ignore_errors=True)
             self._status_bar.showMessage(T("record.no_events"), 6000)
             return
-        reply = QMessageBox.question(
-            self,
-            T("record.done_title"),
-            T("record.done_msg", n=n, m=len(sessions)),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(T("record.done_title"))
+        box.setText(T("record.done_msg", n=n, m=len(sessions)))
+        convert_btn = box.addButton(T("record.btn_convert"), QMessageBox.ButtonRole.AcceptRole)
+        keep_btn = box.addButton(T("record.btn_keep"), QMessageBox.ButtonRole.RejectRole)
+        discard_btn = box.addButton(T("record.btn_discard"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(convert_btn)
+        box.setEscapeButton(keep_btn)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is convert_btn:
             self._convert_recording_to_task(sessions)
+        elif clicked is discard_btn:
+            last = getattr(self, "_last_session_dir", None)
+            if last:
+                shutil.rmtree(last, ignore_errors=True)
+            self._last_session_dir = None
+            self._status_bar.showMessage(T("record.discarded"), 8000)
         else:
             self._status_bar.showMessage(T("record.keep_sessions"), 8000)
 
