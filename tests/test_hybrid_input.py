@@ -20,9 +20,10 @@ def test_is_window_minimized_uses_iconic(monkeypatch):
 
 
 class _FakeUser32:
-    def __init__(self, foreground=42, iconic=False):
+    def __init__(self, foreground=42, iconic=False, blocked=False):
         self.foreground = foreground
         self.iconic = iconic
+        self.blocked = blocked  # 模擬 Windows 前景鎖：SetForegroundWindow 無效
 
     def GetForegroundWindow(self):
         return self.foreground
@@ -46,7 +47,8 @@ class _FakeUser32:
         return True
 
     def SetForegroundWindow(self, hwnd):
-        self.foreground = hwnd
+        if not self.blocked:
+            self.foreground = hwnd
         return True
 
 
@@ -58,8 +60,19 @@ def test_focus_guard_blocks_minimized_target(monkeypatch):
         assert ready is False
 
 
-def test_focus_guard_blocks_failed_activation(monkeypatch):
-    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
+def test_focus_guard_falls_back_when_activate_lies(monkeypatch):
+    """pygetwindow 回報成功但前景沒變 → AttachThreadInput 版仍需把目標拉上前景。"""
+    fake = _FakeUser32(foreground=7)
+    monkeypatch.setattr(_hybrid, "_user32", fake)
+    monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
+
+    with _hybrid.focus_guard("game", lambda _title: True, 42) as ready:
+        assert ready is True
+    assert fake.foreground == 42
+
+
+def test_focus_guard_blocks_when_foreground_lock_wins(monkeypatch):
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32(foreground=7, blocked=True))
     monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
 
     with _hybrid.focus_guard("game", lambda _title: False, 42) as ready:
@@ -95,7 +108,7 @@ def test_focus_guard_restores_state_when_body_raises(monkeypatch):
 
 
 def test_focus_guard_restores_state_when_activation_raises(monkeypatch):
-    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32(foreground=7, blocked=True))
     monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
     restored = _restore_recorder(monkeypatch)
 

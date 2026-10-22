@@ -78,8 +78,11 @@ def _set_foreground(hwnd: int) -> None:
 def focus_guard(title: str, activate_fn, target_hwnd: int | None = None):
     """混合模式動作區間：進入時存檔並激活遊戲，離開時還原使用者狀態。
 
-    activate_fn(title) -> bool：實際激活函式。啟用後必須確認目標已成為前景；
-    視窗消失、最小化或激活失敗時 yield False，讓呼叫端跳過物理輸入。
+    activate_fn(title)：實際激活函式。它的回傳值不可靠——pygetwindow 的
+    activate() 會「回報成功」但 Windows 前景鎖其實沒讓視窗變前景，因此有
+    target_hwnd 時一律以 GetForegroundWindow 驗證，未成功就改用
+    AttachThreadInput 版 _set_foreground 補強。視窗消失、最小化或最終仍非
+    前景時 yield False，讓呼叫端跳過物理輸入。
     """
     with _act_lock:
         state = save_state()
@@ -88,16 +91,18 @@ def focus_guard(title: str, activate_fn, target_hwnd: int | None = None):
             ok = bool(activate_fn(title))
         except Exception:
             pass
-        if not ok:
-            _log_activate_fail(title)
-        hwnd = target_hwnd or _user32.GetForegroundWindow()
-        ready = bool(
-            ok
-            and hwnd
-            and _user32.IsWindow(hwnd)
-            and not _user32.IsIconic(hwnd)
-            and _user32.GetForegroundWindow() == hwnd
-        )
+        if target_hwnd:
+            # 有 hwnd 就以實際前景狀態為準，activate_fn 的回傳值僅供無 hwnd 時使用
+            if _user32.IsWindow(target_hwnd) and not _user32.IsIconic(target_hwnd):
+                if _user32.GetForegroundWindow() != target_hwnd:
+                    _set_foreground(target_hwnd)
+            ready = bool(
+                _user32.IsWindow(target_hwnd)
+                and not _user32.IsIconic(target_hwnd)
+                and _user32.GetForegroundWindow() == target_hwnd
+            )
+        else:
+            ready = ok
         if not ready:
             _log_activate_fail(title)
         time.sleep(_ACTIVATE_SETTLE_SEC)
