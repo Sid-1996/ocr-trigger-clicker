@@ -194,13 +194,34 @@ def get_client_rect_for_image(
 
 
 def activate_window_hwnd(hwnd: int) -> bool:
-    """Bring an exact window handle to the foreground (no title lookup)."""
+    """Bring an exact window handle to the foreground (no title lookup).
+
+    Windows 前景鎖會讓純 SetForegroundWindow 靜默失敗（回報成功但前景沒變），
+    因此以實際 GetForegroundWindow 驗證；失敗時借前景執行緒輸入權限重試。
+    """
     if not hwnd:
         return False
     try:
         _user32.ShowWindow(hwnd, 9)  # SW_RESTORE
         _user32.BringWindowToTop(hwnd)
-        return bool(_user32.SetForegroundWindow(hwnd))
+        if _user32.SetForegroundWindow(hwnd) and _user32.GetForegroundWindow() == hwnd:
+            return True
+        fg = _user32.GetForegroundWindow()
+        cur_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+        fg_tid = _user32.GetWindowThreadProcessId(fg, None)
+        target_tid = _user32.GetWindowThreadProcessId(hwnd, None)
+        attached = []
+        try:
+            if fg_tid and fg_tid != cur_tid and _user32.AttachThreadInput(cur_tid, fg_tid, True):
+                attached.append(fg_tid)
+            if target_tid and target_tid != cur_tid and target_tid not in attached:
+                if _user32.AttachThreadInput(cur_tid, target_tid, True):
+                    attached.append(target_tid)
+            _user32.SetForegroundWindow(hwnd)
+        finally:
+            for tid in attached:
+                _user32.AttachThreadInput(cur_tid, tid, False)
+        return bool(_user32.GetForegroundWindow() == hwnd)
     except Exception:
         return False
 

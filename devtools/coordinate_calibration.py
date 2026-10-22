@@ -942,6 +942,12 @@ def _e2e_run(mode: str, size_label: str, borderless: bool) -> dict:
                     and rect["y"] <= sy < rect["y"] + rect["h"]
                 ):
                     return {"label": label, "ok": False, "error": f"{target['id']} 點擊點超出視窗"}
+            if mode == "pynput":
+                # 擊點前重新抬升：控制台會浮在畫面中央，且前景可能被其他視窗搶走
+                screenshot.activate_window_hwnd(hwnd)
+                time.sleep(0.08)
+                if not main_loop.is_window_foreground(hwnd):
+                    return {"label": label, "ok": False, "error": "前景被其他視窗搶走"}
             ctx = main_loop.StepContext(img=None, rect=rect, step_idx=0)
             rule = main_loop.Rule(
                 id=rule_data["id"], name=rule_data["name"], enabled=True, steps=[]
