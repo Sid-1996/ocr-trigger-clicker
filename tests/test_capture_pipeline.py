@@ -211,6 +211,114 @@ def test_is_black_capture_detects_zero_bitmap():
     assert _pw.is_black_capture(np.zeros((4, 4, 3), np.uint8) + 1) is False
 
 
+class _FakePointUser32:
+    def __init__(self, found):
+        self.found = found
+        self.points = []
+
+    def WindowFromPoint(self, pt):
+        self.points.append((pt.x, pt.y))
+        return self.found
+
+    def GetAncestor(self, hwnd, flag):
+        return hwnd
+
+
+def test_is_point_on_window_compares_top_level_root(monkeypatch):
+    fake = _FakePointUser32(55)
+    monkeypatch.setattr(_pw, "_user32", fake)
+    assert _pw.is_point_on_window(55, 1, 2) is True
+    assert fake.points == [(1, 2)]
+    assert _pw.is_point_on_window(56, 1, 2) is False, "其他視窗蓋住時不算可見"
+    assert _pw.is_point_on_window(0, 1, 2) is False
+
+    monkeypatch.setattr(_pw, "_user32", _FakePointUser32(0))
+    assert _pw.is_point_on_window(55, 1, 2) is False, "桌布不算視窗可見"
+
+
+def test_sample_points_stay_inside_client_area():
+    pts = _pipe._sample_points(100, 50)
+    assert len(pts) == 25
+    assert pts[0] == (10, 5) and pts[-1] == (90, 45)
+    assert all(0 <= x < 100 and 0 <= y < 50 for x, y in pts)
+
+
+def test_patches_mean_clips_and_ignores_out_of_bounds():
+    img = np.zeros((50, 100, 3), np.uint8)
+    img[43:48, 88:93] = 100
+    assert _pipe._patches_mean(img, [(10, 5)]) == 0.0
+    assert _pipe._patches_mean(img, [(90, 45)]) == 100.0
+    assert _pipe._patches_mean(img, [(10, 5), (90, 45)]) == 50.0
+    assert _pipe._patches_mean(np.zeros((5, 5, 3), np.uint8), [(-5, -5)]) is None
+
+
+def _stub_screen_geometry(monkeypatch, rect=(10, 20, 100, 50), offset=(1, 2)):
+    monkeypatch.setattr(
+        _shot,
+        "get_window_rect_hwnd",
+        lambda hwnd: {"x": rect[0], "y": rect[1], "w": rect[2], "h": rect[3]},
+    )
+    monkeypatch.setattr(_shot, "get_client_offset_hwnd", lambda hwnd: offset)
+    monkeypatch.setattr(_shot, "get_client_size_hwnd", lambda hwnd: (rect[2], rect[3]))
+
+
+def test_screen_has_content_true_when_visible_area_bright(monkeypatch):
+    _stub_screen_geometry(monkeypatch)
+    monkeypatch.setattr(_pw, "is_point_on_window", lambda hwnd, x, y: True)
+    img = np.full((50, 100, 3), 40, np.uint8)
+    seen = []
+    monkeypatch.setattr(
+        _shot,
+        "capture",
+        lambda title, rect=None, hwnd=None: seen.append((title, rect, hwnd)) or img,
+    )
+    assert _pipe.screen_has_content("t", 7) is True
+    assert seen == [("t", {"x": 10, "y": 20, "w": 100, "h": 50}, 7)]
+
+
+def test_screen_has_content_false_when_visible_area_black(monkeypatch):
+    _stub_screen_geometry(monkeypatch)
+    monkeypatch.setattr(_pw, "is_point_on_window", lambda hwnd, x, y: True)
+    monkeypatch.setattr(_shot, "capture", lambda *a, **k: np.zeros((50, 100, 3), np.uint8))
+    assert _pipe.screen_has_content("t", 7) is False, "黑幕過場應判為無畫面"
+
+
+def test_screen_has_content_ignores_occluded_samples(monkeypatch):
+    _stub_screen_geometry(monkeypatch, rect=(0, 0, 100, 50), offset=(0, 0))
+    points = _pipe._sample_points(100, 50)
+    visible = set(points[:5])
+    hidden = points[-1]
+    monkeypatch.setattr(_pw, "is_point_on_window", lambda hwnd, x, y: (x, y) in visible)
+    img = np.zeros((50, 100, 3), np.uint8)
+    img[hidden[1] - 2 : hidden[1] + 3, hidden[0] - 2 : hidden[0] + 3] = 200
+    monkeypatch.setattr(_shot, "capture", lambda *a, **k: img)
+    assert _pipe.screen_has_content("t", 7) is False, "被遮擋區域的亮度不應計入"
+
+
+def test_screen_has_content_none_when_occluded_without_capture(monkeypatch):
+    _stub_screen_geometry(monkeypatch)
+    monkeypatch.setattr(_pw, "is_point_on_window", lambda hwnd, x, y: False)
+    monkeypatch.setattr(_shot, "capture", lambda *a, **k: pytest.fail("無可見點不應截圖"))
+    assert _pipe.screen_has_content("t", 7) is None
+
+
+def test_screen_has_content_none_on_shape_mismatch(monkeypatch):
+    _stub_screen_geometry(monkeypatch)
+    monkeypatch.setattr(_pw, "is_point_on_window", lambda hwnd, x, y: True)
+    monkeypatch.setattr(_shot, "capture", lambda *a, **k: np.zeros((10, 10, 3), np.uint8))
+    assert _pipe.screen_has_content("t", 7) is None
+
+
+def test_screen_has_content_none_without_hwnd_or_on_error(monkeypatch):
+    assert _pipe.screen_has_content("t", None) is None
+
+    def boom(hwnd):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(_shot, "get_window_rect_hwnd", boom)
+    assert _pipe.screen_has_content("t", 7) is None
+
+
 def test_slow_capture_log_is_rate_limited(monkeypatch, caplog):
     now = [100.0]
     monkeypatch.setattr(_pw, "time", types.SimpleNamespace(monotonic=lambda: now[0]))

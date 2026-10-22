@@ -190,6 +190,8 @@ GUI 端也有自己的 suppression（commit `bc2ff06`：用 `step.type + rule.id
 
 `is_black_capture()`（`15_print_window.py:25`）檢查 PrintWindow 輸出全像素為 0 才判為全黑（真實畫面再暗也有非零像素；None/空圖回 False）。非管理員時提示權限不足（如鳴潮遊戲），commit `4281972`、`72a9456`。OCR 診斷面板（`gui/09_ocr_debug.py:356`）也會檢查全黑並合併提示。
 
+執行中（`05_main_loop.py` `_check_black_frame`）另做時間與螢幕交叉驗證：全黑須持續 `_BLACK_VERIFY_SEC`（5 秒）才觸發，且由 `17_capture_pipeline.py` `screen_has_content()` 在螢幕上以 5×5 取樣（`WindowFromPoint`＋`GetAncestor(GA_ROOT)` 排除遮擋、平均亮度門檻）確認遊戲真有畫面才警告；螢幕也黑（黑幕過場）或無法判定（被遮擋、截圖失敗）則不警告、每 5 秒重試。啟動前單張測試幀與診斷面板仍只看 `is_black_capture()`。
+
 ### 工具保護排除
 
 後台模式不會被工具前景保護擋下（commit `c2c5327`: `_ensure_window_foreground()` 在後台模式跳過保護）。

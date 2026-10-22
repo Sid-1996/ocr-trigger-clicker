@@ -38,7 +38,7 @@ get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: Non
 _MIN_INTERVAL_SEC = 0.1
 _MAX_CPS = 5
 _CPS_WINDOW_SEC = 1.0
-_BLACK_STREAK_WARN = 3  # 後台連續全黑幀數達標才警告（避開單帧 GDI 抖動誤報）
+_BLACK_VERIFY_SEC = 5.0  # 後台全黑持續這麼久才做螢幕交叉驗證（避開黑幕過場）
 # 數字加總需連續穩定這麼久才顯示，避免畫面切換／數字動畫中的中途總和一閃而過
 _SUM_CONFIRM_SEC = 0.35
 
@@ -327,8 +327,11 @@ class MainLoop:
         # 本幀驗證阻塞時間（_poll_verify 全程，含截圖/OCR/等待），由 _loop 重置、
         # _poll_verify 累加；過慢判定需扣除——驗證等待是故意的，只記錄不告警
         self._verify_blocked_ms: float = 0.0
-        # 後台全黑偵測：連續黑幀計數，每次黑幕期只警告一次（見 _check_black_frame）
-        self._black_streak: int = 0
+        # 後台全黑偵測：持續全黑達門檻後以螢幕畫面交叉驗證，每黑幕期只警告一次
+        self._black_since: float | None = None
+        self._black_next_verify: float = 0.0
+        self._black_warned: bool = False
+        self._black_logged: bool = False
         self._fail_since: dict[
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
@@ -651,22 +654,45 @@ class MainLoop:
     def _should_process_static_frame(self) -> bool:
         return self._has_detect_rules
 
+    def _reset_black_state(self) -> None:
+        self._black_since = None
+        self._black_next_verify = 0.0
+        self._black_warned = False
+        self._black_logged = False
+
     def _check_black_frame(self, img: np.ndarray, is_bg: bool) -> bool:
         """後台 PrintWindow 權限失敗會回全黑圖（真實畫面再暗也有非零像素）。
 
         回傳 True = 本幀視同截圖失敗，呼叫端應跳過規則處理（全黑不可能有可偵測內容，
-        省下每幀白跑的 OCR）。連續 _BLACK_STREAK_WARN 幀才警告一次，非管理員時附提示；
-        黑幕期內不重複警告，出現正常幀即歸零。
+        省下每幀白跑的 OCR）。持續全黑 _BLACK_VERIFY_SEC 秒後，以螢幕上同視窗的
+        可見畫面交叉驗證：螢幕有畫面才警告（真不支援後台截圖），螢幕也黑則視為
+        遊戲黑幕過場，不警告並稍後重試。黑幕期內只警告一次，出現正常幀即歸零。
         """
         if not is_bg or not is_black_capture(img):
-            self._black_streak = 0
+            self._reset_black_state()
             return False
-        self._black_streak += 1
-        if self._black_streak == _BLACK_STREAK_WARN:
-            self._log(f"後台截圖連續全黑（{self._black_streak} 幀）")
+        now = time.monotonic()
+        if self._black_since is None:
+            self._black_since = now
+            self._black_next_verify = now + _BLACK_VERIFY_SEC
+            return True
+        if self._black_warned or now < self._black_next_verify:
+            return True
+        self._black_next_verify = now + _BLACK_VERIFY_SEC
+        verified = _capture_pipeline.screen_has_content(self._window_title, self._window_hwnd)
+        if verified is True:
+            self._black_warned = True
+            black_sec = now - self._black_since
+            self._log(f"後台截圖全黑（{black_sec:.0f} 秒）但螢幕畫面正常，判定不支援後台截圖")
             if self.on_black_fail:
                 # 呈現（診斷＋行動對話框／降級狀態列）由 GUI 層決定
                 self.on_black_fail()
+        elif not self._black_logged:
+            self._black_logged = True
+            self._logger.info(
+                "後台截圖全黑但螢幕交叉驗證未通過（%s），視為黑幕過場或無法判定",
+                "無可見畫面" if verified is False else "無法判定",
+            )
         return True
 
     def _ocr_region(self, img: np.ndarray, roi: dict | None) -> list:
@@ -2506,7 +2532,7 @@ class MainLoop:
                         with self._window_lock:
                             self._window_hwnd = get_window_hwnd_orig(title)
                     if self._window_hwnd and is_window_minimized(self._window_hwnd):
-                        self._black_streak = 0
+                        self._reset_black_state()
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
@@ -2518,6 +2544,7 @@ class MainLoop:
                     )
                     ph_rect = time.monotonic()
                     if rect is None:
+                        self._reset_black_state()
                         self._wait_window_recover(title)
                         self._perf.record_frame()
                         continue
@@ -2548,6 +2575,7 @@ class MainLoop:
                     img = self._capture(mode, self._window_title, hwnd=self._window_hwnd, rect=rect)
                     phase_capture_ms = (time.monotonic() - cap_started) * 1000
                     if img is None:
+                        self._reset_black_state()
                         if iteration % 30 == 0:
                             self._log(f"所有截圖方式皆失敗: {title}")
                         self._perf.record_frame()
@@ -2662,7 +2690,7 @@ class MainLoop:
         self._last_exec_log.clear()
         self._rule_completed.clear()
         self._last_completed_log.clear()
-        self._black_streak = 0
+        self._reset_black_state()
         self._frame_count = 0
         for k in self._phase_sums:
             self._phase_sums[k] = 0.0
@@ -2732,6 +2760,7 @@ class MainLoop:
             self._tracking_hwnd = self._window_hwnd
             self._frame_chrome = None
             self._frame_client_size = None
+            self._reset_black_state()
             return True
 
     def set_tool_hwnd(self, hwnd: int) -> None:
@@ -2912,7 +2941,7 @@ if __name__ == "__main__":
     ml._sum_seen = None
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
-    ml._black_streak = 0
+    ml._reset_black_state()
     ml._slow_loop_warned = False
     ml._obs_mismatch_total = 0
     ml._obs_checked_total = 0

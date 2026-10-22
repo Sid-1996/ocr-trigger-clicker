@@ -10,6 +10,7 @@ import numpy as np
 _log = logging.getLogger(__name__)
 
 PW_RENDERFULLCONTENT = 0x00000002
+_GA_ROOT = 2
 _SLOW_CAPTURE_MS = 500.0
 _SLOW_CAPTURE_LOG_SEC = 5.0
 _last_slow_capture_log = 0.0
@@ -29,10 +30,32 @@ def is_admin() -> bool:
 
 
 def is_black_capture(img) -> bool:
-    """PrintWindow 權限失敗時回傳零初始化 bitmap（全像素為 0）；真實畫面再暗也有非零像素。"""
+    """PrintWindow 權限失敗時回傳零初始化 bitmap（全像素為 0）；真實畫面再暗也有非零像素。
+
+    全黑也可能是遊戲本身的黑幕過場，需再由螢幕畫面交叉驗證（見
+    `17_capture_pipeline.screen_has_content()`）。
+    """
     if img is None or img.size == 0:
         return False
     return not img.any()
+
+
+def is_point_on_window(hwnd: int, x: int, y: int) -> bool:
+    """螢幕座標 (x, y) 的最上層視窗是否就是目標視窗（含子視窗）。
+
+    用來排除被其他視窗遮住的取樣點；點擊穿透視窗不會被 WindowFromPoint
+    命中，需由呼叫端另做亮度門檻。
+    """
+    if not hwnd:
+        return False
+    try:
+        pt = wintypes.POINT(int(x), int(y))
+        found = _user32.WindowFromPoint(pt)
+        if not found:
+            return False
+        return bool(_user32.GetAncestor(found, _GA_ROOT) == _user32.GetAncestor(hwnd, _GA_ROOT))
+    except Exception:
+        return False
 
 
 class _BITMAPINFOHEADER(ctypes.Structure):
@@ -59,6 +82,10 @@ _user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
 _user32.ReleaseDC.restype = ctypes.c_int
 _user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
 _user32.PrintWindow.restype = wintypes.BOOL
+_user32.WindowFromPoint.argtypes = [wintypes.POINT]
+_user32.WindowFromPoint.restype = wintypes.HWND
+_user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+_user32.GetAncestor.restype = wintypes.HWND
 
 _gdi32.CreateCompatibleDC.argtypes = [wintypes.HDC]
 _gdi32.CreateCompatibleDC.restype = wintypes.HDC

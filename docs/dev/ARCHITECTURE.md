@@ -672,7 +672,7 @@ MainLoop.emergency_stop()
 | 全域速率限制 (CPS) | `10_performance_monitor.py` | 限制每秒點擊上限（`max_cps` 可調，預設 5），違規 3 次自動暫停偵測 |
 | 前景保護 (目標視窗) | `05_main_loop.py` | 僅在目標視窗為前景時才執行點擊，非前景時靜默等待 |
 | 前景保護 (工具視窗) | `05_main_loop.py` | 工具自身視窗在前景時自動暫停 click/key/drag/scroll，防止誤搶焦點（後台模式直接回傳 False，不誤擋） |
-| 後台全黑偵測 | `15_print_window.py` `is_black_capture()` | 後台截圖全像素為零才命中（暗色遊戲不誤判）；搭配 `is_admin()` 提醒以系統管理員重啟 |
+| 後台全黑偵測 | `15_print_window.py` `is_black_capture()`＋`17_capture_pipeline.py` `screen_has_content()` | 後台截圖全像素為零且持續 5 秒後，取螢幕上未被遮擋的客戶區交叉驗證：有畫面才提醒（真不支援），黑幕過場不誤報；搭配 `is_admin()` 提醒以系統管理員重啟 |
 | OCR 連續失敗重啟 | `02_ocr_engine.py` | 連續 5 次失敗 → 重建引擎實例 |
 | 視窗消失自動暫停 | `05_main_loop.py` | `get_window_rect()` 回傳 None → 暫停循環，每 5 秒檢查視窗是否重現 |
 | 座標驗證 | `03_pynput_input.py` `_validate_coords()` | 使用 `GetSystemMetrics(VIRTUALSCREEN)` 確保點擊不超出多螢幕範圍 |

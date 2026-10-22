@@ -87,6 +87,7 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 
 - **現象**：部分遊戲（如鳴潮）在後台模式截圖全黑、OCR 偵測不到任何字
 - **原因**：非系統管理員權限下，遊戲拒絕把畫面繪製給 PrintWindow；`core/15_print_window.py` 的 `is_black_capture()` / `is_admin()` 即用以偵測此情況，並於啟動前提醒
+- **過場誤報防護**：執行中只在全黑持續 5 秒、且螢幕上未被遮擋的遊戲畫面確實有內容時才提示（`core/17_capture_pipeline.py` `screen_has_content()`）；純黑過場或全螢幕獨佔／被遮擋等無法判定情況不提示
 - **解法**：以**系統管理員**身分啟動工具（右鍵 → 以系統管理員身分執行）
 
 ---

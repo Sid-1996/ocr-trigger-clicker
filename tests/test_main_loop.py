@@ -1643,28 +1643,92 @@ def test_wait_window_recover_stops_on_stop_event(monkeypatch):
 # ── _check_black_frame（後台全黑偵測）──
 
 
-def test_check_black_frame_notifies_once_per_episode():
+def _stub_screen_content(monkeypatch, results):
+    _pipe = load_sibling("capture_pipeline", "core/17_capture_pipeline.py")
+    assert _ml_mod._capture_pipeline is _pipe, "必須 patch 主循環引用的同一模組物件"
+    calls = []
+
+    def fake(title, hwnd):
+        calls.append((title, hwnd))
+        return results.pop(0) if results else None
+
+    monkeypatch.setattr(_pipe, "screen_has_content", fake)
+    return calls
+
+
+def test_check_black_frame_verifies_only_after_sustained_black(monkeypatch):
     ml = _make_ml()
+    now = [1000.0]
+    monkeypatch.setattr(_ml_mod.time, "monotonic", lambda: now[0])
     calls = []
     ml.on_black_fail = lambda: calls.append(1)
+    verified = _stub_screen_content(monkeypatch, [True])
     black = np.zeros((10, 10, 3), dtype=np.uint8)
     normal = np.full((10, 10, 3), 128, dtype=np.uint8)
+
     assert ml._check_black_frame(black, True) is True
+    now[0] += _ml_mod._BLACK_VERIFY_SEC - 0.1
     assert ml._check_black_frame(black, True) is True
-    assert calls == [], "未達連續幀數門檻不應通知"
+    assert verified == [], "未滿驗證時間不應交叉驗證"
+    assert calls == []
+
+    now[0] += 0.2
     assert ml._check_black_frame(black, True) is True
-    assert len(calls) == 1, "達門檻應通知一次（呈現由 GUI 層決定）"
+    assert len(verified) == 1, "滿 _BLACK_VERIFY_SEC 應驗證一次"
+    assert calls == [1], "螢幕有畫面才通知（呈現由 GUI 層決定）"
+
+    now[0] += _ml_mod._BLACK_VERIFY_SEC * 2
     assert ml._check_black_frame(black, True) is True
-    assert len(calls) == 1, "黑幕期內不重複通知"
+    assert len(verified) == 1, "同一黑幕期不重複驗證"
+    assert calls == [1], "黑幕期內不重複通知"
+
     assert ml._check_black_frame(normal, True) is False
-    assert ml._black_streak == 0, "正常幀應歸零計數"
+    assert ml._black_since is None and ml._black_warned is False, "正常幀應歸零"
+
+
+def test_check_black_frame_retries_until_screen_has_content(monkeypatch):
+    ml = _make_ml()
+    now = [1000.0]
+    monkeypatch.setattr(_ml_mod.time, "monotonic", lambda: now[0])
+    calls = []
+    ml.on_black_fail = lambda: calls.append(1)
+    verified = _stub_screen_content(monkeypatch, [False, None, True])
+    black = np.zeros((10, 10, 3), dtype=np.uint8)
+
+    ml._check_black_frame(black, True)
+    now[0] += _ml_mod._BLACK_VERIFY_SEC
+    ml._check_black_frame(black, True)
+    assert calls == [], "螢幕也黑（黑幕過場）不應通知"
+    now[0] += _ml_mod._BLACK_VERIFY_SEC
+    ml._check_black_frame(black, True)
+    assert calls == [], "無法判定不應通知"
+    now[0] += _ml_mod._BLACK_VERIFY_SEC
+    ml._check_black_frame(black, True)
+    assert calls == [1], "後續驗證到畫面才通知"
+    assert len(verified) == 3
 
 
 def test_check_black_frame_skips_foreground():
     ml = _make_ml()
     black = np.zeros((10, 10, 3), dtype=np.uint8)
+    ml._black_since = 123.0
     assert ml._check_black_frame(black, False) is False
-    assert ml._black_streak == 0, "前景模式不掃描、不累計"
+    assert ml._black_since is None, "前景模式不掃描、不累計"
+
+
+def test_set_window_resets_black_state(monkeypatch):
+    ml = _make_ml()
+    ml._black_since = 123.0
+    ml._black_warned = True
+    ml._black_next_verify = 456.0
+    ml._black_logged = True
+    monkeypatch.setattr(
+        _ml_mod, "get_window_rect", lambda title: {"x": 0, "y": 0, "w": 10, "h": 10}
+    )
+    monkeypatch.setattr(_ml_mod, "get_window_hwnd_orig", lambda title: 42)
+    monkeypatch.setattr(_ml_mod, "get_dpi_scaling_factor", lambda hwnd: 1.0)
+    assert ml.set_window("新視窗") is True
+    assert ml._black_since is None and ml._black_warned is False, "換視窗應重置黑幕狀態"
 
 
 # ── _report_bg_failure（後台注入失敗回報）──
