@@ -89,6 +89,7 @@ def make_main_loop():
         "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "pynput"}
     )()
     ml._execution_log = deque(maxlen=50)
+    ml._quiet_names = set()
     ml._last_exec_log = {}
     ml._rule_completed = set()
     ml._last_completed_log = {}

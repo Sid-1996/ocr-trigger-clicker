@@ -24,15 +24,22 @@ def test_dict_to_rule_round_trip():
                 params={"text": "hello", "roi": {"x": 0, "y": 0, "w": 0, "h": 0}},
             ),
         ],
+        quiet=True,
     )
     d = _rule_to_dict(rule)
     restored = _dict_to_rule(d)
     assert restored.id == rule.id
     assert restored.name == rule.name
     assert restored.enabled == rule.enabled
+    assert restored.quiet is True
     assert len(restored.steps) == 1
     assert restored.steps[0].type == "detect"
     assert restored.steps[0].params["text"] == "hello"
+
+
+def test_dict_to_rule_quiet_defaults_false():
+    restored = _dict_to_rule({"id": "q0", "name": "Q0", "enabled": True, "steps": []})
+    assert restored.quiet is False
 
 
 def test_rule_to_dict_excludes_trigger_fields():

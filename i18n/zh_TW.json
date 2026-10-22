@@ -77,6 +77,8 @@
   "main.name": "名稱:",
   "main.enabled": "啟用:",
   "main.background": "背景:",
+  "main.quiet_log": "🔇 日誌靜音",
+  "main.quiet_log_hint": "勾選後，這條規則的成功紀錄（ok／觸發／完成）不寫入執行日誌與 app.log；失敗仍會顯示。",
   "main.notes": "備註:",
   "main.step_list": "步驟列表:",
   "main.ready": "就緒 — 請選擇視窗並新增規則",

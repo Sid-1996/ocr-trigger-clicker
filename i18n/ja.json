@@ -83,6 +83,8 @@
   "main.name": "名前:",
   "main.enabled": "有効:",
   "main.background": "常駐:",
+  "main.quiet_log": "🔇 ログ非表示",
+  "main.quiet_log_hint": "このルールの成功記録（ok／実行／完了）を実行ログと app.log に書き込みません。失敗は表示されます。",
   "main.notes": "メモ:",
   "main.step_list": "ステップ:",
   "main.ready": "準備完了 — ウィンドウを選択してルールを追加してください",

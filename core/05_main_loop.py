@@ -337,6 +337,7 @@ class MainLoop:
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
         self._last_active_rule_id: str | None = None
         self._execution_log: deque = deque(maxlen=50)
+        self._quiet_names: set[str] = set()
         self._last_exec_log: dict[str, tuple] = {}
         self._rule_completed: set[str] = set()
         self._last_completed_log: dict[str, float] = {}
@@ -479,6 +480,8 @@ class MainLoop:
         result: str,
         detail: str = "",
     ):
+        if result in ("ok", "triggered", "completed") and rule_name in self._quiet_names:
+            return
         if result == "completed":
             now = time.monotonic()
             last = self._last_completed_log.get(rule_name, 0.0)
@@ -520,6 +523,7 @@ class MainLoop:
         with self._rules_lock:
             self._rules = load_rules(self._rules_path)
             self._rule_map = {r.id: r for r in self._rules}
+            self._quiet_names = {r.name for r in self._rules if r.quiet}
             self._groups = load_groups(self._rules_path)
             self._rule_pointer = 0
             self._group_rounds_completed.clear()
@@ -1384,10 +1388,11 @@ class MainLoop:
         if ok:
             self._perf.record_click()
             ctx.triggered = True
-            self._log(
-                f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」",
-                dedup_key=f"{rule.id}:click",
-            )
+            if not rule.quiet:
+                self._log(
+                    f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」",
+                    dedup_key=f"{rule.id}:click",
+                )
         elif self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida":
             self._report_bg_failure()
 
@@ -1421,10 +1426,11 @@ class MainLoop:
         if ok:
             self._perf.record_click()
             ctx.triggered = True
-            self._log(
-                f"規則「{rule.name}」按鍵「{key}」",
-                dedup_key=f"{rule.id}:key:{key}",
-            )
+            if not rule.quiet:
+                self._log(
+                    f"規則「{rule.name}」按鍵「{key}」",
+                    dedup_key=f"{rule.id}:key:{key}",
+                )
         elif self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida":
             self._report_bg_failure()
 
@@ -1477,10 +1483,11 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
         ctx.triggered = True
-        self._log(
-            f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})",
-            dedup_key=f"{rule.id}:drag",
-        )
+        if not rule.quiet:
+            self._log(
+                f"規則「{rule.name}」拖曳 ({ssx},{ssy})→({sex},{sey})",
+                dedup_key=f"{rule.id}:drag",
+            )
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -1507,10 +1514,11 @@ class MainLoop:
 
         self._perf.record_click()
         ctx.triggered = True
-        self._log(
-            f"規則「{rule.name}」滾輪 {direction} x{amount}",
-            dedup_key=f"{rule.id}:scroll",
-        )
+        if not rule.quiet:
+            self._log(
+                f"規則「{rule.name}」滾輪 {direction} x{amount}",
+                dedup_key=f"{rule.id}:scroll",
+            )
         return StepResult("continue")
 
     def _handle_wait(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
@@ -1535,10 +1543,11 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.jump_not_in_group"))
         self._rule_in_group_ptr = group.rule_ids.index(target_id)
         target_name = getattr(self._rule_map.get(target_id), "name", target_id)
-        self._log(
-            f"規則「{rule.name}」跳轉至「{target_name}」",
-            dedup_key=f"{rule.id}:jump",
-        )
+        if not rule.quiet:
+            self._log(
+                f"規則「{rule.name}」跳轉至「{target_name}」",
+                dedup_key=f"{rule.id}:jump",
+            )
         ctx.jumped = True
         return StepResult("stop")
 
@@ -2832,6 +2841,7 @@ class MainLoop:
                     "name": r.name,
                     "enabled": r.enabled,
                     "background": r.background,
+                    "quiet": r.quiet,
                     "pointer": r.id == current_rule_id,
                     "failed": any(k.startswith(f"{r.id}:") for k in self._fail_since),
                     "group_done": (
@@ -2902,6 +2912,7 @@ if __name__ == "__main__":
     ml._tmpl_cache = OrderedDict()
     ml._tmpl_cache_max = 64
     ml._execution_log = deque(maxlen=50)
+    ml._quiet_names = set()
     ml._last_exec_log = {}
     ml._frame_count = 0
     ml._phase_sums = dict.fromkeys(

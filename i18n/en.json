@@ -77,6 +77,8 @@
   "main.name": "Name:",
   "main.enabled": "Enabled:",
   "main.background": "Background:",
+  "main.quiet_log": "🔇 Mute log",
+  "main.quiet_log_hint": "Hide this rule's success rows (ok / triggered / completed) from the execution log and app.log. Failures remain visible.",
   "main.notes": "Notes:",
   "main.step_list": "Steps:",
   "main.ready": "Ready — select a window and add a rule",

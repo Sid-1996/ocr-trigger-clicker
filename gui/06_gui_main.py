@@ -422,6 +422,10 @@ def _step_summary(step, rules_provider=None) -> str:
     return t
 
 
+def _rule_prefix(background, quiet) -> str:
+    return ("👁 " if background else "") + ("🔇 " if quiet else "")
+
+
 def _rule_tags(rule) -> str:
     """Generate summary tags for rule list, e.g. ' [5步] [失敗]'."""
     steps = rule.steps
@@ -4903,6 +4907,9 @@ class MainWindow(QMainWindow):
         self._edit_background = QCheckBox(T("ui.background_monitor"))
         self._edit_background.setToolTip(T("ui.background_monitor_hint"))
         name_row.addWidget(self._edit_background)
+        self._edit_quiet = QCheckBox(T("main.quiet_log"))
+        self._edit_quiet.setToolTip(T("main.quiet_log_hint"))
+        name_row.addWidget(self._edit_quiet)
         edit_layout.addLayout(name_row)
 
         notes_row = QHBoxLayout()
@@ -5059,6 +5066,7 @@ class MainWindow(QMainWindow):
         self._edit_test_btn.clicked.connect(self._test_ctrl.on_test_rule)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._edit_background.stateChanged.connect(self._on_background_changed)
+        self._edit_quiet.stateChanged.connect(self._on_quiet_changed)
         self._edit_notes.textChanged.connect(self._on_notes_changed)
         self._debug_btn.clicked.connect(self._switch_to_debug)
         self._debug_back_btn.clicked.connect(self._switch_to_rules)
@@ -5770,7 +5778,8 @@ class MainWindow(QMainWindow):
                 if r is None:
                     continue
                 child = QTreeWidgetItem()
-                text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
+                prefix = _rule_prefix(r.background, r.quiet)
+                text = f"{prefix}[{'✓' if r.enabled else '✗'}] {r.name}"
                 child.setText(0, text)
                 tags = _rule_tags(r).lstrip()
                 if tags:
@@ -5801,7 +5810,8 @@ class MainWindow(QMainWindow):
             bg_item.setForeground(0, QColor("#aaaaaa"))
             for r in bg_rules:
                 child = QTreeWidgetItem()
-                text = f"{'👁 ' if r.background else ''}[{'✓' if r.enabled else '✗'}] {r.name}"
+                prefix = _rule_prefix(r.background, r.quiet)
+                text = f"{prefix}[{'✓' if r.enabled else '✗'}] {r.name}"
                 child.setText(0, text)
                 tags = _rule_tags(r).lstrip()
                 if tags:
@@ -5915,7 +5925,10 @@ class MainWindow(QMainWindow):
                 icon_color = (0, 180, 0)
             else:
                 icon_color = (160, 160, 160)
-            base = f"{'👁 ' if st.get('background') else ''}[{'✓' if enabled else '✗'}] {st['name']}"
+            base = (
+                f"{_rule_prefix(st.get('background'), st.get('quiet'))}"
+                f"[{'✓' if enabled else '✗'}] {st['name']}"
+            )
             if item.text(0) != base:
                 item.setText(0, base)
             r = rule_lookup.get(sid)
@@ -5986,10 +5999,11 @@ class MainWindow(QMainWindow):
                     prev_rule.name = self._edit_name.text()
                     prev_rule.enabled = self._edit_enabled.isChecked()
                     prev_rule.background = self._edit_background.isChecked()
+                    prev_rule.quiet = self._edit_quiet.isChecked()
                     prev_rule.notes = self._edit_notes.toPlainText()
                     prev_rule.steps = self._step_list.get_steps()
                     self._flush_save()
-                    prefix = "👁 " if prev_rule.background else ""
+                    prefix = _rule_prefix(prev_rule.background, prev_rule.quiet)
                     status = "✓" if prev_rule.enabled else "✗"
                     previous.setText(0, f"{prefix}[{status}] {prev_rule.name}")
                     tags = _rule_tags(prev_rule).lstrip()
@@ -6090,6 +6104,9 @@ class MainWindow(QMainWindow):
         self._edit_background.blockSignals(True)
         self._edit_background.setChecked(getattr(rule, "background", False))
         self._edit_background.blockSignals(False)
+        self._edit_quiet.blockSignals(True)
+        self._edit_quiet.setChecked(getattr(rule, "quiet", False))
+        self._edit_quiet.blockSignals(False)
         self._edit_notes.blockSignals(True)
         self._edit_notes.setPlainText(getattr(rule, "notes", ""))
         self._edit_notes.blockSignals(False)
@@ -6105,12 +6122,24 @@ class MainWindow(QMainWindow):
         self._flush_save()
         item = self._rule_list.currentItem()
         if item:
-            prefix = "👁 " if rule.background else ""
+            prefix = _rule_prefix(rule.background, rule.quiet)
             text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
             item.setText(0, text)
             tags = _rule_tags(rule).lstrip()
             if tags:
                 item.setText(1, tags)
+
+    def _on_quiet_changed(self, state):
+        rule = self._get_current_rule()
+        if rule is None:
+            return
+        rule.quiet = bool(state)
+        self._schedule_save()
+        item = self._rule_list.currentItem()
+        if item:
+            prefix = _rule_prefix(rule.background, rule.quiet)
+            text = f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}"
+            item.setText(0, text)
 
     def _on_background_changed(self, state):
         rule = self._get_current_rule()
@@ -6777,7 +6806,7 @@ class MainWindow(QMainWindow):
         self._schedule_save()
         item = self._rule_list.currentItem()
         if item:
-            prefix = "👁 " if rule.background else ""
+            prefix = _rule_prefix(rule.background, rule.quiet)
             item.setText(0, f"{prefix}[{'✓' if rule.enabled else '✗'}] {rule.name}")
             tags = _rule_tags(rule).lstrip()
             if tags:
@@ -7420,6 +7449,7 @@ class MainWindow(QMainWindow):
         self._edit_name.setEnabled(enabled)
         self._edit_enabled.setEnabled(enabled)
         self._edit_background.setEnabled(enabled)
+        self._edit_quiet.setEnabled(enabled)
         self._step_list.setEnabled(enabled)
 
         if enabled:

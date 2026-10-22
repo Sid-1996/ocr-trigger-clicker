@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 import tempfile
@@ -525,6 +526,59 @@ def test_on_fail_key_logs_stop_not_ok():
     assert len(ml._execution_log) == 1
     assert ml._execution_log[0]["result"] == "stop"
     assert "Escape" in ml._execution_log[0]["detail"]
+
+
+def test_quiet_rule_suppresses_success_logs():
+    """靜音規則：成功/觸發/完成不進日誌；失敗仍進；其他規則不受影響。"""
+    ml = _make_ml()
+    ml._quiet_names = {"Q"}
+    ml._log_exec("Q", 0, "detect", "ok")
+    ml._log_exec("Q", -1, "completed", "completed")
+    ml._log_exec("Q", 0, "background", "triggered")
+    assert len(ml._execution_log) == 0
+    ml._log_exec("Q", 0, "detect", "stop", "no match")
+    assert len(ml._execution_log) == 1
+    assert ml._execution_log[0]["result"] == "stop"
+    ml._log_exec("Loud", 0, "detect", "ok")
+    assert len(ml._execution_log) == 2
+
+
+def test_quiet_rule_skips_key_action_log():
+    """靜音規則連成功動作列也不寫（洗版主因），非靜音規則照寫。"""
+    ml = _make_ml()
+    logged = []
+    ml._log = lambda msg, dedup_key=None: logged.append(msg)
+    ml._send_key = lambda k: True
+    ctx = StepContext(
+        img=np.zeros((10, 10, 3), dtype=np.uint8), rect={"x": 0, "y": 0, "w": 100, "h": 100}
+    )
+    quiet_rule = Rule(id="q", name="Q", enabled=True, steps=[], quiet=True)
+    ml._handle_key({"key": "Tab"}, ctx, quiet_rule)
+    assert logged == []
+    loud_rule = Rule(id="l", name="L", enabled=True, steps=[], quiet=False)
+    ml._handle_key({"key": "Tab"}, ctx, loud_rule)
+    assert len(logged) == 1
+
+
+def test_load_rules_collects_quiet_names(tmp_path):
+    p = tmp_path / "task.json"
+    p.write_text(
+        json.dumps(
+            {
+                "rules": [
+                    {"id": "q1", "name": "Q1", "enabled": True, "steps": [], "quiet": True},
+                    {"id": "l1", "name": "L1", "enabled": True, "steps": []},
+                ],
+                "groups": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    ml = _make_ml()
+    ml._rules_path = str(p)
+    ml._load_rules()
+    assert ml._quiet_names == {"Q1"}
 
 
 # ── _send_click frida 模式派發 ──

@@ -42,6 +42,7 @@ class Rule:
     enabled: bool
     steps: list[Step]
     background: bool = False
+    quiet: bool = False
     notes: str = ""
 
 
