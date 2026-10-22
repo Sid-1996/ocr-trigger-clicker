@@ -196,6 +196,8 @@
   "record.btn_convert": "轉成任務",
   "record.btn_keep": "保留",
   "record.btn_discard": "丟棄本次",
+  "record.discard_confirm_title": "確認丟棄",
+  "record.discard_confirm_msg": "將刪除本次錄製的 {n} 次點擊原始資料，此操作無法復原。",
   "record.discarded": "已丟棄本次錄製資料。",
   "record.keep_sessions": "已保留錄製資料，下次錄製後可一併轉換。",
   "record.save_failed": "任務儲存失敗，錄製資料已保留。請檢查磁碟空間後重試。",

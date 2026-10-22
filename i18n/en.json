@@ -196,6 +196,8 @@
   "record.btn_convert": "Convert to task",
   "record.btn_keep": "Keep",
   "record.btn_discard": "Discard",
+  "record.discard_confirm_title": "Confirm Discard",
+  "record.discard_confirm_msg": "This will delete the original data for {n} click(s) from this recording. This cannot be undone.",
   "record.discarded": "This recording was discarded.",
   "record.keep_sessions": "Recording data kept. It can be converted together next time.",
   "record.save_failed": "Failed to save the task. Recording data was kept. Check disk space and try again.",

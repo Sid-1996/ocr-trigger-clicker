@@ -5388,11 +5388,23 @@ class MainWindow(QMainWindow):
         if clicked is convert_btn:
             self._convert_recording_to_task(sessions)
         elif clicked is discard_btn:
-            last = getattr(self, "_last_session_dir", None)
-            if last:
-                shutil.rmtree(last, ignore_errors=True)
-            self._last_session_dir = None
-            self._status_bar.showMessage(T("record.discarded"), 8000)
+            confirm = QMessageBox(self)
+            confirm.setIcon(QMessageBox.Icon.Warning)
+            confirm.setWindowTitle(T("record.discard_confirm_title"))
+            confirm.setText(T("record.discard_confirm_msg", n=n))
+            confirm_discard = confirm.addButton(
+                T("record.btn_discard"), QMessageBox.ButtonRole.DestructiveRole
+            )
+            confirm_cancel = confirm.addButton(T("ui.cancel"), QMessageBox.ButtonRole.RejectRole)
+            confirm.setDefaultButton(confirm_cancel)
+            confirm.setEscapeButton(confirm_cancel)
+            confirm.exec()
+            if confirm.clickedButton() is confirm_discard:
+                last = getattr(self, "_last_session_dir", None)
+                if last:
+                    shutil.rmtree(last, ignore_errors=True)
+                self._last_session_dir = None
+                self._status_bar.showMessage(T("record.discarded"), 8000)
         else:
             self._status_bar.showMessage(T("record.keep_sessions"), 8000)
 

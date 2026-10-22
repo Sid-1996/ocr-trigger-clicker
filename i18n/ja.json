@@ -202,6 +202,8 @@
   "record.btn_convert": "タスクに変換",
   "record.btn_keep": "保持",
   "record.btn_discard": "今回を破棄",
+  "record.discard_confirm_title": "破棄の確認",
+  "record.discard_confirm_msg": "今回記録した {n} クリック分の元データを削除します。この操作は元に戻せません。",
   "record.discarded": "今回の記録データを破棄しました。",
   "record.keep_sessions": "記録データを保持しました。次回一緒に変換できます。",
   "record.save_failed": "タスクの保存に失敗しました。記録データは保持されています。ディスク容量を確認して再試行してください。",
