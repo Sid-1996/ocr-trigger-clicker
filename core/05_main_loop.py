@@ -342,9 +342,9 @@ class MainLoop:
         self._match_image_warn_counter: dict[str, int] = {}
         self._detect_warn_counter: dict[str, int] = {}
         self._sum_warn_counter: dict[str, int] = {}
-        # 加總浮層狀態：candidate = rule_id → (total, count, 首次看到時間)；
+        # 加總浮層狀態：candidate = (rule_id, step_idx) → (total, count, 首次看到時間)；
         # active_rule = 目前浮層顯示中的規則；seen 記錄上一幀有評估加總的規則
-        self._sum_candidate: dict[str, tuple[int, int, float]] = {}
+        self._sum_candidate: dict[tuple[str, int], tuple[int, int, float]] = {}
         self._last_sum_report: dict[str, dict[int, tuple[int, int]]] = {}
         self._sum_active_rule: str | None = None
         self._sum_seen: set[str] | None = None
@@ -1151,9 +1151,10 @@ class MainLoop:
     ) -> None:
         """穩定後寫日誌；前景模式才顯示浮層。"""
         now = time.monotonic()
-        prev = self._sum_candidate.get(rule.id)
+        key = (rule.id, ctx.step_idx)
+        prev = self._sum_candidate.get(key)
         if prev is None or prev[0] != total or prev[1] != count:
-            self._sum_candidate[rule.id] = (total, count, now)
+            self._sum_candidate[key] = (total, count, now)
             self._hide_sum(rule.id)
             return
         if now - prev[2] < _SUM_CONFIRM_SEC:
@@ -1218,7 +1219,8 @@ class MainLoop:
 
     def _clear_sum(self, rule_id: str) -> None:
         """前置條件失效：丟掉候選值與去重狀態，並淡出該規則的浮層。"""
-        self._sum_candidate.pop(rule_id, None)
+        for key in [k for k in self._sum_candidate if k[0] == rule_id]:
+            del self._sum_candidate[key]
         self._last_sum_report.pop(rule_id, None)
         self._hide_sum(rule_id)
 

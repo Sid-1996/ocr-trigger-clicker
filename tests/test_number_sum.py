@@ -185,7 +185,7 @@ def test_handle_sum_no_numbers_hides_overlay(monkeypatch):
     ml._handle_sum(params, _ctx(), rule)
     assert hides == [True]
     assert ml._sum_active_rule is None
-    assert "r" not in ml._sum_candidate
+    assert not ml._sum_candidate
 
 
 def test_sum_frame_start_hides_rule_not_evaluated():
@@ -193,14 +193,14 @@ def test_sum_frame_start_hides_rule_not_evaluated():
     hides = []
     ml.on_sum_hide = lambda: hides.append(True)
     ml._sum_active_rule = "r"
-    ml._sum_candidate = {"r": (43, 1, 100.0)}
+    ml._sum_candidate = {("r", 0): (43, 1, 100.0), ("r", 1): (10, 1, 100.0)}
     ml._sum_seen = set()
 
     ml._sum_frame_start()
 
     assert hides == [True]
     assert ml._sum_active_rule is None
-    assert "r" not in ml._sum_candidate
+    assert not ml._sum_candidate
     assert ml._sum_seen == set()
 
 
@@ -306,6 +306,30 @@ def test_sum_log_dedupes_per_step():
     assert len(ml._logger.lines) == 2
     assert "step=0" in ml._logger.lines[0]
     assert "step=1" in ml._logger.lines[1]
+
+
+def test_two_sum_steps_track_independently(monkeypatch):
+    ml = make_main_loop()
+    ml._logger = _ListLogger()
+    rule = Rule(id="r", name="加總", enabled=True, steps=[])
+    roi = {"x": 10, "y": 20, "w": 100, "h": 50}
+    now = [100.0]
+    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
+
+    ctxs = []
+    for step_idx, total, count in ((0, 35, 2), (1, 10, 1)):
+        ctx = _ctx()
+        ctx.step_idx = step_idx
+        ml._update_sum(rule, ctx, roi, total, count, "")
+        ctxs.append((ctx, total, count))
+
+    now[0] += 0.4
+    for ctx, total, count in ctxs:
+        ml._update_sum(rule, ctx, roi, total, count, "")
+        assert ctx.sum_stable is True, f"step {ctx.step_idx} 應各自穩定"
+
+    assert set(ml._last_sum_report["r"]) == {0, 1}
+    assert len(ml._logger.lines) == 2
 
 
 def test_sum_panel_log_only_when_foreground():
