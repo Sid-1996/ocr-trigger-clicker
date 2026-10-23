@@ -655,13 +655,9 @@ class TestRunController:
                         else None
                     )
                     cs = _rule_engine.get_effective_capture_size(p, task_path or "")
-                    title = win._window_combo.currentText()
-                    wr = get_window_rect(title) if title else None
-                    chrome = get_window_client_offset(title) or (0, 0) if title else (0, 0)
-                    if wr and chrome and chrome[0] >= 0 and chrome[1] >= 0:
-                        cur_size = [wr["w"] - chrome[0], wr["h"] - chrome[1]]
-                    else:
-                        cur_size = None
+                    # 與圖片比對／主循環同源：客戶區尺寸必須用 GetClientRect 的
+                    # 真實值（_client_rect），不可用 rect - chrome 漏掉右／下邊框。
+                    cur_size = [_client_rect[2], _client_rect[3]] if _client_rect else None
                     results, best_below = _main_loop_mod.match_template(
                         img,
                         tmpl_path,

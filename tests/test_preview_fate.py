@@ -1,10 +1,56 @@
+import base64
 import os
+from types import SimpleNamespace
+
+import cv2
+import numpy as np
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from _loader import load_sibling
 
 RC = load_sibling("run_controller", "gui/run_controller.py")
+
+
+def test_match_image_preview_uses_true_client_size(monkeypatch):
+    """測試預覽的 current_size 必須與圖片比對／主循環同源（GetClientRect）。
+
+    回歸：預覽曾用 wr - chrome 漏掉右／下邊框，導致 1616×939 有框視窗
+    被算成 1608×908，模板尺度偏移而假命中。
+    """
+    title = "StarSavior"
+    img = np.zeros((939, 1616, 3), dtype=np.uint8)
+    template = np.random.default_rng(0).integers(0, 256, (33, 245, 3), dtype=np.uint8)
+    ok, buf = cv2.imencode(".png", template)
+    assert ok
+    step = SimpleNamespace(
+        type="match_image",
+        params={
+            "template_data": base64.b64encode(buf).decode("ascii"),
+            "capture_size": [1920, 1080],
+            "roi": {
+                "x": 0.11,
+                "y": 0.19,
+                "w": 0.15,
+                "h": 0.07,
+                "roi_coord": "client",
+            },
+            "threshold": 0.85,
+        },
+    )
+    rule = SimpleNamespace(name="尺寸回歸", steps=[step])
+    win = SimpleNamespace(
+        _current_task="",
+        _window_combo=SimpleNamespace(currentText=lambda: title),
+    )
+    monkeypatch.setattr(RC, "get_client_rect_for_image", lambda *a: (8, 31, 1600, 900))
+    monkeypatch.setattr(RC, "get_window_client_offset", lambda *a: (8, 31))
+
+    ctrl = RC.TestRunController(win, lambda raw: "", lambda rid, get_rules: rid)
+    _, log, _ = ctrl._run_dry_run(rule, img)
+    text = "\n".join(log)
+    assert "目前視窗 1600×900" in text, text
+    assert "1608×908" not in text, text
 
 
 def test_fate_terminal_actions():

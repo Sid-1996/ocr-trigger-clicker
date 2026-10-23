@@ -1520,7 +1520,7 @@ class _MatchImageStepForm(QWidget):
         )
         if results:
             best = results[0]
-            pct = int(best.confidence * 100)
+            pct = round(best.confidence * 100)
             logging.debug(
                 "img_compare: hit conf=%.3f (%d%%)",
                 best.confidence,
@@ -1546,7 +1546,7 @@ class _MatchImageStepForm(QWidget):
                 color_mask=None,
             )
             top = max(m.confidence for m in fallback) if fallback else 0.0
-            top_pct = int(top * 100)
+            top_pct = round(top * 100)
             color_note = ""
             if color_mask and top >= threshold:
                 color_note = "\n" + T("img_compare.color_mask_rejected", pct=top_pct)
