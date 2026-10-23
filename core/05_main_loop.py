@@ -676,6 +676,20 @@ class MainLoop:
             return None
 
     def _can_perform_action(self) -> bool:
+        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        if (
+            mode == "hybrid"
+            and self._window_hwnd
+            and is_window_foreground(self._window_hwnd)
+            and not is_window_minimized(self._window_hwnd)
+        ):
+            delay = self._perf.click_interval_delay()
+            if delay > 0:
+                t0 = time.monotonic()
+                interrupted = self._stop_event.wait(delay)
+                self._frame_waited_ms += (time.monotonic() - t0) * 1000.0
+                if interrupted:
+                    return False
         return self._perf.check_rate_limit()
 
     def _update_has_detect(self):

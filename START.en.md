@@ -130,7 +130,7 @@ Ratio coordinates auto-adapt between same-aspect-ratio (16:9) resolutions — fo
 
 ### Background capture is black / background mode doesn't work?
 
-Black screenshot → restart the tool **as Administrator** (right-click → Run as Administrator). Most Unity games don't support background control (a game-engine limitation, not a tool issue) — in that case try **Hybrid mode**: detection runs on background captures with zero disturbance, and only when a click / key is needed does the tool briefly bring the game to the foreground and restore your previous window and mouse position afterwards. Great for low-frequency actions; for frequent actions, plain foreground mode is smoother.
+Black screenshot → restart the tool **as Administrator** (right-click → Run as Administrator). Most Unity games don't support background control (a game-engine limitation, not a tool issue) — in that case try **Hybrid mode**: detection runs on background captures with zero disturbance, and only when a click / key is needed does the tool bring the game to the foreground and restore your previous window and mouse position afterwards (if the game is already in front, it acts directly). Great for low-frequency actions; for frequent actions, plain foreground mode is smoother.
 
 ### More questions?
 

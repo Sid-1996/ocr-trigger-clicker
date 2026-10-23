@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -838,6 +839,9 @@ class _FakePerf:
     def record_click(self) -> None:
         pass
 
+    def click_interval_delay(self) -> float:
+        return 0.0
+
 
 def _set_cursor(x: int, y: int) -> None:
     import ctypes
@@ -854,6 +858,8 @@ def _prepare_loop(mode: str, hwnd: int, chrome: tuple[int, int], main_loop):
     ml._tool_hwnd = None
     ml._rule_config_ctrl = _ModeConfig(mode)
     ml._perf = _FakePerf()
+    ml._stop_event = threading.Event()
+    ml._frame_waited_ms = 0.0
     ml._last_frida_err_ts = 0.0
     ml._FRIDA_ERR_THROTTLE_SEC = 30.0
     ml.on_bg_fail = None

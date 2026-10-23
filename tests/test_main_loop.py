@@ -714,6 +714,84 @@ def test_is_tool_foreground_hybrid_keeps_protection():
         ctypes.windll.user32.GetForegroundWindow = orig
 
 
+# ── hybrid 前景動作節流 ──
+
+
+def _hybrid_config():
+    return type(
+        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "hybrid"}
+    )()
+
+
+class _NoWait:
+    def wait(self, _timeout):
+        raise AssertionError("不應等待")
+
+
+class _StopWait:
+    def wait(self, _timeout):
+        return True
+
+
+def test_can_perform_action_hybrid_foreground_paces(monkeypatch):
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._rule_config_ctrl = _hybrid_config()
+    ml._perf = _ml_mod.PerformanceMonitor(max_cps=50)
+    ml._perf.record_click()
+    ml._frame_waited_ms = 0.0
+    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda hwnd: True)
+    monkeypatch.setattr(_ml_mod, "is_window_minimized", lambda hwnd: False)
+
+    assert _ml_mod.MainLoop._can_perform_action(ml) is True
+    assert ml._frame_waited_ms >= 10
+
+
+def test_can_perform_action_hybrid_background_does_not_pace(monkeypatch):
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._rule_config_ctrl = _hybrid_config()
+    ml._perf.record_click()
+    ml._stop_event = _NoWait()
+    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda hwnd: False)
+
+    assert _ml_mod.MainLoop._can_perform_action(ml) is True
+
+
+def test_can_perform_action_pynput_does_not_pace():
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._perf.record_click()
+    ml._stop_event = _NoWait()
+
+    assert _ml_mod.MainLoop._can_perform_action(ml) is True
+
+
+def test_can_perform_action_stop_event_aborts_pacing(monkeypatch):
+    ml = _make_ml()
+    ml._window_hwnd = 12345
+    ml._rule_config_ctrl = _hybrid_config()
+    ml._perf.click_interval_delay = lambda: 0.05
+    ml._perf.check_rate_limit = lambda: (_ for _ in ()).throw(
+        AssertionError("停止事件打斷後不應再檢查速率")
+    )
+    ml._stop_event = _StopWait()
+    monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda hwnd: True)
+    monkeypatch.setattr(_ml_mod, "is_window_minimized", lambda hwnd: False)
+
+    assert _ml_mod.MainLoop._can_perform_action(ml) is False
+
+
+def test_click_interval_delay_edges():
+    mon = _ml_mod.PerformanceMonitor(max_cps=50)
+    assert mon.click_interval_delay() == 0.0
+    mon.record_click()
+    delay = mon.click_interval_delay()
+    assert 0.0 < delay <= 0.03
+    mon._penalty_until = time.monotonic() + 10
+    assert mon.click_interval_delay() == 0.0
+
+
 # ── _handle_on_fail (stop/key) ──
 
 

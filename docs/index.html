@@ -394,7 +394,7 @@
       <div class="feature-card" data-target="faq">
         <div class="icon"><svg class="ico-lg"><use href="#i-repeat"/></svg></div>
         <h3>混合模式</h3>
-        <p>遊戲只吃前景操控也能自動化——平時後台偵測零干擾，需要動作時才短暫切到前景點一下，隨即復原你的視窗與滑鼠。適合低頻動作任務。</p>
+        <p>遊戲只吃前景操控也能自動化——平時後台偵測零干擾，需要動作時才切到前景點一下（已在前景則直接操作），隨即復原你的視窗與滑鼠。適合低頻動作任務。</p>
       </div>
       <div class="feature-card" data-target="recording">
         <div class="icon"><svg class="ico-lg"><use href="#i-clap"/></svg></div>
@@ -784,7 +784,7 @@
     <div class="faq-item">
       <button class="faq-question" aria-expanded="false">可以後台掛機嗎？</button>
       <div class="faq-answer">可以。偏好設定中選擇「後台模式」（Frida 注入）後，工具改用 PrintWindow 截圖 + Frida 注入點擊與按鍵，目標視窗可被其他視窗遮蓋（但<strong>不能最小化</strong>），零游標干擾、不搶焦點。<br><br>
-        ⚠️ 若遊戲不給後台，尤其是多數 <strong>Unity</strong> 開發的遊戲，這是遊戲本身的<strong>底層設計限制</strong>、不是工具的問題——Unity 用 GPU 直接繪製畫面（不經 PrintWindow 這條 Windows 相容繪圖路徑），輸入也走自己的低階輸入系統（不接收 PostMessage 這類舊式視窗訊息），所以後台看不到畫面、也點不進去。遇到這種情況可以改用<strong>混合模式</strong>：平時以後台截圖偵測、零干擾，需要點擊／按鍵時才自動把遊戲短暫切到前景操作，完成後復原你原本的視窗與滑鼠位置。適合低頻動作的任務——例如遊戲正在自動戰鬥爬主線、只有過關時要點「下一關」，寫好規則後就能掛著去做別的事；動作很頻繁的話，一般前景模式反而更順。<br><br>
+        ⚠️ 若遊戲不給後台，尤其是多數 <strong>Unity</strong> 開發的遊戲，這是遊戲本身的<strong>底層設計限制</strong>、不是工具的問題——Unity 用 GPU 直接繪製畫面（不經 PrintWindow 這條 Windows 相容繪圖路徑），輸入也走自己的低階輸入系統（不接收 PostMessage 這類舊式視窗訊息），所以後台看不到畫面、也點不進去。遇到這種情況可以改用<strong>混合模式</strong>：平時以後台截圖偵測、零干擾，需要點擊／按鍵時才把遊戲切到前景操作（已在前景則直接操作），完成後復原你原本的視窗與滑鼠位置。適合低頻動作的任務——例如遊戲正在自動戰鬥爬主線、只有過關時要點「下一關」，寫好規則後就能掛著去做別的事；動作很頻繁的話，一般前景模式反而更順。<br><br>
         實際例子：<strong>棕色塵埃 2</strong>（Unity）後台滑鼠點擊可用，但後台鍵盤會被遊戲擋下——滑鼠與鍵盤是分開驗證的，後台滑鼠可用<strong>不代表</strong>鍵盤也可用（部分遊戲必須視窗聚焦才接收鍵盤輸入）。</div>
     </div>
 

@@ -302,6 +302,16 @@ class PerformanceMonitor:
                 return False
             return True
 
+    def click_interval_delay(self) -> float:
+        """距離下一次允許動作還需等待的秒數（hybrid 前景平滑用）。"""
+        with self._lock:
+            if not self._max_cps or self._max_cps <= 0 or not self._click_timestamps:
+                return 0.0
+            now = time.monotonic()
+            if now < self._penalty_until:
+                return 0.0
+            return max(0.0, self._click_timestamps[-1] + 1.0 / self._max_cps - now)
+
     # ── 資源警告 ──
 
     def _update_resource_warnings(self):
@@ -437,6 +447,17 @@ if __name__ == "__main__":
     ft.dwHighDateTime = 1
     ft.dwLowDateTime = 0
     assert _ft_to_int(ft) == 1 << 32
+
+    paced = PerformanceMonitor(max_cps=5)
+    assert paced.click_interval_delay() == 0.0
+    paced.record_click()
+    assert 0.0 < paced.click_interval_delay() <= 0.2
+    paced._penalty_until = time.monotonic() + 10
+    assert paced.click_interval_delay() == 0.0
+    no_cap = PerformanceMonitor(max_cps=0)
+    no_cap.record_click()
+    assert no_cap.click_interval_delay() == 0.0
+    print("  [OK] click interval pacing")
 
     mon = PerformanceMonitor(max_cps=5)
     assert mon.get_total_clicks() == 0

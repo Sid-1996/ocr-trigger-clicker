@@ -79,38 +79,67 @@ def test_focus_guard_blocks_when_foreground_lock_wins(monkeypatch):
         assert ready is False
 
 
-def test_focus_guard_allows_foreground_target(monkeypatch):
-    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
-    monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
+def _focus_spy(monkeypatch):
+    calls = {"save": 0, "restore": [], "activate": [], "sleep": []}
 
-    with _hybrid.focus_guard("game", lambda _title: True, 42) as ready:
+    def _save():
+        calls["save"] += 1
+        return (99, 5, 6)
+
+    def _sleep(seconds):
+        calls["sleep"].append(seconds)
+
+    def _activate(title):
+        calls["activate"].append(title)
+        return True
+
+    monkeypatch.setattr(_hybrid, "save_state", _save)
+    monkeypatch.setattr(_hybrid, "restore_state", lambda state: calls["restore"].append(state))
+    monkeypatch.setattr(_hybrid.time, "sleep", _sleep)
+    return calls, _activate
+
+
+def test_focus_guard_foreground_target_skips_save_activate_sleep_restore(monkeypatch):
+    """目標已在前景且未最小化：不再存狀態、激活、等待或還原。"""
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
+    calls, activate = _focus_spy(monkeypatch)
+
+    with _hybrid.focus_guard("game", activate, 42) as ready:
         assert ready is True
 
-
-def _restore_recorder(monkeypatch):
-    restored = []
-    monkeypatch.setattr(_hybrid, "save_state", lambda: (99, 5, 6))
-    monkeypatch.setattr(_hybrid, "restore_state", lambda state: restored.append(state))
-    return restored
+    assert calls == {"save": 0, "restore": [], "activate": [], "sleep": []}
 
 
 def test_focus_guard_restores_state_when_body_raises(monkeypatch):
-    """區塊內例外仍須還原使用者游標與前景視窗（滑鼠卡住是最痛的體感故障）。"""
-    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
-    monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
-    restored = _restore_recorder(monkeypatch)
+    """非快速通道的區塊內例外仍須還原使用者游標與前景視窗。"""
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32(foreground=7))
+    calls, activate = _focus_spy(monkeypatch)
 
     with pytest.raises(RuntimeError):
-        with _hybrid.focus_guard("game", lambda _title: True, 42):
+        with _hybrid.focus_guard("game", activate, 42):
             raise RuntimeError("動作失敗")
 
-    assert restored == [(99, 5, 6)]
+    assert calls["save"] == 1
+    assert calls["activate"] == ["game"]
+    assert calls["restore"] == [(99, 5, 6)]
+
+
+def test_focus_guard_fast_path_body_error_does_not_restore(monkeypatch):
+    """快速通道沒有存狀態，body 例外時不得憑空還原。"""
+    monkeypatch.setattr(_hybrid, "_user32", _FakeUser32())
+    calls, activate = _focus_spy(monkeypatch)
+
+    with pytest.raises(RuntimeError):
+        with _hybrid.focus_guard("game", activate, 42):
+            raise RuntimeError("動作失敗")
+
+    assert calls["save"] == 0
+    assert calls["restore"] == []
 
 
 def test_focus_guard_restores_state_when_activation_raises(monkeypatch):
     monkeypatch.setattr(_hybrid, "_user32", _FakeUser32(foreground=7, blocked=True))
-    monkeypatch.setattr(_hybrid.time, "sleep", lambda _seconds: None)
-    restored = _restore_recorder(monkeypatch)
+    calls, _ = _focus_spy(monkeypatch)
 
     def _boom(_title):
         raise OSError("activate 失敗")
@@ -118,4 +147,4 @@ def test_focus_guard_restores_state_when_activation_raises(monkeypatch):
     with _hybrid.focus_guard("game", _boom, 42) as ready:
         assert ready is False, "激活抛錯應視為未就緒，不讓呼叫端做物理輸入"
 
-    assert restored == [(99, 5, 6)]
+    assert calls["restore"] == [(99, 5, 6)]

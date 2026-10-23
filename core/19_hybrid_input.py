@@ -83,8 +83,19 @@ def focus_guard(title: str, activate_fn, target_hwnd: int | None = None):
     target_hwnd 時一律以 GetForegroundWindow 驗證，未成功就改用
     AttachThreadInput 版 _set_foreground 補強。視窗消失、最小化或最終仍非
     前景時 yield False，讓呼叫端跳過物理輸入。
+
+    目標已在前景且未最小化時走快速通道：不存狀態、不激活、不等待、不還原，
+    避免使用者主動操作遊戲時被多餘的焦點切換與游標復原干擾。快速通道的 body
+    若拋例外，不會還原（因為本來就沒存狀態）。
     """
     with _act_lock:
+        if (
+            target_hwnd
+            and _user32.GetForegroundWindow() == target_hwnd
+            and not _user32.IsIconic(target_hwnd)
+        ):
+            yield True
+            return
         state = save_state()
         ok = False
         try:
@@ -138,20 +149,39 @@ if __name__ == "__main__":
     restore_state(None)
     print("  [OK] bogus hwnd / None 容錯")
 
-    # focus_guard 進出：activate_fn 用假函式，確認 yield 值與狀態還原
-    activated = []
-    target_hwnd = _user32.GetForegroundWindow()
+    # 快速通道：目標已在前景且未最小化 → 不激活、不等待、不還原
+    fast_activated = []
+    fast_hwnd = _user32.GetForegroundWindow()
+    moved = (orig[0] + 30, orig[1] + 30)
 
-    def fake_activate(t):
-        activated.append(t)
+    def fast_activate(t):
+        fast_activated.append(t)
         return True
 
-    with focus_guard("dummy", fake_activate, target_hwnd) as ok_flag:
+    try:
+        with focus_guard("dummy", fast_activate, fast_hwnd) as ok_flag:
+            assert ok_flag is True
+            _user32.SetCursorPos(*moved)
+            assert _user32.GetCursorPos(ctypes.byref(pt)) and (pt.x, pt.y) == moved
+        assert fast_activated == []
+        assert _user32.GetCursorPos(ctypes.byref(pt)) and (pt.x, pt.y) == moved
+    finally:
+        _user32.SetCursorPos(orig[0], orig[1])
+    print("  [OK] focus_guard 前景快速通道跳過激活/還原")
+
+    # 非快速通道（無 hwnd）：仍激活、等待、還原
+    legacy_activated = []
+
+    def legacy_activate(t):
+        legacy_activated.append(t)
+        return True
+
+    with focus_guard("dummy", legacy_activate) as ok_flag:
         assert ok_flag is True
-        _user32.SetCursorPos(orig[0] + 30, orig[1] + 30)
-    assert activated == ["dummy"]
+        _user32.SetCursorPos(orig[0] + 20, orig[1] + 20)
+    assert legacy_activated == ["dummy"]
     assert _user32.GetCursorPos(ctypes.byref(pt)) and (pt.x, pt.y) == orig
-    print("  [OK] focus_guard 進出還原")
+    print("  [OK] focus_guard 非快速通道還原")
 
     # activate_fn 失敗不炸、仍正常離開
     with focus_guard("dummy", lambda t: False) as ok_flag:
