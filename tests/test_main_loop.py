@@ -2074,3 +2074,68 @@ def test_verify_timeout_logs_total_and_splits_counters(monkeypatch):
     assert any("共耗時" in m for m in seen), f"逾時行應帶總耗時: {seen}"
     assert ml._verify_blocked_ms >= 200, f"阻塞應累計輪詢耗時: {ml._verify_blocked_ms:.0f}ms"
     assert ml._frame_waited_ms == 0, "驗證等待不得再計入刻意等待（避免重複扣除）"
+
+
+def test_poll_verify_refreshes_only_first_frame(monkeypatch):
+    ml = _make_ml()
+    blank = np.zeros((10, 10, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    monkeypatch.setattr(_ml_mod, "get_window_rect", lambda title: rect)
+    fresh_flags = []
+
+    def fake_capture(*_args, fresh=False, **_kwargs):
+        fresh_flags.append(fresh)
+        return None if fresh else blank
+
+    ml._capture = fake_capture
+    ml._check_verify_condition = lambda *a, **k: True
+
+    res = ml._poll_verify({"timeout_ms": 500, "poll_interval_ms": 5})
+
+    assert res == "success"
+    assert fresh_flags[0] is True
+    assert all(flag is False for flag in fresh_flags[1:]), fresh_flags
+
+
+def test_verify_without_any_frame_does_not_rerun_action(monkeypatch):
+    ml = _make_ml()
+    blank = np.zeros((10, 10, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    monkeypatch.setattr(_ml_mod, "get_window_rect", lambda title: rect)
+    monkeypatch.setattr(ml, "_capture", lambda *a, **k: None)
+    executed = []
+
+    def fake_run_step(step, ctx, rule):
+        executed.append(step.type)
+        return StepResult("continue")
+
+    monkeypatch.setattr(ml, "_run_step", fake_run_step)
+    rule = Rule(
+        id="r_no_frame",
+        name="取不到畫面",
+        enabled=True,
+        steps=[
+            Step(
+                "click",
+                {
+                    "target": "custom",
+                    "x": 0.5,
+                    "y": 0.5,
+                    "after_delay_ms": 0,
+                    "verify": {
+                        "type": "detect",
+                        "text": "zzz",
+                        "timeout_ms": 50,
+                        "poll_interval_ms": 1,
+                        "retries": 2,
+                        "retry_delay_ms": 0,
+                        "on_fail": {"action": "advance"},
+                    },
+                },
+            ),
+        ],
+    )
+
+    ml._run_rule(rule, blank, rect, StepContext(img=blank, rect=rect))
+
+    assert executed == ["click"], f"取不到畫面不應重跑動作: {executed}"

@@ -1712,7 +1712,7 @@ class MainLoop:
     _VERIFY_PRESET_POLL = {"short": 100, "medium": 300, "long": 500}
 
     def _poll_verify(self, verify: dict) -> str:
-        """Poll with fresh capture frames until success/timeout/cancelled."""
+        """Poll with fresh capture frames until success/timeout/cancelled/no_frame."""
         # ponytail: 全程計入 _verify_blocked_ms（_loop 過慢判定扣除用）；
         # 內部等待不再另計 _frame_waited_ms，避免同一段時間被扣兩次。
         # 所有 return 前都需累計（新增 return 別漏）。
@@ -1737,6 +1737,8 @@ class MainLoop:
                 return "cancelled"
         deadline = time.monotonic() + timeout_ms / 1000.0
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        first_frame = True
+        saw_frame = False
         while time.monotonic() < deadline:
             if (
                 self._stop_event.is_set()
@@ -1750,8 +1752,12 @@ class MainLoop:
                 fresh_rect = get_window_rect(self._window_title) or {"x": 0, "y": 0, "w": 0, "h": 0}
             except Exception:
                 fresh_rect = {"x": 0, "y": 0, "w": 0, "h": 0}
-            img = self._capture(mode, self._window_title, hwnd=self._window_hwnd, fresh=True)
+            # ponytail: 只有第一次要求新幀，之後接受同一張；否則 PrintWindow >0.5s 時
+            # 每輪都會丟掉剛完成的結果，整個驗證期間一張都拿不到
+            img = self._capture(mode, self._window_title, hwnd=self._window_hwnd, fresh=first_frame)
+            first_frame = False
             if img is not None and fresh_rect["w"] > 0:
+                saw_frame = True
                 # isolate per-poll frame cache to avoid stale superset from previous poll
                 self._frame_ocr_cache.clear()
                 if self._check_verify_condition(verify, img, fresh_rect):
@@ -1766,7 +1772,7 @@ class MainLoop:
                 self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
         self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
-        return "timeout"
+        return "timeout" if saw_frame else "no_frame"
 
     def _get_verify_cancel_detail(self) -> str:
         if self._emergency_event.is_set():
@@ -1947,6 +1953,10 @@ class MainLoop:
                                 )
                             return StepResult("stop", detail=cancel_detail)
                         # timeout
+                        if poll_res == "no_frame":
+                            # 一張畫面都拿不到時重跑動作只會造成重複輸入
+                            poll_res = "timeout"
+                            break
                         if attempt < retries:
                             if retry_delay > 0:
                                 t0 = time.monotonic()
