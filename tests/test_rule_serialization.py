@@ -238,3 +238,34 @@ def test_scroll_delay_ms_kept_distinct():
     )
     assert rule.steps[0].params["delay_ms"] == 40
     assert rule.steps[0].params["after_delay_ms"] == 500
+
+
+def test_dict_to_group_invalid_values_are_safe():
+    g = _dict_to_group(
+        {
+            "id": "g1",
+            "name": "G1",
+            "mode": "weird",
+            "order": "weird",
+            "repeat_times": "abc",
+            "between_rounds_sec": None,
+            "rule_ids": "not-a-list",
+        }
+    )
+    assert g.mode == "once"
+    assert g.order == "sequential"
+    assert g.repeat_times == 1
+    assert g.between_rounds_sec == 0
+    assert g.rule_ids == []
+
+
+def test_load_rules_bad_encoding_and_non_dict_root(tmp_path):
+    bad_encoding = tmp_path / "bad_utf8.json"
+    bad_encoding.write_bytes(b"\xff\xfe\x00")
+    assert load_rules(str(bad_encoding)) == []
+    assert load_groups(str(bad_encoding)) == []
+
+    non_dict = tmp_path / "list_root.json"
+    non_dict.write_text("[]", encoding="utf-8")
+    assert load_rules(str(non_dict)) == []
+    assert load_groups(str(non_dict)) == []

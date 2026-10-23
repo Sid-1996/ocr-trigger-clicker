@@ -2,6 +2,7 @@ import json
 
 import core.task_management as _tm
 from core.rule_models import Rule, Step
+from core.rule_serialization import load_groups
 
 
 def test_list_tasks_empty(tmp_tasks_dir):
@@ -526,6 +527,298 @@ def test_preview_does_not_mutate_input(tmp_tasks_dir, tmp_path):
     assert p1.raw_data["groups"][0]["rule_ids"] == ["ok"]
     assert p1.raw_data["groups"][0]["rule_ids"] is not p2.raw_data["groups"][0]["rule_ids"]
     assert any("自動過濾" in w for w in p1.warnings)
+
+
+def test_preview_handles_malformed_groups(tmp_tasks_dir, tmp_path):
+    base_rule = {
+        "id": "ok",
+        "name": "Ok",
+        "enabled": True,
+        "steps": [{"type": "wait", "params": {"ms": 100}}],
+    }
+    for i, bad_groups in enumerate((None, {}, [1])):
+        src = tmp_path / f"bad_groups_{i}.json"
+        src.write_text(
+            json.dumps({"groups": bad_groups, "rules": [base_rule]}),
+            encoding="utf-8",
+        )
+        preview = _tm.preview_import_task(str(src))
+        assert preview is not None
+        assert preview.rule_count == 1
+        assert preview.raw_data["groups"] == []
+        assert any("groups" in w or "群組" in w for w in preview.warnings)
+
+
+def test_preview_group_invalid_values_warns_and_load_is_safe(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "groups": [
+            {
+                "id": "g1",
+                "name": "G1",
+                "mode": "weird",
+                "order": "weird",
+                "repeat_times": "abc",
+                "between_rounds_sec": None,
+                "rule_ids": ["ok"],
+            }
+        ],
+        "rules": [
+            {
+                "id": "ok",
+                "name": "Ok",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            }
+        ],
+    }
+    src = tmp_path / "bad_group_values.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert any("未知模式" in w for w in preview.warnings)
+    assert any("未知順序" in w for w in preview.warnings)
+    assert any("repeat_times" in w for w in preview.warnings)
+    assert any("between_rounds_sec" in w for w in preview.warnings)
+
+    result = _tm.import_task(str(src))
+    assert result == "bad_group_values"
+    groups = load_groups(str(tmp_tasks_dir / f"{result}.json"))
+    assert groups[0].mode == "once"
+    assert groups[0].order == "sequential"
+    assert groups[0].repeat_times == 1
+    assert groups[0].between_rounds_sec == 0
+
+
+def test_import_params_null_with_regenerate(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "r1",
+                "name": "R1",
+                "enabled": True,
+                "steps": [{"type": "jump", "params": None}],
+            }
+        ]
+    }
+    src = tmp_path / "null_params.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    result = _tm.import_task(str(src), regenerate_uuids=True)
+    assert result == "null_params"
+    assert (tmp_tasks_dir / "null_params.json").exists()
+
+
+def test_import_stop_groups_non_list_is_normalized(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "r1",
+                "name": "R1",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "detect",
+                        "params": {
+                            "text": "x",
+                            "on_fail": {"action": "notify", "stop_groups": 5},
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+    src = tmp_path / "bad_stop_groups.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert any("停止群組格式錯誤" in w for w in preview.warnings)
+
+    result = _tm.import_task(str(src))
+    assert result == "bad_stop_groups"
+    loaded = _tm.load_task(result)
+    assert loaded[0].steps[0].params["on_fail"]["stop_groups"] == []
+
+
+def test_import_preserves_empty_groups(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "groups": [],
+        "rules": [
+            {
+                "id": "r1",
+                "name": "R1",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            }
+        ],
+    }
+    src = tmp_path / "empty_groups.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    result = _tm.import_task(str(src))
+    assert result == "empty_groups"
+    task_path = tmp_tasks_dir / f"{result}.json"
+    data = json.loads(task_path.read_text(encoding="utf-8"))
+    assert data["groups"] == []
+    assert _tm.load_task(result)
+    after_load = json.loads(task_path.read_text(encoding="utf-8"))
+    assert after_load["groups"] == []
+    assert "__default__" not in json.dumps(after_load)
+
+
+def test_export_rejects_non_dict_root_and_bad_encoding(tmp_tasks_dir, tmp_path):
+    root_list = tmp_tasks_dir / "bad_root.json"
+    root_list.write_text("[]", encoding="utf-8")
+    dest = tmp_path / "out.json"
+    assert not _tm.export_task("bad_root", str(dest))
+
+    bad_utf8 = tmp_tasks_dir / "bad_utf8.json"
+    bad_utf8.write_bytes(b"\xff\xfe\x00")
+    assert not _tm.export_task("bad_utf8", str(dest))
+    assert _tm.preview_import_task(str(bad_utf8)) is None
+
+
+def test_export_atomic_write_failure_preserves_destination(tmp_tasks_dir, tmp_path, monkeypatch):
+    rules = [Rule(id="r1", name="R1", enabled=True, steps=[Step(type="wait", params={"ms": 1})])]
+    assert _tm.save_task("atomic_export", rules)
+    dest = tmp_path / "atomic_export.json"
+    dest.write_text("old content", encoding="utf-8")
+
+    def fail_replace(source, destination):
+        assert json.loads(_tm.Path(source).read_text(encoding="utf-8"))["rules"]
+        raise OSError("replace denied")
+
+    monkeypatch.setattr(_tm, "_replace_file", fail_replace)
+    assert not _tm.export_task("atomic_export", str(dest))
+    assert dest.read_text(encoding="utf-8") == "old content"
+    assert not list(dest.parent.glob("*.tmp"))
+
+
+def test_export_and_import_preserve_meta_fields(tmp_tasks_dir, tmp_path):
+    rules = [Rule(id="r1", name="R1", enabled=True, steps=[Step(type="wait", params={"ms": 1})])]
+    assert _tm.save_task("meta_task", rules)
+    task_path = tmp_tasks_dir / "meta_task.json"
+    data = json.loads(task_path.read_text(encoding="utf-8"))
+    data["_meta"] = {"description": "D", "author": "A", "game": "G"}
+    task_path.write_text(json.dumps(data), encoding="utf-8")
+
+    dest = tmp_path / "meta_export.json"
+    assert _tm.export_task("meta_task", str(dest))
+    exported = json.loads(dest.read_text(encoding="utf-8"))
+    assert exported["_meta"]["description"] == "D"
+    assert exported["_meta"]["author"] == "A"
+    assert exported["_meta"]["game"] == "G"
+    assert exported["_meta"]["format_version"] == _tm._FORMAT_VERSION
+
+    result = _tm.import_task(str(dest))
+    assert result is not None
+    imported = json.loads((tmp_tasks_dir / f"{result}.json").read_text(encoding="utf-8"))
+    assert imported["_meta"]["description"] == "D"
+    assert imported["_meta"]["author"] == "A"
+    assert imported["_meta"]["game"] == "G"
+
+
+def test_preview_warns_duplicate_ids_and_dangling_refs(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "rules": [
+            {
+                "id": "dup",
+                "name": "Dup",
+                "enabled": True,
+                "steps": [
+                    {"type": "jump", "params": {"rule_id": "missing"}},
+                    {
+                        "type": "detect",
+                        "params": {
+                            "text": "x",
+                            "on_fail": {"action": "jump", "rule_id": "missing"},
+                        },
+                    },
+                    {
+                        "type": "click",
+                        "params": {
+                            "target": "custom",
+                            "x": 0.1,
+                            "y": 0.1,
+                            "verify": {
+                                "type": "detect",
+                                "text": "ok",
+                                "on_fail": {"action": "jump", "rule_id": "missing"},
+                            },
+                        },
+                    },
+                ],
+            },
+            {
+                "id": "dup",
+                "name": "Dup2",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            },
+        ]
+    }
+    src = tmp_path / "dup_refs.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert any("重複" in w for w in preview.warnings)
+    assert sum("目標不存在" in w for w in preview.warnings) >= 3
+
+
+def test_preview_warns_invalid_verify_and_newer_format(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "_meta": {"format_version": _tm._FORMAT_VERSION + 1},
+        "rules": [
+            {
+                "id": "r1",
+                "name": "R1",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "click",
+                        "params": {"target": "custom", "x": 0.1, "y": 0.1, "verify": "bad"},
+                    },
+                    {
+                        "type": "detect",
+                        "params": {
+                            "text": "x",
+                            "verify": {"type": "unknown"},
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+    src = tmp_path / "invalid_verify.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert any("驗證格式錯誤" in w for w in preview.warnings)
+    assert any("不支援動作後驗證" in w for w in preview.warnings)
+    assert any("格式版本" in w for w in preview.warnings)
+
+
+def test_preview_warns_old_format_without_groups(tmp_tasks_dir, tmp_path):
+    src_data = {
+        "run_mode": "loop",
+        "rules": [
+            {
+                "id": "r1",
+                "name": "R1",
+                "enabled": True,
+                "steps": [{"type": "wait", "params": {"ms": 100}}],
+            }
+        ],
+    }
+    src = tmp_path / "old_format.json"
+    src.write_text(json.dumps(src_data), encoding="utf-8")
+
+    preview = _tm.preview_import_task(str(src))
+    assert preview is not None
+    assert any("舊格式任務" in w for w in preview.warnings)
 
 
 # ── collect_templates ──

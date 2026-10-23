@@ -5789,6 +5789,9 @@ class MainWindow(QMainWindow):
     def _on_task_export(self):
         if not self._current_task:
             return
+        if not (self._loop and self._loop.is_running):
+            self._save_current_rule()
+        self._flush_save()
         path, _ = QFileDialog.getSaveFileName(
             self,
             T("dialog.export_task"),

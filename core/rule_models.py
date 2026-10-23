@@ -4,6 +4,8 @@ from i18n import T  # noqa: E402
 
 _UNCATEGORIZED_ID = "__uncategorized__"
 _UNCATEGORIZED_DEFAULT_NAMES = {"未歸類", "Uncategorized", "未分類"}
+_VALID_GROUP_MODES = frozenset({"once", "repeat", "loop"})
+_VALID_GROUP_ORDERS = frozenset({"sequential", "parallel"})
 
 
 def group_display_name(g) -> str:

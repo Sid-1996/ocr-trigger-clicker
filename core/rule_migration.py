@@ -152,10 +152,13 @@ def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
         except (TypeError, ValueError):
             fd = 0.0
         if action == "notify":
+            stop_groups = raw.get("stop_groups", [])
+            if not isinstance(stop_groups, (list, tuple)):
+                stop_groups = []
             result: dict = {
                 "action": "notify",
                 "message": str(raw.get("message", "")).strip(),
-                "stop_groups": [str(g) for g in raw.get("stop_groups", []) if g],
+                "stop_groups": [str(g) for g in stop_groups if g],
             }
         elif action == "key":
             result = {"action": "key", "key": str(raw.get("key", ""))}
@@ -457,8 +460,10 @@ def _migrate_v1_to_v2(old: dict) -> dict:
 
 def migrate_v2_to_v3(data: dict) -> dict:
     mode = str(data.get("run_mode", "once"))
-    repeat_times = int(data.get("repeat_times", 1))
-    between_rounds_sec = int(data.get("between_rounds_sec", 0))
+    if mode not in ("once", "repeat", "loop"):
+        mode = "once"
+    repeat_times = _as_int(data.get("repeat_times", 1), 1)
+    between_rounds_sec = _as_int(data.get("between_rounds_sec", 0), 0)
 
     normal_ids = []
     for r in data.get("rules", []):

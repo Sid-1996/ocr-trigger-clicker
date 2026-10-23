@@ -11,6 +11,7 @@ from _loader import load_sibling, log_main
 _migration = load_sibling("rule_migration", "core/rule_migration.py")
 _migrate_v1_to_v2 = _migration._migrate_v1_to_v2
 _normalize_step_params = _migration._normalize_step_params
+_as_int = _migration._as_int
 migrate_v2_to_v3 = _migration.migrate_v2_to_v3
 _migrate_roi_to_ratio = _migration._migrate_roi_to_ratio
 _migrate_roi_coord = _migration._migrate_roi_coord
@@ -36,6 +37,7 @@ def _dict_to_rule(d: dict) -> Rule:
             ),
         )
         for s in d.get("steps", [])
+        if isinstance(s, dict)
     ]
     return Rule(
         id=str(d.get("id", "")),
@@ -56,15 +58,24 @@ def _rule_to_dict(r: Rule) -> dict:
 
 
 def _dict_to_group(d: dict) -> RuleGroup:
+    mode = str(d.get("mode", "once"))
+    if mode not in _models._VALID_GROUP_MODES:
+        mode = "once"
+    order = str(d.get("order", "sequential"))
+    if order not in _models._VALID_GROUP_ORDERS:
+        order = "sequential"
+    rule_ids = d.get("rule_ids", [])
+    if not isinstance(rule_ids, (list, tuple)):
+        rule_ids = []
     return RuleGroup(
         id=str(d.get("id", "")),
         name=str(d.get("name", "")),
         enabled=bool(d.get("enabled", True)),
-        mode=str(d.get("mode", "once")),
-        repeat_times=int(d.get("repeat_times", 1)),
-        between_rounds_sec=int(d.get("between_rounds_sec", 0)),
-        rule_ids=[str(r) for r in d.get("rule_ids", []) if r],
-        order=str(d.get("order", "sequential")),
+        mode=mode,
+        repeat_times=_as_int(d.get("repeat_times", 1), 1),
+        between_rounds_sec=_as_int(d.get("between_rounds_sec", 0), 0),
+        rule_ids=[str(r) for r in rule_ids if r],
+        order=order,
     )
 
 
@@ -79,14 +90,16 @@ def load_groups(path: str) -> list[RuleGroup]:
     try:
         with open(p, encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeError):
+        return []
+    if not isinstance(data, dict):
         return []
     if "groups" not in data:
         data = migrate_v2_to_v3(data)
     groups = data.get("groups", [])
     if not isinstance(groups, list):
         return []
-    groups = [_dict_to_group(g) for g in groups]
+    groups = [_dict_to_group(g) for g in groups if isinstance(g, dict)]
     logging.debug("[load_groups] n=%d", len(groups))
     return groups
 
@@ -164,8 +177,10 @@ def load_rules(path: str) -> list[Rule]:
     try:
         with open(p, encoding="utf-8") as f:
             data = json.load(f)
-    except (json.JSONDecodeError, OSError, KeyError) as e:
+    except (json.JSONDecodeError, OSError, UnicodeError, KeyError) as e:
         log_main(f"規則檔案載入失敗「{path}」: {e}")
+        return []
+    if not isinstance(data, dict):
         return []
 
     if "groups" not in data:
@@ -185,7 +200,9 @@ def load_rules(path: str) -> list[Rule]:
     if not data.get("rules"):
         return []
     rules_data = data.get("rules", [])
-    rules = [_dict_to_rule(r) for r in rules_data]
+    if not isinstance(rules_data, list):
+        return []
+    rules = [_dict_to_rule(r) for r in rules_data if isinstance(r, dict)]
     logging.debug("[load_rules] n=%d", len(rules))
     return rules
 

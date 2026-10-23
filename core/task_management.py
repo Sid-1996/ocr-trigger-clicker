@@ -17,9 +17,14 @@ save_rules = _serial.save_rules
 _models = load_sibling("rule_models", "core/rule_models.py")
 ImportPreview = _models.ImportPreview
 Rule = _models.Rule
+_VALID_GROUP_MODES = _models._VALID_GROUP_MODES
+_VALID_GROUP_ORDERS = _models._VALID_GROUP_ORDERS
 
 _migration = load_sibling("rule_migration", "core/rule_migration.py")
 _STEP_DEFAULTS = _migration._STEP_DEFAULTS
+
+_config = load_sibling("run_config", "core/run_config.py")
+_VALID_INTERACTION_MODES = _config._VALID_INTERACTION_MODES
 
 _utils = load_sibling("file_utils", "core/file_utils.py")
 _replace_file = _utils._replace_file
@@ -117,35 +122,73 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
         pp = p if isinstance(p, dict) else {}
         if stype == "key" and not str(pp.get("key", "")).strip():
             warnings.append(f"規則「{raw['name']}」步驟 {i} 按鍵為空，執行時無動作")
-        elif stype == "jump" and not str(pp.get("rule_id", "")).strip():
+        if stype == "jump" and not str(pp.get("rule_id", "")).strip():
             warnings.append(f"規則「{raw['name']}」步驟 {i} 跳轉目標為空，執行時原地停止")
-        elif isinstance(pp.get("on_fail"), dict) and str(pp["on_fail"].get("action", "")) not in (
-            "stop",
-            "advance",
-            "notify",
-            "key",
-            "skip",
-            "jump",
-        ):
-            # 查 raw 才有意義：_normalize_on_fail 會把未知 action 靜默壓成 stop（normalize 發生在日後 load）
-            warnings.append(
-                f"規則「{raw['name']}」步驟 {i} 未知失敗動作「{pp['on_fail'].get('action', '')}」，將被視為 stop"
-            )
-        # 驗證在載入時會被靜默移除的兩種情況，此處先行警告（含規則名）
-        vfy = pp.get("verify")
-        if isinstance(vfy, dict):
-            _v_on_fail = vfy.get("on_fail", None)
-            if _v_on_fail == "stop" or (
-                isinstance(_v_on_fail, dict) and str(_v_on_fail.get("action", "")) == "stop"
+        on_fail = pp.get("on_fail")
+        if isinstance(on_fail, dict):
+            action = str(on_fail.get("action", ""))
+            if action not in ("stop", "advance", "notify", "key", "skip", "jump"):
+                # 查 raw 才有意義：_normalize_on_fail 會把未知 action 靜默壓成 stop（normalize 發生在日後 load）
+                warnings.append(
+                    f"規則「{raw['name']}」步驟 {i} 未知失敗動作「{action}」，將被視為 stop"
+                )
+            elif action == "key" and not str(on_fail.get("key", "")).strip():
+                warnings.append(f"規則「{raw['name']}」步驟 {i} 失敗按鍵為空，執行時無動作")
+            elif action == "notify" and not isinstance(
+                on_fail.get("stop_groups", []), (list, tuple)
             ):
-                warnings.append(
-                    f"規則「{raw['name']}」步驟 {i} 驗證 on_fail=stop 不支援，驗證將被移除（動作照常執行但失去保護）"
-                )
-            elif stype == "match_image":
-                warnings.append(
-                    f"規則「{raw['name']}」步驟 {i} 圖片比對不支援動作後驗證，驗證將被移除"
-                )
+                warnings.append(f"規則「{raw['name']}」步驟 {i} 停止群組格式錯誤，將被忽略")
+        # 驗證在載入時會被靜默移除的情況，此處先行警告（含規則名）
+        vfy = pp.get("verify")
+        if vfy is not None:
+            if stype not in ("click", "key", "drag", "scroll"):
+                if stype == "match_image":
+                    warnings.append(
+                        f"規則「{raw['name']}」步驟 {i} 圖片比對不支援動作後驗證，驗證將被移除"
+                    )
+                else:
+                    warnings.append(
+                        f"規則「{raw['name']}」步驟 {i} 步驟類型「{stype}」不支援動作後驗證，驗證將被移除"
+                    )
+            elif not isinstance(vfy, dict):
+                warnings.append(f"規則「{raw['name']}」步驟 {i} 驗證格式錯誤，將被移除")
+            else:
+                _v_on_fail = vfy.get("on_fail", None)
+                if _v_on_fail == "stop" or (
+                    isinstance(_v_on_fail, dict) and str(_v_on_fail.get("action", "")) == "stop"
+                ):
+                    warnings.append(
+                        f"規則「{raw['name']}」步驟 {i} 驗證 on_fail=stop 不支援，驗證將被移除（動作照常執行但失去保護）"
+                    )
+                elif _migration._normalize_verify(vfy) is None:
+                    warnings.append(
+                        f"規則「{raw['name']}」步驟 {i} 驗證內容無效（缺少文字/圖片或失敗動作不支援），將被移除"
+                    )
     return True
+
+
+def _warn_missing_refs(rule: dict, valid_ids: set[str], warnings: list[str]) -> None:
+    name = str(rule.get("name", "?"))
+    for i, step in enumerate(rule.get("steps", [])):
+        if not isinstance(step, dict):
+            continue
+        params = step.get("params")
+        if not isinstance(params, dict):
+            continue
+        refs = []
+        if step.get("type") == "jump":
+            refs.append(("跳轉", params.get("rule_id", "")))
+        on_fail = params.get("on_fail")
+        if isinstance(on_fail, dict) and str(on_fail.get("action", "")) == "jump":
+            refs.append(("失敗動作跳轉", on_fail.get("rule_id", "")))
+        verify = params.get("verify")
+        if isinstance(verify, dict):
+            verify_on_fail = verify.get("on_fail")
+            if isinstance(verify_on_fail, dict) and str(verify_on_fail.get("action", "")) == "jump":
+                refs.append(("驗證失敗跳轉", verify_on_fail.get("rule_id", "")))
+        for label, rid in refs:
+            if isinstance(rid, str) and rid and rid not in valid_ids:
+                warnings.append(f"規則「{name}」步驟 {i} {label}目標不存在，執行時會停止")
 
 
 def export_task(name: str, dest_path: str) -> bool:
@@ -154,11 +197,32 @@ def export_task(name: str, dest_path: str) -> bool:
         return False
     try:
         data = json.loads(src.read_text(encoding="utf-8"))
-        data["_meta"] = _export_meta()
-        Path(dest_path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        return True
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeError):
         return False
+    if not isinstance(data, dict):
+        return False
+    existing_meta = data.get("_meta")
+    data["_meta"] = (
+        {**existing_meta, **_export_meta()} if isinstance(existing_meta, dict) else _export_meta()
+    )
+    tmp_path = None
+    try:
+        dest = Path(dest_path)
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dest.parent, suffix=".tmp", delete=False, encoding="utf-8"
+        ) as f:
+            tmp_path = Path(f.name)
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        _replace_file(str(tmp_path), str(dest))
+        return True
+    except OSError:
+        return False
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def preview_import_task(src_path: str) -> Optional[ImportPreview]:
@@ -172,7 +236,7 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
         return None
     try:
         data = json.loads(src.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeError):
         return None
     if not isinstance(data, dict) or "rules" not in data:
         return None
@@ -186,7 +250,10 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
     warnings: list[str] = []
     valid_rules = []
     for raw in data["rules"]:
-        if isinstance(raw, dict) and _validate_rule_structure(raw, warnings):
+        if not isinstance(raw, dict):
+            warnings.append("規則格式錯誤，已略過")
+            continue
+        if _validate_rule_structure(raw, warnings):
             valid_rules.append(raw)
 
     rule_names = [r.get("name", "?") for r in valid_rules]
@@ -196,9 +263,30 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
             f"共 {len(data['rules'])} 條規則，{len(valid_rules)} 條格式正確，{dropped} 條已略過"
         )
 
-    valid_ids = {r["id"] for r in valid_rules}
+    seen_ids: set[str] = set()
+    duplicate_ids: set[str] = set()
+    for rid in (r["id"] for r in valid_rules):
+        if rid in seen_ids:
+            duplicate_ids.add(rid)
+        seen_ids.add(rid)
+    if duplicate_ids:
+        warnings.append(
+            f"規則 ID 重複：{', '.join(sorted(duplicate_ids))}；引用可能不明確，建議勾選重新產生 ID"
+        )
+
+    valid_ids = seen_ids
+    for raw in valid_rules:
+        _warn_missing_refs(raw, valid_ids, warnings)
+
+    raw_groups = data.get("groups", [])
+    if not isinstance(raw_groups, list):
+        warnings.append("groups 格式錯誤，已忽略")
+        raw_groups = []
     valid_groups = []
-    for g in data.get("groups", []):
+    for g in raw_groups:
+        if not isinstance(g, dict):
+            warnings.append("群組格式錯誤，已略過")
+            continue
         gid = g.get("id", "")
         gname = g.get("name", "")
         if not isinstance(gid, str) or not gid:
@@ -207,8 +295,20 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
         if not isinstance(gname, str) or not gname:
             warnings.append(f"群組 {gid} 缺少 name，已略過")
             continue
+        mode = g.get("mode", "once")
+        if not isinstance(mode, str) or mode not in _VALID_GROUP_MODES:
+            warnings.append(f"群組「{gname}」未知模式「{mode}」，載入時視為 once")
+        order = g.get("order", "sequential")
+        if not isinstance(order, str) or order not in _VALID_GROUP_ORDERS:
+            warnings.append(f"群組「{gname}」未知順序「{order}」，載入時視為 sequential")
+        for key, default in (("repeat_times", 1), ("between_rounds_sec", 0)):
+            try:
+                int(g.get(key, default))
+            except (TypeError, ValueError):
+                warnings.append(f"群組「{gname}」{key} 格式錯誤，載入時使用預設 {default}")
         raw_ids = g.get("rule_ids", [])
         if not isinstance(raw_ids, list):
+            warnings.append(f"群組「{gname}」rule_ids 格式錯誤，已視為空")
             raw_ids = []
         filtered = [rid for rid in raw_ids if isinstance(rid, str) and rid in valid_ids]
         if len(filtered) < len(raw_ids):
@@ -217,15 +317,44 @@ def preview_import_task(src_path: str) -> Optional[ImportPreview]:
         valid_groups.append({**g, "rule_ids": filtered})
 
     raw_data: dict = {"rules": valid_rules}
-    if valid_groups:
+    if "groups" in data:
         raw_data["groups"] = valid_groups
+    elif data.get("run_mode") is not None:
+        warnings.append("舊格式任務（沒有 groups）：run_mode 不會保留，匯入後使用預設 once 群組")
     if isinstance(data.get("window_title"), str) and data["window_title"]:
         raw_data["window_title"] = data["window_title"]
-    if data.get("interaction_mode") in ("pynput", "frida", "hybrid"):
-        raw_data["interaction_mode"] = data["interaction_mode"]
+    interaction_mode = data.get("interaction_mode")
+    if interaction_mode in _VALID_INTERACTION_MODES:
+        raw_data["interaction_mode"] = interaction_mode
+    elif interaction_mode is not None:
+        warnings.append(f"互動模式「{interaction_mode}」無效，已忽略")
     cs = data.get("capture_size")
     if isinstance(cs, list) and len(cs) == 2:
-        raw_data["capture_size"] = cs
+        try:
+            cw, ch = int(cs[0]), int(cs[1])
+        except (TypeError, ValueError):
+            warnings.append("capture_size 格式錯誤，已忽略")
+        else:
+            if cw > 0 and ch > 0:
+                raw_data["capture_size"] = [cw, ch]
+            else:
+                warnings.append("capture_size 必須為正整數，已忽略")
+    elif cs is not None:
+        warnings.append("capture_size 格式錯誤，已忽略")
+    if meta:
+        raw_data["_meta"] = meta
+
+    format_version = meta.get("format_version")
+    if format_version is not None:
+        try:
+            format_version_int = int(format_version)
+        except (TypeError, ValueError):
+            warnings.append("_meta.format_version 格式錯誤")
+        else:
+            if format_version_int > _FORMAT_VERSION:
+                warnings.append(
+                    f"任務格式版本 {format_version_int} 比目前支援的 {_FORMAT_VERSION} 新，部分欄位可能無法解讀"
+                )
 
     return ImportPreview(
         meta=meta,
@@ -249,7 +378,7 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
         for r in data["rules"]:
             old_id = r["id"]
             new_id = uuid.uuid4().hex[:12]
-            id_map[old_id] = new_id
+            id_map.setdefault(old_id, new_id)
             r["id"] = new_id
 
         def _remap_on_fail(of: dict) -> None:
@@ -260,23 +389,24 @@ def import_task(src_path: str, regenerate_uuids: bool = False) -> Optional[str]:
 
         for r in data["rules"]:
             for s in r.get("steps", []):
-                p = s.get("params", {})
-                if s["type"] == "jump":
+                p = s.get("params")
+                if not isinstance(p, dict):
+                    continue
+                if s.get("type") == "jump":
                     rid = p.get("rule_id", "")
                     if rid in id_map:
                         p["rule_id"] = id_map[rid]
-                if s["type"] in ("detect", "compare", "match_image") and isinstance(
-                    p.get("on_fail"), dict
-                ):
+                # 任何步驟的 on_fail／verify.on_fail 都可能含跨規則跳轉，統一 remap。
+                if isinstance(p.get("on_fail"), dict):
                     _remap_on_fail(p["on_fail"])
-                # 動作步的 verify.on_fail 同樣含跨規則跳轉，一併 remap
                 vfy = p.get("verify")
                 if isinstance(vfy, dict) and isinstance(vfy.get("on_fail"), dict):
                     _remap_on_fail(vfy["on_fail"])
                 # notify 停止群組是群組 id，不隨規則改；此處僅 remap 誤寫成規則 id 的舊資料
                 # （正常 stop_groups 本來就是群組 id，不在 id_map 內，原樣保留）
         for g in data.get("groups", []):
-            g["rule_ids"] = [id_map.get(rid, rid) for rid in g.get("rule_ids", [])]
+            if isinstance(g, dict):
+                g["rule_ids"] = [id_map.get(rid, rid) for rid in g.get("rule_ids", [])]
 
     src_name = Path(src_path).stem
     dest = get_tasks_dir() / f"{src_name}.json"
