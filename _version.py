@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 
-__version__ = "0.4.7"
+__version__ = "0.4.8"
 __author__ = "Sid"
 __github__ = "https://github.com/Sid-1996/ocr-trigger-clicker"
 
@@ -26,3 +26,4 @@ def build_id() -> str:
         return out.stdout.strip() if out.returncode == 0 else ""
     except Exception:
         return ""
+
