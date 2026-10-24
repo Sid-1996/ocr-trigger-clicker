@@ -5092,6 +5092,9 @@ class MainWindow(QMainWindow):
         outer_layout.addWidget(self._exec_log_toggle)
 
         self._exec_log_widget = ExecutionLogWidget()
+        self._exec_log_widget._on_clear = lambda: (
+            self._loop.clear_execution_log() if getattr(self, "_loop", None) else None
+        )
         self._exec_log_widget.setVisible(False)
         outer_layout.addWidget(self._exec_log_widget)
 
@@ -7539,6 +7542,13 @@ class MainWindow(QMainWindow):
         visible = not self._exec_log_widget.isVisible()
         self._exec_log_widget.setVisible(visible)
         self._exec_log_toggle.setText(T("exec_log.hide") if visible else T("exec_log.toggle"))
+        # 隱藏時停止輪詢，避免白花 GIL；顯示時恢復
+        if hasattr(self, "_exec_log_timer"):
+            if visible:
+                if not self._exec_log_timer.isActive():
+                    self._exec_log_timer.start(500)
+            else:
+                self._exec_log_timer.stop()
 
     def _update_exec_log(self):
         if not self._loop or not self._loop.is_running:

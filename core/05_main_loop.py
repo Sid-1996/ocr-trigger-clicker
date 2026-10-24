@@ -544,6 +544,12 @@ class MainLoop:
             detail,
         )
 
+    def clear_execution_log(self) -> None:
+        with self._rules_lock:
+            self._execution_log.clear()
+            self._last_exec_log.clear()
+            self._last_completed_log.clear()
+
     def get_execution_log(self) -> list[dict]:
         with self._rules_lock:
             return list(self._execution_log)

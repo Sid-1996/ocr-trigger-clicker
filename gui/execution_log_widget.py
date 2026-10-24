@@ -74,13 +74,24 @@ class ExecutionLogWidget(QWidget):
         # 只補上新增的尾端列。日誌為 deque(maxlen=50) 且每 500ms 全量傳入，
         # 全量重建（每列 5 個 QTableWidgetItem + ResizeToContents 重算）曾讓
         # GUI 執行緒吃掉整個行程的 GIL，主循環被餓死（實測 217ms/幀 → 574ms/幀）。
+        # deque 滾出前端時改走滑動窗口對齊，避免整表重建。
         n = len(self._rendered)
         keep = 0
         while keep < n and keep < len(entries) and self._rendered[keep] == entries[keep]:
             keep += 1
-        if keep < n:
+        if keep == 0 and n > 0 and len(entries) > 0:
+            max_ov = min(n, len(entries))
+            for ov in range(max_ov, 0, -1):
+                if self._rendered[n - ov :] == entries[:ov]:
+                    for _ in range(n - ov):
+                        self._table.removeRow(0)
+                    del self._rendered[: n - ov]
+                    keep = ov
+                    break
+        if keep < len(self._rendered):
             self._table.setRowCount(keep)
             del self._rendered[keep:]
+        added = len(entries) - keep
         self._table.setRowCount(len(entries))
         for row in range(keep, len(entries)):
             e = entries[row]
@@ -116,12 +127,21 @@ class ExecutionLogWidget(QWidget):
                     item.setForeground(QColor(140, 140, 140))
                 self._table.setItem(row, col, item)
             self._rendered.append(e)
-        if entries:
-            self._table.scrollToBottom()
+        # 僅在有新增列且使用者在底部附近時才捲動，避免打斷瀏覽歷史
+        if entries and added > 0:
+            sb = self._table.verticalScrollBar()
+            if sb is not None and sb.value() >= sb.maximum() - 20:
+                self._table.scrollToBottom()
 
     def _clear(self):
         self._table.setRowCount(0)
         self._rendered.clear()
+        cb = getattr(self, "_on_clear", None)
+        if callable(cb):
+            try:
+                cb()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
