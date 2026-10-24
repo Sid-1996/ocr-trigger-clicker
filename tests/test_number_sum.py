@@ -332,7 +332,7 @@ def test_two_sum_steps_track_independently(monkeypatch):
     assert len(ml._logger.lines) == 2
 
 
-def test_sum_panel_log_only_when_foreground():
+def test_sum_panel_log_in_all_modes():
     ml = make_main_loop()
     logged = []
     ml._log_exec = lambda *args: logged.append(args)
@@ -340,6 +340,7 @@ def test_sum_panel_log_only_when_foreground():
     def run_step(step, ctx, rule):
         ctx.sum_total = 35
         ctx.sum_count = 2
+        ctx.sum_stable = True
         return _ml.StepResult("continue")
 
     ml._run_step = run_step
@@ -348,10 +349,11 @@ def test_sum_panel_log_only_when_foreground():
     rect = {"x": 0, "y": 0, "w": 10, "h": 10}
 
     ml._run_rule(rule, img, rect)
-    assert logged == []
+    assert len(logged) == 1
+    assert logged[0][2:4] == ("sum", "ok")
 
     ctx = _ctx()
     ctx.sum_foreground = True
     ml._run_rule(rule, img, rect, ctx)
-    assert len(logged) == 1
-    assert logged[0][2:4] == ("sum", "ok")
+    assert len(logged) == 2
+    assert logged[1][2:4] == ("sum", "ok")
