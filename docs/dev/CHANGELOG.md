@@ -2,102 +2,70 @@
 
 ## [v0.4.8] - 2026-10-24
 
-**隢?頛?OCRTriggerClicker-win-Setup.exe**嚗?鋆??芸??湔??
+**請下載 OCRTriggerClicker-win-Setup.exe**，安裝後自動更新。
 **Please download OCRTriggerClicker-win-Setup.exe**; install once and updates become automatic.
 
-### ?啣???/ New Features
+### 新功能 / New Features
 
-- **?詨??蜇甇仿??撟筑撅?*嚗憓摮?蝮賬??郊撽??臬?Ｗ?瘚桀惜憿舐內蝛拙?蝮賢?嚗?蝵格?隞嗅仃??蝡瘛∪嚗??頝喲? OCR??Ｗ?甇Ｗ??儘霅?
+- **數字加總步驟與螢幕浮層**：新增「數字加總」規則步驟，可在螢幕浮層顯示穩定總和；前置條件失效時立即淡出，捲動時跳過 OCR、畫面停止後才辨識。
   **Number-sum step & on-screen overlay**: new "number sum" rule step showing a stable total on an on-screen overlay; fades out immediately when preconditions fail; skips OCR while scrolling and recognizes once the screen settles.
-- **??瘥??舀憿蝭??桃蔗**嚗敹賜??憿???銝阡＊蝷箸芋?蹂?皞圾?漲?偕摨西那?瑯?
+- **圖片比對支援顏色範圍遮罩**：可忽略指定顏色區域，並顯示模板來源解析度與尺度診斷。
   **Template matching color-range mask**: ignore specified color ranges; show template source resolution and scale diagnostics.
-- **Hybrid 瘛瑕?璅∪?撘瑕?**嚗?箏??舐?交?雿蒂撟單?????嚗??舀?瘣餃仃???寧 AttachThreadInput 鋆撥??
+- **Hybrid 混合模式強化**：改為前景直接操作並平滑動作間隔；前景激活失敗時改用 AttachThreadInput 補強。
   **Hybrid mode strengthened**: foreground-direct operation with smoothed action intervals; AttachThreadInput fallback when foreground activation fails.
-- **閬??亥???賊?**嚗??閬??瑁??亥???
+- **規則日誌靜音選項**：可關閉規則執行日誌。
   **Rule log mute option**: turn off rule execution logging.
-- **摨扳??⊥迤?刻??霅?*嚗憓漣璅甇?葫閰西?蝒??芸?閮箸嚗?游?芸?撽???
+- **座標校正全自動驗證**：新增座標校正測試視窗與自動診斷，支援全自動驗證。
   **Coordinate calibration auto-verification**: new calibration test window and auto-diagnosis supporting fully automated verification.
-- **隞餃?璅⊥??sim_task.py**嚗誑?箏? seed ?冽???撖血?撟撽??????????芾??訾??瑁???
+- **任務模擬器 sim_task.py**：以固定 seed 隨機切換實境幀驅動真規則引擎，動作只計數不執行。
   **Task simulator sim_task.py**: drives the real rule engine with seeded random real-world frames; actions are counted, not executed.
-- **?瑁??亥?蝎曄陛**嚗神蝘???ollover 憓?撠??lear ?郊敺垢?神?交????gating???隞嗚axlen 100?eload 皜?dedup??憭???
+- **執行日誌精簡**：毫秒時間戳、rollover 增量對齊、clear 同步後端、寫入持鎖、隱藏 gating、捲動條件、maxlen 100、reload 清 dedup、例外處理。
   **Execution log streamlined**: millisecond timestamps, rollover incremental alignment, clear syncs backend, locked writes, hidden gating, scroll conditions, maxlen 100, reload clears dedup, exception handling.
-- **?ˊ摰?撠店獢憓?璉??*嚗?璉?鈭活蝣箄???
+- **錄製完成對話框新增「丟棄」選項**，丟棄前二次確認。
   **Record-complete dialog adds "Discard" option** with a second confirmation before discarding.
 
-### ??靽桀儔 / Bug Fixes
+### 問題修復 / Bug Fixes
 
-- **摨扳????*嚗耨甇??獢?蝒恥?嗅?摨扳??宏嚗?蝒楊?Ｗ?????◤鋆???摨扳??臭?嚗漣璅甇?????砍?閬????舀?瘣餉??????撘瘀?敺?湔暺?銝剖?摰?靽格迤??
+- **座標與截圖**：修正有框視窗客戶區座標偏移；視窗跨螢幕時截圖不再被裁切造成座標錯位；座標校正擷取前重新抬升視窗、前景激活與擊點前抬升補強；後台直接點擊中心定位修正。
   **Coordinates & capture**: fixed client-area offset for framed windows; cross-monitor captures no longer cropped causing coordinate drift; re-raise window before calibration capture; strengthen foreground activation and pre-click raise; fix backend center-click positioning.
-- **敺?券?霅血?**嚗隞亥撟?Ｖ漱??霅??輸??暺??隤文??
+- **後台全黑警告**：改以螢幕畫面交叉驗證，避開遊戲黑幕過場誤判。
   **Backend black-screen warning**: cross-validated with screen capture to avoid false positives during game black transitions.
-- **PrintWindow ?∩?**嚗歲?撟嚗?蜓敺芰????
+- **PrintWindow 卡住**：跳過本幀，避免主循環凍結。
   **PrintWindow hang**: skip the frame instead of freezing the main loop.
-- **撽?頛芾岷**嚗撥?嗅??唳???踹??暹?敺炊?刻?撟嚗???頛芯?璉??舀??
+- **驗證輪詢**：強制取新截圖，避免逾時後誤用舊幀；不再每輪丟棄背景截圖。
   **Verification polling**: force fresh capture to avoid stale frames after timeout; no longer discards background capture every round.
-- **??瘥?**嚗耨甇?芋?踵?撠撩撠?蝒祝摨行?隤斤 ROI嚗蒂憿舐內撠箏漲閮箄那?瘀?璅⊥?寧?郊撽?皞圾?漲嚗耨甇?楊閫??摨行??方?閬?皜祈岫?蜇?汗嚗?摮宏?啁蝡??踹?????
+- **圖片比對**：修正模板比對缺少視窗寬度時誤用 ROI，並顯示尺度診斷；模板改用各步驟來源解析度，修正跨解析度漏判與規則測試加總預覽；紅字移到獨立列避免擠壓。
   **Template matching**: fix misuse of ROI when window width missing with scale diagnostics; use per-step source resolution to fix cross-resolution misses and sum preview in rule tests; move red text to its own row to avoid crowding.
-- **?蜇瘚桀惜**嚗? DPI 摨扳?撠?嚗?典??舫＊蝷綽????舀撖急隤??芷＊蝷箇帘摰蜇???蔭璇辣憭望????單楚?綽??脣??歲??OCR??
+- **加總浮層**：高 DPI 座標對齊；只在前景顯示，非前景改寫日誌；只顯示穩定總和，前置條件失效時立即淡出；捲動時跳過 OCR。
   **Sum overlay**: high-DPI alignment; foreground-only display with log fallback; show only stable totals and fade out immediately on precondition failure; skip OCR while scrolling.
-- **?蜇甇仿?蝛拙???*嚗?銝閬?????蝮賣郊撽??芰帘摰?蝘駁?蜇閬死??敹怠?嚗???OCR 銝餉楝敺?
+- **加總步驟穩定性**：同一規則的多個加總步驟各自穩定；移除加總視覺指紋快取，回到 OCR 主路徑。
   **Sum step stability**: multiple sum steps in one rule are independently stable; removed visual-fingerprint cache, back to OCR main path.
-- **?ˊ**嚗耨甇??鋆賣???閬?暺?鋡怨炊??靽格迤?ˊ憭撟???摨扳?靘?閮?嚗?璉?鋆賢?憓?鈭活蝣箄???
+- **錄製**：修正錄製時重疊視窗點擊被誤吞；修正錄製多螢幕點擊與座標來源記錄；丟棄錄製前增加二次確認。
   **Recording**: fix overlapping-window clicks being swallowed; fix multi-monitor click and coordinate source recording; add second confirmation before discarding a recording.
-- **隞餃??臬?臬**嚗撥?撏拇蔑?????湔扼?
+- **任務匯入匯出**：強化防崩潰與資料完整性。
   **Task import/export**: harden against crashes and improve data integrity.
-- **閬?皜祈岫????撠?*嚗?其??游恥?嗅?撠箏站??
+- **規則測試與圖片比對**：改用一致客戶區尺寸。
   **Rule testing & template matching**: use consistent client-area size.
-- **擐?閮箸閬? stop 瘣?**靽格迤??
+- **首幀診斷規則 stop 洗版**修正。
   **First-frame diagnostic rule stop spam** fixed.
 
-### ?扯?芸? / Performance
+### 性能優化 / Performance
 
-- **???漲??蝝?2.6 ??*嚗???頛芸?刻???蝝?0.34 蝘葬?剖蝝?0.13 蝘?CPU ?券?蝝???v0.4.3 銋??霈??靽桀儔嚗?
+- **掃描速度提升約 2.6 倍**：掃描一輪全部規則從約 0.34 秒縮短到約 0.13 秒，CPU 用量約減半（v0.4.3 之後版本變慢問題修復）。
   **Scan speed ~2.6x faster**: a full rule scan from ~0.34s to ~0.13s, CPU usage roughly halved (fixes slowdown introduced after v0.4.3).
-- **撽?頛芾岷撘瑕??芸?**嚗?暹?敺炊?刻?撟??
+- **驗證輪詢強制取新截圖**，避免逾時後誤用舊幀。
   **Verification polling forces fresh capture** to avoid stale frames after timeout.
-- **摨扳??⊥迤?瑕????唳??蝒?*嚗??舀?瘣餉?撘瑯?
+- **座標校正擷取前重新抬升視窗**，前景激活補強。
   **Re-raise window before calibration capture** to strengthen foreground activation.
 
-### ?嗡? / Other
+### 其他 / Other
 
-- **?訾??湔**嚗illow 摰靽格迤?嚗etuptools 84.0.0 ??84.1.0??
-  **Dependency updates**: Pillow security fix; setuptools 84.0.0 ??84.1.0.
-- **?辣**嚗憓漣璅甇???霅?摰Ｘ?撠箏站?琿隤芣?嚗?蝷?sim_task 銝?蝬???
+- **相依更新**：Pillow 安全修正版本；setuptools 84.0.0 → 84.1.0。
+  **Dependency updates**: Pillow security fix; setuptools 84.0.0 → 84.1.0.
+- **文件**：新增座標校正自動驗證與客戶區尺寸陷阱說明；明示 sim_task 不是效能綠燈。
   **Docs**: added coordinate calibration auto-verification and client-area size pitfalls; clarified sim_task is not a performance green light.
 
 ---
-
-
-
-**隢?頛?OCRTriggerClicker-win-Setup.exe**嚗?鋆??芸??湔??
-
-### ??靽桀儔
-
-- 靽格迤??閬??恥?嗅?摨扳??宏嚗楊?Ｗ??芸?銝?鋡怨???摨扳??臭???
-- 靽格迤敺璅∪??券?霅血?嚗隞亥撟?Ｖ漱??霅??輸??暺??隤文??
-- 靽格迤?ˊ????蝒??◤隤文????Ｗ?暺?摨扳?閮???
-- 靽格迤 PrintWindow ?∩??蜓敺芰??嚗?箄歲?撟??
-- 靽格迤撽?頛芾岷?暹?敺炊?刻?撟??頛芯?璉??舀??????
-- 靽格迤??閬?憭?蝮賣郊撽??詨僕?橘???函?蝛拙???
-- 靽格迤??瘥?蝻箏?閬?撖砍漲?炊??ROI嚗蒂憿舐內撠箏漲閮箸??
-- 靽格迤?蜇瘚桀惜?券? DPI 銝?摨扳?撠???
-- 靽格迤擐?閮箸閬? stop 瘣???
-- 靽格迤隞餃??臬?臬?撏拇蔑?????湔扼?
-
-### ?啣???
-
-- ??瘥??舀憿蝭??桃蔗嚗敹賜??憿???
-- ??瘥?甇仿?憿舐內璅⊥靘?閫??摨西?撠箏漲閮箸??
-- Hybrid 瘛瑕?璅∪??寧??湔??銝血像皛?雿???
-- ?瑁??亥?蝎曄陛嚗神蝘???ollover 憓?撠??lear ?郊敺垢?神?交???
-- ?ˊ摰?撠店獢憓?璉??銝???甈∠Ⅱ隤?
-- ?啣?閬??亥???賊???
-- ?啣?摨扳??⊥迤?芸?閮箸?葫閰西?蝒??舀?刻??霅?
-
-### ?扯?芸?
-
-- 撽?頛芾岷撘瑕??芸?嚗?暹?敺炊?刻?撟??
-- 摨扳??⊥迤?瑕????唳??蝒??瞈瘣餉?撘瑯?
 
 ## [v0.4.7] - 2026-10-18
 
