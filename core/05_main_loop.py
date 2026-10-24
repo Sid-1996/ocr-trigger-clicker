@@ -521,6 +521,12 @@ class MainLoop:
             self._last_exec_log.pop(key, None)
         else:
             key = f"{rule_name}:{step_idx}"
+        # 首幀抑制：循環剛啟動時每條規則都尚未命中，全部回 stop，會洗版。
+        # 只在第一幀丟棄 stop 的印出與面板紀錄，但保留 dedup 狀態，讓第二幀起的
+        # 相同 stop 被既有 dedup 機制正常抑制；ok/triggered/completed 仍記錄。
+        if result == "stop" and getattr(self, "_frame_count", 0) == 1:
+            self._last_exec_log[key] = ("stop", detail)
+            return
         entry = (result, detail)
         if self._last_exec_log.get(key) == entry:
             return
@@ -1134,6 +1140,7 @@ class MainLoop:
         roi = self._resolve_roi(raw_roi, ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         text = " ".join(r.text for r in results)
+        confidences = [round(getattr(r, "confidence", 0.0), 3) for r in results]
         total, count = sum_numbers(text)
         if count == 0:
             self._clear_sum(rule.id)
@@ -1143,7 +1150,7 @@ class MainLoop:
         ctx.sum_count = count
         if self._sum_seen is not None:
             self._sum_seen.add(rule.id)
-        self._update_sum(rule, ctx, roi, total, count, text)
+        self._update_sum(rule, ctx, roi, total, count, text, confidences)
         return StepResult("continue")
 
     def _update_sum(
@@ -1154,6 +1161,7 @@ class MainLoop:
         total: int,
         count: int,
         text: str,
+        confidences: list | None = None,
     ) -> None:
         """穩定後寫日誌；前景模式才顯示浮層。"""
         now = time.monotonic()
@@ -1167,7 +1175,7 @@ class MainLoop:
             return
         ctx.sum_stable = True
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
-        self._log_sum_result(rule, ctx, roi, total, count, text, mode)
+        self._log_sum_result(rule, ctx, roi, total, count, text, mode, confidences)
         if not self._sum_overlay_enabled(rule, mode):
             self._hide_sum(rule.id)
             return
@@ -1190,6 +1198,7 @@ class MainLoop:
         count: int,
         text: str,
         mode: str,
+        confidences: list | None = None,
     ) -> None:
         key = (total, count)
         per_rule = self._last_sum_report.setdefault(rule.id, {})
@@ -1202,8 +1211,9 @@ class MainLoop:
             f"{int(roi.get('x', 0))},{int(roi.get('y', 0))},"
             f"{int(roi.get('w', 0))},{int(roi.get('h', 0))}"
         )
+        conf_text = str(confidences) if confidences is not None else ""
         self._logger.info(
-            "[sum] mode=%s rule=%s id=%s step=%s total=%d count=%d roi=(%s) numbers=%s text=%r",
+            "[sum] mode=%s rule=%s id=%s step=%s total=%d count=%d roi=(%s) conf=%s numbers=%s text=%r",
             mode,
             rule.name,
             rule.id,
@@ -1211,6 +1221,7 @@ class MainLoop:
             total,
             count,
             roi_text,
+            conf_text,
             numbers_text,
             text[:200],
         )
@@ -2109,8 +2120,9 @@ class MainLoop:
                 continue
             else:
                 detail = self._build_ok_detail(step, ctx)
-                # 非前景的加總只寫檔案日誌（_log_sum_result），不進執行日誌面板
-                if not background and (step.type != "sum" or ctx.sum_foreground):
+                # 加總步驟：僅穩定結果才寫入執行日誌面板（避免抖動值洗版）；
+                # 檔案日誌仍由 _log_sum_result 另行記錄（且僅穩定時記錄）。
+                if not background and (step.type != "sum" or ctx.sum_stable):
                     if ctx.on_fail_fired:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
                     else:
@@ -2183,7 +2195,7 @@ class MainLoop:
             dy = step.params.get("dy", 0)
             return T("exec_log.detail.drag_offset", dx=f"{dx:+d}", dy=f"{dy:+d}")
         if t == "sum":
-            if ctx.sum_foreground:
+            if ctx.sum_count > 0:
                 return T("exec_log.detail.sum_result", total=ctx.sum_total, count=ctx.sum_count)
             raw_roi = step.params.get("roi", {})
             if all(raw_roi.get(k, 0) == 0 for k in ("x", "y", "w", "h")):
@@ -2762,7 +2774,7 @@ class MainLoop:
 
     def start(self) -> None:
         self._started_at = time.monotonic()
-        log_main(f"循環開始，目標視窗「{self._window_title}」")
+        log_main(f"循環開始，目標視窗「{self._window_title}」，{len(self._rules)} 條規則待命")
         self._execution_log.clear()
         self._last_exec_log.clear()
         self._rule_completed.clear()
