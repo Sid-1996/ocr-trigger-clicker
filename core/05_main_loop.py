@@ -1092,12 +1092,10 @@ class MainLoop:
         pattern = params.get("pattern", r"-?\d+\.?\d*")
         m = re.search(pattern, combined)
         if not m:
-            self._log(f"規則「{rule.name}」數字比較：OCR 未抓到數字（combined='{combined[:64]}'）")
             return self._handle_on_fail(params, ctx, rule)
         try:
             num = float(m.group())
         except (ValueError, TypeError):
-            self._log(f"規則「{rule.name}」數字比較：數字解析失敗（matched='{m.group()}'）")
             return self._handle_on_fail(params, ctx, rule)
         op = params.get("operator", ">=")
         val = params.get("value", 0.0)
@@ -1110,13 +1108,8 @@ class MainLoop:
             "!=": lambda a, b: a != b,
         }
         if op not in ops:
-            self._log(f"規則「{rule.name}」數字比較：不支援的運算子 '{op}'")
             return self._handle_on_fail(params, ctx, rule)
-        passed = ops[op](num, val)
-        self._log(
-            f"規則「{rule.name}」數字比較：OCR='{combined[:64]}' → {num} {op} {val} = {'通過' if passed else '未通過'}"
-        )
-        if not passed:
+        if not ops[op](num, val):
             return self._handle_on_fail(params, ctx, rule)
         self._fail_since.pop(f"{rule.id}:{ctx.step_idx}", None)
         ctx.matched_text = results[0]
