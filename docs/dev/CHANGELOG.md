@@ -10,13 +10,12 @@
 - **圖片比對支援顏色範圍遮罩**：可忽略指定顏色區域，並顯示模板來源解析度與尺度診斷。
 - **Hybrid 混合模式強化**：改為前景直接操作並平滑動作間隔；前景激活失敗時改用 AttachThreadInput 補強。
 - **規則日誌靜音選項**：可關閉規則執行日誌。
-- **座標校正全自動驗證**：新增座標校正測試視窗與自動診斷，支援全自動驗證。
 - **執行日誌精簡**：毫秒時間戳、rollover 增量對齊、clear 同步後端、寫入持鎖、隱藏 gating、捲動條件、maxlen 100、reload 清 dedup、例外處理。
 - **錄製完成對話框新增「丟棄」選項**，丟棄前二次確認。
 
 ### 問題修復
 
-- **座標與截圖**：修正有框視窗客戶區座標偏移；視窗跨螢幕時截圖不再被裁切造成座標錯位；座標校正擷取前重新抬升視窗、前景激活與擊點前抬升補強；後台直接點擊中心定位修正。
+- **座標與截圖**：修正有框視窗客戶區座標偏移；視窗跨螢幕時截圖不再被裁切造成座標錯位；前景激活與擊點前抬升補強；後台直接點擊中心定位修正。
 - **後台全黑警告**：改以螢幕畫面交叉驗證，避開遊戲黑幕過場誤判。
 - **PrintWindow 卡住**：跳過本幀，避免主循環凍結。
 - **驗證輪詢**：強制取新截圖，避免逾時後誤用舊幀；不再每輪丟棄背景截圖。
@@ -31,12 +30,11 @@
 ### 性能優化
 
 - **驗證輪詢強制取新截圖**，避免逾時後誤用舊幀。
-- **座標校正擷取前重新抬升視窗**，前景激活補強。
 
 ### 其他
 
 - **相依更新**：Pillow 安全修正版本；setuptools 84.0.0 → 84.1.0。
-- **文件**：新增座標校正自動驗證與客戶區尺寸陷阱說明。
+- **文件**：新增客戶區尺寸陷阱說明。
 
 ---
 
@@ -48,13 +46,12 @@
 - **Template matching color-range mask**: ignore specified color ranges; show template source resolution and scale diagnostics.
 - **Hybrid mode strengthened**: foreground-direct operation with smoothed action intervals; AttachThreadInput fallback when foreground activation fails.
 - **Rule log mute option**: turn off rule execution logging.
-- **Coordinate calibration auto-verification**: new calibration test window and auto-diagnosis supporting fully automated verification.
 - **Execution log streamlined**: millisecond timestamps, rollover incremental alignment, clear syncs backend, locked writes, hidden gating, scroll conditions, maxlen 100, reload clears dedup, exception handling.
 - **Record-complete dialog adds "Discard" option** with a second confirmation before discarding.
 
 ### Bug Fixes
 
-- **Coordinates & capture**: fixed client-area offset for framed windows; cross-monitor captures no longer cropped causing coordinate drift; re-raise window before calibration capture; strengthen foreground activation and pre-click raise; fix backend center-click positioning.
+- **Coordinates & capture**: fixed client-area offset for framed windows; cross-monitor captures no longer cropped causing coordinate drift; strengthen foreground activation and pre-click raise; fix backend center-click positioning.
 - **Backend black-screen warning**: cross-validated with screen capture to avoid false positives during game black transitions.
 - **PrintWindow hang**: skip the frame instead of freezing the main loop.
 - **Verification polling**: force fresh capture to avoid stale frames after timeout; no longer discards background capture every round.
@@ -69,12 +66,11 @@
 ### Performance
 
 - **Verification polling forces fresh capture** to avoid stale frames after timeout.
-- **Re-raise window before calibration capture** to strengthen foreground activation.
 
 ### Other
 
 - **Dependency updates**: Pillow security fix; setuptools 84.0.0 → 84.1.0.
-- **Docs**: added coordinate calibration auto-verification and client-area size pitfalls.
+- **Docs**: added client-area size pitfalls.
 
 ---
 
