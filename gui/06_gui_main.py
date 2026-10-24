@@ -7553,8 +7553,13 @@ class MainWindow(QMainWindow):
     def _update_exec_log(self):
         if not self._loop or not self._loop.is_running:
             return
-        entries = self._loop.get_execution_log()
-        self._exec_log_widget._populate(entries)
+        try:
+            entries = self._loop.get_execution_log()
+            self._exec_log_widget._populate(entries)
+        except Exception as e:
+            import logging
+
+            logging.getLogger("gui").debug("exec log populate failed: %s", e)
 
     def _update_edit_enabled(self, enabled: bool):
         self._rule_list.setEnabled(enabled)

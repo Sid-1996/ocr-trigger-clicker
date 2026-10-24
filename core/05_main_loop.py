@@ -365,7 +365,7 @@ class MainLoop:
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
         self._last_active_rule_id: str | None = None
-        self._execution_log: deque = deque(maxlen=50)
+        self._execution_log: deque = deque(maxlen=100)
         self._quiet_names: set[str] = set()
         self._last_exec_log: dict[str, tuple] = {}
         self._rule_completed: set[str] = set()
@@ -527,7 +527,7 @@ class MainLoop:
         self._last_exec_log[key] = entry
         self._execution_log.append(
             {
-                "ts": time.strftime("%H:%M:%S"),
+                "ts": time.strftime("%H:%M:%S") + f".{int((time.time() % 1) * 1000):03d}",
                 "rule_name": rule_name,
                 "step_idx": step_idx,
                 "step_type": step_type,
@@ -2816,11 +2816,14 @@ class MainLoop:
     def reload_rules(self) -> None:
         with self._rules_lock:
             self._load_rules()
+            self._last_exec_log.clear()
+            self._last_completed_log.clear()
 
     def set_active_groups(self, group_ids: list[str]):
         self._active_group_ids = group_ids
         self._group_queue_idx = 0
         self._rule_in_group_ptr = 0
+        self._last_exec_log.clear()
         while self._group_queue_idx < len(self._active_group_ids):
             g = self._current_group()
             if g and g.enabled:
