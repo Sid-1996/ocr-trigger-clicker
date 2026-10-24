@@ -5314,6 +5314,19 @@ class MainWindow(QMainWindow):
         self._rule_config_ctrl.refresh_task_list(self)
 
     def _on_task_changed(self, name: str):
+        # 切換任務前，把目前選取的目標視窗寫回舊任務（避免遺失上次執行的視窗紀錄）
+        if self._current_task and self._current_task != name:
+            try:
+                old_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+                title = self._window_combo.currentText()
+                if title:
+                    set_task_window(old_path, title)
+                    set_task_interaction_mode(
+                        old_path,
+                        self._rule_config_ctrl.get_setting(self, "interaction_mode", "pynput"),
+                    )
+            except Exception:
+                pass
         if self._loop and self._loop.is_running:
             self._flush_save()
         if self._save_timer.isActive():
