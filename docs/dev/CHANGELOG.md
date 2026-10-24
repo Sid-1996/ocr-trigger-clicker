@@ -3,67 +3,78 @@
 ## [v0.4.8] - 2026-10-24
 
 **請下載 OCRTriggerClicker-win-Setup.exe**，安裝後自動更新。
-**Please download OCRTriggerClicker-win-Setup.exe**; install once and updates become automatic.
 
-### 新功能 / New Features
+### 新功能
 
 - **數字加總步驟與螢幕浮層**：新增「數字加總」規則步驟，可在螢幕浮層顯示穩定總和；前置條件失效時立即淡出，捲動時跳過 OCR、畫面停止後才辨識。
-  **Number-sum step & on-screen overlay**: new "number sum" rule step showing a stable total on an on-screen overlay; fades out immediately when preconditions fail; skips OCR while scrolling and recognizes once the screen settles.
 - **圖片比對支援顏色範圍遮罩**：可忽略指定顏色區域，並顯示模板來源解析度與尺度診斷。
-  **Template matching color-range mask**: ignore specified color ranges; show template source resolution and scale diagnostics.
 - **Hybrid 混合模式強化**：改為前景直接操作並平滑動作間隔；前景激活失敗時改用 AttachThreadInput 補強。
-  **Hybrid mode strengthened**: foreground-direct operation with smoothed action intervals; AttachThreadInput fallback when foreground activation fails.
 - **規則日誌靜音選項**：可關閉規則執行日誌。
-  **Rule log mute option**: turn off rule execution logging.
 - **座標校正全自動驗證**：新增座標校正測試視窗與自動診斷，支援全自動驗證。
-  **Coordinate calibration auto-verification**: new calibration test window and auto-diagnosis supporting fully automated verification.
-- **任務模擬器 sim_task.py**：以固定 seed 隨機切換實境幀驅動真規則引擎，動作只計數不執行。
-  **Task simulator sim_task.py**: drives the real rule engine with seeded random real-world frames; actions are counted, not executed.
 - **執行日誌精簡**：毫秒時間戳、rollover 增量對齊、clear 同步後端、寫入持鎖、隱藏 gating、捲動條件、maxlen 100、reload 清 dedup、例外處理。
-  **Execution log streamlined**: millisecond timestamps, rollover incremental alignment, clear syncs backend, locked writes, hidden gating, scroll conditions, maxlen 100, reload clears dedup, exception handling.
 - **錄製完成對話框新增「丟棄」選項**，丟棄前二次確認。
-  **Record-complete dialog adds "Discard" option** with a second confirmation before discarding.
 
-### 問題修復 / Bug Fixes
+### 問題修復
 
 - **座標與截圖**：修正有框視窗客戶區座標偏移；視窗跨螢幕時截圖不再被裁切造成座標錯位；座標校正擷取前重新抬升視窗、前景激活與擊點前抬升補強；後台直接點擊中心定位修正。
-  **Coordinates & capture**: fixed client-area offset for framed windows; cross-monitor captures no longer cropped causing coordinate drift; re-raise window before calibration capture; strengthen foreground activation and pre-click raise; fix backend center-click positioning.
 - **後台全黑警告**：改以螢幕畫面交叉驗證，避開遊戲黑幕過場誤判。
-  **Backend black-screen warning**: cross-validated with screen capture to avoid false positives during game black transitions.
 - **PrintWindow 卡住**：跳過本幀，避免主循環凍結。
-  **PrintWindow hang**: skip the frame instead of freezing the main loop.
 - **驗證輪詢**：強制取新截圖，避免逾時後誤用舊幀；不再每輪丟棄背景截圖。
-  **Verification polling**: force fresh capture to avoid stale frames after timeout; no longer discards background capture every round.
 - **圖片比對**：修正模板比對缺少視窗寬度時誤用 ROI，並顯示尺度診斷；模板改用各步驟來源解析度，修正跨解析度漏判與規則測試加總預覽；紅字移到獨立列避免擠壓。
-  **Template matching**: fix misuse of ROI when window width missing with scale diagnostics; use per-step source resolution to fix cross-resolution misses and sum preview in rule tests; move red text to its own row to avoid crowding.
 - **加總浮層**：高 DPI 座標對齊；只在前景顯示，非前景改寫日誌；只顯示穩定總和，前置條件失效時立即淡出；捲動時跳過 OCR。
-  **Sum overlay**: high-DPI alignment; foreground-only display with log fallback; show only stable totals and fade out immediately on precondition failure; skip OCR while scrolling.
 - **加總步驟穩定性**：同一規則的多個加總步驟各自穩定；移除加總視覺指紋快取，回到 OCR 主路徑。
-  **Sum step stability**: multiple sum steps in one rule are independently stable; removed visual-fingerprint cache, back to OCR main path.
 - **錄製**：修正錄製時重疊視窗點擊被誤吞；修正錄製多螢幕點擊與座標來源記錄；丟棄錄製前增加二次確認。
-  **Recording**: fix overlapping-window clicks being swallowed; fix multi-monitor click and coordinate source recording; add second confirmation before discarding a recording.
 - **任務匯入匯出**：強化防崩潰與資料完整性。
-  **Task import/export**: harden against crashes and improve data integrity.
 - **規則測試與圖片比對**：改用一致客戶區尺寸。
-  **Rule testing & template matching**: use consistent client-area size.
 - **首幀診斷規則 stop 洗版**修正。
-  **First-frame diagnostic rule stop spam** fixed.
 
-### 性能優化 / Performance
+### 性能優化
 
-- **掃描速度提升約 2.6 倍**：掃描一輪全部規則從約 0.34 秒縮短到約 0.13 秒，CPU 用量約減半（v0.4.3 之後版本變慢問題修復）。
-  **Scan speed ~2.6x faster**: a full rule scan from ~0.34s to ~0.13s, CPU usage roughly halved (fixes slowdown introduced after v0.4.3).
 - **驗證輪詢強制取新截圖**，避免逾時後誤用舊幀。
-  **Verification polling forces fresh capture** to avoid stale frames after timeout.
 - **座標校正擷取前重新抬升視窗**，前景激活補強。
-  **Re-raise window before calibration capture** to strengthen foreground activation.
 
-### 其他 / Other
+### 其他
 
 - **相依更新**：Pillow 安全修正版本；setuptools 84.0.0 → 84.1.0。
-  **Dependency updates**: Pillow security fix; setuptools 84.0.0 → 84.1.0.
-- **文件**：新增座標校正自動驗證與客戶區尺寸陷阱說明；明示 sim_task 不是效能綠燈。
-  **Docs**: added coordinate calibration auto-verification and client-area size pitfalls; clarified sim_task is not a performance green light.
+- **文件**：新增座標校正自動驗證與客戶區尺寸陷阱說明。
+
+---
+
+**Please download OCRTriggerClicker-win-Setup.exe**; install once and updates become automatic.
+
+### New Features
+
+- **Number-sum step & on-screen overlay**: new "number sum" rule step showing a stable total on an on-screen overlay; fades out immediately when preconditions fail; skips OCR while scrolling and recognizes once the screen settles.
+- **Template matching color-range mask**: ignore specified color ranges; show template source resolution and scale diagnostics.
+- **Hybrid mode strengthened**: foreground-direct operation with smoothed action intervals; AttachThreadInput fallback when foreground activation fails.
+- **Rule log mute option**: turn off rule execution logging.
+- **Coordinate calibration auto-verification**: new calibration test window and auto-diagnosis supporting fully automated verification.
+- **Execution log streamlined**: millisecond timestamps, rollover incremental alignment, clear syncs backend, locked writes, hidden gating, scroll conditions, maxlen 100, reload clears dedup, exception handling.
+- **Record-complete dialog adds "Discard" option** with a second confirmation before discarding.
+
+### Bug Fixes
+
+- **Coordinates & capture**: fixed client-area offset for framed windows; cross-monitor captures no longer cropped causing coordinate drift; re-raise window before calibration capture; strengthen foreground activation and pre-click raise; fix backend center-click positioning.
+- **Backend black-screen warning**: cross-validated with screen capture to avoid false positives during game black transitions.
+- **PrintWindow hang**: skip the frame instead of freezing the main loop.
+- **Verification polling**: force fresh capture to avoid stale frames after timeout; no longer discards background capture every round.
+- **Template matching**: fix misuse of ROI when window width missing with scale diagnostics; use per-step source resolution to fix cross-resolution misses and sum preview in rule tests; move red text to its own row to avoid crowding.
+- **Sum overlay**: high-DPI alignment; foreground-only display with log fallback; show only stable totals and fade out immediately on precondition failure; skip OCR while scrolling.
+- **Sum step stability**: multiple sum steps in one rule are independently stable; removed visual-fingerprint cache, back to OCR main path.
+- **Recording**: fix overlapping-window clicks being swallowed; fix multi-monitor click and coordinate source recording; add second confirmation before discarding a recording.
+- **Task import/export**: harden against crashes and improve data integrity.
+- **Rule testing & template matching**: use consistent client-area size.
+- **First-frame diagnostic rule stop spam** fixed.
+
+### Performance
+
+- **Verification polling forces fresh capture** to avoid stale frames after timeout.
+- **Re-raise window before calibration capture** to strengthen foreground activation.
+
+### Other
+
+- **Dependency updates**: Pillow security fix; setuptools 84.0.0 → 84.1.0.
+- **Docs**: added coordinate calibration auto-verification and client-area size pitfalls.
 
 ---
 
