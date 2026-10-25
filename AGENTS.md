@@ -384,7 +384,9 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 **流程：**
 1. **比較差異**：用 Python 載入兩邊 JSON，比對 groups/rules 數量、enabled 狀態、step 內容
 2. **覆蓋檔案**：`Copy-Item` 從本地複製到 `docs/tasks/`
-3. **提交**：`git add -A` → commit + push 上傳 JSON 即可（commit 訊息：`docs: sync task JSON`）
+3. **同步 GitHub 討論**：更新 [Discussion #1](https://github.com/Sid-1996/ocr-trigger-clicker/discussions/1) 的原始貼文，把標題與內文的更新日期改為本次同步日期，並確認檔名、任務介紹與下載連結仍符合目前 JSON／任務頁；保留既有使用說明，不要只新增留言。每次同步 StarSavior 任務鏡像都必須完成這一步。
+4. **核對提交內容**：確認 `docs/tasks/` 兩份 StarSavior JSON 與本機來源內容相同；提交時只 stage 本次要同步的任務 JSON 與流程文件，不要把其他工作區修改一起提交。
+5. **提交並推送**：commit + push 上傳（任務鏡像同步的 commit 訊息：`docs: sync task JSON`）。
 
 **HTML 不再逐次同步：** `docs/starsavior.html` 使用通用性介紹（不寫死群組數、群組名稱、規則清單、enabled 狀態），使用者下載 JSON 後自行啟停調整。因此任務內容更新時**不需要**改 HTML。僅當網頁的整體功能描述本身需要調整（例如新增/移除整個功能類別）時才動 HTML。
 
