@@ -149,8 +149,6 @@
   /* ── Screenshots ── */
   .screenshot { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; cursor: zoom-in; transition: transform 0.2s; }
   figcaption { font-size: .85em; color: var(--text-muted); text-align: center; margin-top: 6px; margin-bottom: 1.5rem; }
-  .video-wrap { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; border: 1px solid var(--border); }
-  .video-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 
   /* ── Principle Cards ── */
   .principle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.2rem; }
@@ -288,7 +286,6 @@
     <ul>
       <li><a href="#features">功能</a></li>
       <li><a href="#screenshots">截圖</a></li>
-      <li class="nav-hide-sm"><a href="#video">影片</a></li>
       <li><a href="#guide">使用</a></li>
       <li class="nav-hide-sm"><a href="#tools">工具</a></li>
       <li class="nav-hide-sm"><a href="#recording">錄製</a></li>
@@ -304,7 +301,7 @@
 <!-- ════════════ Hero ════════════ -->
 <section class="hero">
   <div class="container">
-    <div class="subtitle">Windows 10/11 · 安裝版，自動更新 · 開源 AGPLv3 · <span id="hero-version">v0.4.3</span></div>
+    <div class="subtitle">Windows 10/11 · 安裝版，自動更新 · 開源 AGPLv3 · <span id="hero-version">v0.4.8</span></div>
     <h1>OCR Trigger Clicker</h1>
     <p>給一般玩家的免寫程式遊戲自動化工具 — 看畫面文字點兩下就建好規則，或錄製一遍操作自動轉成腳本，自動完成每日任務與重複操作。支援繁中 / English / 日本語介面、圖片比對、前景／後台／混合三種互動方式。</p>
     <div class="actions">
@@ -369,12 +366,12 @@
       <div class="feature-card" data-target="tool-matchimage">
         <div class="icon"><svg class="ico-lg"><use href="#i-image"/></svg></div>
         <h3>圖片比對</h3>
-      <p>以圖找圖，支援多尺度搜尋與 NMS 篩選。適合無文字的按鈕或圖示。</p>
+        <p>支援多尺度搜尋、NMS 篩選、模板修剪與顏色範圍遮罩，可忽略背景色來比對按鈕或圖示。</p>
       </div>
       <div class="feature-card" data-target="patterns">
         <div class="icon"><svg class="ico-lg"><use href="#i-link"/></svg></div>
         <h3>多步驟流程</h3>
-        <p>每條規則由有序步驟組成：偵測、點擊、按鍵、等待、跳轉、數值比對、圖片比對、提示訊息、滾輪、拖曳。</p>
+        <p>每條規則由有序步驟組成：文字偵測、圖片比對、數值比較、數字加總、點擊、按鍵、拖曳、滾輪、等待、規則跳轉與提示訊息。</p>
       </div>
       <div class="feature-card" data-target="gametasks">
         <div class="icon"><svg class="ico-lg"><use href="#i-folder"/></svg></div>
@@ -408,30 +405,23 @@
 <section id="screenshots">
   <div class="container">
     <h2>介面截圖</h2>
-    <p class="section-desc">深色主題、中文介面，規則列表與步驟編輯一目瞭然。</p>
+    <p class="section-desc">查看目前版本的規則編輯、OCR 診斷、圖片修剪與顏色遮罩操作。</p>
     <figure>
-      <img class="screenshot" src="images/gui-main.png?v=20260829" alt="OCR Trigger Clicker 工具主介面" width="1920" height="1080" loading="lazy">
-      <figcaption>主介面：視窗選擇、任務管理、規則編輯</figcaption>
+      <img class="screenshot" src="images/工具介面示範.png" alt="OCR Trigger Clicker v0.4.8 新增規則步驟選單，包含數字加總" loading="lazy">
+      <figcaption>新增規則步驟：可選數字加總、數值比較、圖片比對等操作</figcaption>
     </figure>
     <figure>
-      <img class="screenshot" src="images/ocr-diagnostic.png?v=20260827" alt="OCR 即時診斷功能" width="1920" height="1080" loading="lazy">
+      <img class="screenshot" src="images/OCR診斷示範.png" alt="OCR 診斷畫面，顯示遊戲畫面、辨識文字與信心度" loading="lazy">
       <figcaption>OCR 診斷面板：即時掃描視窗文字，輔助設定偵測區域</figcaption>
     </figure>
     <figure>
-      <img class="screenshot" src="images/gui2.png?v=20260829" alt="圖片比對步驟設定" width="1920" height="1080" loading="lazy">
-      <figcaption>圖片比對步驟：截取圖片、設定搜尋區域與相似度門檻</figcaption>
+      <img class="screenshot" src="images/圖片比對&amp;修剪示範.png" alt="圖片比對設定與修剪圖片對話框" loading="lazy">
+      <figcaption>圖片比對：修剪模板，設定搜尋範圍、相似度與失敗處理</figcaption>
     </figure>
-  </div>
-</section>
-
-<!-- ════════════ Video Demo ════════════ -->
-<section id="video" class="alt">
-  <div class="container">
-    <h2><svg class="ico"><use href="#i-clap"/></svg> 示範影片</h2>
-    <p class="section-desc">一鏡到底看懂主要功能：錄製一遍自動轉規則、多步驟流程、前景／後台模式與任務分享。</p>
-    <div class="video-wrap">
-      <iframe src="https://www.dailymotion.com/embed/video/xaxgcfq" title="OCR Trigger Clicker 示範影片" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe>
-    </div>
+    <figure>
+      <img class="screenshot" src="images/圖片比對&amp;比對顏色+去背.gif" alt="圖片比對的顏色範圍遮罩動畫示範" loading="lazy">
+      <figcaption>顏色範圍遮罩：忽略選取的背景色，或只保留指定前景色</figcaption>
+    </figure>
   </div>
 </section>
 
@@ -544,7 +534,7 @@
         <li>❌ 點在 <strong>空白處</strong> → 只能轉成固定等待後點擊（純計時播放），換解析度或畫面位移後容易點錯位置。</li>
       </ul>
       <p style="color:var(--text-muted);font-size:0.85rem;">💡 自動轉換：點在文字上 → 等文字出現再點擊；無文字但有圖示 → 圖片比對後點擊；空白處 → 固定等待後點擊。座標一律存為視窗比例，<strong>相同長寬比（16:9）</strong>換螢幕／換解析度不用重設。</p>
-      <p style="margin-top:10px;">▶ <a href="#video">看示範影片</a> — 一鏡到底示範錄製與轉換。</p>
+      <p style="margin-top:10px;">可參考上方介面截圖了解規則步驟、OCR 診斷與圖片比對工具。</p>
     </div>
   </div>
 </section>
@@ -826,7 +816,7 @@
     <h2>下載</h2>
     <p class="section-desc">最新穩定版本，歡迎下載使用或貢獻原始碼。</p>
     <div class="download-box">
-      <div class="version" id="dl-version">v0.4.3</div>
+      <div class="version" id="dl-version">v0.4.8</div>
       <div class="meta">Windows 10/11 64-bit · 安裝版，自動更新</div>
       <div class="actions">
         <a href="https://github.com/Sid-1996/ocr-trigger-clicker/releases/latest/download/OCRTriggerClicker-win-Setup.exe" target="_blank" class="btn btn-primary">下載最新版本</a>
