@@ -31,22 +31,18 @@
 ## Preview
 
 <p align="center">
-  <img src="docs/images/gui-main.png" alt="Main Interface" width="880"><br>
-  <em>Rule list + step editor — dark theme, Chinese UI</em>
+  <img src="docs/images/工具介面示範.png" alt="OCR Trigger Clicker v0.4.8 interface with the number sum step menu" width="880"><br>
+  <em>Chinese UI: the step menu includes number sum, numeric comparison, and image matching</em>
 </p>
 
 <br>
 
 <p align="center">
-  <img src="docs/images/ocr-diagnostic.png" alt="OCR Diagnostic Panel" width="880"><br>
+  <img src="docs/images/OCR診斷示範.png" alt="OCR Diagnostic Panel" width="880"><br>
   <em>OCR diagnostic — real-time text recognition; pick a target, one click to create its rule</em>
 </p>
 
 <br>
-
-<p align="center">
-  <a href="https://www.dailymotion.com/video/xaxgcfq">🎬 Watch the demo video — record once, auto-convert to rules, foreground / background modes</a>
-</p>
 
 ---
 
@@ -55,8 +51,8 @@
 | | Feature | Description |
 |:-:|---------|-------------|
 | 🔍 | **Detect text on screen** | Tell it what text to look for and what to do — when found, it acts automatically (OCR is optimized for Traditional Chinese; the English UI auto-switches to a dedicated English model) |
-| 🖼️ | **Find buttons with images** | No text? Match by image — faster than reading text; captured images can be **trimmed** to the exact area needed |
-| 🔗 | **Chain multiple steps** | Detect → click → wait → drag… runs all the way through like a recorded macro |
+| 🖼️ | **Find buttons with images** | No text? Match by image; **trim templates** or use **color-range masks** to ignore backgrounds |
+| 🔗 | **Chain multiple steps** | Detect → click → wait → drag, plus numeric comparison and **number-sum** steps |
 | 📂 | **Switch between tasks** | Save each game or workflow as a separate file — one-click switch |
 | 📐 | **Resolution-proof (same aspect ratio)** | Coordinates are stored as window ratios — switch between same-aspect-ratio (16:9, e.g. 1080p↔900p) resolutions with no reconfiguring; different aspect ratios need re-framing |
 | 👁️ | **Set up rules visually** | OCR diagnostic panel lists every readable text on screen — pick your target and hit "Create as new text rule" to fill in detection conditions automatically |
@@ -64,7 +60,7 @@
 | 🔀 | **Hybrid mode** | For games that only accept foreground input (like most Unity games): detection runs on background captures with zero disturbance, and only when an action is needed does the tool bring the game to the foreground, click, then restore your previous window and mouse position (if the game is already in front, it acts directly). Ideal for low-frequency actions — e.g. the game is auto-battling through the story and you only need to tap "Next" after each stage: set up a rule once, then go do something else |
 | ⌨️ | **F8 global hotkey** | Start / stop any time with F8 — no need to switch back to the tool (if paused, F8 resumes) |
 | 🎬 | **Record actions** | Press F9 to record, click through the game once as a demo, then convert it into rules automatically — no manual setup (only mouse clicks are recorded; aiming at text or icons gives the best result) |
-| 🔄 | **Auto-update** | Checks for new versions on launch, downloads and applies updates automatically with a restart; delta packages only fetch what changed (~0.6 MB in practice) |
+| 🔄 | **Auto-update** | Checks for new versions on launch, downloads and applies updates automatically with a restart; delta packages only fetch changed files |
 | 🌐 | **Multilingual UI** | Traditional Chinese / English / Japanese, switch anytime |
 
 ---

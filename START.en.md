@@ -30,7 +30,7 @@ Save the `.json` file somewhere on your PC.
 
 The tool looks like this when opened:
 
-![Main UI](docs/images/gui-main.png)
+![v0.4.8 Chinese interface with the step menu open](docs/images/工具介面示範.png)
 
 Find these on screen:
 
@@ -47,7 +47,7 @@ Want to build your own automation from scratch? Four steps:
 
 ### ① Download the tool
 
-Same as above — [download Setup.exe](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → install and launch (Portable.zip also available)
+Same as above — [download Setup.exe](https://github.com/Sid-1996/ocr-trigger-clicker/releases) → install and launch.
 
 ### ② Meet the UI
 
@@ -59,8 +59,8 @@ Same as above — [download Setup.exe](https://github.com/Sid-1996/ocr-trigger-c
 
 1. Click "**+ Group**" in the toolbar to add a group (name it "test")
 2. Inside the group, click "**+ Rule**" to add a rule
-3. Add a step: choose "**detect**" → enter the text to find
-4. Add another step: choose "**click**" → pick where to click
+3. Add a step: choose "**Detect Text**" → enter the text to find
+4. Add another step: choose "**Click**" → pick where to click
 5. Hit "▶Test" to verify it works
 
 > 💡 **Fastest way:** open "OCR Diagnostic" to see every text found on screen, find your target, click "Create as new text rule" — detection text and position are filled in automatically. You only need to add the action.
@@ -76,8 +76,6 @@ For detailed tutorials, see the [documentation site](https://sid-1996.github.io/
 ## Path C: Record actions
 
 Don't want to set up rules one by one? Record once and the tool converts it into rules automatically.
-
-> 🎬 Want to see it in action? [Watch the recording demo video](https://www.dailymotion.com/video/xaxgcfq).
 
 ### ① Prepare
 
