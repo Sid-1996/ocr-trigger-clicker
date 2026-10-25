@@ -31,15 +31,15 @@
 ## 預覽
 
 <p align="center">
-  <img src="docs/images/工具介面示範.png" alt="v0.4.8 工具主介面與數字加總步驟選單" width="880"><br>
-  <em>新增步驟選單包含數字加總、數值比較與圖片比對</em>
+  <img src="docs/images/OCR診斷示範.png" alt="OCR 診斷面板" width="880"><br>
+  <em>OCR 診斷 — 即時辨識畫面文字，選取目標後一鍵建立規則</em>
 </p>
 
 <br>
 
 <p align="center">
-  <img src="docs/images/OCR診斷示範.png" alt="OCR 診斷面板" width="880"><br>
-  <em>OCR 診斷 — 即時辨識畫面文字，選取目標後一鍵建立規則</em>
+  <img src="docs/images/工具介面示範.png" alt="v0.4.8 工具主介面與數字加總步驟選單" width="880"><br>
+  <em>新增步驟選單包含數字加總、數值比較與圖片比對</em>
 </p>
 
 <br>

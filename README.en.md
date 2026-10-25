@@ -31,15 +31,15 @@
 ## Preview
 
 <p align="center">
-  <img src="docs/images/工具介面示範.png" alt="OCR Trigger Clicker v0.4.8 interface with the number sum step menu" width="880"><br>
-  <em>Chinese UI: the step menu includes number sum, numeric comparison, and image matching</em>
+  <img src="docs/images/OCR診斷示範.png" alt="OCR Diagnostic Panel" width="880"><br>
+  <em>OCR diagnostic — real-time text recognition; pick a target, one click to create its rule</em>
 </p>
 
 <br>
 
 <p align="center">
-  <img src="docs/images/OCR診斷示範.png" alt="OCR Diagnostic Panel" width="880"><br>
-  <em>OCR diagnostic — real-time text recognition; pick a target, one click to create its rule</em>
+  <img src="docs/images/工具介面示範.png" alt="OCR Trigger Clicker v0.4.8 interface with the number sum step menu" width="880"><br>
+  <em>Chinese UI: the step menu includes number sum, numeric comparison, and image matching</em>
 </p>
 
 <br>
