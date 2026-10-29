@@ -26,6 +26,69 @@ _utils = load_sibling("file_utils", "core/file_utils.py")
 _replace_file = _utils._replace_file
 
 
+class RuleFileError(Exception):
+    """JSON task/config load or unsafe overwrite error."""
+
+    def __init__(self, path: str | Path, reason: str):
+        self.path = str(path)
+        self.reason = str(reason)
+        super().__init__(f"「{self.path}」: {self.reason}")
+
+
+def _read_json_object(path: str | Path) -> dict | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeError) as e:
+        err = RuleFileError(p, f"無法讀取或解析 JSON：{e}")
+        log_main(f"JSON 載入失敗：{err}")
+        raise err from e
+    if not isinstance(data, dict):
+        err = RuleFileError(p, "JSON 根層級必須是物件")
+        log_main(f"JSON 載入失敗：{err}")
+        raise err
+    return data
+
+
+def _validate_task_structure(data: dict, p: Path, *, overwrite: bool = False) -> None:
+    suffix = "，拒絕覆寫" if overwrite else ""
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        raise RuleFileError(p, f"rules 必須是陣列{suffix}")
+    if "groups" in data and not isinstance(data["groups"], list):
+        raise RuleFileError(p, f"groups 必須是陣列{suffix}")
+    for i, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            raise RuleFileError(p, f"規則 {i} 必須是物件{suffix}")
+        if "steps" not in rule:
+            continue  # v1 legacy, migrated by _dict_to_rule
+        name = rule.get("name", "")
+        label = f"規則 {i}" + (f"「{name}」" if isinstance(name, str) and name else "")
+        steps = rule["steps"]
+        if not isinstance(steps, list):
+            raise RuleFileError(p, f"{label} 的 steps 必須是陣列{suffix}")
+        for j, step in enumerate(steps):
+            if not isinstance(step, dict):
+                raise RuleFileError(p, f"{label} 的步驟 {j} 必須是物件{suffix}")
+
+
+def _read_existing_for_save(p: Path) -> dict:
+    if not p.exists():
+        return {}
+    try:
+        with open(p, encoding="utf-8") as f:
+            existing = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeError) as e:
+        raise RuleFileError(p, f"既有檔案無法解析，拒絕覆寫：{e}") from e
+    if not isinstance(existing, dict):
+        raise RuleFileError(p, "既有檔案根層級不是物件，拒絕覆寫")
+    _validate_task_structure(existing, p, overwrite=True)
+    return existing
+
+
 def _dict_to_rule(d: dict) -> Rule:
     if "steps" not in d:
         d = _migrate_v1_to_v2(d)
@@ -37,7 +100,6 @@ def _dict_to_rule(d: dict) -> Rule:
             ),
         )
         for s in d.get("steps", [])
-        if isinstance(s, dict)
     ]
     return Rule(
         id=str(d.get("id", "")),
@@ -85,20 +147,13 @@ def _group_to_dict(g: RuleGroup) -> dict:
 
 def load_groups(path: str) -> list[RuleGroup]:
     p = Path(path)
-    if not p.exists():
+    data = _read_json_object(p)
+    if data is None:
         return []
-    try:
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError, UnicodeError):
-        return []
-    if not isinstance(data, dict):
-        return []
+    _validate_task_structure(data, p)
     if "groups" not in data:
         data = migrate_v2_to_v3(data)
     groups = data.get("groups", [])
-    if not isinstance(groups, list):
-        return []
     groups = [_dict_to_group(g) for g in groups if isinstance(g, dict)]
     logging.debug("[load_groups] n=%d", len(groups))
     return groups
@@ -110,15 +165,9 @@ def save_groups(groups: list[RuleGroup], path: str) -> bool:
     try:
         data = {"groups": [_group_to_dict(g) for g in groups]}
         p = Path(path)
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    existing = json.load(f)
-                for k, v in existing.items():
-                    if k != "groups":
-                        data[k] = v
-            except (json.JSONDecodeError, OSError):
-                pass
+        for k, v in _read_existing_for_save(p).items():
+            if k != "groups":
+                data[k] = v
         with tempfile.NamedTemporaryFile(
             "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
         ) as f:
@@ -126,6 +175,9 @@ def save_groups(groups: list[RuleGroup], path: str) -> bool:
             tmp_path = f.name
         _replace_file(tmp_path, str(p))
         return True
+    except RuleFileError as e:
+        log_main(f"儲存失敗，未覆寫原始檔案：{e}")
+        return False
     except OSError:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
@@ -148,15 +200,9 @@ def save_task_with_groups(rules: list[Rule], groups: list[RuleGroup], path: str)
             "groups": [_group_to_dict(g) for g in groups],
         }
         p = Path(path)
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    existing = json.load(f)
-                for k, v in existing.items():
-                    if k not in data:
-                        data[k] = v
-            except (json.JSONDecodeError, OSError):
-                pass
+        for k, v in _read_existing_for_save(p).items():
+            if k not in data:
+                data[k] = v
         with tempfile.NamedTemporaryFile(
             "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
         ) as f:
@@ -164,6 +210,9 @@ def save_task_with_groups(rules: list[Rule], groups: list[RuleGroup], path: str)
             tmp_path = f.name
         _replace_file(tmp_path, str(p))
         return True
+    except RuleFileError as e:
+        log_main(f"儲存失敗，未覆寫原始檔案：{e}")
+        return False
     except OSError:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
@@ -172,19 +221,24 @@ def save_task_with_groups(rules: list[Rule], groups: list[RuleGroup], path: str)
 
 def load_rules(path: str) -> list[Rule]:
     p = Path(path)
-    if not p.exists():
-        return []
-    try:
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError, UnicodeError, KeyError) as e:
-        log_main(f"規則檔案載入失敗「{path}」: {e}")
-        return []
-    if not isinstance(data, dict):
+    data = _read_json_object(p)
+    if data is None:
         return []
 
-    if "groups" not in data:
+    _validate_task_structure(data, p)
+
+    migrate = "groups" not in data
+    if migrate:
         data = migrate_v2_to_v3(data)
+
+    rules: list[Rule] = []
+    for i, raw in enumerate(data.get("rules", [])):
+        try:
+            rules.append(_dict_to_rule(raw))
+        except (TypeError, ValueError, AttributeError, KeyError) as e:
+            raise RuleFileError(p, f"規則 {i} 轉換失敗：{e}") from e
+
+    if migrate:
         tmp_path = ""
         try:
             with tempfile.NamedTemporaryFile(
@@ -197,12 +251,6 @@ def load_rules(path: str) -> list[Rule]:
             if tmp_path:
                 Path(tmp_path).unlink(missing_ok=True)
 
-    if not data.get("rules"):
-        return []
-    rules_data = data.get("rules", [])
-    if not isinstance(rules_data, list):
-        return []
-    rules = [_dict_to_rule(r) for r in rules_data if isinstance(r, dict)]
     logging.debug("[load_rules] n=%d", len(rules))
     return rules
 
@@ -213,15 +261,9 @@ def save_rules(rules: list[Rule], path: str) -> bool:
     try:
         data = {"rules": [_rule_to_dict(r) for r in rules]}
         p = Path(path)
-        if p.exists():
-            try:
-                with open(p, encoding="utf-8") as f:
-                    existing = json.load(f)
-                for k, v in existing.items():
-                    if k != "rules":
-                        data[k] = v
-            except (json.JSONDecodeError, OSError):
-                pass
+        for k, v in _read_existing_for_save(p).items():
+            if k != "rules":
+                data[k] = v
         with tempfile.NamedTemporaryFile(
             "w", dir=p.parent, suffix=".tmp", delete=False, encoding="utf-8"
         ) as f:
@@ -229,6 +271,9 @@ def save_rules(rules: list[Rule], path: str) -> bool:
             tmp_path = f.name
         _replace_file(tmp_path, str(p))
         return True
+    except RuleFileError as e:
+        log_main(f"儲存失敗，未覆寫原始檔案：{e}")
+        return False
     except OSError:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)

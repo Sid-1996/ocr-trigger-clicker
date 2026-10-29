@@ -5,7 +5,7 @@ _here = Path(__file__).resolve().parent.parent
 if str(_here) not in sys.path:
     sys.path.insert(0, str(_here))
 
-from _loader import load_sibling  # noqa: E402
+from _loader import load_sibling, log_main  # noqa: E402
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 OcrResult = _ocr_mod.OcrResult
@@ -43,6 +43,7 @@ save_groups = _serial.save_groups
 load_rules = _serial.load_rules
 save_rules = _serial.save_rules
 save_task_with_groups = _serial.save_task_with_groups
+RuleFileError = _serial.RuleFileError
 
 _tasks = load_sibling("task_management", "core/task_management.py")
 get_tasks_dir = _tasks.get_tasks_dir
@@ -76,7 +77,11 @@ def migrate_old_rules():
 
     old_path = Path(get_data_path("rules.json"))
     if old_path.exists():
-        rules = load_rules(str(old_path))
+        try:
+            rules = load_rules(str(old_path))
+        except RuleFileError as e:
+            log_main(f"舊規則檔載入失敗，略過遷移：{e}")
+            return
         save_task("預設任務", rules)
 
 

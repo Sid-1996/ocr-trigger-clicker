@@ -160,7 +160,7 @@ def _validate_rule_structure(raw: dict, warnings: list[str]) -> bool:
                     warnings.append(
                         f"規則「{raw['name']}」步驟 {i} 驗證 on_fail=stop 不支援，驗證將被移除（動作照常執行但失去保護）"
                     )
-                elif _migration._normalize_verify(vfy) is None:
+                elif _migration._normalize_verify(vfy, rule_name=str(raw.get("name", ""))) is None:
                     warnings.append(
                         f"規則「{raw['name']}」步驟 {i} 驗證內容無效（缺少文字/圖片或失敗動作不支援），將被移除"
                     )

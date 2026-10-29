@@ -618,6 +618,45 @@ def test_quiet_rule_skips_key_action_log():
     assert len(logged) == 1
 
 
+def test_load_rules_corrupt_preserves_current_rules(tmp_path):
+    p = tmp_path / "task.json"
+    p.write_text('{"rules": [', encoding="utf-8")
+    ml = _make_ml()
+    keep = Rule(id="keep", name="Keep", enabled=True, steps=[])
+    ml._rules = [keep]
+    ml._rule_map = {keep.id: keep}
+    ml._quiet_names = {"Keep"}
+    ml._rules_path = str(p)
+    warnings = []
+    ml.on_warning = warnings.append
+    ml._load_rules()
+    assert [r.id for r in ml._rules] == ["keep"]
+    assert ml._rule_map == {"keep": keep}
+    assert ml._quiet_names == {"Keep"}
+    assert warnings and "保留目前規則" in warnings[0]
+
+
+def test_load_rules_nested_type_error_preserves_current_rules(tmp_path):
+    p = tmp_path / "task.json"
+    p.write_text(
+        '{"rules": [{"id": "bad", "name": "Bad", "steps": 5}], "groups": []}',
+        encoding="utf-8",
+    )
+    ml = _make_ml()
+    keep = Rule(id="keep", name="Keep", enabled=True, steps=[])
+    ml._rules = [keep]
+    ml._rule_map = {keep.id: keep}
+    ml._groups = ["sentinel"]
+    ml._rules_path = str(p)
+    warnings = []
+    ml.on_warning = warnings.append
+    ml._load_rules()
+    assert [r.id for r in ml._rules] == ["keep"]
+    assert ml._rule_map == {"keep": keep}
+    assert ml._groups == ["sentinel"]
+    assert warnings and "保留目前規則" in warnings[0]
+
+
 def test_load_rules_collects_quiet_names(tmp_path):
     p = tmp_path / "task.json"
     p.write_text(

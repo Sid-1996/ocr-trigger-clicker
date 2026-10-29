@@ -72,6 +72,7 @@ RuleGroup = _rule.RuleGroup
 load_rules = _rule.load_rules
 load_groups = _rule.load_groups
 save_rules = _rule.save_rules
+RuleFileError = _rule.RuleFileError
 get_effective_capture_size = _rule.get_effective_capture_size
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 MatchResult = _tmpl.MatchResult
@@ -332,7 +333,7 @@ class MainLoop:
         self._tmpl_cache_max = 64
 
         self._rule_pointer: int = 0
-        self._groups: list[RuleGroup] = load_groups(rules_path)
+        self._groups: list[RuleGroup] = []
         self._active_group_ids: list[str] = []
         self._group_queue_idx: int = 0
         self._rule_in_group_ptr: int = 0
@@ -561,25 +562,39 @@ class MainLoop:
             return list(self._execution_log)
 
     def _load_rules(self):
+        error_msg = ""
         with self._rules_lock:
-            self._rules = load_rules(self._rules_path)
-            self._rule_map = {r.id: r for r in self._rules}
-            self._quiet_names = {r.name for r in self._rules if r.quiet}
-            self._groups = load_groups(self._rules_path)
-            self._rule_pointer = 0
-            self._group_rounds_completed.clear()
-            self._match_image_warn_counter.clear()
-            self._detect_warn_counter.clear()
-            self._sum_warn_counter.clear()
-            self._sum_candidate.clear()
-            self._last_sum_report.clear()
-            self._sum_active_rule = None
-            self._sum_seen = None
-            self._xframe_ocr_cache.clear()
-            self._tmpl_cache.clear()
-            self._fail_since.clear()
-            self._last_active_rule_id = None
-            self._update_has_detect()
+            try:
+                rules = load_rules(self._rules_path)
+                groups = load_groups(self._rules_path)
+            except RuleFileError as e:
+                error_msg = f"規則檔案載入失敗，保留目前規則：{e}"
+            else:
+                self._rules = rules
+                self._rule_map = {r.id: r for r in self._rules}
+                self._quiet_names = {r.name for r in self._rules if r.quiet}
+                self._groups = groups
+                self._rule_pointer = 0
+                self._group_rounds_completed.clear()
+                self._match_image_warn_counter.clear()
+                self._detect_warn_counter.clear()
+                self._sum_warn_counter.clear()
+                self._sum_candidate.clear()
+                self._last_sum_report.clear()
+                self._sum_active_rule = None
+                self._sum_seen = None
+                self._xframe_ocr_cache.clear()
+                self._tmpl_cache.clear()
+                self._fail_since.clear()
+                self._last_active_rule_id = None
+                self._update_has_detect()
+        if error_msg:
+            log_main(error_msg)
+            if self.on_warning:
+                try:
+                    self.on_warning(error_msg)
+                except Exception:
+                    logging.exception("規則載入失敗通知回呼錯誤")
 
     def _current_group(self) -> RuleGroup | None:
         if not self._active_group_ids or self._group_queue_idx >= len(self._active_group_ids):
@@ -2026,9 +2041,10 @@ class MainLoop:
                             )
                         return StepResult("stop", detail=late_cancel)
                     else:  # timeout after retries exhausted
-                        v_on_fail = verify.get("on_fail", None)
+                        # 缺省／None 採 advance；不可回退 step 的 on_fail，兩者層級不同。
+                        v_on_fail = verify.get("on_fail")
                         if v_on_fail is None:
-                            v_on_fail = step.params.get("on_fail", "stop")
+                            v_on_fail = {"action": "advance"}
                         # verify+stop is forbidden → stay, log timeout, no on_fail action
                         if v_on_fail == "stop" or (
                             isinstance(v_on_fail, dict) and v_on_fail.get("action") == "stop"
@@ -2065,7 +2081,9 @@ class MainLoop:
                         res = self._handle_on_fail(tmp_params, ctx, rule)
                         if res.action == "stop" and not res.detail:
                             res.detail = T("exec_log.detail.verification_timeout")
-                        return res
+                        # 交回 _run_rule 主流程處理 continue / jump_step / stop，
+                        # key、skip 才不會被提前 return 吞掉。
+                        result = res
             if step.type == "wait" and result.action == "continue":
                 if not background:
                     self._log_exec(rule.name, i, "wait", "ok")

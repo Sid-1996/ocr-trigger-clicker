@@ -176,7 +176,7 @@ def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
     return str(raw) if str(raw) in ("key", "stop") else "stop"
 
 
-def _normalize_verify(raw: object) -> dict | None:
+def _normalize_verify(raw: object, rule_name: str = "") -> dict | None:
     if not isinstance(raw, dict):
         return None
     vtype = str(raw.get("type", "")).strip()
@@ -200,14 +200,42 @@ def _normalize_verify(raw: object) -> dict | None:
         return None
     if isinstance(on_fail_raw, dict) and str(on_fail_raw.get("action", "")) == "stop":
         return None
-    on_fail = None
-    if on_fail_raw is not None:
+    # 缺省／None／無效純量一律採 advance：verify 已禁止 stop，若 runtime 再回退
+    # stop 會讓動作每幀重送。明確 stop 仍在上方視為無效 verify。
+    if on_fail_raw is None:
+        on_fail: str | dict = {"action": "advance"}
+    elif isinstance(on_fail_raw, str) and on_fail_raw == "advance":
+        on_fail = {"action": "advance"}  # 舊 JSON 可能存字串
+    elif not isinstance(on_fail_raw, (str, dict)):
+        on_fail = {"action": "advance"}  # 無效型別 → 預設 advance，避免落到 stop
+    else:
         on_fail = _normalize_on_fail(on_fail_raw, allow_skip=True)
         # _normalize may coerce unknown to "stop" — treat that as invalid too
         if on_fail == "stop" or (isinstance(on_fail, dict) and on_fail.get("action") == "stop"):
             # if user explicitly passed stop-like value, reject
             if isinstance(on_fail_raw, (str, dict)):
                 return None
+        # 空 key 會讓 _handle_on_fail 不送按鍵卻回 continue，改走 advance。
+        # 舊格式 "key" 經 _normalize_on_fail 後也是字串，需一併涵蓋。
+        if on_fail == "key" or (
+            isinstance(on_fail, dict)
+            and on_fail.get("action") == "key"
+            and (
+                not str(on_fail.get("key", "")).strip()
+                or (isinstance(on_fail_raw, dict) and on_fail_raw.get("key") is None)
+            )
+        ):
+            try:
+                import logging
+
+                logging.getLogger("rule_migration").warning(
+                    "規則「%s」動作後驗證 on_fail=key 缺少有效按鍵，已改為 advance: %r",
+                    rule_name or "?",
+                    raw,
+                )
+            except Exception:
+                pass
+            on_fail = {"action": "advance"}
     result: dict = {
         "type": vtype,
         "preset": preset,
@@ -219,8 +247,7 @@ def _normalize_verify(raw: object) -> dict | None:
         "retries": retries,
         "retry_delay_ms": retry_delay_ms,
     }
-    if on_fail is not None:
-        result["on_fail"] = on_fail
+    result["on_fail"] = on_fail
     if vtype == "detect":
         result["text"] = str(raw.get("text", "")).strip()
         result["match_mode"] = str(raw.get("match_mode", "fuzzy"))
@@ -255,7 +282,7 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
     if step_type in ("click", "key", "drag", "scroll"):
         raw_verify = params.get("verify", None)
         if raw_verify is not None:
-            v = _normalize_verify(raw_verify)
+            v = _normalize_verify(raw_verify, rule_name=rule_name)
             if v is None:
                 # invalid verify (e.g. verify+stop or missing text/template) -> drop with log
                 base.pop("verify", None)

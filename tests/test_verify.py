@@ -90,6 +90,68 @@ def test_verify_roundtrip_step_params():
     assert out["after_delay_ms"] == 250
 
 
+def test_verify_normalize_missing_on_fail_defaults_advance():
+    nv = RuleMig._normalize_verify({"type": "detect", "text": "hi"})
+    assert nv is not None
+    assert nv["on_fail"] == {"action": "advance"}
+
+
+def test_verify_explicit_advance_string_preserved():
+    nv = RuleMig._normalize_verify({"type": "detect", "text": "hi", "on_fail": "advance"})
+    assert nv is not None
+    assert nv["on_fail"] == {"action": "advance"}
+
+
+def test_verify_invalid_on_fail_scalar_defaults_advance():
+    for raw in (123, [], ["advance"], True):
+        nv = RuleMig._normalize_verify({"type": "detect", "text": "hi", "on_fail": raw})
+        assert nv is not None
+        assert nv["on_fail"] == {"action": "advance"}
+
+
+def test_verify_empty_key_normalizes_to_advance_with_warning(caplog):
+    import logging
+
+    cases = (
+        {"action": "key", "key": ""},
+        {"action": "key", "key": "   "},
+        {"action": "key"},
+        {"action": "key", "key": None},
+        "key",
+    )
+    for raw in cases:
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="rule_migration"):
+            nv = RuleMig._normalize_verify({"type": "detect", "text": "hi", "on_fail": raw})
+        assert nv is not None, raw
+        assert nv["on_fail"] == {"action": "advance"}, raw
+        assert any("on_fail=key" in m for m in caplog.messages), raw
+
+
+def test_verify_valid_key_preserved_without_warning(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="rule_migration"):
+        nv = RuleMig._normalize_verify(
+            {"type": "detect", "text": "hi", "on_fail": {"action": "key", "key": "F1"}}
+        )
+    assert nv is not None
+    assert nv["on_fail"] == {"action": "key", "key": "F1"}
+    assert caplog.messages == []
+
+
+def test_verify_empty_key_warning_names_rule(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="rule_migration"):
+        RuleMig._normalize_step_params(
+            "click",
+            {"verify": {"type": "detect", "text": "hi", "on_fail": "key"}},
+            rule_name="我的規則",
+        )
+    assert any("我的規則" in m for m in caplog.messages)
+
+
 def test_verify_clamp():
     v = {
         "type": "detect",

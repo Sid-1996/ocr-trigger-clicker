@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -152,7 +153,8 @@ def set_task_interaction_mode(path: str, mode: str) -> bool:
             tmp_path = f.name
         _replace_file(tmp_path, str(p))
         return True
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as e:
+        logging.getLogger(__name__).error("任務 interaction_mode 寫入失敗：%s：%s", path, e)
         if tmp_path:
             try:
                 os.unlink(tmp_path)

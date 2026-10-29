@@ -1,7 +1,10 @@
 import json
 
+import pytest
+
 from core.rule_models import Rule, RuleGroup, Step
 from core.rule_serialization import (
+    RuleFileError,
     _dict_to_group,
     _dict_to_rule,
     _group_to_dict,
@@ -10,6 +13,7 @@ from core.rule_serialization import (
     load_rules,
     save_groups,
     save_rules,
+    save_task_with_groups,
 )
 
 
@@ -148,13 +152,17 @@ def test_load_groups_nonexistent():
 def test_load_rules_corrupt(tmp_path):
     f = tmp_path / "corrupt.json"
     f.write_text("not json!!!", encoding="utf-8")
-    assert load_rules(str(f)) == []
+    with pytest.raises(RuleFileError) as exc:
+        load_rules(str(f))
+    assert str(f) in str(exc.value)
 
 
 def test_load_groups_corrupt(tmp_path):
     f = tmp_path / "corrupt.json"
     f.write_text("not json!!!", encoding="utf-8")
-    assert load_groups(str(f)) == []
+    with pytest.raises(RuleFileError) as exc:
+        load_groups(str(f))
+    assert str(f) in str(exc.value)
 
 
 def test_old_field_compat():
@@ -262,10 +270,109 @@ def test_dict_to_group_invalid_values_are_safe():
 def test_load_rules_bad_encoding_and_non_dict_root(tmp_path):
     bad_encoding = tmp_path / "bad_utf8.json"
     bad_encoding.write_bytes(b"\xff\xfe\x00")
-    assert load_rules(str(bad_encoding)) == []
-    assert load_groups(str(bad_encoding)) == []
+    with pytest.raises(RuleFileError):
+        load_rules(str(bad_encoding))
+    with pytest.raises(RuleFileError):
+        load_groups(str(bad_encoding))
 
     non_dict = tmp_path / "list_root.json"
     non_dict.write_text("[]", encoding="utf-8")
-    assert load_rules(str(non_dict)) == []
-    assert load_groups(str(non_dict)) == []
+    with pytest.raises(RuleFileError):
+        load_rules(str(non_dict))
+    with pytest.raises(RuleFileError):
+        load_groups(str(non_dict))
+
+
+def test_load_rejects_non_array_rules_and_groups(tmp_path):
+    bad_rules = tmp_path / "bad_rules.json"
+    bad_rules.write_text('{"rules": {}}', encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        load_rules(str(bad_rules))
+
+    bad_groups = tmp_path / "bad_groups.json"
+    bad_groups.write_text('{"rules": [], "groups": {}}', encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        load_rules(str(bad_groups))
+    with pytest.raises(RuleFileError):
+        load_groups(str(bad_groups))
+
+
+def test_load_accepts_empty_datasets(tmp_path):
+    f = tmp_path / "empty.json"
+    f.write_text('{"rules": [], "groups": []}', encoding="utf-8")
+    assert load_rules(str(f)) == []
+    assert load_groups(str(f)) == []
+
+
+def test_save_refuses_to_overwrite_corrupt_json(tmp_path):
+    f = tmp_path / "corrupt.json"
+    original = b'{"rules": ['
+    f.write_bytes(original)
+    rule = Rule(id="r1", name="R1", enabled=True, steps=[])
+    assert save_rules([rule], str(f)) is False
+    assert save_groups([RuleGroup(id="g1", name="G1")], str(f)) is False
+    assert save_task_with_groups([rule], [], str(f)) is False
+    assert f.read_bytes() == original
+
+
+def test_save_refuses_malformed_array_fields(tmp_path):
+    f = tmp_path / "bad_shape.json"
+    original = '{"rules": {}, "groups": {}}'
+    f.write_text(original, encoding="utf-8")
+    rule = Rule(id="r1", name="R1", enabled=True, steps=[])
+    assert save_rules([rule], str(f)) is False
+    assert save_groups([RuleGroup(id="g1", name="G1")], str(f)) is False
+    assert save_task_with_groups([rule], [], str(f)) is False
+    assert f.read_text(encoding="utf-8") == original
+
+
+def test_save_succeeds_after_repair(tmp_path):
+    f = tmp_path / "repair.json"
+    f.write_text("not json", encoding="utf-8")
+    rule = Rule(id="r1", name="R1", enabled=True, steps=[])
+    assert save_rules([rule], str(f)) is False
+    f.write_text('{"rules": [], "groups": []}', encoding="utf-8")
+    assert save_rules([rule], str(f)) is True
+    assert [r.id for r in load_rules(str(f))] == ["r1"]
+    assert json.loads(f.read_text(encoding="utf-8"))["groups"] == []
+
+
+MALFORMED_TASK_PAYLOADS = [
+    '{"rules": [{"id": "r", "name": "R", "steps": []}], "groups": {}}',
+    '{"rules": 5, "groups": [{"id": "g", "name": "G"}]}',
+    '{"rules": [{"id": "r", "name": "R", "steps": 5}], "groups": []}',
+    '{"rules": [{"id": "r", "name": "R", "steps": null}], "groups": []}',
+    '{"rules": [{"id": "r", "name": "R", "steps": [1]}], "groups": []}',
+    '{"rules": [1], "groups": []}',
+]
+
+
+@pytest.mark.parametrize("payload", MALFORMED_TASK_PAYLOADS)
+def test_load_rejects_malformed_nested_rules(tmp_path, payload):
+    f = tmp_path / "bad.json"
+    f.write_text(payload, encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        load_rules(str(f))
+    with pytest.raises(RuleFileError):
+        load_groups(str(f))
+
+
+@pytest.mark.parametrize("payload", MALFORMED_TASK_PAYLOADS)
+def test_save_refuses_any_malformed_task_structure(tmp_path, payload):
+    f = tmp_path / "bad.json"
+    f.write_text(payload, encoding="utf-8")
+    rule = Rule(id="r1", name="R1", enabled=True, steps=[])
+    group = RuleGroup(id="g1", name="G1")
+    assert save_rules([rule], str(f)) is False
+    assert save_groups([group], str(f)) is False
+    assert save_task_with_groups([rule], [group], str(f)) is False
+    assert f.read_text(encoding="utf-8") == payload
+
+
+def test_load_migration_does_not_rewrite_invalid_legacy_file(tmp_path):
+    f = tmp_path / "legacy_bad.json"
+    original = '{"rules": [{"id": "a", "name": "A", "steps": 5}]}'
+    f.write_text(original, encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        load_rules(str(f))
+    assert f.read_text(encoding="utf-8") == original

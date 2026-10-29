@@ -1,8 +1,13 @@
 import json
 
+import pytest
+
 import core.task_management as _tm
+from _loader import load_sibling
 from core.rule_models import Rule, Step
 from core.rule_serialization import load_groups
+
+RuleFileError = load_sibling("rule_serialization", "core/rule_serialization.py").RuleFileError
 
 
 def test_list_tasks_empty(tmp_tasks_dir):
@@ -17,6 +22,26 @@ def test_save_and_load_task(tmp_tasks_dir):
     assert len(loaded) == 1
     assert loaded[0].id == "r1"
     assert loaded[0].steps[0].params["ms"] == 100
+
+
+def test_corrupt_task_load_raises_and_save_does_not_overwrite(tmp_tasks_dir):
+    p = tmp_tasks_dir / "broken.json"
+    original = '{"rules": ['
+    p.write_text(original, encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        _tm.load_task("broken")
+    assert _tm.save_task("broken", []) is False
+    assert p.read_text(encoding="utf-8") == original
+
+
+def test_nested_corrupt_task_load_raises_and_save_does_not_overwrite(tmp_tasks_dir):
+    p = tmp_tasks_dir / "nested.json"
+    original = '{"rules": [{"id": "r", "name": "R", "steps": 5}], "groups": []}'
+    p.write_text(original, encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        _tm.load_task("nested")
+    assert _tm.save_task("nested", []) is False
+    assert p.read_text(encoding="utf-8") == original
 
 
 def test_delete_task(tmp_tasks_dir):

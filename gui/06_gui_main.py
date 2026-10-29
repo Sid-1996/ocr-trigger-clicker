@@ -4167,6 +4167,7 @@ export_task = _rule_mod.export_task
 import_task = _rule_mod.import_task
 preview_import_task = _rule_mod.preview_import_task
 ImportPreview = _rule_mod.ImportPreview
+RuleFileError = _rule_mod.RuleFileError
 migrate_old_rules = _rule_mod.migrate_old_rules
 Step = _rule_mod.Step
 RuleGroup = _rule_mod.RuleGroup
@@ -4366,6 +4367,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self._win = win
         self._ctrl = RuleConfigController()
+        self._save_blocked = False
         self.setWindowTitle(T("settings.title"))
         self.setMinimumWidth(420)
 
@@ -4560,57 +4562,137 @@ class SettingsDialog(QDialog):
         layout.addWidget(tabs)
 
         # 底部按鈕
-        buttons = QDialogButtonBox(
+        self._buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(self._on_accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self._buttons.accepted.connect(self._on_accept)
+        self._buttons.rejected.connect(self.reject)
+        layout.addWidget(self._buttons)
+
+    def _block_save(self):
+        self._save_blocked = True
+        buttons = getattr(self, "_buttons", None)
+        if buttons is not None:
+            ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+            if ok_button is not None:
+                ok_button.setEnabled(False)
 
     def _on_accept(self):
+        if getattr(self, "_save_blocked", False):
+            QMessageBox.critical(
+                self,
+                T("dialog.warning"),
+                T("notif.settings_reopen_required"),
+            )
+            return
+        if not self._win._task_load_failed and not self._win._flush_save():
+            self._win._report_task_save_failed()
+            return
         old_lang = get_language()
         old_power_save = self._ctrl.get_setting(self._win, "power_save_mode", False)
-        self._ctrl.set_setting(self._win, "max_cps", self._max_cps.value())
-        self._ctrl.set_setting(self._win, "scan_interval_ms", self._scan_interval.value())
-        self._ctrl.set_setting(self._win, "default_match_mode", self._match_mode.currentData())
-        self._ctrl.set_setting(self._win, "close_behavior", self._close_behavior.currentData())
-        self._ctrl.set_setting(
-            self._win, "show_close_confirm", self._show_close_confirm.isChecked()
+        new_lang = self._language.currentData()
+        new_mode = self._interaction_mode.currentData()
+        task_path = ""
+        old_task_mode = None
+        if getattr(self._win, "_current_task", ""):
+            task_path = str(_rule_mod.get_tasks_dir() / f"{self._win._current_task}.json")
+            old_task_mode = get_task_interaction_mode(task_path)
+
+        old_config = dict(self._ctrl.load_config(self._win))
+        config = dict(old_config)
+        config.update(
+            {
+                "max_cps": self._max_cps.value(),
+                "scan_interval_ms": self._scan_interval.value(),
+                "default_match_mode": self._match_mode.currentData(),
+                "close_behavior": self._close_behavior.currentData(),
+                "show_close_confirm": self._show_close_confirm.isChecked(),
+                "notify_resource_warn": self._notify_resource_warn.isChecked(),
+                "power_save_mode": self._power_save.isChecked(),
+                "skip_update_check": not self._auto_update.isChecked(),
+                "ask_group_selection": self._ask_group.isChecked(),
+                "interaction_mode": new_mode,
+                "default_mouse_button": self._mouse_btn.currentData(),
+                "default_random_offset": self._random_offset.value(),
+                "default_wait_ms": self._default_wait_ms.value(),
+                "default_after_delay_ms": self._default_after_delay.value(),
+                "default_detect_after_delay_ms": self._default_detect_after_delay.value(),
+                "record_after_delay_ms": self._record_after_delay.value(),
+                "record_detect_after_delay_ms": self._record_detect_after_delay.value(),
+                "default_fuzzy_threshold": self._fuzzy_th.value(),
+                "default_template_threshold": self._template_th.value(),
+                "default_color_tolerance": self._color_tol.value(),
+                "language": new_lang,
+            }
         )
-        self._ctrl.set_setting(
-            self._win, "notify_resource_warn", self._notify_resource_warn.isChecked()
-        )
-        self._ctrl.set_setting(self._win, "power_save_mode", self._power_save.isChecked())
+        config_path = str(getattr(self._win, "_config_path", ""))
+        if not self._win._save_config(config):
+            error_ctrl = getattr(self._win, "_rule_config_ctrl", self._ctrl)
+            get_save_conflict = getattr(error_ctrl, "get_save_conflict", None)
+            save_conflict = get_save_conflict() if get_save_conflict is not None else None
+            if save_conflict is not None:
+                self._block_save()
+                path = getattr(save_conflict, "path", config_path)
+                reason = getattr(save_conflict, "reason", str(save_conflict))
+                logging.error(f"settings save blocked by external config change: {path}: {reason}")
+                message = T("dialog.config_external_change_msg", path=path, error=reason)
+                message += "\n\n" + T("notif.settings_reopen_required")
+                QMessageBox.critical(self, T("dialog.config_external_change"), message)
+                return
+            get_load_error = getattr(error_ctrl, "get_load_error", None)
+            load_error = get_load_error() if get_load_error is not None else None
+            if load_error is not None:
+                self._block_save()
+                path = getattr(load_error, "path", config_path)
+                reason = getattr(load_error, "reason", str(load_error))
+                logging.error(f"settings save blocked by config load error: {path}: {reason}")
+                message = T("dialog.config_load_failed_msg", path=path, error=reason)
+                message += "\n\n" + T("notif.settings_reopen_required")
+                QMessageBox.critical(self, T("dialog.config_load_failed"), message)
+            else:
+                QMessageBox.critical(
+                    self,
+                    T("dialog.warning"),
+                    T("notif.settings_save_failed", path=config_path),
+                )
+            return
+        if task_path and new_mode != old_task_mode:
+            if not set_task_interaction_mode(task_path, new_mode):
+                logging.error(f"settings task mode write failed: {task_path} (mode={new_mode})")
+                if not self._win._save_config(old_config):
+                    self._block_save()
+                    logging.error(
+                        "settings rollback failed after task mode write failure: "
+                        f"config={config_path} task={task_path}"
+                    )
+                    message = T(
+                        "notif.settings_rollback_failed",
+                        config_path=config_path,
+                        task_path=task_path,
+                    )
+                    conflict_ctrl = getattr(self._win, "_rule_config_ctrl", self._ctrl)
+                    get_conflict = getattr(conflict_ctrl, "get_save_conflict", None)
+                    conflict = get_conflict() if get_conflict is not None else None
+                    if conflict is not None:
+                        message += "\n\n" + T(
+                            "dialog.config_external_change_msg",
+                            path=getattr(conflict, "path", config_path),
+                            error=getattr(conflict, "reason", str(conflict)),
+                        )
+                    QMessageBox.critical(self, T("dialog.warning"), message)
+                    return
+                QMessageBox.critical(
+                    self,
+                    T("dialog.warning"),
+                    f"{T('dialog.cannot_write')}\n{task_path}",
+                )
+                return
         if bool(old_power_save) != self._power_save.isChecked():
-            # 省電模式變更：即時丟棄 OCR 引擎，下一次辨識依新設定懶載入重建（免重啟）
+            # 節電模式變更：即時重置 OCR 引擎，下一個任務依新設定進入引擎（延遲載入）
             from _loader import load_sibling
 
             _ocr_mod = load_sibling("_ocr_engine", "core/02_ocr_engine.py")
             _ocr_mod.reset_engine()
-        self._ctrl.set_setting(self._win, "skip_update_check", not self._auto_update.isChecked())
-        self._ctrl.set_setting(self._win, "ask_group_selection", self._ask_group.isChecked())
-        self._ctrl.set_setting(self._win, "interaction_mode", self._interaction_mode.currentData())
-        if getattr(self._win, "_current_task", ""):
-            task_path = str(_rule_mod.get_tasks_dir() / f"{self._win._current_task}.json")
-            set_task_interaction_mode(task_path, self._interaction_mode.currentData())
-        self._ctrl.set_setting(self._win, "default_mouse_button", self._mouse_btn.currentData())
-        self._ctrl.set_setting(self._win, "default_random_offset", self._random_offset.value())
-        self._ctrl.set_setting(self._win, "default_wait_ms", self._default_wait_ms.value())
-        self._ctrl.set_setting(
-            self._win, "default_after_delay_ms", self._default_after_delay.value()
-        )
-        self._ctrl.set_setting(
-            self._win, "default_detect_after_delay_ms", self._default_detect_after_delay.value()
-        )
-        self._ctrl.set_setting(self._win, "record_after_delay_ms", self._record_after_delay.value())
-        self._ctrl.set_setting(
-            self._win, "record_detect_after_delay_ms", self._record_detect_after_delay.value()
-        )
-        self._ctrl.set_setting(self._win, "default_fuzzy_threshold", self._fuzzy_th.value())
-        self._ctrl.set_setting(self._win, "default_template_threshold", self._template_th.value())
-        self._ctrl.set_setting(self._win, "default_color_tolerance", self._color_tol.value())
-        new_lang = self._language.currentData()
-        self._ctrl.set_setting(self._win, "language", new_lang)
         if old_lang != new_lang:
             answer = QMessageBox.question(
                 self,
@@ -4619,6 +4701,9 @@ class SettingsDialog(QDialog):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if answer == QMessageBox.StandardButton.Yes:
+                if not self._win._task_load_failed and not self._win._flush_save():
+                    self._win._report_task_save_failed()
+                    return
                 if getattr(sys, "frozen", False):
                     _launch_args: list[str] = []
                     _launch_cwd = str(Path(sys.executable).parent)
@@ -4627,22 +4712,27 @@ class SettingsDialog(QDialog):
                     if "--debug" in sys.argv:
                         _launch_args.append("--debug")
                     _launch_cwd = str(Path(__file__).resolve().parent.parent)
-                # 內建 relaunch：新程序等本程序退出後才初始化，不再經過 updater.exe
+                # 先啟動 relaunch：新程式等待舊程式退出後再初始化，避免經過 updater.exe
                 if not _relaunch_detached(_launch_args, _launch_cwd):
-                    logging.error("無法啟動重啟程序，將退出供使用者手動重啟")
-                # watchdog：萬一 _quit_app 卡住（如 _rules_lock），3 秒後強制結束，
-                # 保證新程序的 --wait-exit-pid 能繼續。
+                    logging.error("無法啟動語言切換重啟程式，將直接退出由使用者手動重新開啟")
+                # watchdog：下一個 _quit_app 會嘗試取得 _rules_lock，3 秒後強制結束，
+                # 避免新程式的 --wait-exit-pid 永久卡住。
+                watchdog_stop = threading.Event()
                 threading.Thread(
-                    target=lambda: (time.sleep(3), os._exit(1)),
+                    target=lambda: watchdog_stop.wait(3) or os._exit(1),
                     daemon=True,
                 ).start()
-                self.accept()
                 try:
-                    self._win._quit_app()
+                    quit_ok = self._win._quit_app()
                 except Exception:
-                    logging.exception("語言切換退出時例外")
-                # os._exit 跳過直譯器 shutdown（可能被非 daemon 執行緒卡住），
-                # 確保舊程序結束、新程序接手啟動。
+                    logging.exception("語言切換退出時發生例外")
+                    quit_ok = False
+                if not quit_ok:
+                    watchdog_stop.set()
+                    return
+                self.accept()
+                # os._exit 跳過 Qt 的事件迴圈 shutdown，確保舊程式立即讓位
+                # 給新程式啟動。
                 os._exit(0)
         self.accept()
 
@@ -4670,7 +4760,11 @@ class MainWindow(QMainWindow):
             self._selected_rule_id: Optional[str] = None
             self._window_lost = False
             self._current_task: str = ""
+            self._task_load_failed = False
+            self._task_load_error: Optional[RuleFileError] = None
+            self._task_load_failed_notified = False
             self._groups: list[RuleGroup] = []
+            self._rules: list[Rule] = []
             self._collapsed_groups: set[str] = set()
             self._suppress_collapse = False
             self._is_starting = False
@@ -4736,8 +4830,8 @@ class MainWindow(QMainWindow):
     def _load_config(self) -> dict:
         return self._rule_config_ctrl.load_config(self)
 
-    def _save_config(self, data: dict):
-        self._rule_config_ctrl.save_config(self, data)
+    def _save_config(self, data: dict) -> bool:
+        return self._rule_config_ctrl.save_config(self, data)
 
     def _deferred_init(self):
         try:
@@ -4746,6 +4840,17 @@ class MainWindow(QMainWindow):
 
             self._status_bar.showMessage(T("status.loading_task"))
             self._refresh_task_list()
+
+            config_error = self._rule_config_ctrl.get_load_error()
+            if config_error:
+                msg = T(
+                    "dialog.config_load_failed_msg",
+                    path=config_error.path,
+                    error=config_error.reason,
+                )
+                _main_loop_mod.log_main(msg)
+                self._status_bar.showMessage(msg)
+                QMessageBox.warning(self, T("dialog.config_load_failed"), msg)
 
             self._restore_last_state()
             self._maybe_show_startup_guide()
@@ -5313,24 +5418,75 @@ class MainWindow(QMainWindow):
     def _refresh_task_list(self):
         self._rule_config_ctrl.refresh_task_list(self)
 
+    def _task_load_failed_message(self) -> str:
+        err = self._task_load_error
+        if err is None:
+            return T("dialog.task_load_failed")
+        return T("dialog.task_load_failed_msg", path=err.path, error=err.reason)
+
+    def _report_task_save_failed(self, path: str | None = None) -> None:
+        if path is None:
+            path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+        QMessageBox.critical(
+            self,
+            T("dialog.warning"),
+            T("notif.task_save_failed", path=path),
+        )
+
+    def _restore_task_selection(self) -> None:
+        self._task_combo.blockSignals(True)
+        try:
+            idx = self._task_combo.findText(self._current_task)
+            if idx >= 0:
+                self._task_combo.setCurrentIndex(idx)
+        finally:
+            self._task_combo.blockSignals(False)
+
     def _on_task_changed(self, name: str):
-        if self._loop and self._loop.is_running:
-            self._flush_save()
-        if self._save_timer.isActive():
-            self._save_timer.stop()
-            self._save_current_rule()
-            self._do_debounced_save()
+        if self._task_load_failed:
+            if self._save_timer.isActive():
+                self._save_timer.stop()
+        else:
+            if not (self._loop and self._loop.is_running) and self._save_timer.isActive():
+                self._save_timer.stop()
+                self._save_current_rule()
+            if not self._flush_save():
+                self._restore_task_selection()
+                self._report_task_save_failed()
+                return
         if not name:
             logging.debug("[task changed] rules=0")
             self._rules = []
             self._current_task = ""
+            self._task_load_failed = False
+            self._task_load_error = None
+            self._task_load_failed_notified = False
             self._refresh_rule_list()
             return
         self._current_task = name
-        self._rules = load_task(name)
-        _main_loop_mod.log_main(T("notif.task_loaded", name=name, count=len(self._rules)))
+        self._task_load_failed = False
+        self._task_load_error = None
+        self._task_load_failed_notified = False
         task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
-        self._groups = load_groups(task_path)
+        try:
+            rules = load_task(name)
+            groups = load_groups(task_path)
+        except RuleFileError as e:
+            self._task_load_failed = True
+            self._task_load_error = e
+            self._rules = []
+            self._groups = []
+            self._selected_rule_id = None
+            self._refresh_rule_list()
+            self._update_edit_enabled(not (self._loop and self._loop.is_running))
+            msg = T("dialog.task_load_failed_msg", path=e.path, error=e.reason)
+            _main_loop_mod.log_main(msg)
+            self._status_bar.showMessage(msg)
+            QMessageBox.critical(self, T("dialog.task_load_failed"), msg)
+            return
+        self._rules = rules
+        _main_loop_mod.log_main(T("notif.task_loaded", name=name, count=len(self._rules)))
+        self._groups = groups
         # safety net: remove from uncategorized any rule also in a normal group
         uncat = next((g for g in self._groups if g.id == "__uncategorized__"), None)
         if uncat and uncat.rule_ids:
@@ -5359,6 +5515,7 @@ class MainWindow(QMainWindow):
         config["last_task"] = name
         self._save_config(config)
         self._refresh_rule_list()
+        self._update_edit_enabled(not (self._loop and self._loop.is_running))
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel.clear_results()
         self._status_bar.showMessage(T("format.task_rules", name=name, count=len(self._rules)))
@@ -5393,13 +5550,19 @@ class MainWindow(QMainWindow):
                 self, T("dialog.task_exists"), T("dialog.task_exists_msg", name=name)
             )
             return
-        self._groups = [RuleGroup(id="__default__", name=T("ui.all_rules"))]
-        save_task(name, [])
-        save_groups(self._groups, str(_rule_mod.get_tasks_dir() / f"{name}.json"))
+        task_path = str(_rule_mod.get_tasks_dir() / f"{name}.json")
+        new_groups = [RuleGroup(id="__default__", name=T("ui.all_rules"))]
+        if not save_task_with_groups([], new_groups, task_path):
+            QMessageBox.critical(
+                self, T("dialog.new_task"), T("notif.task_save_failed", path=task_path)
+            )
+            return
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
-        if idx >= 0:
-            self._task_combo.setCurrentIndex(idx)
+        if idx < 0:
+            QMessageBox.warning(self, T("dialog.new_task"), T("dialog.cannot_open"))
+            return
+        self._task_combo.setCurrentIndex(idx)
         self._status_bar.showMessage(T("notif.task_created", name=name))
 
     # === 示範錄製 ===
@@ -5594,8 +5757,14 @@ class MainWindow(QMainWindow):
             # 加入既有任務成群組。先把 merged 寫檔，並在「合併目標＝當前任務」時
             # 同步記憶體狀態，避免 _refresh_task_list 內部的 debounced save 用舊狀態
             # 覆寫剛合併的檔案；目標為其他任務時則保留現狀（flush 仍寫回原當前任務）。
-            existing_rules = load_task(merge_into)
-            existing_groups = load_groups(str(tasks_dir / f"{merge_into}.json"))
+            try:
+                existing_rules = load_task(merge_into)
+                existing_groups = load_groups(str(tasks_dir / f"{merge_into}.json"))
+            except RuleFileError as e:
+                msg = T("dialog.task_load_failed_msg", path=e.path, error=e.reason)
+                _main_loop_mod.log_main(msg)
+                QMessageBox.critical(self, T("dialog.task_load_failed"), msg)
+                return
             merged_rules, merged_groups = merge_rule_entries(
                 existing_rules, existing_groups, rules, groups
             )
@@ -5606,7 +5775,7 @@ class MainWindow(QMainWindow):
                 self._rules, self._groups = merged_rules, merged_groups
             target = merge_into
         else:
-            ok = save_task(name, rules) and save_groups(groups, str(tasks_dir / f"{name}.json"))
+            ok = save_task_with_groups(rules, groups, str(tasks_dir / f"{name}.json"))
             target = name
         if not ok:
             self._status_bar.showMessage(T("record.save_failed"), 8000)
@@ -5657,10 +5826,13 @@ class MainWindow(QMainWindow):
                 self, T("dialog.task_exists"), T("dialog.task_exists_msg", name=name)
             )
             return
-        self._flush_save()
+        if not self._task_load_failed and not self._flush_save():
+            self._report_task_save_failed()
+            return
         if not rename_task(old_name, name):
             QMessageBox.warning(self, T("dialog.cannot_rename"), T("dialog.cannot_rename"))
             return
+        self._current_task = name
         self._refresh_task_list()
         idx = self._task_combo.findText(name)
         if idx >= 0:
@@ -5687,8 +5859,27 @@ class MainWindow(QMainWindow):
             != QMessageBox.StandardButton.Yes
         ):
             return
-        self._flush_save()
-        delete_task(self._current_task)
+        if not self._task_load_failed and not self._flush_save():
+            if (
+                QMessageBox.question(
+                    self,
+                    T("dialog.delete_task_discard_unsaved_title"),
+                    T("dialog.delete_task_discard_unsaved_msg", name=self._current_task),
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                != QMessageBox.StandardButton.Yes
+            ):
+                return
+        if not delete_task(self._current_task):
+            QMessageBox.warning(self, T("dialog.cannot_delete"), T("dialog.cannot_delete"))
+            return
+        self._current_task = ""
+        self._rules = []
+        self._groups = []
+        self._selected_rule_id = None
+        self._task_load_failed = False
+        self._task_load_error = None
+        self._task_load_failed_notified = False
         self._refresh_task_list()
 
     def _show_import_preview_dialog(self, preview: ImportPreview) -> tuple[bool, bool]:
@@ -5794,7 +5985,9 @@ class MainWindow(QMainWindow):
             return
         if not (self._loop and self._loop.is_running):
             self._save_current_rule()
-        self._flush_save()
+        if not self._flush_save():
+            self._report_task_save_failed()
+            return
         path, _ = QFileDialog.getSaveFileName(
             self,
             T("dialog.export_task"),
@@ -6088,7 +6281,7 @@ class MainWindow(QMainWindow):
             self._persist_collapsed()
 
     def _persist_collapsed(self):
-        if not self._current_task:
+        if not self._current_task or self._task_load_failed:
             return
         try:
             task_path = _rule_mod.get_tasks_dir() / f"{self._current_task}.json"
@@ -6488,6 +6681,11 @@ class MainWindow(QMainWindow):
             self._rename_group(item)
 
     def _add_rule(self):
+        if self._task_load_failed:
+            QMessageBox.warning(
+                self, T("dialog.task_load_failed"), self._task_load_failed_message()
+            )
+            return
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_add_rule"))
             return
@@ -6862,26 +7060,42 @@ class MainWindow(QMainWindow):
     def _schedule_save(self):
         self._save_timer.start()
 
-    def _do_debounced_save(self) -> None:
+    def _do_debounced_save(self) -> bool:
         if not self._current_task:
-            return
+            return False
+        if self._task_load_failed:
+            logging.warning("[_do_debounced_save] blocked: task load failed")
+            if not self._task_load_failed_notified:
+                self._task_load_failed_notified = True
+                self._notif_stack.push(T("dialog.task_load_failed"))
+            return False
         task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         logging.debug(
             "[_do_debounced_save] rules=%d groups=%d", len(self._rules), len(self._groups)
         )
         if self._loop:
             with self._loop._rules_lock:
-                save_task_with_groups(self._rules, self._groups, task_path)
-                self._loop._load_rules()
+                ok = save_task_with_groups(self._rules, self._groups, task_path)
+                if ok:
+                    self._loop._load_rules()
         else:
-            save_task_with_groups(self._rules, self._groups, task_path)
+            ok = save_task_with_groups(self._rules, self._groups, task_path)
+        if not ok:
+            msg = T("notif.task_save_failed", path=task_path)
+            _main_loop_mod.log_main(msg)
+            self._notif_stack.push(T("notif.task_save_failed_short"))
+        return ok
 
-    def _flush_save(self) -> None:
+    def _flush_save(self) -> bool:
+        if not self._current_task:
+            return True
         bg_ids = [r.id for r in self._rules if r.background]
         logging.debug("[save] _flush_save: rules=%d, background=%s", len(self._rules), bg_ids)
         self._save_timer.stop()
-        self._do_debounced_save()
+        if not self._do_debounced_save():
+            return False
         _main_loop_mod.log_main(T("status.task_saved", count=len(self._rules)))
+        return True
 
     def _rule_hard_problems(self, rule) -> list[str]:
         """真正執行前須攔截的問題（detect 空文字、自訂點擊 (0,0)）。"""
@@ -6896,6 +7110,9 @@ class MainWindow(QMainWindow):
         return problems
 
     def _save_current_rule(self):
+        if self._task_load_failed:
+            logging.warning("[_save_current_rule] blocked: task load failed")
+            return
         if self._loop and self._loop.is_running:
             QMessageBox.warning(self, T("dialog.notice"), T("status.stop_first_save"))
             return
@@ -7278,6 +7495,11 @@ class MainWindow(QMainWindow):
             self._start_loop()
 
     def _start_loop(self, group_ids: Optional[list[str]] = None):
+        if self._task_load_failed:
+            QMessageBox.critical(
+                self, T("dialog.task_load_failed"), self._task_load_failed_message()
+            )
+            return
         self._window_lost = False
         self._bg_fail_dialog_shown = False
         self._black_fail_dialog_shown = False
@@ -7353,8 +7575,15 @@ class MainWindow(QMainWindow):
                 if resp2 != QMessageBox.StandardButton.Yes:
                     return
         # 提交未存編輯並同步寫入磁碟，確保主迴圈讀到的是最新規則
+        task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         self._save_current_rule()
-        self._flush_save()
+        if not self._flush_save():
+            QMessageBox.critical(
+                self,
+                T("dialog.warning"),
+                T("notif.task_save_failed", path=task_path),
+            )
+            return
         self._is_starting = True
         if self._is_bg_mode():
             activate_window_bg(title)
@@ -7363,9 +7592,8 @@ class MainWindow(QMainWindow):
         self._btn_toggle.setEnabled(False)
         self._btn_toggle.setText(T("status.initializing"))
         self._status_bar.showMessage(T("status.initializing_ocr"))
-        task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         self._init_worker = InitWorker(
-            str(task_path),
+            task_path,
             title,
             self._signals,
             active_group_ids=group_ids,
@@ -7562,31 +7790,32 @@ class MainWindow(QMainWindow):
             logging.getLogger("gui").debug("exec log populate failed: %s", e)
 
     def _update_edit_enabled(self, enabled: bool):
-        self._rule_list.setEnabled(enabled)
-        if enabled:
+        editing = enabled and not self._task_load_failed
+        self._rule_list.setEnabled(editing)
+        if editing:
             self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
             self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         else:
             self._rule_list.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
             self._rule_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self._add_group_btn.setEnabled(enabled)
-        self._add_rule_btn.setEnabled(enabled)
-        self._del_rule_btn.setEnabled(enabled)
-        self._debug_btn.setEnabled(enabled)
+        self._add_group_btn.setEnabled(editing)
+        self._add_rule_btn.setEnabled(editing)
+        self._del_rule_btn.setEnabled(editing)
+        self._debug_btn.setEnabled(editing)
 
         self._task_combo.setEnabled(enabled)
         self._task_new_btn.setEnabled(enabled)
         self._task_del_btn.setEnabled(enabled)
         self._task_import_btn.setEnabled(enabled)
         self._task_export_btn.setEnabled(enabled)
-        self._edit_test_btn.setEnabled(enabled)
-        self._edit_name.setEnabled(enabled)
-        self._edit_enabled.setEnabled(enabled)
-        self._edit_background.setEnabled(enabled)
-        self._edit_quiet.setEnabled(enabled)
-        self._step_list.setEnabled(enabled)
+        self._edit_test_btn.setEnabled(editing)
+        self._edit_name.setEnabled(editing)
+        self._edit_enabled.setEnabled(editing)
+        self._edit_background.setEnabled(editing)
+        self._edit_quiet.setEnabled(editing)
+        self._step_list.setEnabled(editing)
 
-        if enabled:
+        if editing:
             self._show_rule_detail(self._get_current_rule())
 
     # === Thread-safe callbacks ===
@@ -7781,6 +8010,12 @@ class MainWindow(QMainWindow):
             self._progress.setLabelText(f"{T('update.downloading')} {value}%")
 
     def _on_download_finished(self):
+        if not self._task_load_failed and not self._flush_save():
+            if getattr(self, "_progress", None) is not None:
+                self._progress.close()
+            self._downloading = False
+            self._report_task_save_failed()
+            return
         # download_and_apply 已排定 Update.exe 換目錄並重啟：立刻讓位退出
         config = self._load_config()
         config["just_updated"] = getattr(self, "_pending_update_ver", "")
@@ -7800,14 +8035,14 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self):
         SettingsDialog(self).exec()
-        self._rule_config_ctrl._config_cache = None
+        self._rule_config_ctrl.reset_cache()
         if self._loop:
             # 主循環持有獨立的 controller 快取，一併失效才能讓 scan_interval 等設定即時生效
-            self._loop._rule_config_ctrl._config_cache = None
+            self._loop._rule_config_ctrl.reset_cache()
         self._update_interaction_mode_label()
 
     def closeEvent(self, event):
-        self._rule_config_ctrl._config_cache = None
+        self._rule_config_ctrl.reset_cache()
         config = self._load_config()
         behavior = config.get("close_behavior", "tray")
         show_confirm = config.get("show_close_confirm", True)
@@ -7835,7 +8070,9 @@ class MainWindow(QMainWindow):
                 self._save_config(config)
 
         if behavior == "quit":
-            self._quit_app()
+            if not self._quit_app():
+                event.ignore()
+                return
             event.accept()
         else:
             event.ignore()
@@ -7875,19 +8112,22 @@ class MainWindow(QMainWindow):
             ag.y() + (ag.height() - self.height()) // 2,
         )
 
-    def _quit_app(self):
+    def _quit_app(self) -> bool:
+        if not self._task_load_failed and not self._flush_save():
+            self._report_task_save_failed()
+            return False
         _hk_unregister(int(self.winId()))
         if getattr(self, "_recorder", None) and self._recorder.is_recording:
             try:
                 self._recorder.stop()
             except Exception:
                 logging.exception("退出時停止錄製失敗")
-        self._flush_save()
         self._status_timer.stop()
         if self._loop:
             self._loop.stop()
         self._perf_timer.stop()
         QApplication.quit()
+        return True
 
     def _on_tray_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
