@@ -58,8 +58,15 @@ def _validate_task_structure(data: dict, p: Path, *, overwrite: bool = False) ->
     rules = data.get("rules", [])
     if not isinstance(rules, list):
         raise RuleFileError(p, f"rules 必須是陣列{suffix}")
-    if "groups" in data and not isinstance(data["groups"], list):
+    groups = data.get("groups", [])
+    if not isinstance(groups, list):
         raise RuleFileError(p, f"groups 必須是陣列{suffix}")
+    for i, group in enumerate(groups):
+        if not isinstance(group, dict):
+            raise RuleFileError(p, f"群組 {i} 必須是物件{suffix}")
+        rule_ids = group.get("rule_ids", [])
+        if not isinstance(rule_ids, list) or any(not isinstance(rid, str) for rid in rule_ids):
+            raise RuleFileError(p, f"群組 {i} 的 rule_ids 必須是字串陣列{suffix}")
     for i, rule in enumerate(rules):
         if not isinstance(rule, dict):
             raise RuleFileError(p, f"規則 {i} 必須是物件{suffix}")
@@ -73,6 +80,8 @@ def _validate_task_structure(data: dict, p: Path, *, overwrite: bool = False) ->
         for j, step in enumerate(steps):
             if not isinstance(step, dict):
                 raise RuleFileError(p, f"{label} 的步驟 {j} 必須是物件{suffix}")
+            if "params" in step and not isinstance(step["params"], dict):
+                raise RuleFileError(p, f"{label} 的步驟 {j} 的 params 必須是物件{suffix}")
 
 
 def _read_existing_for_save(p: Path) -> dict:
@@ -154,7 +163,7 @@ def load_groups(path: str) -> list[RuleGroup]:
     if "groups" not in data:
         data = migrate_v2_to_v3(data)
     groups = data.get("groups", [])
-    groups = [_dict_to_group(g) for g in groups if isinstance(g, dict)]
+    groups = [_dict_to_group(g) for g in groups]
     logging.debug("[load_groups] n=%d", len(groups))
     return groups
 

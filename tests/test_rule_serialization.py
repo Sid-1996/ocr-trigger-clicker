@@ -357,6 +357,38 @@ def test_load_rejects_malformed_nested_rules(tmp_path, payload):
         load_groups(str(f))
 
 
+@pytest.mark.parametrize("params", [None, "bad", 1, []])
+def test_load_rejects_non_object_step_params_without_rewriting(tmp_path, params):
+    f = tmp_path / "bad_params.json"
+    original = json.dumps(
+        {
+            "rules": [{"id": "r", "name": "R", "steps": [{"type": "click", "params": params}]}],
+            "groups": [],
+        }
+    )
+    f.write_text(original, encoding="utf-8")
+    with pytest.raises(RuleFileError, match="params"):
+        load_rules(str(f))
+    assert f.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        ["bad group"],
+        [{"id": "g", "name": "G", "rule_ids": "r1"}],
+        [{"id": "g", "name": "G", "rule_ids": ["r1", 1]}],
+    ],
+)
+def test_load_rejects_malformed_groups_without_rewriting(tmp_path, groups):
+    f = tmp_path / "bad_groups.json"
+    original = json.dumps({"rules": [], "groups": groups})
+    f.write_text(original, encoding="utf-8")
+    with pytest.raises(RuleFileError):
+        load_groups(str(f))
+    assert f.read_text(encoding="utf-8") == original
+
+
 @pytest.mark.parametrize("payload", MALFORMED_TASK_PAYLOADS)
 def test_save_refuses_any_malformed_task_structure(tmp_path, payload):
     f = tmp_path / "bad.json"
