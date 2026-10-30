@@ -405,8 +405,8 @@ def test_handle_click_cursor_bg():
     ml = _make_ml()
     ml._window_hwnd = 12345
     ml._client_center_offset = lambda _rect: (398, 300)
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
+    ml._config_store = type(
+        "FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "frida"}
     )()
     captured = {}
     ml._send_click = lambda x, y, button="left", hold_ms=0: (
@@ -684,8 +684,8 @@ def test_load_rules_collects_quiet_names(tmp_path):
 def test_send_click_frida_dispatch(monkeypatch):
     ml = _make_ml()
     ml._window_hwnd = 12345
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
+    ml._config_store = type(
+        "FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "frida"}
     )()
     _bg = load_sibling("bg_input", "core/16_bg_input.py")
     captured = {}
@@ -708,8 +708,8 @@ def test_send_click_hybrid_dispatch(monkeypatch):
     """hybrid 模式：點擊走 pynput 物理路徑，絕不可觸碰 bg_input（set_method 會炸）。"""
     ml = _make_ml()
     ml._window_hwnd = 12345
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "hybrid"}
+    ml._config_store = type(
+        "FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "hybrid"}
     )()
     _bg = load_sibling("bg_input", "core/16_bg_input.py")
     _input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
@@ -738,16 +738,14 @@ def test_is_tool_foreground_hybrid_keeps_protection():
     ml._tool_hwnd = 999
 
     def _make(mode):
-        return type(
-            "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": mode}
-        )()
+        return type("FakeConfigStore", (), {"get": lambda self, key="interaction_mode": mode})()
 
     orig = ctypes.windll.user32.GetForegroundWindow
     try:
         ctypes.windll.user32.GetForegroundWindow = lambda: 999  # 模擬工具在前景
-        ml._rule_config_ctrl = _make("frida")
+        ml._config_store = _make("frida")
         assert _ml_mod.MainLoop._is_tool_foreground(ml) is False  # frida 跳過保護
-        ml._rule_config_ctrl = _make("hybrid")
+        ml._config_store = _make("hybrid")
         assert _ml_mod.MainLoop._is_tool_foreground(ml) is True  # hybrid 保留保護
     finally:
         ctypes.windll.user32.GetForegroundWindow = orig
@@ -757,9 +755,7 @@ def test_is_tool_foreground_hybrid_keeps_protection():
 
 
 def _hybrid_config():
-    return type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "hybrid"}
-    )()
+    return type("FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "hybrid"})()
 
 
 class _NoWait:
@@ -775,7 +771,7 @@ class _StopWait:
 def test_can_perform_action_hybrid_foreground_paces(monkeypatch):
     ml = _make_ml()
     ml._window_hwnd = 12345
-    ml._rule_config_ctrl = _hybrid_config()
+    ml._config_store = _hybrid_config()
     ml._perf = _ml_mod.PerformanceMonitor(max_cps=50)
     ml._perf.record_click()
     ml._frame_waited_ms = 0.0
@@ -789,7 +785,7 @@ def test_can_perform_action_hybrid_foreground_paces(monkeypatch):
 def test_can_perform_action_hybrid_background_does_not_pace(monkeypatch):
     ml = _make_ml()
     ml._window_hwnd = 12345
-    ml._rule_config_ctrl = _hybrid_config()
+    ml._config_store = _hybrid_config()
     ml._perf.record_click()
     ml._stop_event = _NoWait()
     monkeypatch.setattr(_ml_mod, "is_window_foreground", lambda hwnd: False)
@@ -809,7 +805,7 @@ def test_can_perform_action_pynput_does_not_pace():
 def test_can_perform_action_stop_event_aborts_pacing(monkeypatch):
     ml = _make_ml()
     ml._window_hwnd = 12345
-    ml._rule_config_ctrl = _hybrid_config()
+    ml._config_store = _hybrid_config()
     ml._perf.click_interval_delay = lambda: 0.05
     ml._perf.check_rate_limit = lambda: (_ for _ in ()).throw(
         AssertionError("停止事件打斷後不應再檢查速率")
@@ -1234,11 +1230,11 @@ def test_loop_triggers_rule_on_second_static_game_frame(monkeypatch):
     ml._update_has_detect()
     ml._window_hwnd = 1
     ml._foreground_only = False
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig",
+    ml._config_store = type(
+        "FakeConfigStore",
         (),
         {
-            "get_setting": lambda self, win, key: {
+            "get": lambda self, key: {
                 "scan_interval_ms": 10,
                 "interaction_mode": "pynput",
             }[key]
@@ -1968,8 +1964,8 @@ def _make_frida_ml(monkeypatch, err="boom"):
     ml = _make_ml()
     calls = []
     ml.on_bg_fail = lambda: calls.append("fail")
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig", (), {"get_setting": lambda self, win, key="interaction_mode": "frida"}
+    ml._config_store = type(
+        "FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "frida"}
     )()
     _bg = load_sibling("bg_input", "core/16_bg_input.py")
     monkeypatch.setattr(_bg, "last_error", lambda: err)

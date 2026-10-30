@@ -31,8 +31,8 @@ _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
 group_display_name = load_sibling("rule_models", "core/rule_models.py").group_display_name
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
-_rule_config = load_sibling("rule_config_controller", "gui/rule_config_controller.py")
-RuleConfigController = _rule_config.RuleConfigController
+_config_store = load_sibling("config_store", "core/config_store.py")
+ConfigStore = _config_store.ConfigStore
 get_window_hwnd_orig = getattr(_screenshot, "get_window_hwnd", lambda title: None)
 
 _MIN_INTERVAL_SEC = 0.1
@@ -396,7 +396,7 @@ class MainLoop:
         # 加總浮層該淡出（前置條件失效／數字改動中）；GUI 負責淡出動畫
         self.on_sum_hide: Optional[Callable[[], None]] = None
 
-        self._rule_config_ctrl = RuleConfigController()
+        self._config_store = ConfigStore(config_path)
 
         self._perf = PerformanceMonitor(max_cps=self._max_cps)
         self._perf.on_rate_limit_exceeded = self._on_rate_limit_exceeded
@@ -425,9 +425,7 @@ class MainLoop:
 
     def _is_obs_shadow_enabled(self) -> bool:
         try:
-            return bool(
-                self._rule_config_ctrl.get_setting(self, "observation_shadow_enabled", False)
-            )
+            return bool(self._config_store.get("observation_shadow_enabled", False))
         except Exception:
             return False
 
@@ -610,7 +608,7 @@ class MainLoop:
         return None
 
     def _send_click(self, x: int, y: int, button: str, hold_ms: int = 0) -> bool:
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
             import ctypes
@@ -622,14 +620,14 @@ class MainLoop:
         return _input_mod.send_click(x, y, button, hold_ms)
 
     def _send_key(self, key: str) -> bool:
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
             return _bg_input.send_key(self._window_hwnd, key)
         return _input_mod.send_key(key)
 
     def _send_scroll(self, direction: str) -> bool:
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
             # 後台 scroll(): 正值 = 上/右，負值 = 下/左（見 bg_input.scroll docstring）
@@ -643,7 +641,7 @@ class MainLoop:
 
     def _activate_window(self) -> bool:
         """Activate window using the appropriate method based on interaction mode."""
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         # 已在前景就免再激活：pynput 模式下這個檢查原本只在前景之外的模式生效，
         # 導致每次動作都白呼叫 activate_window（列舉視窗＋搶焦點）。
         if self._window_hwnd and is_window_foreground(self._window_hwnd):
@@ -654,7 +652,7 @@ class MainLoop:
 
     def _focus_guard(self):
         """hybrid 模式動作區間：存/還原使用者前景＋滑鼠；其他模式 no-op。"""
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         if mode == "hybrid":
             return _hybrid.focus_guard(
                 self._window_title, _screenshot.activate_window, self._window_hwnd
@@ -703,7 +701,7 @@ class MainLoop:
             return None
 
     def _can_perform_action(self) -> bool:
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         if (
             mode == "hybrid"
             and self._window_hwnd
@@ -1189,7 +1187,7 @@ class MainLoop:
         if now - prev[2] < _SUM_CONFIRM_SEC:
             return
         ctx.sum_stable = True
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         self._log_sum_result(rule, ctx, roi, total, count, text, mode, confidences)
         if not self._sum_overlay_enabled(rule, mode):
             self._hide_sum(rule.id)
@@ -1426,7 +1424,7 @@ class MainLoop:
             cy += dy
             matched_text = ""
         elif target == "cursor":
-            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            mode = self._config_store.get("interaction_mode")
             if mode == "frida" and self._window_hwnd and ctx.rect:
                 center = self._client_center_offset(ctx.rect)
                 if center is None:
@@ -1452,7 +1450,7 @@ class MainLoop:
 
         button = params.get("button", "left")
         if target == "cursor":
-            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            mode = self._config_store.get("interaction_mode")
             if mode == "frida" and self._window_hwnd and ctx.rect:
                 sx, sy = self._to_screen_coords(ctx.rect, cx, cy)
             else:
@@ -1473,7 +1471,7 @@ class MainLoop:
                     f"規則「{rule.name}」點擊 ({sx},{sy}) 匹配「{matched_text}」",
                     dedup_key=f"{rule.id}:click",
                 )
-        elif self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida":
+        elif self._config_store.get("interaction_mode") == "frida":
             self._report_bg_failure()
 
         return StepResult("continue")
@@ -1495,7 +1493,7 @@ class MainLoop:
 
             hold_ms = params.get("hold_ms", 0)
             if hold_ms > 0:
-                mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                mode = self._config_store.get("interaction_mode")
                 if mode == "frida" and self._window_hwnd:
                     _bg_input.set_method(mode)
                     ok = _bg_input.send_hold_key(self._window_hwnd, key, hold_ms)
@@ -1511,7 +1509,7 @@ class MainLoop:
                     f"規則「{rule.name}」按鍵「{key}」",
                     dedup_key=f"{rule.id}:key:{key}",
                 )
-        elif self._rule_config_ctrl.get_setting(self, "interaction_mode") == "frida":
+        elif self._config_store.get("interaction_mode") == "frida":
             self._report_bg_failure()
 
         return StepResult("continue")
@@ -1546,7 +1544,7 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
-            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            mode = self._config_store.get("interaction_mode")
             if mode == "frida" and self._window_hwnd:
                 _bg_input.set_method(mode)
                 import ctypes
@@ -1770,7 +1768,7 @@ class MainLoop:
                 self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
         deadline = time.monotonic() + timeout_ms / 1000.0
-        mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+        mode = self._config_store.get("interaction_mode")
         first_frame = True
         saw_frame = False
         while time.monotonic() < deadline:
@@ -2622,7 +2620,7 @@ class MainLoop:
                 loop_thr_start = time.thread_time()
                 # 讀取掃描間隔設定（允許即時生效）
                 self._interval = max(
-                    self._rule_config_ctrl.get_setting(self, "scan_interval_ms") / 1000.0,
+                    self._config_store.get("scan_interval_ms") / 1000.0,
                     _MIN_INTERVAL_SEC,
                 )
                 ph_int = time.monotonic()
@@ -2663,13 +2661,12 @@ class MainLoop:
                         self._foreground_only
                         and self._window_hwnd
                         and not is_window_foreground(self._window_hwnd)
-                        and self._rule_config_ctrl.get_setting(self, "interaction_mode")
-                        in (None, "pynput")
+                        and self._config_store.get("interaction_mode") in (None, "pynput")
                     ):
                         self._perf.record_frame()
                         self._stop_event.wait(self._interval)
                         continue
-                    mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+                    mode = self._config_store.get("interaction_mode")
                     phase_pre_ms = (time.monotonic() - loop_start) * 1000
                     phase_pre_cpu_ms = (time.process_time() - loop_cpu_start) * 1000
                     phase_pre_thr_ms = (time.thread_time() - loop_thr_start) * 1000
@@ -2884,7 +2881,7 @@ class MainLoop:
 
             # 後台模式（frida）不依賴前景焦點，工具在前景不影響操作，不需此保護；
             # hybrid 依賴前景物理輸入，必須保留保護（避免使用者操作本工具時被搶焦點）
-            mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
+            mode = self._config_store.get("interaction_mode")
             if mode == "frida":
                 return False
             return ctypes.windll.user32.GetForegroundWindow() == self._tool_hwnd
@@ -3077,10 +3074,10 @@ if __name__ == "__main__":
     ml.on_emergency = None
     ml.on_sum = None
     ml.on_sum_hide = None
-    ml._rule_config_ctrl = type(
-        "FakeRuleConfig",
+    ml._config_store = type(
+        "FakeConfigStore",
         (),
-        {"get_setting": lambda self, win, key="interaction_mode": "pynput"},
+        {"get": lambda self, key="interaction_mode": "pynput"},
     )()
     sx, sy = ml._to_screen_coords({"x": 100, "y": 200, "w": 800, "h": 600}, 50, 60)
     assert sx == 150 and sy == 260, f"expected (150, 260), got ({sx}, {sy})"

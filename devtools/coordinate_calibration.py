@@ -627,14 +627,10 @@ def _diagnose():
     ml._frame_chrome = chrome
     ml._frame_client_size = None
     ml._window_hwnd = hwnd
-    ml._rule_config_ctrl = type(
+    ml._config_store = type(
         "_ModeConfig",
         (),
-        {
-            "get_setting": lambda _self, _loop, key, default=None: (
-                mode if key == "interaction_mode" else default
-            )
-        },
+        {"get": lambda _self, key, default=None: mode if key == "interaction_mode" else default},
     )()
 
     original_send_click = main_loop._input_mod.send_click
@@ -828,7 +824,7 @@ class _ModeConfig:
     def __init__(self, mode: str):
         self.mode = mode
 
-    def get_setting(self, _win, key, default=None):
+    def get(self, key, default=None):
         return self.mode if key == "interaction_mode" else default
 
 
@@ -856,7 +852,7 @@ def _prepare_loop(mode: str, hwnd: int, chrome: tuple[int, int], main_loop):
     ml._frame_chrome = chrome
     ml._frame_client_size = None
     ml._tool_hwnd = None
-    ml._rule_config_ctrl = _ModeConfig(mode)
+    ml._config_store = _ModeConfig(mode)
     ml._perf = _FakePerf()
     ml._stop_event = threading.Event()
     ml._frame_waited_ms = 0.0

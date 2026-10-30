@@ -9,7 +9,13 @@ _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
+from _loader import load_sibling  # noqa: E402
 from gui.rule_config_controller import RuleConfigController  # noqa: E402
+
+# 設定讀寫實作已抽到 core/config_store.py；_replace_file 隨實作一併搬過去。
+# 必須用 load_sibling 取得「與程式碼同一個」模組物件（sys.modules["config_store"]），
+# 直接 import core.config_store 會載入第二份模組，patch 不會生效、測試變空轉。
+_config_store = load_sibling("config_store", "core/config_store.py")
 
 
 def _make_win(tmp_path):
@@ -37,12 +43,10 @@ def test_set_setting_returns_false_and_rolls_back_cache_on_failure(tmp_path, mon
     ctrl = RuleConfigController()
     assert ctrl.set_setting(win, "language", "zh_TW") is True
 
-    import gui.rule_config_controller as _mod
-
     def _boom(t, d):
         raise OSError("disk full")
 
-    monkeypatch.setattr(_mod, "_replace_file", _boom)
+    monkeypatch.setattr(_config_store, "_replace_file", _boom)
     assert ctrl.set_setting(win, "language", "en") is False
     assert ctrl.get_setting(win, "language") == "zh_TW"
 
@@ -50,12 +54,11 @@ def test_set_setting_returns_false_and_rolls_back_cache_on_failure(tmp_path, mon
 def test_set_setting_failure_removes_new_key_from_cache(tmp_path, monkeypatch):
     win = _make_win(tmp_path)
     ctrl = RuleConfigController()
-    import gui.rule_config_controller as _mod
 
     def _boom(t, d):
         raise OSError("disk full")
 
-    monkeypatch.setattr(_mod, "_replace_file", _boom)
+    monkeypatch.setattr(_config_store, "_replace_file", _boom)
     assert ctrl.set_setting(win, "language", "en") is False
     assert "language" not in ctrl.load_config(win)
 
@@ -76,12 +79,10 @@ def test_save_config_failure_keeps_old_file(tmp_path, monkeypatch):
     ctrl = RuleConfigController()
     ctrl.set_setting(win, "language", "zh_TW")
 
-    import gui.rule_config_controller as _mod
-
     def _boom(t, d):
         raise OSError("disk full")
 
-    monkeypatch.setattr(_mod, "_replace_file", _boom)
+    monkeypatch.setattr(_config_store, "_replace_file", _boom)
     ctrl.set_setting(win, "language", "en")
     assert json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))["language"] == (
         "zh_TW"
@@ -195,8 +196,6 @@ def test_save_config_refuses_external_creation_and_deletion(tmp_path):
 
 
 def test_conflict_does_not_call_replace_and_reset_reloads_external_file(tmp_path, monkeypatch):
-    import gui.rule_config_controller as _mod
-
     win = _make_win(tmp_path)
     p = tmp_path / "config.json"
     p.write_text('{"language": "ja"}', encoding="utf-8")
@@ -206,15 +205,15 @@ def test_conflict_does_not_call_replace_and_reset_reloads_external_file(tmp_path
     external = {"language": "en", "external_only": True}
     p.write_text(json.dumps(external), encoding="utf-8")
     called = []
-    real_replace = _mod._replace_file
-    monkeypatch.setattr(_mod, "_replace_file", lambda *args: called.append(args))
+    real_replace = _config_store._replace_file
+    monkeypatch.setattr(_config_store, "_replace_file", lambda *args: called.append(args))
 
     assert ctrl.save_config(win, {"language": "zh_TW"}) is False
     assert called == []
     assert json.loads(p.read_text(encoding="utf-8")) == external
     assert not list(tmp_path.glob("*.tmp"))
 
-    monkeypatch.setattr(_mod, "_replace_file", real_replace)
+    monkeypatch.setattr(_config_store, "_replace_file", real_replace)
     ctrl.reset_cache()
     assert ctrl.get_save_conflict() is None
     assert ctrl.load_config(win) == external
@@ -245,15 +244,13 @@ def test_replace_time_race_is_a_known_residual_limitation(tmp_path, monkeypatch)
     atomic replace. This test documents that boundary rather than claiming the
     race is eliminated.
     """
-    import gui.rule_config_controller as _mod
-
     win = _make_win(tmp_path)
     p = tmp_path / "config.json"
     p.write_text('{"language": "ja"}', encoding="utf-8")
     ctrl = RuleConfigController()
     assert ctrl.load_config(win) == {"language": "ja"}
 
-    real_replace = _mod._replace_file
+    real_replace = _config_store._replace_file
 
     def _racing_replace(src, dst):
         Path(dst).write_text(
@@ -262,7 +259,7 @@ def test_replace_time_race_is_a_known_residual_limitation(tmp_path, monkeypatch)
         )
         real_replace(src, dst)
 
-    monkeypatch.setattr(_mod, "_replace_file", _racing_replace)
+    monkeypatch.setattr(_config_store, "_replace_file", _racing_replace)
 
     assert ctrl.save_config(win, {"language": "zh_TW", "max_cps": 7}) is True
     assert json.loads(p.read_text(encoding="utf-8")) == {

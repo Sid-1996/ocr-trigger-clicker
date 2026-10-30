@@ -16,6 +16,11 @@ MainWindow = _gui.MainWindow
 RuleGroup = _gui.RuleGroup
 T = _gui.T
 
+# 設定寫入的原子替換實作已搬到 core/config_store.py；必須用 load_sibling 取得
+# 與程式碼同一個模組物件（sys.modules["config_store"]），直接 import 會載入第二份、
+# patch 不生效、測試變空轉。
+_config_store = load_sibling("config_store", "core/config_store.py")
+
 
 class _Widget:
     def __init__(self):
@@ -964,7 +969,7 @@ def test_settings_rollback_failure_keeps_new_config_and_blocks_retry(tmp_path, m
         controller=ctrl,
         config_path=str(config_path),
     )
-    real_replace = _gui._rule_config_mod._replace_file
+    real_replace = _config_store._replace_file
     calls = 0
     rollback_data = []
 
@@ -977,7 +982,7 @@ def test_settings_rollback_failure_keeps_new_config_and_blocks_retry(tmp_path, m
         raise OSError("disk full during rollback")
 
     critical = []
-    monkeypatch.setattr(_gui._rule_config_mod, "_replace_file", _flaky_replace)
+    monkeypatch.setattr(_config_store, "_replace_file", _flaky_replace)
     monkeypatch.setattr(_gui, "get_language", lambda: "zh_TW")
     monkeypatch.setattr(_gui._rule_mod, "get_tasks_dir", lambda: tmp_path)
     monkeypatch.setattr(_gui, "get_task_interaction_mode", lambda path: "frida")
@@ -1030,7 +1035,7 @@ def test_settings_general_save_failure_retries_with_current_fields(tmp_path, mon
         controller=ctrl,
         config_path=str(config_path),
     )
-    real_replace = _gui._rule_config_mod._replace_file
+    real_replace = _config_store._replace_file
     calls = 0
 
     def _flaky_replace(src, dst):
@@ -1041,7 +1046,7 @@ def test_settings_general_save_failure_retries_with_current_fields(tmp_path, mon
         return real_replace(src, dst)
 
     critical = []
-    monkeypatch.setattr(_gui._rule_config_mod, "_replace_file", _flaky_replace)
+    monkeypatch.setattr(_config_store, "_replace_file", _flaky_replace)
     monkeypatch.setattr(_gui, "get_language", lambda: "zh_TW")
     monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *args: critical.append(args)))
 

@@ -45,7 +45,7 @@ class _ModeConfig:
     def __init__(self, mode):
         self.mode = mode
 
-    def get_setting(self, win, key="interaction_mode"):
+    def get(self, key="interaction_mode"):
         return self.mode
 
 
@@ -207,7 +207,7 @@ def test_sum_frame_start_hides_rule_not_evaluated():
 @pytest.mark.parametrize("mode", ["frida", "hybrid"])
 def test_handle_sum_non_foreground_logs_without_overlay(monkeypatch, mode):
     ml = make_main_loop()
-    ml._rule_config_ctrl = _ModeConfig(mode)
+    ml._config_store = _ModeConfig(mode)
     ml._logger = _ListLogger()
     ml._ocr_region = lambda img, roi: [
         _ocr.OcrResult(text="+26", x=0, y=0, w=20, h=10, confidence=0.9),
@@ -263,7 +263,7 @@ def test_handle_sum_background_rule_never_shows_overlay(monkeypatch):
 
 def test_sum_log_deduped_until_value_changes(monkeypatch):
     ml = make_main_loop()
-    ml._rule_config_ctrl = _ModeConfig("frida")
+    ml._config_store = _ModeConfig("frida")
     ml._logger = _ListLogger()
     current = [_ocr.OcrResult(text="+43", x=0, y=0, w=20, h=10, confidence=0.9)]
     ml._ocr_region = lambda img, roi: current
