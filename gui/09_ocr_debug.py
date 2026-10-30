@@ -74,6 +74,35 @@ _KEY_TEST_WAIT_SEC = 0.6
 _KEY_PIXEL_TOLERANCE = 12
 _KEY_SIMILAR_THRESHOLD = 0.90
 
+# ── Verify 狀態 → i18n key 對照 ────────────────────────────────────────────
+# 狀態名不等於 i18n key（key_test 的成功文案是 ok 不是 success），而且長文與
+# 短文分屬不同命名空間，所以對應關係集中在這裡，避免程式端直接拼 key 拼錯
+# 而讓使用者看到原始 key 字串。
+# 欄位：state → (色碼, 長文命名空間, 長文 key, 短文命名空間, 短文 key)
+_KEY_VERIFY_STATES = {
+    "success": ("#1e8e3e", "key_test", "ok", "key_test", "ok"),
+    "no_change": ("#b45309", "key_test", "no_change", "key_test", "no_change"),
+    "fail": ("#c62828", "click_verify", "inject_fail", "click_verify", "inject_fail"),
+    "black": ("#b45309", "key_test", "black", "click_verify", "black"),
+    "window_changed": (
+        "#666",
+        "key_test",
+        "window_changed",
+        "click_verify",
+        "window_changed",
+    ),
+}
+
+# Click Verify：state → (色碼, i18n key 後綴)，長文與短文共用同一個後綴。
+_CLICK_VERIFY_STATES = {
+    "success": ("#1e8e3e", "success"),
+    "no_response": ("#b45309", "no_response"),
+    "inject_fail": ("#c62828", "inject_fail"),
+    "black": ("#b45309", "black"),
+    "window_changed": ("#666", "window_changed"),
+    "skipped": ("#666", "skipped"),
+}
+
 
 def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
     """回傳 0~1 的相似度：像素差 > 12 的像素比例反算。"""
@@ -1050,16 +1079,9 @@ class OcrDebugPanel(QWidget):
         ms: float = 0.0,
         still: str = "?",
     ):
-        colors = {
-            "success": "#1e8e3e",
-            "no_response": "#b45309",
-            "inject_fail": "#c62828",
-            "black": "#b45309",
-            "window_changed": "#666",
-            "skipped": "#666",
-        }
-        key = state if state in colors else "black"
-        guidance = T(f"ocr_debug.click_verify.{key}", text=text)
+        key = state if state in _CLICK_VERIFY_STATES else "black"
+        color, suffix = _CLICK_VERIFY_STATES[key]
+        guidance = T(f"ocr_debug.click_verify.{suffix}", text=text)
         dev = T(
             "ocr_debug.click_verify.dev_info",
             mode=_get_interaction_mode(),
@@ -1075,8 +1097,8 @@ class OcrDebugPanel(QWidget):
         )
         self._last_verify_guidance = guidance
         self._last_verify_dev = dev
-        self._click_error_label.setStyleSheet(f"color: {colors.get(key, '#666')};")
-        self._click_error_label.setText(T(f"ocr_debug.click_verify.short.{key}", text=text))
+        self._click_error_label.setStyleSheet(f"color: {color};")
+        self._click_error_label.setText(T(f"ocr_debug.click_verify.short.{suffix}", text=text))
         self._click_error_label.show()
         QTimer.singleShot(15000, self._click_error_label.hide)
         if key in ("inject_fail", "no_response", "black"):
@@ -1189,21 +1211,12 @@ class OcrDebugPanel(QWidget):
 
     def _show_key_verify(self, out: dict):
         state = out.get("state", "black")
-        colors = {
-            "success": "#1e8e3e",
-            "no_change": "#b45309",
-            "fail": "#c62828",
-            "black": "#b45309",
-            "window_changed": "#666",
-        }
-        key = state if state in colors else "black"
+        key = state if state in _KEY_VERIFY_STATES else "black"
+        color, g_ns, g_key, s_ns, s_key = _KEY_VERIFY_STATES[key]
         test_key = out.get("key", _KEY_TEST_DEFAULT)
         sim = out.get("similar", "?")
-        guidance = (
-            T("ocr_debug.click_verify.inject_fail", text="")
-            if key == "fail"
-            else T(f"ocr_debug.key_test.{key}", sim=sim, key=test_key)
-        )
+        # 長文與短文可能來自不同命名空間，兩個命名空間的文案可用的 placeholder 皆一併帶上
+        guidance = T(f"ocr_debug.{g_ns}.{g_key}", text="", sim=sim, key=test_key)
         dev = T(
             "ocr_debug.key_test.dev_info",
             mode=_get_interaction_mode(),
@@ -1218,16 +1231,8 @@ class OcrDebugPanel(QWidget):
         self._last_verify_guidance = guidance
         self._last_verify_dev = dev
         self._last_verify_title = T("ocr_debug.key_test.dialog_title")
-        short_for = {
-            "success": ("key_test", "ok"),
-            "no_change": ("key_test", "no_change"),
-            "fail": ("click_verify", "inject_fail"),
-            "black": ("click_verify", "black"),
-            "window_changed": ("click_verify", "window_changed"),
-        }
-        ns, sk = short_for.get(key, ("key_test", key))
-        self._click_error_label.setStyleSheet(f"color: {colors.get(key, '#666')};")
-        self._click_error_label.setText(T(f"ocr_debug.{ns}.short.{sk}"))
+        self._click_error_label.setStyleSheet(f"color: {color};")
+        self._click_error_label.setText(T(f"ocr_debug.{s_ns}.short.{s_key}"))
         self._click_error_label.show()
         QTimer.singleShot(15000, self._click_error_label.hide)
         if key in ("no_change", "fail", "black"):
