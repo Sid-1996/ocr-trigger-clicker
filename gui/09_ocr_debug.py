@@ -121,7 +121,8 @@ class _ImageLabel(QLabel):
 
 class _OcrSignals(QObject):
     ocr_done = pyqtSignal(list, float, int)
-    ocr_status = pyqtSignal(str)
+    ocr_failed = pyqtSignal(str, int)  # (錯誤訊息, request_id)
+    ocr_status = pyqtSignal(str, int)  # (訊息, request_id)
     click_verify_done = pyqtSignal(dict)
     key_verify_done = pyqtSignal(dict)
 
@@ -141,7 +142,6 @@ class OcrDebugPanel(QWidget):
     def __init__(self, window_title: str, parent=None):
         super().__init__(parent)
         self._window_title = window_title
-        self._ocr_busy = False
         self._ocr_results: list = []
         self._latest_raw: np.ndarray | None = None
         self._annotated_pixmap: QPixmap | None = None
@@ -149,12 +149,19 @@ class OcrDebugPanel(QWidget):
         self._capture_source = ""
         self._black_warn_text = ""
         self._selected_index = -1
-        self._request_id = 0
+        # 三種背景任務各自的 generation id。
+        # 遞增只代表「禁止舊結果回填」，不代表取消 Worker（Worker 仍會跑完）。
+        self._ocr_request_id = 0
+        self._click_verify_request_id = 0
+        self._key_verify_request_id = 0
         self._has_active_rule = False
         self._verif_in_progress = False
         self._key_verif_in_progress = False
+        self._last_verify_guidance = ""
+        self._last_verify_dev = ""
         self._signals = _OcrSignals()
         self._signals.ocr_done.connect(self._on_ocr_done)
+        self._signals.ocr_failed.connect(self._on_ocr_failed)
         self._signals.ocr_status.connect(self._on_ocr_status)
         self._signals.click_verify_done.connect(self._on_click_verify_done)
         self._signals.key_verify_done.connect(self._on_key_verify_done)
@@ -401,14 +408,20 @@ class OcrDebugPanel(QWidget):
                     self.showNormal()
 
     def _take_snapshot(self):
-        self._request_id += 1
-        request_id = self._request_id
+        self._ocr_request_id += 1
+        request_id = self._ocr_request_id
         self._capture_btn.setEnabled(False)
         self._capture_btn.setText(T("ocr_debug.recognizing"))
         self._info_label.setText("")
         self._click_error_label.hide()
         self._black_warn_text = ""
         self._selected_index = -1
+        # 清掉上一次擷取的結果：舊視窗的 OCR 座標配上新視窗 rect 會點錯位置。
+        self._ocr_results = []
+        self._result_table.blockSignals(True)
+        self._result_table.setRowCount(0)
+        self._result_table.clearSelection()
+        self._result_table.blockSignals(False)
         self._add_rule_btn.setEnabled(False)
         self._template_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
@@ -420,8 +433,7 @@ class OcrDebugPanel(QWidget):
         if raw is None:
             logging.warning("capture failed for '%s'", self._window_title)
             self._status_bar.showMessage(T("ocr_debug.capture_failed", title=self._window_title))
-            self._capture_btn.setText(T("ocr_debug.capture"))
-            self._capture_btn.setEnabled(True)
+            self._restore_capture_btn()
             return
 
         # 後台截圖全黑 + 非系統管理員 → 暫存提示，待 OCR 完成後與耗時訊息合併顯示
@@ -429,35 +441,55 @@ class OcrDebugPanel(QWidget):
             self._black_warn_text = T("bg_capture.black_admin_warn")
 
         self._latest_raw = raw
-        self._ocr_busy = True
-        threading.Thread(target=self._do_ocr, args=(raw.copy(), request_id), daemon=True).start()
+        try:
+            threading.Thread(
+                target=self._do_ocr, args=(raw.copy(), request_id), daemon=True
+            ).start()
+        except Exception as e:
+            # Worker 啟動失敗：必須自行復原按鈕，否則擷取按鈕會永久停用
+            logging.exception("ocr worker start failed")
+            self._restore_capture_btn()
+            self._status_bar.showMessage(T("ocr_debug.ocr_failed", err=str(e) or type(e).__name__))
 
     def _do_ocr(self, img: np.ndarray, request_id: int):
+        # Worker 執行緒：不得直接操作任何 QWidget，成功與失敗都經 signal 回 GUI thread。
         try:
-            self._signals.ocr_status.emit(T("ocr_debug.ocr_loading"))
+            self._signals.ocr_status.emit(T("ocr_debug.ocr_loading"), request_id)
             t0 = time.monotonic()
             opts = self._ocr_options()
             results = recognize(img, **opts)
             elapsed = (time.monotonic() - t0) * 1000
             logging.debug("ocr_dbg: %.0fms %d blocks", elapsed, len(results))
             self._signals.ocr_done.emit(results, elapsed, request_id)
-        except Exception:
+        except Exception as e:
             logging.exception("_do_ocr failed")
-            self._capture_btn.setText(T("ocr_debug.capture"))
-            self._capture_btn.setEnabled(True)
-        finally:
-            self._ocr_busy = False
+            self._signals.ocr_failed.emit(str(e) or type(e).__name__, request_id)
 
-    def _on_ocr_status(self, msg: str):
+    def _on_ocr_status(self, msg: str, request_id: int):
+        if request_id != self._ocr_request_id:
+            return
         self._status_bar.showMessage(msg)
+
+    def _on_ocr_failed(self, message: str, request_id: int):
+        try:
+            if request_id != self._ocr_request_id:
+                return
+            self._restore_capture_btn()
+            # 只顯示簡短錯誤訊息；完整 traceback 留在日誌
+            self._status_bar.showMessage(T("ocr_debug.ocr_failed", err=message))
+        except Exception:
+            logging.exception("_on_ocr_failed failed")
+
+    def _restore_capture_btn(self):
+        self._capture_btn.setText(T("ocr_debug.capture"))
+        self._capture_btn.setEnabled(True)
 
     def _on_ocr_done(self, results: list, elapsed_ms: float, request_id: int):
         try:
-            if request_id != self._request_id:
+            if request_id != self._ocr_request_id:
                 return
             self._ocr_results = results
-            self._capture_btn.setText(T("ocr_debug.capture"))
-            self._capture_btn.setEnabled(True)
+            self._restore_capture_btn()
             self._populate_table()
             self._rebuild_annotated()
             self._update_display()
@@ -518,7 +550,9 @@ class OcrDebugPanel(QWidget):
                 self._selected_index = rows[0].row()
                 self._add_rule_btn.setEnabled(True)
                 self._template_btn.setEnabled(True)
-                self._click_test_btn.setEnabled(True)
+                # 驗證進行中不得提前解鎖，否則使用者可重複點擊測試
+                if not self._verif_in_progress:
+                    self._click_test_btn.setEnabled(True)
             else:
                 self._selected_index = -1
                 self._add_rule_btn.setEnabled(False)
@@ -759,6 +793,9 @@ class OcrDebugPanel(QWidget):
         )
 
     def _on_click_test(self):
+        if self._verif_in_progress:
+            # 上一輪驗證還沒回來：不得重複送出實際點擊
+            return
         if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
             return
         r = self._ocr_results[self._selected_index]
@@ -913,17 +950,21 @@ class OcrDebugPanel(QWidget):
     def _start_click_verify(self, r, sx: int, sy: int):
         if self._verif_in_progress:
             return
+        self._click_verify_request_id += 1
+        request_id = self._click_verify_request_id
         self._verif_in_progress = True
         self._click_test_btn.setEnabled(False)
         self._click_test_btn.setText(T("ocr_debug.verifying"))
         frame_size = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
         threading.Thread(
             target=self._click_verify_worker,
-            args=(r, sx, sy, frame_size[1], frame_size[0]),
+            args=(r, sx, sy, frame_size[1], frame_size[0], request_id),
             daemon=True,
         ).start()
 
-    def _click_verify_worker(self, r, sx: int, sy: int, frame_w: int, frame_h: int):
+    def _click_verify_worker(
+        self, r, sx: int, sy: int, frame_w: int, frame_h: int, request_id: int
+    ):
         def emit(state: str, still: str, ms: float, err: str = ""):
             self._signals.click_verify_done.emit(
                 {
@@ -934,6 +975,7 @@ class OcrDebugPanel(QWidget):
                     "ms": ms,
                     "still": still,
                     "last_error": err,
+                    "request_id": request_id,
                 }
             )
 
@@ -944,6 +986,9 @@ class OcrDebugPanel(QWidget):
             hwnd = _screenshot.get_window_hwnd(self._window_title)
             t0 = time.monotonic()
             if mode == "pynput" or not hwnd:
+                # 目標視窗消失或互動模式改變 → 必須回報完成，
+                # 否則 in-progress 永遠卡住，點擊測試按鈕會永久停用。
+                emit("skipped", "?", 0.0, _ERR_MODE_SWITCHED if mode == "pynput" else "")
                 return
             img = capture_frame(mode, self._window_title, hwnd=hwnd)
             if img is None or is_black_capture(img):
@@ -976,6 +1021,9 @@ class OcrDebugPanel(QWidget):
         return img[y0:y1, x0:x1]
 
     def _on_click_verify_done(self, out: dict):
+        if out.get("request_id") != self._click_verify_request_id:
+            # 過期任務：安全忽略，不得解鎖新任務的按鈕或覆蓋其狀態
+            return
         self._verif_in_progress = False
         self._click_test_btn.setEnabled(True)
         self._click_test_btn.setText(T("ocr_debug.click_test"))
@@ -1008,6 +1056,7 @@ class OcrDebugPanel(QWidget):
             "inject_fail": "#c62828",
             "black": "#b45309",
             "window_changed": "#666",
+            "skipped": "#666",
         }
         key = state if state in colors else "black"
         guidance = T(f"ocr_debug.click_verify.{key}", text=text)
@@ -1067,15 +1116,27 @@ class OcrDebugPanel(QWidget):
     def _start_key_verify(self, hwnd: int, key: str):
         if self._key_verif_in_progress:
             return
+        self._key_verify_request_id += 1
+        request_id = self._key_verify_request_id
         self._key_verif_in_progress = True
         self._key_test_btn.setEnabled(False)
         self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
-        threading.Thread(target=self._key_verify_worker, args=(hwnd, key), daemon=True).start()
+        threading.Thread(
+            target=self._key_verify_worker, args=(hwnd, key, request_id), daemon=True
+        ).start()
 
-    def _key_verify_worker(self, hwnd: int, key: str):
+    def _key_verify_worker(self, hwnd: int, key: str, request_id: int):
         def emit(state: str, **kw):
             self._signals.key_verify_done.emit(
-                {"state": state, "similar": "?", "err": "", "ms": 0.0, "key": key, **kw}
+                {
+                    "state": state,
+                    "similar": "?",
+                    "err": "",
+                    "ms": 0.0,
+                    "key": key,
+                    "request_id": request_id,
+                    **kw,
+                }
             )
 
         try:
@@ -1118,6 +1179,9 @@ class OcrDebugPanel(QWidget):
             emit("fail", err=str(e))
 
     def _on_key_verify_done(self, out: dict):
+        if out.get("request_id") != self._key_verify_request_id:
+            # 過期任務：安全忽略，不得解鎖新任務的按鈕或覆蓋其狀態
+            return
         self._key_verif_in_progress = False
         self._key_test_btn.setEnabled(True)
         self._key_test_btn.setText(T("ocr_debug.key_test"))
@@ -1336,20 +1400,46 @@ class OcrDebugPanel(QWidget):
         self._image_label.setPixmap(scaled)
 
     def clear_results(self):
+        # 遞增三種背景任務各自的 generation id，讓在途結果全部失效。
+        # 注意：這「不代表取消 Worker」——Worker 仍會跑完，只是結果不得回填新畫面。
+        self._ocr_request_id += 1
+        self._click_verify_request_id += 1
+        self._key_verify_request_id += 1
         self._ocr_results = []
         self._latest_raw = None
         self._annotated_pixmap = None
         self._crop_pixmap = None
+        self._capture_source = ""
+        self._black_warn_text = ""
         self._selected_index = -1
+        # 表格一併清空，舊視窗的列不得再被選取
+        self._result_table.blockSignals(True)
+        self._result_table.setRowCount(0)
+        self._result_table.clearSelection()
+        self._result_table.blockSignals(False)
         self._info_label.setText("")
+        self._summary_label.setText(T("ocr_debug.summary"))
+        self._last_verify_guidance = ""
+        self._last_verify_dev = ""
+        self._click_error_label.hide()
         self._add_rule_btn.setEnabled(False)
+        self._template_btn.setEnabled(False)
         self._click_test_btn.setEnabled(False)
+        self._click_test_btn.setText(T("ocr_debug.click_test"))
+        # 在途的驗證工作已被 generation id 作廢，旗標一併歸零，
+        # 否則過期 slot 被忽略後沒人能解鎖，按鈕會永久卡在「驗證中」。
+        self._verif_in_progress = False
+        self._key_verif_in_progress = False
+        self._key_test_btn.setEnabled(True)
+        self._key_test_btn.setText(T("ocr_debug.key_test"))
         self._update_step_btn_state()
         self._image_label.setText(T("ocr_debug.switch_window"))
         self._image_label.setPixmap(QPixmap())
         self._crop_label.setText("")
         self._crop_label.setPixmap(QPixmap())
         self._selected_detail.setText(T("ocr_debug.selected_none"))
+        # 在途 OCR 結果已作廢，擷取按鈕必須恢復可用，否則會永久卡在「辨識中」
+        self._restore_capture_btn()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
