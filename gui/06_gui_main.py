@@ -8037,8 +8037,8 @@ class MainWindow(QMainWindow):
         SettingsDialog(self).exec()
         self._rule_config_ctrl.reset_cache()
         if self._loop:
-            # 主循環持有獨立的 controller 快取，一併失效才能讓 scan_interval 等設定即時生效
-            self._loop._rule_config_ctrl.reset_cache()
+            # 主循環持有獨立的 ConfigStore 快取，一併失效才能讓 scan_interval 等設定即時生效
+            self._loop._config_store.reset_cache()
         self._update_interaction_mode_label()
 
     def closeEvent(self, event):
