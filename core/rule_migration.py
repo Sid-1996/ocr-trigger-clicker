@@ -168,6 +168,14 @@ def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
             result = {"action": "jump", "rule_id": str(raw.get("rule_id", ""))}
         elif action == "advance":
             result = {"action": "advance"}
+        elif action == "stop":
+            # stop 搭配容忍期：GUI 寫入 {"action":"stop","fail_duration_sec":N}，
+            # 不可壓成裸字串 "stop"，否則容忍期在重新載入後被靜默丟棄，
+            # 使用者設定的「持續失敗 N 秒」會在存檔再開後失效。
+            # fd == 0 時維持既有向下相容寫法（純字串 "stop"）。
+            if fd > 0:
+                return {"action": "stop", "fail_duration_sec": fd}
+            return "stop"
         else:
             return "stop"
         if fd > 0:
