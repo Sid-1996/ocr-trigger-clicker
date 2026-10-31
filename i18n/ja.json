@@ -528,6 +528,7 @@
   "step_form.step_n": "ステップ {i}",
   "step_form.unknown_rule": "（不明: {id}）",
   "step_form.missing_rule": "（欠落: {id}）",
+  "step_form.unset_rule": "（未設定）",
   "step_form.of_skip_once": "1 回スキップ（既定）",
   "step_form.of_skip_rule": "ルールをスキップ（次へ進む）",
   "step_form.of_jump_step": "ステップへジャンプ",

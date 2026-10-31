@@ -522,6 +522,7 @@
   "step_form.step_n": "Step {i}",
   "step_form.unknown_rule": "(Unknown: {id})",
   "step_form.missing_rule": "(Missing: {id})",
+  "step_form.unset_rule": "(No target)",
   "step_form.of_skip_once": "Skip Once (default)",
   "step_form.of_skip_rule": "Skip Rule (move to next)",
   "step_form.of_jump_step": "Jump to Step",

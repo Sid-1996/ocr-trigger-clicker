@@ -981,6 +981,17 @@ class _StepListWidget(QWidget):
             return _SumStepForm(self, step, idx, self._roi_callback)
         if t == "notify":
             return _NotifyStepForm(self, step, idx)
+        if t == "wait":
+            return _WaitStepForm(self, step, idx)
+        if t == "jump":
+            return _JumpStepForm(
+                self,
+                step,
+                idx,
+                self._rules_provider,
+                self._groups_provider,
+                self._rule_id,
+            )
         return None
 
 
@@ -4001,19 +4012,26 @@ class _JumpStepForm(QWidget):
         form.setContentsMargins(12, 6, 12, 6)
 
         self._combo = _NoWheelCombo()
-        current_id = step.params.get("rule_id", "")
+        current_id = step.params.get("rule_id", "") or ""
         _populate_rule_combo(
             self._combo,
             rules_provider() if rules_provider else [],
             groups_provider() if groups_provider else [],
             exclude_rule_id,
         )
+        # 永遠提供「未設定目標」選項：
+        # 1. 空 rule_id 開啟表單時不會停在第一條規則（否則存檔會靜默改寫資料）；
+        # 2. 使用者可以把已設定的目標清回未設定。
+        self._combo.insertItem(0, T("step_form.unset_rule"), "")
         idx_r = self._combo.findData(current_id)
         if idx_r >= 0:
             self._combo.setCurrentIndex(idx_r)
         elif current_id:
+            # 目標已不存在：保留原值，不得靜默換成其他規則
             self._combo.addItem(T("step_form.unknown_rule", id=current_id), current_id)
             self._combo.setCurrentIndex(self._combo.count() - 1)
+        else:
+            self._combo.setCurrentIndex(0)
         form.addRow(T("step_form.jump_to_rule"), self._combo)
 
     def save(self):

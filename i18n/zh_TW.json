@@ -522,6 +522,7 @@
   "step_form.step_n": "步驟{i}",
   "step_form.unknown_rule": "(未知: {id})",
   "step_form.missing_rule": "(遺失: {id})",
+  "step_form.unset_rule": "(未設定目標)",
   "step_form.of_skip_once": "跳過本次（預設）",
   "step_form.of_skip_rule": "跳過此規則（換下一條）",
   "step_form.of_jump_step": "跳至步驟",
