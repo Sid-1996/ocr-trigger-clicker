@@ -1,4 +1,5 @@
 import logging
+import math
 import re
 import threading
 import time
@@ -471,6 +472,16 @@ class TestRunController:
                     op = p.get("operator", ">=")
                     val = p.get("value", 0.0)
                     pattern = p.get("pattern", r"-?\d+\.?\d*")
+
+                    # 比較數值無效（null / NaN / ±Infinity）→ 無法比較，
+                    # 與 Core 行為一致地視為失敗（不可把 None 當 0.0）。
+                    if not isinstance(val, (int, float)) or not math.isfinite(val):
+                        log.append(T("test.compare_value_invalid", idx=idx + 1, value=val))
+                        of_hint = of_summary(p.get("on_fail", "stop"))
+                        if of_hint:
+                            log.append(f"  → {of_hint}")
+                        _fatal(idx, _dry_fail_fate(p.get("on_fail", "stop")))
+                        continue
 
                     r = _resolve(p.get("roi", {}))
                     use_roi = any(r.get(k, 0) != 0 for k in ("x", "y", "w", "h"))

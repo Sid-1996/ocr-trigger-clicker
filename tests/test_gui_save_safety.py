@@ -740,6 +740,9 @@ def test_do_debounced_save_failure_preserves_corrupt_file(tmp_path, monkeypatch)
         _rules=[],
         _groups=[],
         _loop=None,
+        # 寫入前會先提交展開中的 Step 表單（Phase 2-4b-1）；
+        # 本測試聚焦「寫入失敗時保留原檔」，提交步驟以成功回報代替。
+        _commit_open_step_form=lambda: True,
     )
     monkeypatch.setattr(_gui._rule_mod, "get_tasks_dir", lambda: tmp_path)
     monkeypatch.setattr(_gui._main_loop_mod, "log_main", lambda message: None)

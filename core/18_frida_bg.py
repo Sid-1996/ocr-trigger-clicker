@@ -336,8 +336,24 @@ def _sync_update(hwnd: int, x: int, y: int) -> tuple[bool, str]:
         return False, str(e)
 
 
-def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
-    """Click at (x, y) client coords via spoofed cursor + PostMessage."""
+def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None) -> bool:
+    """Click at (x, y) client coords via spoofed cursor + PostMessage.
+
+    cancel 為可選的 threading.Event：等待按住期間可被中斷並提前放開按鈕。
+    """
+    if not sync_cursor(hwnd, x, y):
+        return False
+    return _bg()._click_postmessage(hwnd, x, y, button, hold_ms, cancel)
+
+
+def sync_cursor(hwnd: int, x: int, y: int) -> bool:
+    """把注入腳本中的假造游標位置更新到客戶區座標 (x, y)。
+
+    拖曳時需要分兩次呼叫：先同步起點（DOWN 之前），再同步終點（MOVE 之前），
+    否則遊戲讀到的游標位置會停在舊值。
+
+    回傳 True 只代表注入腳本已接受這次游標狀態更新，不代表遊戲已處理訊息。
+    """
     if not ensure_attached(hwnd):
         return False
     with _lock:
@@ -353,7 +369,7 @@ def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> 
         if not ok:
             _set_error(f"Frida 座標同步失敗: {err}")
             return False
-    return _bg()._click_postmessage(hwnd, x, y, button, hold_ms)
+    return True
 
 
 def _sync_key(vk: int, down: bool) -> tuple[bool, str]:

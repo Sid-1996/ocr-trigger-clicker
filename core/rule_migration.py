@@ -1,3 +1,4 @@
+import math
 from copy import deepcopy
 from pathlib import Path
 
@@ -57,15 +58,36 @@ _STEP_DEFAULTS = {
 def _as_int(value, default: int = 0) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError：int(float('inf')) 會拋出，任務 JSON 可帶 Infinity
+        # （Python json 預設接受 Infinity/NaN），不可讓例外穿透載入流程。
+        # NaN 走 ValueError 分支，兩者一律回退欄位既有 default。
         return default
 
 
 def _as_float(value, default: float = 0.0) -> float:
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError：float(10**400) 這類超大整數會拋出
         return default
+    if not math.isfinite(result):
+        # NaN / ±Infinity：非有限值不得進入執行期參數
+        # （NaN 讓所有比較恆 False，Infinity 讓門檻恆不成立）。
+        # 回退各欄位自己的 default，不一律轉 0（0 在不同欄位語意不同）。
+        return default
+    return result
+
+
+def _as_optional_float(value) -> float | None:
+    """非有限值（NaN/±Infinity）、null 與非數值 → None（代表「無效值」）。
+
+    僅用於需要區分「無效」與「預設值」的欄位（目前只有 compare.value）：
+    無效值必須讓執行期安全失敗，而不是被當成 0.0 —— 0.0 在 ">=" / ">" / "!="
+    之下會讓比較條件恆成立，等於無條件執行後續的點擊／按鍵動作。
+    其他欄位仍走 _as_float 的 default 回退語義。
+    """
+    return _as_float(value, None)
 
 
 def _sanitize_roi(roi: dict | None) -> dict:
@@ -87,7 +109,8 @@ def _sanitize_capture_size(raw: object) -> list[int] | None:
         return None
     try:
         w, h = int(raw[0]), int(raw[1])
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError：int(float('inf')) — 非法尺寸回 None（回退任務級 capture_size）
         return None
     if not (0 < w <= 100000 and 0 < h <= 100000):
         return None
@@ -108,7 +131,8 @@ def _sanitize_color_mask(raw: object) -> dict | None:
             continue
         try:
             r, g, b = (max(0, min(255, int(v))) for v in color)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError：int(float('inf')) — 非法色碼略過該色
             continue
         key = (r, g, b)
         if key in seen:
@@ -146,11 +170,7 @@ def _normalize_action(action: dict | None, default_type: str = "key") -> dict:
 def _normalize_on_fail(raw: object, allow_skip: bool = False) -> str | dict:
     if isinstance(raw, dict):
         action = str(raw.get("action", "stop"))
-        fd = raw.get("fail_duration_sec", 0)
-        try:
-            fd = float(fd)
-        except (TypeError, ValueError):
-            fd = 0.0
+        fd = _as_float(raw.get("fail_duration_sec", 0), 0.0)
         if action == "notify":
             stop_groups = raw.get("stop_groups", [])
             if not isinstance(stop_groups, (list, tuple)):
@@ -361,7 +381,8 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
         base["roi"] = _sanitize_roi(base.get("roi"))
         base["pattern"] = str(base.get("pattern", r"-?\d+\.?\d*"))
         base["operator"] = str(base.get("operator", ">="))
-        base["value"] = _as_float(base.get("value", 0.0), 0.0)
+        # 無效值（NaN/±Infinity/null）→ None：執行期據此安全失敗，不可用 0.0 代替
+        base["value"] = _as_optional_float(base.get("value", 0.0))
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
     elif step_type == "sum":
         base["roi"] = _sanitize_roi(base.get("roi"))

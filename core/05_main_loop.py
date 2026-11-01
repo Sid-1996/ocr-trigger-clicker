@@ -1,6 +1,7 @@
 import contextlib
 import hashlib
 import logging
+import math
 import os
 import random
 import re
@@ -67,6 +68,22 @@ OcrResult = _ocr.OcrResult
 recognize = _ocr.recognize
 find_text = _ocr.find_text
 init_engine = _ocr.init_engine
+
+
+def _is_finite_number(value) -> bool:
+    """value 是否為有限數值。
+
+    None、NaN、±Infinity、非數值型別皆回 False。
+    巨整數（10**400）轉 float 會 OverflowError，也視為非有限。
+    """
+    if not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except (OverflowError, ValueError):
+        return False
+
+
 Rule = _rule.Rule
 RuleGroup = _rule.RuleGroup
 load_rules = _rule.load_rules
@@ -616,8 +633,8 @@ class MainLoop:
             user32 = ctypes.windll.user32
             pt = wintypes.POINT(x, y)
             user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt))
-            return _bg_input.click(self._window_hwnd, pt.x, pt.y, button, hold_ms)
-        return _input_mod.send_click(x, y, button, hold_ms)
+            return _bg_input.click(self._window_hwnd, pt.x, pt.y, button, hold_ms, self._stop_event)
+        return _input_mod.send_click(x, y, button, hold_ms, self._stop_event)
 
     def _send_key(self, key: str) -> bool:
         mode = self._config_store.get("interaction_mode")
@@ -1112,6 +1129,16 @@ class MainLoop:
             return self._handle_on_fail(params, ctx, rule)
         op = params.get("operator", ">=")
         val = params.get("value", 0.0)
+        if not _is_finite_number(val):
+            # 比較數值本身無效（None / NaN / ±Infinity）：無法比較。
+            # 走既有 on_fail 流程（預設 stop → 本規則結束，後續步驟不執行），
+            # 不可把 None 當 0.0 —— 0.0 在 ">=" / ">" / "!=" 之下會讓條件恆成立。
+            self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 比較數值無效（{val!r}），無法比較")
+            res = self._handle_on_fail(params, ctx, rule)
+            if res.action == "stop":
+                # 讓日誌能區分「比較條件不成立」與「比較數值本身無效」
+                res.detail = T("exec_log.detail.value_invalid")
+            return res
         ops = {
             ">": lambda a, b: a > b,
             "<": lambda a, b: a < b,
@@ -1496,9 +1523,9 @@ class MainLoop:
                 mode = self._config_store.get("interaction_mode")
                 if mode == "frida" and self._window_hwnd:
                     _bg_input.set_method(mode)
-                    ok = _bg_input.send_hold_key(self._window_hwnd, key, hold_ms)
+                    ok = _bg_input.send_hold_key(self._window_hwnd, key, hold_ms, self._stop_event)
                 else:
-                    ok = _input_mod.send_hold_key(key, hold_ms)
+                    ok = _input_mod.send_hold_key(key, hold_ms, self._stop_event)
             else:
                 ok = self._send_key(key)
         if ok:

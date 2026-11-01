@@ -35,6 +35,7 @@ from core.rule_models import Rule, RuleGroup, Step  # noqa: E402
 _GUI = load_sibling("gui_main", "gui/06_gui_main.py")
 _MIG = load_sibling("rule_migration", "core/rule_migration.py")
 _SER = load_sibling("rule_serialization", "core/rule_serialization.py")
+_INPUT = load_sibling("pynput_input", "core/03_pynput_input.py")
 
 _GUI_SOURCE = _root / "gui" / "06_gui_main.py"
 
@@ -750,3 +751,624 @@ def test_jump_empty_target_survives_expand_and_rebuild(step_list, qapp):
     step_list.set_steps(steps)
     assert step_list.get_steps()[0].params["rule_id"] == "", "重建清單後空目標被改寫"
     qapp.processEvents()
+
+
+# ── 6：Step Form 靜默資料改寫護欄（Phase 2-7a）─────────────────────────────
+#
+# Phase 2-7 唯讀診斷確認三類「使用者完全沒有修改、資料卻被改寫」的缺陷：
+#
+#   D-1：Key Step 的合法按鍵值被清空成 ""
+#        Core（core/03_pynput_input.py 的 _KEY_MAP / _NUMPAD_VK）能解析該鍵，
+#        但 GUI 的按鍵下拉（gui/06_gui_main.py _make_key_combo）沒有該選項；
+#        回填時 findData() 回 -1 → combo 停在 index 0（分隔線）→ 存成 ""。
+#
+#   D-3：ComboBox 遇到未知值被換成第一個選項
+#        （click/drag.target、scroll.direction、compare.operator、detect.match_mode）
+#
+#   D-4：widget 範圍／精度限制把原值截斷
+#        （wait.ms、after_delay_ms、random_offset、scroll.amount、
+#          compare.value、detect.fuzzy_threshold）
+#
+# 本節一律走完整保存路徑（真實 MainWindow + 真實磁碟 JSON）：
+#   JSON → 載入任務 → 展開表單（不動任何欄位）→ _flush_save() → 讀回磁碟 JSON → 重新載入
+#
+# Phase 2-7a 建立本節護欄；Phase 2-7b 已修復 D-1（GUI 按鍵下拉改由 Core 的
+# 按鍵定義自動補齊）、Phase 2-7c 已修復 D-3（ComboBox 未知值原樣保留），
+# 這兩節的 xfail 標記已移除。D-4 尚未修復，仍以 pytest.mark.xfail(strict=True)
+# 標記：strict 代表修復後若沒移除標記會變成 XPASS 而失敗（防止遺漏）。
+# 每個案例都附缺陷 ID 與具體原因，不使用無條件 xfail。
+
+_D1_REASON = "D-1: Key Step 的合法按鍵值在 GUI 回填時被清空成空字串"
+_D3_REASON = "D-3: ComboBox 未知值在 GUI 回填時被換成第一個選項"
+_D4_REASON = "D-4: widget 範圍／精度限制在保存時截斷原值（2-7d-2b-1 已修復）"
+
+# Core 可解析、但 GUI 按鍵下拉未提供的鍵（實測全部會被清空成 ""）
+_D1_KEYS = [
+    "capslock",
+    "numlock",
+    "scrolllock",
+    "printscreen",
+    "pause",
+    "menu",
+    "shift",
+    "ctrl",
+    "alt",
+    "lshift",
+    "rshift",
+    "lctrl",
+    "rctrl",
+    "lalt",
+    "ralt",
+    "win",
+    "windows",
+    "numpad0",
+    "numpad1",
+    "numpad2",
+    "numpad3",
+    "numpad4",
+    "numpad5",
+    "numpad6",
+    "numpad7",
+    "numpad8",
+    "numpad9",
+    "numpadadd",
+    "numpadsub",
+    "numpadmult",
+    "numpaddiv",
+    "numpadenter",
+    "numpaddel",
+]
+
+# GUI 下拉有提供、必須原樣保留的對照組（正常通過，非 xfail）
+_D1_OK_KEYS = ["0", "F12", "a", "Enter", "Space", "Numpad5", "NumpadAdd", "^c"]
+
+
+def _expand_step_form(win, index: int = 0):
+    """展開 step 編輯表單且不修改任何欄位（走真實展開流程）。"""
+    win._step_list._collapse()
+    win._step_list._toggle_expand(index)
+    form = win._step_list._expanded_form
+    assert form is not None, "表單必須成功展開"
+    return form
+
+
+def _disk_step_params(isolated_data_dir, name: str = "t1") -> dict:
+    """從磁碟讀回第一條規則第一個 step 的 params（真的落盤，不是記憶體物件）。"""
+    path = isolated_data_dir / "tasks" / f"{name}.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data["rules"][0]["steps"][0]["params"]
+
+
+def _save_without_editing(
+    win, write_task, make_step, make_rule, isolated_data_dir, step_type, params
+):
+    """走完整保存路徑且不修改任何欄位。
+
+    回傳 (磁碟上的 step params, 重新載入後記憶體中的 step params)。
+    """
+    step = make_step(step_type, **params)
+    write_task("t1", [make_rule("r0", "規則零", [step])])
+    win._on_task_changed("t1")
+    _expand_step_form(win, 0)
+    assert win._flush_save(), "_flush_save 必須成功"
+    disk = _disk_step_params(isolated_data_dir, "t1")
+    win._on_task_changed("t1")  # 重新載入
+    reloaded = win._rules[0].steps[0].params
+    return disk, reloaded
+
+
+# ── 6-1：D-1 Key Step 合法按鍵被清空 ────────────────────────────────────────
+
+
+def test_d1_key_list_is_really_supported_by_core():
+    """D-1 案例清單必須全部是 Core 能解析的鍵，否則不該期待 GUI 保留它們。
+
+    這是護欄本身的自檢：若 Core 日後不再支援某個鍵，這個測試會直接失敗，
+    而不是讓對應的 xfail 案例繼續「假裝」是已知缺陷。
+    """
+    unsupported = [k for k in _D1_KEYS if _INPUT._parse_key(k) is None]
+    assert not unsupported, f"這些鍵 Core 無法解析，不屬於 D-1 案例：{unsupported}"
+
+
+@pytest.mark.parametrize("key", _D1_KEYS)
+def test_key_step_core_supported_key_survives_gui_save(
+    real_mainwindow, write_task, make_step, make_rule, isolated_data_dir, key
+):
+    """D-1：Core 合法但 GUI 下拉未提供的按鍵，展開並存檔後不得被清空。
+
+    Phase 2-7b 已修復（GUI 下拉改由 Core 的按鍵定義自動補齊），
+    本測試由 xfail 轉為正常通過，確保不得復發。
+    """
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win, write_task, make_step, make_rule, isolated_data_dir, "key", {"key": key}
+    )
+    assert disk["key"] == key, f"按鍵 {key!r} 在磁碟上被清空成 {disk['key']!r}"
+    assert reloaded["key"] == key, f"按鍵 {key!r} 重新載入後變成 {reloaded['key']!r}"
+
+
+def test_gui_key_combo_covers_core_supported_keys(qapp):
+    """GUI 按鍵下拉必須涵蓋 Core 支援的所有鍵，且不得提供 Core 不支援的鍵。
+
+    這是「Core 為按鍵事實來源」這個不變量的護欄：
+    Core 新增鍵時下拉必須跟著有；Core 不支援的鍵（例如 F13）不得出現在下拉。
+    """
+    combo = _GUI._make_key_combo()
+    values = [combo.itemData(i) for i in range(combo.count())]
+    values = [v for v in values if isinstance(v, str)]
+    lowered = {v.lower() for v in values}
+
+    core_keys = set(_INPUT._KEY_MAP) | set(_INPUT._NUMPAD_VK)
+    missing = sorted(k for k in core_keys if k.lower() not in lowered)
+    assert not missing, f"GUI 按鍵下拉缺少 Core 支援的鍵：{missing}"
+
+    # 「^x」形式的 Ctrl 組合由 send_key 的 _send_ctrl_combo 處理，不走 _parse_key。
+    unsupported = [v for v in values if not v.startswith("^") and _INPUT._parse_key(v) is None]
+    assert not unsupported, f"GUI 按鍵下拉提供 Core 不支援的鍵：{unsupported}"
+
+
+@pytest.mark.parametrize("key", _D1_OK_KEYS)
+def test_key_step_gui_offered_key_survives_gui_save(
+    real_mainwindow, write_task, make_step, make_rule, isolated_data_dir, key
+):
+    """對照組：GUI 下拉有提供的按鍵，展開並存檔後必須原樣保留。"""
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win, write_task, make_step, make_rule, isolated_data_dir, "key", {"key": key}
+    )
+    assert disk["key"] == key, f"按鍵 {key!r} 在磁碟上變成 {disk['key']!r}"
+    assert reloaded["key"] == key, f"按鍵 {key!r} 重新載入後變成 {reloaded['key']!r}"
+
+
+# ── 6-2：D-3 ComboBox 未知值被換成第一個選項 ───────────────────────────────
+
+
+_D3_CASES = [
+    pytest.param("click", {"target": "cursor_v2"}, "target", "cursor_v2", id="click.target"),
+    pytest.param("drag", {"target": "cursor_v2"}, "target", "cursor_v2", id="drag.target"),
+    pytest.param(
+        "scroll", {"direction": "WheelUp2"}, "direction", "WheelUp2", id="scroll.direction"
+    ),
+    pytest.param(
+        "compare",
+        {"pattern": r"\d+", "operator": "=>", "value": 1.0},
+        "operator",
+        "=>",
+        id="compare.operator",
+    ),
+    pytest.param(
+        "detect",
+        {"text": "戰鬥", "match_mode": "fuzzy_v2"},
+        "match_mode",
+        "fuzzy_v2",
+        id="detect.match_mode",
+    ),
+]
+
+# GUI 有提供、必須原樣保留的對照值（正常通過，非 xfail）
+_D3_OK_CASES = [
+    ("click", {"target": "cursor"}, "target", "cursor"),
+    ("drag", {"target": "custom", "x": 3, "y": 4}, "target", "custom"),
+    ("scroll", {"direction": "WheelUp"}, "direction", "WheelUp"),
+    ("compare", {"pattern": r"\d+", "operator": "!=", "value": 1.0}, "operator", "!="),
+    ("detect", {"text": "戰鬥", "match_mode": "exact"}, "match_mode", "exact"),
+]
+
+# 欄位 → 對應 Form 的 ComboBox 屬性（不同欄位的 ComboBox 行為必須分別驗證）
+_D3_COMBO_ATTR = {
+    "target": "_target",
+    "direction": "_direction",
+    "operator": "_operator",
+    "match_mode": "_match_mode",
+}
+
+
+@pytest.mark.parametrize("step_type,params,field,expected", _D3_CASES)
+def test_combo_unknown_value_survives_no_edit_save(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    expected,
+):
+    """D-3：下拉選項以外的未知值，不該在使用者未修改時被換成第一個選項。"""
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win, write_task, make_step, make_rule, isolated_data_dir, step_type, params
+    )
+    assert disk[field] == expected, f"{step_type}.{field} 在磁碟上變成 {disk[field]!r}"
+    assert reloaded[field] == expected, f"{step_type}.{field} 重新載入後變成 {reloaded[field]!r}"
+
+
+@pytest.mark.parametrize("step_type,params,field,expected", _D3_OK_CASES)
+def test_combo_known_value_survives_no_edit_save(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    expected,
+):
+    """對照組：下拉有提供的合法值，不該在使用者未修改時被改動。"""
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win, write_task, make_step, make_rule, isolated_data_dir, step_type, params
+    )
+    assert disk[field] == expected, f"{step_type}.{field} 在磁碟上變成 {disk[field]!r}"
+    assert reloaded[field] == expected, f"{step_type}.{field} 重新載入後變成 {reloaded[field]!r}"
+
+
+@pytest.mark.parametrize("step_type,params,field,unknown", _D3_CASES)
+def test_combo_unknown_value_replaced_when_user_picks_valid_option(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    unknown,
+):
+    """D-3：使用者主動改選有效選項後，必須保存新值，不得繼續保存原本的未知值。"""
+    win = real_mainwindow
+    step = make_step(step_type, **params)
+    write_task("t1", [make_rule("r0", "規則零", [step])])
+    win._on_task_changed("t1")
+
+    form = _expand_step_form(win, 0)
+    combo = getattr(form, _D3_COMBO_ATTR[field])
+    # 使用者明確改選清單中的第一個合法選項（未知值項目排在最後）
+    combo.setCurrentIndex(0)
+    new_value = combo.currentData()
+    assert new_value != unknown, "改選後的值不該還是原本的未知值"
+
+    win._flush_save()
+    disk = _disk_step_params(isolated_data_dir, "t1")
+    assert disk[field] == new_value, f"{step_type}.{field} 在磁碟上變成 {disk[field]!r}"
+    assert disk[field] != unknown, "使用者已改選，原始未知值不該被保留"
+
+    # 重新載入後應回填新選項（不再是未知值項目）
+    win._on_task_changed("t1")
+    form2 = _expand_step_form(win, 0)
+    combo2 = getattr(form2, _D3_COMBO_ATTR[field])
+    assert combo2.currentData() == new_value, "重新載入後應回填使用者選擇的新值"
+
+
+@pytest.mark.parametrize("step_type,params,field,unknown", _D3_CASES)
+def test_combo_unknown_value_survives_collapse_and_reexpand(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    unknown,
+):
+    """D-3：展開 → 折疊 → 重新展開 → 保存，未知值仍必須原樣保留。"""
+    win = real_mainwindow
+    step = make_step(step_type, **params)
+    write_task("t1", [make_rule("r0", "規則零", [step])])
+    win._on_task_changed("t1")
+
+    form = _expand_step_form(win, 0)
+    combo = getattr(form, _D3_COMBO_ATTR[field])
+    assert combo.currentData() == unknown, "展開時未知值應被選中"
+
+    win._step_list._collapse()  # 折疊（內含一次保存）
+    form2 = _expand_step_form(win, 0)  # 重新展開
+    combo2 = getattr(form2, _D3_COMBO_ATTR[field])
+    assert combo2.currentData() == unknown, "重新展開後未知值應仍在"
+
+    win._flush_save()
+    disk = _disk_step_params(isolated_data_dir, "t1")
+    assert disk[field] == unknown, f"{step_type}.{field} 在磁碟上變成 {disk[field]!r}"
+
+    win._on_task_changed("t1")
+    reloaded = win._rules[0].steps[0].params
+    assert reloaded[field] == unknown, f"{step_type}.{field} 重新載入後變成 {reloaded[field]!r}"
+
+
+# ── 6-3：D-4 widget 範圍／精度截斷（Phase 2-7d-2b-1 已修復）────────────────
+#
+# 原本這 6 個案例是 xfail(strict=True)：GUI 在未編輯的情況下就把既有任務的
+# 數值截斷成 widget 的夾制值。修復方式：
+#   - fuzzy_threshold → QDoubleSpinBox 0.00–1.00（3 位小數），不再做百分比往返
+#   - compare.value    → 15 位小數，保留 ±999999 範圍
+#   - 整數欄位         → 未編輯時保存原始值（_RawValue），使用者主動改過才寫新值
+# 下列斷言維持「值必須完全等於原值」，不放寬。
+
+
+_D4_CASES = [
+    pytest.param("wait", {"ms": 120000}, "ms", 120000, id="wait.ms"),
+    pytest.param(
+        "click",
+        {"target": "cursor", "after_delay_ms": 120000},
+        "after_delay_ms",
+        120000,
+        id="click.after_delay_ms",
+    ),
+    pytest.param(
+        "click",
+        {"target": "cursor", "random_offset": 150},
+        "random_offset",
+        150,
+        id="click.random_offset",
+    ),
+    pytest.param(
+        "scroll",
+        {"direction": "WheelUp", "amount": 100},
+        "amount",
+        100,
+        id="scroll.amount",
+    ),
+    pytest.param(
+        "compare",
+        {"pattern": r"\d+", "operator": ">=", "value": 1.23456},
+        "value",
+        1.23456,
+        id="compare.value",
+    ),
+    pytest.param(
+        "detect",
+        {"text": "戰鬥", "fuzzy_threshold": 0.855},
+        "fuzzy_threshold",
+        0.855,
+        id="detect.fuzzy_threshold",
+    ),
+]
+
+
+@pytest.mark.parametrize("step_type,params,field,expected", _D4_CASES)
+def test_out_of_range_value_survives_no_edit_save(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    expected,
+):
+    """D-4：超出 widget 範圍或小數位數的值，不該在使用者未修改時被截斷。"""
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win, write_task, make_step, make_rule, isolated_data_dir, step_type, params
+    )
+    assert disk[field] == expected, f"{step_type}.{field} 在磁碟上變成 {disk[field]!r}"
+    assert reloaded[field] == expected, f"{step_type}.{field} 重新載入後變成 {reloaded[field]!r}"
+
+
+# ── 6-4：fuzzy_threshold 完整 0.0–1.0 範圍無損往返 ───────────────────────
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0.0, 0.01, 0.29, 0.57, 0.58, 0.855, 0.9, 1.0],
+    ids=[
+        "zero",
+        "one_percent",
+        "29_percent",
+        "57_percent",
+        "58_percent",
+        "85_5_percent",
+        "90_percent",
+        "one",
+    ],
+)
+def test_fuzzy_threshold_roundtrip_is_lossless(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    value,
+):
+    """fuzzy_threshold 必須無損往返：0.29/0.57/0.58 不得因 IEEE754 掉位。
+
+    舊版用 int(value*100) 的整數百分比，0.29*100 = 28.999999999999996 → 28。
+    """
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win,
+        write_task,
+        make_step,
+        make_rule,
+        isolated_data_dir,
+        "detect",
+        {"text": "戰鬥", "fuzzy_threshold": value},
+    )
+    assert disk["fuzzy_threshold"] == value, f"磁碟上變成 {disk['fuzzy_threshold']!r}"
+    assert reloaded["fuzzy_threshold"] == value, f"重載後變成 {reloaded['fuzzy_threshold']!r}"
+
+
+# ── 6-5：compare.value 高精度小數無損往返 ─────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "value",
+    [1.23456, 1.23456789012345, -1.23456, 0.1, 55.0],
+    ids=["five_dp", "high_dp", "negative", "one_dp", "integral"],
+)
+def test_compare_value_roundtrip_is_lossless(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    value,
+):
+    """compare.value 必須精確往返：舊版 3 位小數會把 1.23456 四捨五入成 1.235。
+
+    這會讓 Core 的 == 比較結果改變（原本成立變成不成立）。
+    """
+    win = real_mainwindow
+    disk, reloaded = _save_without_editing(
+        win,
+        write_task,
+        make_step,
+        make_rule,
+        isolated_data_dir,
+        "compare",
+        {"pattern": r"\d+", "operator": ">=", "value": value},
+    )
+    assert disk["value"] == value, f"磁碟上變成 {disk['value']!r}"
+    assert reloaded["value"] == value, f"重載後變成 {reloaded['value']!r}"
+
+
+# ── 6-6：修改其他欄位不得連帶改寫數值欄位 ────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "step_type,params,field,expected",
+    [
+        (
+            "click",
+            {"target": "cursor", "after_delay_ms": 120000, "random_offset": 150},
+            "after_delay_ms",
+            120000,
+        ),
+        ("scroll", {"direction": "WheelUp", "amount": 100}, "amount", 100),
+        (
+            "compare",
+            {"pattern": r"\d+", "operator": ">=", "value": 1.23456},
+            "value",
+            1.23456,
+        ),
+        (
+            "detect",
+            {"text": "戰鬥", "fuzzy_threshold": 0.855},
+            "fuzzy_threshold",
+            0.855,
+        ),
+    ],
+    ids=["click", "scroll", "compare", "detect"],
+)
+def test_editing_other_field_does_not_rewrite_numeric(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    expected,
+):
+    """改了別的欄位再存檔，數值欄位仍必須保持原值。
+
+    wait 步驟只有 ms 一個欄位，無法改「別的欄位」，故不列入本測試。
+    """
+    win = real_mainwindow
+    step = make_step(step_type, **params)
+    write_task("t1", [make_rule("r0", "規則零", [step])])
+    win._on_task_changed("t1")
+    _expand_step_form(win, 0)
+    form = win._step_list._expanded_form
+    # 動一個「不是數值欄位」的東西
+    if step_type == "detect":
+        form._text.setText("別的字")
+    elif step_type == "compare":
+        form._pattern.setText(r"\d{2}")
+    elif step_type == "scroll":
+        form._direction.setCurrentIndex(form._direction.findData("WheelDown"))
+    else:
+        form._target.setCurrentIndex(form._target.findData("cursor"))
+    assert win._flush_save()
+    disk = _disk_step_params(isolated_data_dir, "t1")
+    assert disk[field] == expected, f"改其他欄位後 {step_type}.{field} 變成 {disk[field]!r}"
+
+
+# ── 6-7：使用者主動修改數值欄位後才寫入新值 ──────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "step_type,params,field,new_value",
+    [
+        ("wait", {"ms": 120000}, "ms", 500),
+        ("click", {"target": "cursor", "random_offset": 150}, "random_offset", 5),
+        ("scroll", {"direction": "WheelUp", "amount": 100}, "amount", 3),
+        ("compare", {"pattern": r"\d+", "operator": ">=", "value": 1.23456}, "value", 9.5),
+        ("detect", {"text": "戰鬥", "fuzzy_threshold": 0.855}, "fuzzy_threshold", 0.9),
+    ],
+    ids=["wait", "click", "scroll", "compare", "detect"],
+)
+def test_user_edit_replaces_preserved_value(
+    real_mainwindow,
+    write_task,
+    make_step,
+    make_rule,
+    isolated_data_dir,
+    step_type,
+    params,
+    field,
+    new_value,
+):
+    """使用者主動改過數值欄位 → 保存新值（不是保留原值）。"""
+    win = real_mainwindow
+    step = make_step(step_type, **params)
+    write_task("t1", [make_rule("r0", "規則零", [step])])
+    win._on_task_changed("t1")
+    _expand_step_form(win, 0)
+    form = win._step_list._expanded_form
+    widget = {
+        "ms": lambda: form._ms,
+        "random_offset": lambda: form._offset,
+        "amount": lambda: form._amount,
+        "value": lambda: form._value,
+        "fuzzy_threshold": lambda: form._fuzzy_th,
+    }[field]()
+    widget.setValue(new_value)
+    assert win._flush_save()
+    disk = _disk_step_params(isolated_data_dir, "t1")
+    assert disk[field] == new_value, (
+        f"{step_type}.{field} 應保存新值 {new_value!r}，實際 {disk[field]!r}"
+    )
+
+
+# ── 6-8：GUI 範圍不得因本階段被放寬 ──────────────────────────────────────
+
+
+def test_gui_numeric_ranges_not_widened(qt_app):
+    """Phase 2-7d-2b-1 只修精度與資料保全，不得放寬任何數值上限。"""
+    from _loader import load_sibling
+
+    gui = load_sibling("gui_main", "gui/06_gui_main.py")
+    models = load_sibling("rule_models", "core/rule_models.py")
+    Step = models.Step
+
+    cmp_form = gui._CompareStepForm(
+        None, Step("compare", {"value": 0.0, "pattern": r"\d+", "operator": ">="}), 0, None
+    )
+    assert cmp_form._value.minimum() == -999999.0
+    assert cmp_form._value.maximum() == 999999.0
+
+    det_form = gui._DetectStepForm(None, Step("detect", {"text": "x"}), 0, None)
+    assert det_form._fuzzy_th.minimum() == 0.0
+    assert det_form._fuzzy_th.maximum() == 1.0
+    assert det_form._fuzzy_th.decimals() == 3
+
+    wait = gui._WaitStepForm(None, Step("wait", {"ms": 500}), 0)
+    assert wait._ms.minimum() == 0
+    assert wait._ms.maximum() == 60000
+
+    click = gui._ClickStepForm(None, Step("click", {"target": "cursor"}), 0, None, None, None, None)
+    assert click._offset.minimum() == 0
+    assert click._offset.maximum() == 100
+    assert click._after_delay.maximum() == 60000
+
+    scroll = gui._ScrollStepForm(
+        None, Step("scroll", {"direction": "WheelUp"}), 0, None, None, None
+    )
+    assert scroll._amount.minimum() == 1
+    assert scroll._amount.maximum() == 99

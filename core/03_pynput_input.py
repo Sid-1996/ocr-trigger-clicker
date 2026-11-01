@@ -11,6 +11,59 @@ _lock = threading.Lock()
 _Key = pynput.keyboard.Key
 _Button = pynput.mouse.Button
 
+
+class _PressLedger:
+    """記錄「已確認 press 成功」的輸入，離開時依 LIFO 逐項嘗試釋放。
+
+    語義：
+    - 只有 press 呼叫成功回來才登記；未登記者一律不送出 release（不誤放）。
+    - 釋放順序為 press 的相反順序（LIFO），多鍵組合才不會先放掉仍在使用的修飾鍵。
+    - 每一項釋放各自 try/except：某一項失敗不得阻止其餘已登記項目的釋放。
+    - 釋放失敗會記 warning，不得靜默。
+
+    提供的是「盡可能嘗試釋放」，不是 OS 層的絕對成功保證——真實按鍵／按鈕是否
+    真的放開取決於作業系統與目標視窗，程式端無法百分之百確認。
+    """
+
+    def __init__(self) -> None:
+        self._held: list[tuple[str, object]] = []
+
+    def record(self, label: str, release_fn) -> None:
+        """登記一個已確認 press 成功的輸入及其釋放動作。"""
+        self._held.append((label, release_fn))
+
+    def release_all(self) -> int:
+        """依相反順序逐項嘗試釋放；回傳失敗的項目數。一次操作只應呼叫一次。"""
+        failures = 0
+        for label, release_fn in reversed(self._held):
+            try:
+                release_fn()
+            except Exception as e:
+                failures += 1
+                _log.warning("釋放 %s 失敗: %s", label, e)
+        self._held.clear()
+        return failures
+
+    def __enter__(self) -> "_PressLedger":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.release_all()
+        return False  # 不吞掉原始例外
+
+
+def _interruptible_wait(ms: int, cancel=None) -> bool:
+    """等待 ms 毫秒；回傳 True 代表等待期間被取消。
+
+    cancel is None 時保留舊有的 time.sleep 行為，既有呼叫者零影響。
+    """
+    if cancel is None:
+        if ms > 0:
+            time.sleep(ms / 1000.0)
+        return False
+    return cancel.wait(timeout=max(0.0, ms / 1000.0))
+
+
 _KEY_MAP: dict[str, pynput.keyboard.Key] = {
     "enter": _Key.enter,
     "escape": _Key.esc,
@@ -94,19 +147,23 @@ def _parse_key(key: str):
     return None
 
 
-def _send_simple_key(key: str) -> bool:
+def _send_simple_key(key: str, cancel=None) -> bool:
     parsed = _parse_key(key)
     if parsed is None:
         _log.warning("無法解析按鍵: %s", key)
         return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過按鍵 %s", key)
+        return False
     kb = pynput.keyboard.Controller()
-    kb.press(parsed)
-    time.sleep(0.02)
-    kb.release(parsed)
+    with _PressLedger() as ledger:
+        kb.press(parsed)
+        ledger.record(f"按鍵 {parsed}", lambda: kb.release(parsed))
+        _interruptible_wait(20, cancel)
     return True
 
 
-def _send_ctrl_combo(combo: str) -> bool:
+def _send_ctrl_combo(combo: str, cancel=None) -> bool:
     if len(combo) < 2 or combo[0] != "^":
         return False
     rest = combo[1:]
@@ -115,12 +172,18 @@ def _send_ctrl_combo(combo: str) -> bool:
     char_key = _parse_key(rest)
     if char_key is None:
         return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過組合鍵 %s", combo)
+        return False
     kb = pynput.keyboard.Controller()
-    kb.press(_Key.ctrl)
-    kb.press(char_key)
-    time.sleep(0.02)
-    kb.release(char_key)
-    kb.release(_Key.ctrl)
+    # 多鍵組合：Ctrl 與字元都要登記，釋放依 LIFO（先字元、後 Ctrl）。
+    # 第二個 press 失敗時只會釋放已登記的 Ctrl，不會誤送字元 release。
+    with _PressLedger() as ledger:
+        kb.press(_Key.ctrl)
+        ledger.record("Ctrl 鍵", lambda: kb.release(_Key.ctrl))
+        kb.press(char_key)
+        ledger.record(f"按鍵 {char_key}", lambda: kb.release(char_key))
+        _interruptible_wait(20, cancel)
     return True
 
 
@@ -149,48 +212,63 @@ def _validate_coords(x: int, y: int) -> bool:
     return True
 
 
-def send_click(x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
+def send_click(x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None) -> bool:
     if not _validate_coords(x, y):
+        return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過點擊 (%d,%d)", x, y)
         return False
     btn = {"left": _Button.left, "right": _Button.right, "middle": _Button.middle}.get(
         button, _Button.left
     )
     mouse = pynput.mouse.Controller()
     with _lock:
-        mouse.position = (x, y)
-        time.sleep(0.01)
-        mouse.press(btn)
-        if hold_ms > 0:
-            time.sleep(hold_ms / 1000.0)
-        mouse.release(btn)
+        if cancel is not None and cancel.is_set():
+            return False
+        with _PressLedger() as ledger:
+            mouse.position = (x, y)
+            time.sleep(0.01)
+            mouse.press(btn)
+            ledger.record(f"滑鼠按鈕 {btn}", lambda: mouse.release(btn))
+            if hold_ms > 0:
+                _interruptible_wait(hold_ms, cancel)
     return True
 
 
-def send_key(key: str) -> bool:
+def send_key(key: str, cancel=None) -> bool:
     key = key.strip().replace("\n", "").replace("\r", "")
     if not key:
         return False
     with _lock:
         if key.startswith("^") and len(key) == 2:
-            return _send_ctrl_combo(key)
-        return _send_simple_key(key)
+            return _send_ctrl_combo(key, cancel)
+        return _send_simple_key(key, cancel)
 
 
-def send_drag(x1: int, y1: int, x2: int, y2: int, button: str = "left") -> bool:
+def send_drag(x1: int, y1: int, x2: int, y2: int, button: str = "left", cancel=None) -> bool:
     if not _validate_coords(x1, y1) or not _validate_coords(x2, y2):
+        return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過拖曳")
         return False
     btn = {"left": _Button.left, "right": _Button.right, "middle": _Button.middle}.get(
         button, _Button.left
     )
     mouse = pynput.mouse.Controller()
     with _lock:
-        mouse.position = (x1, y1)
-        time.sleep(0.02)
-        mouse.press(btn)
-        time.sleep(0.02)
-        mouse.position = (x2, y2)
-        time.sleep(0.02)
-        mouse.release(btn)
+        if cancel is not None and cancel.is_set():
+            return False
+        with _PressLedger() as ledger:
+            mouse.position = (x1, y1)
+            time.sleep(0.02)
+            mouse.press(btn)
+            ledger.record(f"滑鼠按鈕 {btn}", lambda: mouse.release(btn))
+            if cancel is not None and cancel.is_set():
+                _log.info("拖曳已取消，提前放開滑鼠按鈕")
+                return True
+            time.sleep(0.02)
+            mouse.position = (x2, y2)
+            time.sleep(0.02)
     return True
 
 
@@ -211,7 +289,7 @@ def send_scroll(amount: int = 1, direction: str = "WheelDown") -> bool:
     return True
 
 
-def send_hold_key(key: str, duration_ms: int = 0) -> bool:
+def send_hold_key(key: str, duration_ms: int = 0, cancel=None) -> bool:
     key = key.strip().replace("\n", "").replace("\r", "")
     if not key:
         return False
@@ -219,12 +297,18 @@ def send_hold_key(key: str, duration_ms: int = 0) -> bool:
     if parsed is None:
         _log.warning("無法解析按鍵: %s", key)
         return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過按住 %s", key)
+        return False
     kb = pynput.keyboard.Controller()
     with _lock:
-        kb.press(parsed)
-        if duration_ms > 0:
-            time.sleep(duration_ms / 1000.0)
-        kb.release(parsed)
+        if cancel is not None and cancel.is_set():
+            return False
+        with _PressLedger() as ledger:
+            kb.press(parsed)
+            ledger.record(f"按鍵 {parsed}", lambda: kb.release(parsed))
+            if duration_ms > 0:
+                _interruptible_wait(duration_ms, cancel)
     return True
 
 
@@ -279,4 +363,27 @@ if __name__ == "__main__":
     assert send_emergency_stop() is True
     print("  [OK] send_emergency_stop noop")
 
-    print("\n=== All 8 tests passed ===")
+    # Ledger 與可取消等待（不觸碰真實輸入設備）
+    released = []
+    led = _PressLedger()
+    led.record("A", lambda: released.append("A"))
+    led.record("B", lambda: released.append("B"))
+    assert led.release_all() == 0
+    assert released == ["B", "A"], "釋放必須依 press 的相反順序（LIFO）"
+    assert led.release_all() == 0, "release_all 不得重複釋放"
+
+    others = []
+    led2 = _PressLedger()
+    led2.record("X", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    led2.record("Y", lambda: others.append("Y"))
+    assert led2.release_all() == 1, "釋放失敗必須被計數"
+    assert others == ["Y"], "某一項釋放失敗不得阻止其他已登記項目"
+
+    ev = threading.Event()
+    assert _interruptible_wait(0, ev) is False
+    ev.set()
+    assert _interruptible_wait(0, ev) is True, "已取消時必須回報 True"
+    assert _interruptible_wait(1, None) is False, "cancel=None 必須維持舊行為"
+    print("  [OK] _PressLedger / _interruptible_wait")
+
+    print("\n=== All 9 tests passed ===")

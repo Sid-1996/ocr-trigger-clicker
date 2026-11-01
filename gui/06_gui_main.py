@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -137,6 +138,75 @@ class _NoWheelDoubleSpin(QDoubleSpinBox):
         e.ignore()
 
 
+def _num_to_int(raw, default):
+    """轉成 QSpinBox 可接受的 int；無法轉換時回 default。"""
+    try:
+        return int(raw)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _num_is_finite(raw) -> bool:
+    """是否為有限數值（None／NaN／±Infinity／非數值皆 False）。"""
+    try:
+        return math.isfinite(float(raw))
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _num_to_finite_float(raw, default):
+    """轉成有限浮點數；None／NaN／±Infinity／非數值皆回 default。"""
+    return float(raw) if _num_is_finite(raw) else default
+
+
+class _RawValue:
+    """數值欄位的「原始值保全」：使用者沒改過就寫回原始值。
+
+    既有任務 JSON 的數值可能超出 widget 可表示範圍（wait.ms=120000 而 GUI
+    上限 60000）、精度被 widget 截斷（fuzzy_threshold=0.8555 而小數位 3），
+    或值本身無效（compare.value=null）。直接寫回 widget 的值，等於在使用者
+    完全沒動過的情況下靜默改寫既有資料。
+
+    這裡記住原始值與「使用者是否真的改過」：未編輯時保存原值，使用者主動
+    改過才保存 widget 的新值。原始值只存在於 Step.params，表單重建後仍可恢復。
+    """
+
+    def __init__(self, widget, raw):
+        self._widget = widget
+        self._raw = raw
+        self._dirty = False
+        self._initial = widget.value()
+        # 在初始 setValue 之後才綁定 → 初始化不會被當成使用者修改
+        widget.valueChanged.connect(self._on_changed)
+
+    def _on_changed(self, *_args):
+        if self._widget.value() != self._initial:
+            self._dirty = True
+
+    @property
+    def dirty(self) -> bool:
+        return self._dirty
+
+    def value(self):
+        """保存時應寫入的值。"""
+        return self._widget.value() if self._dirty else self._raw
+
+
+def _bind_raw_value(widget, raw, shown):
+    """回填數值欄位並回傳 _RawValue 保管物件（未編輯時保存 raw）。
+
+    shown 是 widget 實際顯示的值；raw 無法被 widget 表示時（超出範圍或精度）
+    由呼叫端給暫存安全值，這裡額外附上提示讓使用者知道原始值被保留。
+    """
+    widget.setValue(shown)
+    keeper = _RawValue(widget, raw)
+    if raw is not None and widget.value() != raw:
+        old = widget.toolTip()
+        note = T("step_form.value_kept", value=raw)
+        widget.setToolTip(f"{old}\n{note}" if old else note)
+    return keeper
+
+
 def _rule_own_group_id(rule_id: str, groups_provider) -> Optional[str]:
     """回傳包含該規則的群組 id（支援 dict 與 RuleGroup 物件）；找不到回 None。"""
     if not rule_id or not groups_provider:
@@ -269,6 +339,25 @@ def _populate_rule_combo(combo, rules, groups=None, exclude_rule_id=""):
         combo.addItem(r.name, r.id)
 
 
+def _select_combo_keep_unknown(combo, value) -> bool:
+    """在 ComboBox 中選取 value；清單沒有這個值時保留原值，不得靜默換成第一項。
+
+    找不到時補一個顯示為「(未知: value)」的項目並選中，
+    儲存時 combo.currentData() 就會寫回原值 → 未知值不會被第一個選項覆蓋。
+
+    與 `_JumpStepForm` 及 on_fail 跳轉下拉的既有做法一致。
+    """
+    idx = combo.findData(value)
+    if idx >= 0:
+        combo.setCurrentIndex(idx)
+        return True
+    if value:
+        combo.addItem(T("step_form.unknown_rule", id=value), value)
+        combo.setCurrentIndex(combo.count() - 1)
+        return True
+    return False
+
+
 def _fmt_roi(roi: dict) -> str:
     x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
     if w <= 1.0 and h <= 1.0 and not (x == 0 and y == 0 and w == 0 and h == 0):
@@ -348,7 +437,9 @@ def _step_summary(step, rules_provider=None) -> str:
         val = p.get("value", 0.0)
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-        parts = [f"{op} {val}"]
+        # 無效值（None）顯示為「無效」，不可顯示成 0.0（會誤導成可用的門檻）
+        val_text = T("summary.value_invalid") if val is None else val
+        parts = [f"{op} {val_text}"]
         parts.append(T("summary.whole_window") if zero_roi else _fmt_roi(roi))
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
         if of:
@@ -506,6 +597,17 @@ def _test_log_html(log_text: str, dead_lines) -> str:
     return "<br>".join(parts)
 
 
+def _core_key_names() -> tuple[str, ...]:
+    """Core（core/03_pynput_input.py）真正能解析的按鍵名稱。
+
+    Core 是按鍵支援的事實來源：GUI 不另外維護一份按鍵清單，
+    只補上「Core 支援、但既有 GUI 清單未提供」的鍵。
+    """
+    names = set(getattr(_input_mod, "_KEY_MAP", {}) or {})
+    names |= set(getattr(_input_mod, "_NUMPAD_VK", {}) or {})
+    return tuple(sorted(names))
+
+
 def _make_key_combo(parent=None):
     cb = _KeyCombo(parent)
     for group in [
@@ -590,6 +692,17 @@ def _make_key_combo(parent=None):
                 text, data = item
             else:
                 text = data = item
+            cb.addItem(text, data)
+    # Core 支援、但上面清單未提供的鍵自動補齊（以小寫比較）。
+    # 少了這一步，合法按鍵（例如 capslock / win / lshift）不在下拉中，
+    # 載入既有任務時會找不到項目而落到第一項，存檔時就把原值清空（D-1）。
+    existing = {
+        cb.itemData(i).lower() for i in range(cb.count()) if isinstance(cb.itemData(i), str)
+    }
+    extra = [(n.capitalize(), n) for n in _core_key_names() if n.lower() not in existing]
+    if extra:
+        cb.insertSeparator(cb.count())
+        for text, data in extra:
             cb.addItem(text, data)
     cb.setCurrentIndex(0)
     return cb
@@ -1145,7 +1258,11 @@ class _MatchImageStepForm(QWidget):
         self._after_delay.setRange(0, 60000)
         self._after_delay.setSingleStep(100)
         self._after_delay.setSuffix(" ms")
-        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        # 超出 GUI 上限但 Core 合法的既有值（after_delay_ms=120000）：未編輯時保留原值
+        _raw_after_delay = p.get("after_delay_ms", 0)
+        self._after_delay_raw = _bind_raw_value(
+            self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
+        )
         self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
         form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
         # Verify 已收斂至動作四類（ADR-0005），圖片比對不再提供驗證入口
@@ -1808,16 +1925,22 @@ class _DetectStepForm(QWidget):
         ]
         for i in range(self._match_mode.count()):
             self._match_mode.setItemData(i, _tt[i], Qt.ItemDataRole.ToolTipRole)
-        idx_mm = self._match_mode.findData(p.get("match_mode", "fuzzy"))
-        if idx_mm >= 0:
-            self._match_mode.setCurrentIndex(idx_mm)
+        # 未知比對模式保留原值，不得靜默換成第一項（D-3）
+        _select_combo_keep_unknown(self._match_mode, p.get("match_mode", "fuzzy"))
         self._match_mode.currentIndexChanged.connect(self._on_match_mode_changed)
         adv_form.addRow(T("step_form.compare_mode"), self._match_mode)
 
-        self._fuzzy_th = _NoWheelSpin()
-        self._fuzzy_th.setRange(1, 100)
-        self._fuzzy_th.setSuffix(" %")
-        self._fuzzy_th.setValue(int(p.get("fuzzy_threshold", 0.8) * 100))
+        self._fuzzy_th = _NoWheelDoubleSpin()
+        self._fuzzy_th.setRange(0.0, 1.0)
+        self._fuzzy_th.setDecimals(3)
+        self._fuzzy_th.setSingleStep(0.05)
+        # 直接用浮點門檻（Core 的 [0,1] 語義），不再做 int(×100)/÷100 往返：
+        # 整數百分比會讓 0.29/0.57/0.58 因 IEEE754 誤差掉位，0.855 也被截斷。
+        _raw_fuzzy_th = p.get("fuzzy_threshold", 0.8)
+        self._fuzzy_th_raw = _bind_raw_value(
+            self._fuzzy_th, _raw_fuzzy_th, _num_to_finite_float(_raw_fuzzy_th, 0.8)
+        )
+        self._fuzzy_th.setToolTip(T("settings.default_fuzzy_threshold.tooltip"))
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
         adv_form.addRow(T("step_form.accuracy"), self._fuzzy_th)
 
@@ -1825,7 +1948,11 @@ class _DetectStepForm(QWidget):
         self._after_delay.setRange(0, 60000)
         self._after_delay.setSingleStep(100)
         self._after_delay.setSuffix(" ms")
-        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        # 超出 GUI 上限但 Core 合法的既有值（after_delay_ms=120000）：未編輯時保留原值
+        _raw_after_delay = p.get("after_delay_ms", 0)
+        self._after_delay_raw = _bind_raw_value(
+            self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
+        )
         self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
         adv_form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
 
@@ -2052,8 +2179,8 @@ class _DetectStepForm(QWidget):
     def save(self):
         self._step.params["text"] = self._text.text().strip()
         self._step.params["match_mode"] = self._match_mode.currentData()
-        self._step.params["fuzzy_threshold"] = self._fuzzy_th.value() / 100.0
-        self._step.params["after_delay_ms"] = self._after_delay.value()
+        self._step.params["fuzzy_threshold"] = self._fuzzy_th_raw.value()
+        self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":
@@ -3209,6 +3336,15 @@ class _VerifyWidget(QWidget):
             if not isinstance(_skip_to, (int, float)):
                 _skip_to = self._step_count
             verify["on_fail"] = {"action": "skip", "skip_to": int(_skip_to)}
+        # GUI 沒有編輯介面的欄位必須原樣帶回：上方是「整份重建」verify，
+        # 只放 GUI 管理的欄位，其餘（capture_size / template / match_color /
+        # color_tolerance / color_mask…）會被刪掉。少了 capture_size 會讓跨解析度
+        # 比對退回任務級尺寸而失準；少了 legacy template 路徑會讓重載時
+        # verify 被判定無效而整個消失。已存在於 GUI 管理的欄位一律不覆蓋。
+        if isinstance(cur, dict):
+            for _k, _v in cur.items():
+                if _k not in verify:
+                    verify[_k] = _v
         self._step.params["verify"] = verify
 
 
@@ -3247,9 +3383,8 @@ class _ClickStepForm(QWidget):
         )
         self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
         self._target.setItemData(2, T("step_form.target_cursor_tip"), Qt.ItemDataRole.ToolTipRole)
-        t_idx = self._target.findData(p.get("target", "text_center"))
-        if t_idx >= 0:
-            self._target.setCurrentIndex(t_idx)
+        # 未知目標保留原值，不得靜默換成第一項（D-3）
+        _select_combo_keep_unknown(self._target, p.get("target", "text_center"))
         self._target.currentIndexChanged.connect(self._on_target_changed)
         form.addRow(T("step_form.click_target"), self._target)
 
@@ -3280,7 +3415,9 @@ class _ClickStepForm(QWidget):
         self._offset = _NoWheelSpin()
         self._offset.setRange(0, 100)
         self._offset.setSuffix(" px")
-        self._offset.setValue(p.get("random_offset", 3))
+        # 超出 GUI 上限但 Core 合法的既有值（random_offset=150）：未編輯時保留原值
+        _raw_offset = p.get("random_offset", 3)
+        self._offset_raw = _bind_raw_value(self._offset, _raw_offset, _num_to_int(_raw_offset, 3))
         adv_form.addRow(T("format.random_jitter"), self._offset)
 
         self._hold_ms = _NoWheelSpin()
@@ -3293,7 +3430,11 @@ class _ClickStepForm(QWidget):
         self._after_delay = _NoWheelSpin()
         self._after_delay.setRange(0, 60000)
         self._after_delay.setSuffix(" ms")
-        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        # 超出 GUI 上限但 Core 合法的既有值（after_delay_ms=120000）：未編輯時保留原值
+        _raw_after_delay = p.get("after_delay_ms", 0)
+        self._after_delay_raw = _bind_raw_value(
+            self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
+        )
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         adv_form.addRow(T("step_form.after_delay_label"), self._after_delay)
 
@@ -3332,9 +3473,9 @@ class _ClickStepForm(QWidget):
     def save(self):
         self._step.params["target"] = self._target.currentData()
         self._step.params["button"] = self._button.currentData()
-        self._step.params["random_offset"] = self._offset.value()
+        self._step.params["random_offset"] = self._offset_raw.value()
         self._step.params["hold_ms"] = self._hold_ms.value()
-        self._step.params["after_delay_ms"] = self._after_delay.value()
+        self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         try:
             self._verify.save()
         except Exception:
@@ -3374,9 +3515,8 @@ class _DragStepForm(QWidget):
             0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
         )
         self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
-        t_idx = self._target.findData(p.get("target", "text_center"))
-        if t_idx >= 0:
-            self._target.setCurrentIndex(t_idx)
+        # 未知目標保留原值，不得靜默換成第一項（D-3）
+        _select_combo_keep_unknown(self._target, p.get("target", "text_center"))
         self._target.currentIndexChanged.connect(self._on_target_changed)
         form.addRow(T("step_form.drag_start"), self._target)
 
@@ -3414,7 +3554,11 @@ class _DragStepForm(QWidget):
         self._after_delay = _NoWheelSpin()
         self._after_delay.setRange(0, 60000)
         self._after_delay.setSuffix(" ms")
-        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        # 超出 GUI 上限但 Core 合法的既有值（after_delay_ms=120000）：未編輯時保留原值
+        _raw_after_delay = p.get("after_delay_ms", 0)
+        self._after_delay_raw = _bind_raw_value(
+            self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
+        )
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         form.addRow(T("step_form.after_delay_label"), self._after_delay)
         self._verify = _VerifyWidget(
@@ -3452,7 +3596,7 @@ class _DragStepForm(QWidget):
         self._step.params["dx"] = self._dx.value()
         self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
-        self._step.params["after_delay_ms"] = self._after_delay.value()
+        self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         try:
             self._verify.save()
         except Exception:
@@ -3488,14 +3632,15 @@ class _ScrollStepForm(QWidget):
         self._direction.addItem(T("summary.up"), "WheelUp")
         self._direction.addItem(T("summary.left"), "WheelLeft")
         self._direction.addItem(T("summary.right"), "WheelRight")
-        d_idx = self._direction.findData(p.get("direction", "WheelDown"))
-        if d_idx >= 0:
-            self._direction.setCurrentIndex(d_idx)
+        # 未知方向保留原值，不得靜默換成第一項（D-3）
+        _select_combo_keep_unknown(self._direction, p.get("direction", "WheelDown"))
         form.addRow(T("step_form.direction"), self._direction)
 
         self._amount = _NoWheelSpin()
         self._amount.setRange(1, 99)
-        self._amount.setValue(p.get("amount", 1))
+        # 超出 GUI 上限但 Core 合法的既有值（amount=100）：未編輯時保留原值
+        _raw_amount = p.get("amount", 1)
+        self._amount_raw = _bind_raw_value(self._amount, _raw_amount, _num_to_int(_raw_amount, 1))
         form.addRow(T("step_form.times"), self._amount)
 
         self._delay = _NoWheelSpin()
@@ -3508,7 +3653,11 @@ class _ScrollStepForm(QWidget):
         self._after_delay = _NoWheelSpin()
         self._after_delay.setRange(0, 60000)
         self._after_delay.setSuffix(" ms")
-        self._after_delay.setValue(p.get("after_delay_ms", 0))
+        # 超出 GUI 上限但 Core 合法的既有值（after_delay_ms=120000）：未編輯時保留原值
+        _raw_after_delay = p.get("after_delay_ms", 0)
+        self._after_delay_raw = _bind_raw_value(
+            self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
+        )
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         form.addRow(T("step_form.after_delay_label"), self._after_delay)
         self._verify = _VerifyWidget(
@@ -3528,9 +3677,9 @@ class _ScrollStepForm(QWidget):
 
     def save(self):
         self._step.params["direction"] = self._direction.currentData()
-        self._step.params["amount"] = self._amount.value()
+        self._step.params["amount"] = self._amount_raw.value()
         self._step.params["delay_ms"] = self._delay.value()
-        self._step.params["after_delay_ms"] = self._after_delay.value()
+        self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         try:
             self._verify.save()
         except Exception:
@@ -3589,17 +3738,33 @@ class _CompareStepForm(QWidget):
         self._operator = _NoWheelCombo()
         for op in (">", "<", ">=", "<=", "==", "!="):
             self._operator.addItem(op, op)
-        op_idx = self._operator.findData(p.get("operator", ">="))
-        if op_idx >= 0:
-            self._operator.setCurrentIndex(op_idx)
+        # 未知運算子保留原值，不得靜默換成第一項（D-3）
+        _select_combo_keep_unknown(self._operator, p.get("operator", ">="))
         form.addRow(T("step_form.compare_mode"), self._operator)
 
         # Value
         self._value = _NoWheelDoubleSpin()
         self._value.setRange(-999999.0, 999999.0)
-        self._value.setDecimals(3)
-        self._value.setValue(p.get("value", 0.0))
-        form.addRow(T("step_form.value"), self._value)
+        # 15 位小數：Core 的比較是精確浮點比較，3 位會讓 1.23456 被四捨五入成
+        # 1.235，使 "==" 運算子的判定結果改變（原本成立變成不成立）。
+        self._value.setDecimals(15)
+        # 無效值（null / NaN / ±Infinity）→ 顯示暫存安全值，但保存時保留 None，
+        # 不可在此把 None 轉成 0.0（0.0 在 >= / > / != 之下會讓條件恆成立）。
+        _raw_value = p.get("value", 0.0)
+        _value_invalid = not _num_is_finite(_raw_value)
+        self._value.setValue(0.0 if _value_invalid else float(_raw_value))
+        self._value_raw = _RawValue(self._value, _raw_value)
+        self._value_hint = QLabel(T("step_form.value_invalid"))
+        self._value_hint.setStyleSheet("color: #e67e22;")
+        self._value_hint.setVisible(_value_invalid)
+        self._value.valueChanged.connect(self._on_value_changed)
+        _value_row = QWidget()
+        _vr = QHBoxLayout(_value_row)
+        _vr.setContentsMargins(0, 0, 0, 0)
+        _vr.addWidget(self._value)
+        _vr.addWidget(self._value_hint)
+        _vr.addStretch(1)
+        form.addRow(T("step_form.value"), _value_row)
 
         # ── Advanced collapsible section ──
         self._toggle_btn = QPushButton(T("step_form.toggle_compare_collapsed"))
@@ -3766,7 +3931,7 @@ class _CompareStepForm(QWidget):
         if "roi_coord" in self._roi:
             self._step.params["roi"]["roi_coord"] = self._roi["roi_coord"]
         self._step.params["operator"] = self._operator.currentData()
-        self._step.params["value"] = self._value.value()
+        self._step.params["value"] = self._value_raw.value()
         self._step.params["pattern"] = self._pattern.text().strip()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
@@ -3849,6 +4014,11 @@ class _CompareStepForm(QWidget):
         is_notify = action == "notify"
         _set_form_row_visible(self._of_form, self._of_notify_msg, is_notify)
         _set_form_row_visible(self._of_form, self._of_notify_groups, is_notify)
+
+    def _on_value_changed(self, *_args):
+        """使用者主動改過比較數值 → 隱藏「數值無效」提示。"""
+        if self._value_raw.dirty:
+            self._value_hint.setVisible(False)
 
 
 class _SumStepForm(QWidget):
@@ -3938,7 +4108,16 @@ class _KeyStepForm(QWidget):
 
         self._key = _make_key_combo()
         k = step.params.get("key", "")
+        self._orig_key = k
         k_idx = self._key.findData(k)
+        if k_idx < 0 and isinstance(k, str) and k:
+            # 大小寫不同的同一個鍵（例如既有資料 "numpad5" 對應下拉的 "Numpad5"）：
+            # 必須選中對應項目，否則會落到第一項，存檔時原值就被清空（D-1）。
+            for i in range(self._key.count()):
+                data = self._key.itemData(i)
+                if isinstance(data, str) and data.lower() == k.lower():
+                    k_idx = i
+                    break
         if k_idx >= 0:
             self._key.setCurrentIndex(k_idx)
         form.addRow(T("step_form.key_label"), self._key)
@@ -3953,7 +4132,11 @@ class _KeyStepForm(QWidget):
         self._after_delay = _NoWheelSpin()
         self._after_delay.setRange(0, 60000)
         self._after_delay.setSuffix(" ms")
-        self._after_delay.setValue(step.params.get("after_delay_ms", 0))
+        # 超出 GUI 上限但 Core 合法的既有值（after_delay_ms=120000）：未編輯時保留原值
+        _raw_after_delay = step.params.get("after_delay_ms", 0)
+        self._after_delay_raw = _bind_raw_value(
+            self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
+        )
         self._after_delay.setToolTip(T("tooltip.after_delay"))
         form.addRow(T("step_form.after_delay_label"), self._after_delay)
         self._verify = _VerifyWidget(
@@ -3972,9 +4155,20 @@ class _KeyStepForm(QWidget):
         form.addRow(self._verify)
 
     def save(self):
-        self._step.params["key"] = self._key.currentData() or self._key.currentText()
+        cur = self._key.currentData() or self._key.currentText()
+        orig = self._orig_key
+        # 只是大小寫不同、其實是同一個鍵 → 保留使用者原本的寫法，不改動既有資料。
+        if (
+            isinstance(cur, str)
+            and isinstance(orig, str)
+            and orig
+            and cur != orig
+            and cur.lower() == orig.lower()
+        ):
+            cur = orig
+        self._step.params["key"] = cur
         self._step.params["hold_ms"] = self._hold_ms.value()
-        self._step.params["after_delay_ms"] = self._after_delay.value()
+        self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         try:
             self._verify.save()
         except Exception:
@@ -3993,12 +4187,15 @@ class _WaitStepForm(QWidget):
         self._ms.setRange(0, 60000)
         self._ms.setSuffix(" ms")
         self._ms.setToolTip(T("tooltip.wait_ms"))
-        self._ms.setValue(step.params.get("ms", 500))
+        # 超出 GUI 上限但 Core 合法的既有值（wait.ms=120000）：未編輯時保留原值，
+        # 使用者主動改過才寫入 widget 的新值（避免靜默截斷既有資料）。
+        _raw_ms = step.params.get("ms", 500)
+        self._ms_raw = _bind_raw_value(self._ms, _raw_ms, _num_to_int(_raw_ms, 500))
         self._ms.editingFinished.connect(lambda: self._list.steps_changed.emit())
         form.addRow(T("step_form.milliseconds"), self._ms)
 
     def save(self):
-        self._step.params["ms"] = self._ms.value()
+        self._step.params["ms"] = self._ms_raw.value()
 
 
 class _JumpStepForm(QWidget):
@@ -4234,6 +4431,7 @@ _test_run_mod = load_sibling("run_controller", "gui/run_controller.py")
 TestRunController = _test_run_mod.TestRunController
 
 _ocr_mod = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+_input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _perf_mod = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 _tmpl_mod = load_sibling("template_matching", "core/11_template_matching.py")
 
@@ -4553,7 +4751,8 @@ class SettingsDialog(QDialog):
         self._fuzzy_th = QDoubleSpinBox()
         self._fuzzy_th.setRange(0.5, 0.95)
         self._fuzzy_th.setSingleStep(0.05)
-        self._fuzzy_th.setDecimals(2)
+        # 小數位與 Step 表單對齊（3 位），避免同一語意存在兩套精度定義
+        self._fuzzy_th.setDecimals(3)
         self._fuzzy_th.setValue(self._ctrl.get_setting(win, "default_fuzzy_threshold"))
         self._fuzzy_th.setToolTip(T("settings.default_fuzzy_threshold.tooltip"))
         aform.addRow(T("settings.default_fuzzy_threshold"), self._fuzzy_th)
@@ -5775,6 +5974,18 @@ class MainWindow(QMainWindow):
             # 加入既有任務成群組。先把 merged 寫檔，並在「合併目標＝當前任務」時
             # 同步記憶體狀態，避免 _refresh_task_list 內部的 debounced save 用舊狀態
             # 覆寫剛合併的檔案；目標為其他任務時則保留現狀（flush 仍寫回原當前任務）。
+            if merge_into == getattr(self, "_current_task", ""):
+                # 合併目標就是目前開啟的任務：先把 GUI 記憶體中的編輯資料完整落地，
+                # 否則下面 load_task() 讀到的是磁碟舊版，會蓋掉尚未存檔的修改
+                # （含展開中 Step 表單尚未觸發 editingFinished 的欄位值）。
+                # _flush_save() 內含 _commit_open_step_form()（提交展開中的表單），
+                # 且會先 stop() 掉 pending 的 debounce timer，因此合併完成後
+                # 不會有舊的 pending save 反向覆寫剛合併的結果。
+                # 保存失敗必須中止合併：不可拿磁碟舊版繼續合併，否則仍會遺失資料。
+                if not self._flush_save():
+                    if not self._task_load_failed:
+                        self._report_task_save_failed()
+                    return
             try:
                 existing_rules = load_task(merge_into)
                 existing_groups = load_groups(str(tasks_dir / f"{merge_into}.json"))
@@ -7078,6 +7289,37 @@ class MainWindow(QMainWindow):
     def _schedule_save(self):
         self._save_timer.start()
 
+    def _commit_open_step_form(self) -> bool:
+        """把目前展開的 Step 表單的最新值寫回 Step.params。
+
+        使用者可能在輸入框尚未失去焦點（未觸發 editingFinished）時就觸發存檔，
+        此時輸入值只存在於 Qt widget；不先提交就會把舊值寫進磁碟。
+
+        只呼叫 Step 表單既有的 save()（經由 get_steps → _save_expanded）：
+          * 不重建表單、不改變展開狀態
+          * 不發 steps_changed、不觸發重複保存
+          * 不改變 Step 順序、不動到其他規則
+        回傳 False 表示提交失敗，此時呼叫端不得覆寫原檔。
+        """
+        step_list = getattr(self, "_step_list", None)
+        if step_list is None:
+            return True
+        try:
+            step_list.get_steps()
+        except RuntimeError as exc:
+            if "has been deleted" in str(exc):
+                # 表單已被 Qt 銷毀：已無可提交的內容，仍要保存其餘資料，但必須留下紀錄。
+                logging.warning("展開中的 Step 表單已被銷毀，略過提交後繼續存檔")
+                return True
+            logging.exception("提交展開中的 Step 表單失敗，保留原檔不覆蓋")
+            self._notif_stack.push(T("notif.task_save_failed_short"))
+            return False
+        except Exception:
+            logging.exception("提交展開中的 Step 表單失敗，保留原檔不覆蓋")
+            self._notif_stack.push(T("notif.task_save_failed_short"))
+            return False
+        return True
+
     def _do_debounced_save(self) -> bool:
         if not self._current_task:
             return False
@@ -7086,6 +7328,11 @@ class MainWindow(QMainWindow):
             if not self._task_load_failed_notified:
                 self._task_load_failed_notified = True
                 self._notif_stack.push(T("dialog.task_load_failed"))
+            return False
+        # 寫入磁碟前先提交目前展開的 Step 表單：
+        # 使用者可能尚未讓輸入框失去焦點（未觸發 editingFinished），
+        # 最新值只在 widget 裡，不提交就會把舊值寫回磁碟。
+        if not self._commit_open_step_form():
             return False
         task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         logging.debug(

@@ -26,6 +26,56 @@ _lock = threading.Lock()
 
 user32 = ctypes.windll.user32
 
+
+class _PressLedger:
+    """記錄「已確認 press 成功」的輸入，離開時依 LIFO 逐項嘗試釋放。
+
+    與 core/03_pynput_input.py 的同名 helper 各持一份（不抽共用模組）：
+    兩個輸入後端分屬不同路徑，後端之間不應互相依賴。
+
+    提供的是「盡可能嘗試釋放」，不是 OS 層的絕對成功保證——真實按鍵／按鈕是否
+    真的放開取決於作業系統與目標視窗，程式端無法百分之百確認。
+    """
+
+    def __init__(self) -> None:
+        self._held: list[tuple[str, object]] = []
+
+    def record(self, label: str, release_fn) -> None:
+        """登記一個已確認 press 成功的輸入及其釋放動作。"""
+        self._held.append((label, release_fn))
+
+    def release_all(self) -> int:
+        """依相反順序逐項嘗試釋放；回傳失敗的項目數。一次操作只應呼叫一次。"""
+        failures = 0
+        for label, release_fn in reversed(self._held):
+            try:
+                release_fn()
+            except Exception as e:
+                failures += 1
+                _log.warning("釋放 %s 失敗: %s", label, e)
+        self._held.clear()
+        return failures
+
+    def __enter__(self) -> "_PressLedger":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        self.release_all()
+        return False  # 不吞掉原始例外
+
+
+def _interruptible_wait(ms: int, cancel=None) -> bool:
+    """等待 ms 毫秒；回傳 True 代表等待期間被取消。
+
+    cancel is None 時保留舊有的 time.sleep 行為，既有呼叫者零影響。
+    """
+    if cancel is None:
+        if ms > 0:
+            time.sleep(ms / 1000.0)
+        return False
+    return cancel.wait(timeout=max(0.0, ms / 1000.0))
+
+
 # ── Win32 constants ──
 WM_LBUTTONDOWN = 0x0201
 WM_LBUTTONUP = 0x0202
@@ -200,8 +250,86 @@ def _make_lparam(x: int, y: int) -> int:
 
 
 # ── PostMessage method ──
-def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
-    """Click using PostMessage (pure message, no cursor movement)."""
+def _post_message_ok(hwnd: int, msg: int, wparam: int, lparam: int, label: str) -> bool:
+    """送出訊息並檢查 Win32 BOOL 回傳值。
+
+    PostMessageW 失敗時**回傳 0 而不拋例外**（ctypes windll 未設 errcheck），
+    只靠 Python exception 判斷失敗會完全漏掉真實的 Win32 失敗路徑。
+    回傳 True 只代表 PostMessageW 成功**提交**訊息，不代表遊戲已處理該訊息。
+    例外會往外拋，由呼叫端處理。
+    """
+    if user32.PostMessageW(hwnd, msg, wparam, lparam):
+        return True
+    _log.warning("%s：PostMessageW 回傳 0（msg=0x%04X, hwnd=%s）", label, msg, hwnd)
+    return False
+
+
+def _post_up_with_retry(hwnd: int, up_msg: int, lparam: int) -> bool:
+    """送出放開訊息；失敗時再試一次（最多兩次嘗試）。
+
+    回傳 True 只代表 PostMessageW 成功提交放開訊息，不代表遊戲已放開按鈕。
+    frida 滑鼠按鈕在遊戲端由 PostMessage 自行追蹤，沒有像鍵盤那樣的 TTL 自動清除，
+    因此放開訊息送不出去就會讓按鈕卡住——失敗必須重試並留下 warning。
+    """
+    for attempt in (1, 2):
+        label = f"放開訊息失敗（第 {attempt} 次嘗試）"
+        try:
+            if _post_message_ok(hwnd, up_msg, 0, lparam, label):
+                return True
+        except Exception as e:
+            _log.warning("%s：送出時發生例外 %s", label, e)
+    return False
+
+
+def _mouse_messages(button: str) -> tuple[int, int, int] | None:
+    """回傳 (down_msg, mk, up_msg)；不支援的按鍵回傳 None。
+
+    抽成共用 helper，讓 click 與 drag 的按鍵語意只此一份。
+    """
+    if button == "left":
+        return WM_LBUTTONDOWN, MK_LBUTTON, WM_LBUTTONUP
+    if button == "right":
+        return WM_RBUTTONDOWN, MK_RBUTTON, WM_RBUTTONUP
+    if button == "middle":
+        return WM_MBUTTONDOWN, MK_MBUTTON, WM_MBUTTONUP
+    return None
+
+
+def _post_mouse_down(hwnd: int, button: str, x: int, y: int) -> bool:
+    """送出滑鼠按下訊息（不取得 _lock，呼叫端負責鎖定）。
+
+    回傳 True 只代表 PostMessageW 成功「提交」訊息，不代表遊戲已處理。
+    """
+    msgs = _mouse_messages(button)
+    if msgs is None:
+        return False
+    down_msg, mk, _up_msg = msgs
+    return _post_message_ok(hwnd, down_msg, mk, _make_lparam(x, y), "按下滑鼠訊息失敗")
+
+
+def _post_mouse_up(hwnd: int, button: str, x: int, y: int) -> bool:
+    """送出滑鼠放開訊息（不取得 _lock，呼叫端負責鎖定）。
+
+    失敗會依 _post_up_with_retry 再試一次並留下 warning。
+    """
+    msgs = _mouse_messages(button)
+    if msgs is None:
+        return False
+    _down_msg, _mk, up_msg = msgs
+    return _post_up_with_retry(hwnd, up_msg, _make_lparam(x, y))
+
+
+def _click_postmessage(
+    hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None
+) -> bool:
+    """Click using PostMessage (pure message, no cursor movement).
+
+    down 送出後一定會嘗試送出 up；up 失敗會再試一次並留下 warning。
+    回傳值反映 down/up 是否成功「提交」給目標視窗，不會假裝成功。
+    """
+    down_sent = False
+    released = True
+    ok = True
     try:
         lparam = _make_lparam(x, y)
         if button == "left":
@@ -216,16 +344,24 @@ def _click_postmessage(hwnd: int, x: int, y: int, button: str = "left", hold_ms:
         else:
             return False
 
-        user32.PostMessageW(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
+        # 激活訊息失敗不中斷點擊（維持原行為），但留下紀錄
+        _post_message_ok(hwnd, WM_ACTIVATE, WA_ACTIVE, 0, "視窗激活訊息失敗")
         time.sleep(0.02)
-        user32.PostMessageW(hwnd, down_msg, mk, lparam)
-        if hold_ms > 0:
-            time.sleep(hold_ms / 1000.0)
-        user32.PostMessageW(hwnd, up_msg, 0, lparam)
-        return True
+        if not _post_message_ok(hwnd, down_msg, mk, lparam, "按下滑鼠訊息失敗"):
+            # down 沒提交成功 → 不得標記 down_sent（否則會送出無意義的 up）
+            ok = False
+        else:
+            down_sent = True
+            if hold_ms > 0:
+                _interruptible_wait(hold_ms, cancel)
     except Exception as e:
         _log.error("PostMessage click failed: %s", e)
-        return False
+        ok = False
+    finally:
+        if down_sent:
+            # 無論正常、取消或例外，都必須嘗試送出 up
+            released = _post_up_with_retry(hwnd, up_msg, lparam)
+    return ok and released
 
 
 def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
@@ -270,7 +406,9 @@ def _scroll_postmessage(hwnd: int, x: int, y: int, amount: int, horizontal: bool
 
 
 # ── Pynput method (physical input, requires foreground) ──
-def _click_pynput(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
+def _click_pynput(
+    hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None
+) -> bool:
     """Click using pynput (physical input, requires foreground)."""
     try:
         import pynput.mouse
@@ -283,15 +421,19 @@ def _click_pynput(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int 
         btn = btn_map.get(button)
         if btn is None:
             return False
+        if cancel is not None and cancel.is_set():
+            _log.info("已取消，略過背景點擊")
+            return False
 
         abs_x, abs_y = _client_to_screen(hwnd, x, y)
         mouse = pynput.mouse.Controller()
-        mouse.position = (abs_x, abs_y)
-        time.sleep(0.02)
-        mouse.press(btn)
-        if hold_ms > 0:
-            time.sleep(hold_ms / 1000.0)
-        mouse.release(btn)
+        with _PressLedger() as ledger:
+            mouse.position = (abs_x, abs_y)
+            time.sleep(0.02)
+            mouse.press(btn)
+            ledger.record(f"滑鼠按鈕 {btn}", lambda: mouse.release(btn))
+            if hold_ms > 0:
+                _interruptible_wait(hold_ms, cancel)
         return True
     except Exception as e:
         _log.error("pynput click failed: %s", e)
@@ -333,13 +475,13 @@ def _scroll_pynput(hwnd: int, x: int, y: int, amount: int, horizontal: bool = Fa
 
 
 # ── Public API ──
-def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0) -> bool:
+def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None) -> bool:
     """Click at (x, y) in client coordinates using the current method."""
     with _lock:
         if _method == "frida":
-            return _frida().click(hwnd, x, y, button, hold_ms)
+            return _frida().click(hwnd, x, y, button, hold_ms, cancel)
         elif _method == "pynput":
-            return _click_pynput(hwnd, x, y, button, hold_ms)
+            return _click_pynput(hwnd, x, y, button, hold_ms, cancel)
         return False
 
 
@@ -359,7 +501,7 @@ def last_error() -> str:
         return ""
 
 
-def send_key(hwnd: int, key: str) -> bool:
+def send_key(hwnd: int, key: str, cancel=None) -> bool:
     """Send a key press and release."""
     vk = _resolve_vk(key)
     if vk is None:
@@ -379,9 +521,12 @@ def send_key(hwnd: int, key: str) -> bool:
             finally:
                 f.key(hwnd, vk, False)
         elif _method == "pynput":
-            ok = _key_pynput(hwnd, vk, True)
-            time.sleep(0.02)
-            ok = _key_pynput(hwnd, vk, False) and ok
+            # 只有按下確認成功才登記釋放；未登記者不送出 release（不誤放）。
+            with _PressLedger() as ledger:
+                ok = _key_pynput(hwnd, vk, True)
+                if ok:
+                    ledger.record(f"按鍵 vk={vk}", lambda: _key_pynput(hwnd, vk, False))
+                time.sleep(0.02)
             return ok
         return False
 
@@ -406,11 +551,14 @@ def activate_window_bg(hwnd: int) -> bool:
         return False
 
 
-def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
+def send_hold_key(hwnd: int, key: str, hold_ms: float, cancel=None) -> bool:
     """Hold a key for hold_ms milliseconds in background mode."""
     vk = _resolve_vk(key)
     if vk is None:
         _log.warning("Cannot parse key for hold: %s", key)
+        return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過背景按住")
         return False
 
     with _lock:
@@ -423,13 +571,21 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
                 # 遊戲輪詢永遠能看到 down 狀態（1s 間隔在低頻輪詢下可能跳過）
                 deadline = time.monotonic() + hold_ms / 1000.0
                 while True:
+                    if cancel is not None and cancel.is_set():
+                        _log.info("按住已取消，提前放開按鍵")
+                        return True
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         break
-                    time.sleep(min(remaining, 0.5))
+                    if cancel is None:
+                        time.sleep(min(remaining, 0.5))
+                    elif cancel.wait(min(remaining, 0.5)):
+                        _log.info("按住已取消，提前放開按鍵")
+                        return True
                     f.key(hwnd, vk, True)
                 return True
             finally:
+                # 取消或例外都會走到這裡：key(up) 一定被嘗試送出。
                 f.key(hwnd, vk, False)
         elif _method == "pynput":
             return False
@@ -439,29 +595,46 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float) -> bool:
 def drag(
     hwnd: int, start_x: int, start_y: int, end_x: int, end_y: int, button: str = "left"
 ) -> bool:
-    """Perform a drag operation in background mode."""
+    """Perform a drag operation in background mode.
+
+    訊息順序：WM_ACTIVATE → DOWN(起點) → MOVE(終點) → UP(終點)。
+
+    - 全程只取得一次 _lock：不得呼叫會自行取同一把鎖的 click()，否則同執行緒
+      重入非重入 Lock 會永久死鎖。
+    - DOWN 成功後，無論 MOVE 成功與否都一定會嘗試 UP（避免遊戲內卡住按鈕）。
+    - 回傳值反映 DOWN／MOVE／UP 是否成功「提交」訊息，不代表遊戲已處理。
+    """
     with _lock:
-        if _method == "frida":
-            ok = click(hwnd, start_x, start_y, button)
-            if not ok:
-                return False
-            time.sleep(0.05)
-            lparam = _make_lparam(end_x, end_y)
-            user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
-            time.sleep(0.05)
-            if button == "left":
-                up_msg = WM_LBUTTONUP
-            elif button == "right":
-                up_msg = WM_RBUTTONUP
-            elif button == "middle":
-                up_msg = WM_MBUTTONUP
-            else:
-                return False
-            user32.PostMessageW(hwnd, up_msg, 0, lparam)
-            return True
-        elif _method == "pynput":
+        if _method != "frida":
             return False
-    return False
+        if _mouse_messages(button) is None:
+            return False
+        f = _frida()
+        # frida 必須先把注入腳本裡的假造游標移到起點，遊戲才會認為按在該處；
+        # sync_cursor 內含 ensure_attached，失敗即中止（尚未按下，不需釋放）。
+        if not f.sync_cursor(hwnd, start_x, start_y):
+            return False
+        # 激活訊息失敗不中斷拖曳（維持 click 的既有行為），但留下紀錄
+        _post_message_ok(hwnd, WM_ACTIVATE, WA_ACTIVE, 0, "視窗激活訊息失敗")
+        if not _post_mouse_down(hwnd, button, start_x, start_y):
+            # DOWN 沒提交成功 → 不得送出 MOVE 或 UP
+            return False
+        moved = False
+        released = False
+        try:
+            time.sleep(0.05)
+            # 拖曳過程遊戲讀的是假造游標 → MOVE 前必須先同步到終點
+            if not f.sync_cursor(hwnd, end_x, end_y):
+                _log.warning("拖曳終點游標同步失敗，跳過移動訊息")
+            else:
+                moved = _post_message_ok(
+                    hwnd, WM_MOUSEMOVE, 0, _make_lparam(end_x, end_y), "滑鼠移動訊息失敗"
+                )
+            time.sleep(0.05)
+        finally:
+            # 無論正常、取消或例外，都必須嘗試送出 UP（DOWN 已成功）
+            released = _post_mouse_up(hwnd, button, end_x, end_y)
+        return moved and released
 
 
 if __name__ == "__main__":
@@ -559,5 +732,36 @@ if __name__ == "__main__":
     finally:
         user32.PostMessageW = _orig_pm
     print("  [OK] _key_postmessage WM_CHAR（字母送、keyup 不送、導航鍵不送）")
+
+    # frida 拖曳訊息順序：ACTIVATE → DOWN → MOVE → UP（不得提前放開按鈕）
+    captured = []
+    _orig_pm = user32.PostMessageW
+    _orig_frida = _frida
+    _orig_method = _method
+
+    class _SelfCheckFrida:
+        @staticmethod
+        def sync_cursor(hwnd, x, y):
+            return True
+
+    def _selfcheck_frida():
+        return _SelfCheckFrida()
+
+    user32.PostMessageW = lambda hwnd, msg, wparam, lparam: captured.append((msg, wparam)) or True
+    try:
+        _frida = _selfcheck_frida
+        _method = "frida"
+        assert drag(1, 10, 20, 30, 40, "left") is True
+        assert [m for m, _w in captured] == [
+            WM_ACTIVATE,
+            WM_LBUTTONDOWN,
+            WM_MOUSEMOVE,
+            WM_LBUTTONUP,
+        ], captured
+    finally:
+        _method = _orig_method
+        _frida = _orig_frida
+        user32.PostMessageW = _orig_pm
+    print("  [OK] frida drag 訊息順序：ACTIVATE → DOWN → MOVE → UP")
 
     print("\n=== All checks passed ===")

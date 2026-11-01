@@ -627,6 +627,8 @@ def _diagnose():
     ml._frame_chrome = chrome
     ml._frame_client_size = None
     ml._window_hwnd = hwnd
+    # MainLoop._send_click 會把 _stop_event 傳給輸入層作為取消事件
+    ml._stop_event = threading.Event()
     ml._config_store = type(
         "_ModeConfig",
         (),
@@ -704,10 +706,10 @@ def _diagnose():
                 print(f"  畫面座標對齊：{anchors_ok}/5")
 
             actual = []
-            main_loop._input_mod.send_click = lambda x, y, button="left", hold_ms=0: (
+            main_loop._input_mod.send_click = lambda x, y, button="left", hold_ms=0, cancel=None: (
                 actual.append(("screen", x, y)) or True
             )
-            main_loop._bg_input.click = lambda _hwnd, x, y, button="left", hold_ms=0: (
+            main_loop._bg_input.click = lambda _hwnd, x, y, button="left", hold_ms=0, cancel=None: (
                 actual.append(("client", x, y)) or True
             )
             for target in TARGETS:

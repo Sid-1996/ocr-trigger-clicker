@@ -163,7 +163,12 @@ def load_groups(path: str) -> list[RuleGroup]:
     if "groups" not in data:
         data = migrate_v2_to_v3(data)
     groups = data.get("groups", [])
-    groups = [_dict_to_group(g) for g in groups]
+    try:
+        groups = [_dict_to_group(g) for g in groups]
+    except (TypeError, ValueError, AttributeError, KeyError, OverflowError) as e:
+        # 與 load_rules 對稱：群組轉換失敗同樣轉成既有 RuleFileError，
+        # 不讓轉換例外穿透 MainLoop._load_rules / GUI 任務載入的錯誤處理。
+        raise RuleFileError(p, f"群組轉換失敗：{e}") from e
     logging.debug("[load_groups] n=%d", len(groups))
     return groups
 
@@ -244,7 +249,10 @@ def load_rules(path: str) -> list[Rule]:
     for i, raw in enumerate(data.get("rules", [])):
         try:
             rules.append(_dict_to_rule(raw))
-        except (TypeError, ValueError, AttributeError, KeyError) as e:
+        except (TypeError, ValueError, AttributeError, KeyError, OverflowError) as e:
+            # OverflowError：數值轉換邊界的縱深防禦。正常路徑已由
+            # rule_migration._as_int/_as_float 收斂為欄位 default，
+            # 此處僅確保任何殘餘轉換例外都轉成既有 RuleFileError，不穿透載入流程。
             raise RuleFileError(p, f"規則 {i} 轉換失敗：{e}") from e
 
     if migrate:

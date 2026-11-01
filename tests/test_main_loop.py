@@ -689,13 +689,14 @@ def test_send_click_frida_dispatch(monkeypatch):
     )()
     _bg = load_sibling("bg_input", "core/16_bg_input.py")
     captured = {}
-    monkeypatch.setattr(
-        _bg,
-        "click",
-        lambda hwnd, x, y, button="left", hold_ms=0: (
-            captured.update(hwnd=hwnd, x=x, y=y, button=button, hold_ms=hold_ms) or True
-        ),
-    )
+    cancel_seen = {}
+
+    def _fake_click(hwnd, x, y, button="left", hold_ms=0, cancel=None):
+        captured.update(hwnd=hwnd, x=x, y=y, button=button, hold_ms=hold_ms)
+        cancel_seen["cancel"] = cancel
+        return True
+
+    monkeypatch.setattr(_bg, "click", _fake_click)
     try:
         ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
     finally:
@@ -720,11 +721,12 @@ def test_send_click_hybrid_dispatch(monkeypatch):
 
     monkeypatch.setattr(_bg, "click", _boom)
     monkeypatch.setattr(_bg, "set_method", _boom)
-    monkeypatch.setattr(
-        _input_mod,
-        "send_click",
-        lambda x, y, button="left", hold_ms=0: calls.append((x, y)) or True,
-    )
+
+    def _fake_send_click(x, y, button="left", hold_ms=0, cancel=None):
+        calls.append((x, y))
+        return True
+
+    monkeypatch.setattr(_input_mod, "send_click", _fake_send_click)
     ok = _ml_mod.MainLoop._send_click(ml, 150, 250, "left", 0)
     assert ok
     assert calls == [(150, 250)]
