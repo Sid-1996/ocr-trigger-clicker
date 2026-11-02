@@ -569,6 +569,26 @@ def _migrate_roi_to_ratio(data: dict) -> dict:
                 px, py = p.get("x", 0), p.get("y", 0)
                 if px > 1.0 or py > 1.0:
                     step["params"] = {**p, "x": px / W, "y": py / H}
+                ex, ey = p.get("end_x"), p.get("end_y")
+                if (
+                    ex is not None
+                    and ey is not None
+                    and not isinstance(ex, bool)
+                    and not isinstance(ey, bool)
+                    and isinstance(ex, (int, float))
+                    and isinstance(ey, (int, float))
+                ):
+                    try:
+                        ex_f, ey_f = float(ex), float(ey)
+                    except (OverflowError, ValueError):
+                        ex_f = ey_f = float("nan")
+                    if math.isfinite(ex_f) and math.isfinite(ey_f) and (ex_f > 1.0 or ey_f > 1.0):
+                        # 以最新的 step["params"] 為基礎，否則會蓋掉上面剛算好的 x/y
+                        step["params"] = {
+                            **step["params"],
+                            "end_x": ex_f / W,
+                            "end_y": ey_f / H,
+                        }
     data["ratio_coords"] = True
     return data
 

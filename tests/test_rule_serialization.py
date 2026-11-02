@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 
@@ -39,6 +40,83 @@ def test_dict_to_rule_round_trip():
     assert len(restored.steps) == 1
     assert restored.steps[0].type == "detect"
     assert restored.steps[0].params["text"] == "hello"
+
+
+def test_drag_end_round_trip():
+    rule = Rule(
+        id="rt-drag-end",
+        name="Drag End",
+        enabled=True,
+        steps=[
+            Step(
+                type="drag",
+                params={
+                    "target": "custom",
+                    "x": 0.2,
+                    "y": 0.3,
+                    "dx": 10,
+                    "dy": 20,
+                    "end_x": 0.5,
+                    "end_y": 0.7,
+                },
+            ),
+        ],
+    )
+    restored = _dict_to_rule(_rule_to_dict(rule))
+    assert restored.steps[0].params["end_x"] == 0.5
+    assert restored.steps[0].params["end_y"] == 0.7
+
+    unset = Rule(
+        id="rt-drag-end-unset",
+        name="Drag End Unset",
+        enabled=True,
+        steps=[
+            Step(
+                type="drag",
+                params={"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20},
+            ),
+        ],
+    )
+    restored_unset = _dict_to_rule(_rule_to_dict(unset))
+    assert restored_unset.steps[0].params.get("end_x") is None
+    assert restored_unset.steps[0].params.get("end_y") is None
+
+
+@pytest.mark.parametrize(
+    "end",
+    [
+        {},
+        {"end_x": None, "end_y": None},
+        {"end_x": 0.0, "end_y": 0.0},
+        {"end_x": 0, "end_y": 0},
+        {"end_x": 0.5, "end_y": 0.7},
+        {"end_x": 0.5, "end_y": 0.7, "end_roi_coord": "client"},
+        {"end_x": 960, "end_y": 540},
+        {"end_x": 0.5, "end_y": None},
+        {"end_x": None, "end_y": 0.5},
+        {"end_x": "bad", "end_y": 0.3},
+        {"end_x": float("nan"), "end_y": float("inf")},
+    ],
+)
+def test_drag_end_serialization_preserves_raw_values(end):
+    """序列化不得補值、消毒或改寫終點；非法值留給執行期拒絕。"""
+    params = {"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20, **end}
+    rule = Rule(id="rt-raw", name="Raw", enabled=True, steps=[Step(type="drag", params=params)])
+    raw = json.dumps(_rule_to_dict(rule))
+    got = _dict_to_rule(json.loads(raw)).steps[0].params
+    for key in ("end_x", "end_y"):
+        if key not in end:
+            assert key not in got
+            continue
+        value = end[key]
+        if isinstance(value, float) and math.isnan(value):
+            assert isinstance(got[key], float) and math.isnan(got[key])
+        else:
+            assert got[key] == value, (key, value, got.get(key))
+    if "end_roi_coord" in end:
+        assert got["end_roi_coord"] == "client"
+    else:
+        assert "end_roi_coord" not in got
 
 
 def test_match_image_color_mask_round_trip():

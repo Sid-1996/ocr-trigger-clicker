@@ -235,6 +235,126 @@ def test_normalize_fail_duration_finite_unchanged():
     }
 
 
+def _drag_migration_task(end_x, end_y) -> dict:
+    return {
+        "capture_size": [1920, 1080],
+        "rules": [
+            {
+                "id": "r1",
+                "name": "Drag End Migration",
+                "enabled": True,
+                "steps": [
+                    {
+                        "type": "drag",
+                        "params": {
+                            "target": "custom",
+                            "x": 0.1,
+                            "y": 0.2,
+                            "dx": 5,
+                            "dy": 6,
+                            "end_x": end_x,
+                            "end_y": end_y,
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_migrate_drag_end_none_pair_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(None, None))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] is None
+    assert step["params"]["end_y"] is None
+    assert out["ratio_coords"] is True
+
+
+def test_migrate_drag_end_zero_pair_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(0, 0))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] == 0
+    assert step["params"]["end_y"] == 0
+
+
+def test_migrate_drag_end_valid_px_converted_to_ratio():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(960, 540))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] == pytest.approx(0.5)
+    assert step["params"]["end_y"] == pytest.approx(0.5)
+
+
+def test_migrate_drag_end_partial_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(0.5, None))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] == 0.5
+    assert step["params"]["end_y"] is None
+
+
+def test_migrate_drag_end_invalid_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task("bad", 0.3))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] == "bad"
+    assert step["params"]["end_y"] == 0.3
+
+
+def test_migrate_drag_end_bool_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(True, False))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] is True
+    assert step["params"]["end_y"] is False
+
+
+def test_migrate_drag_end_non_finite_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(float("nan"), float("inf")))
+    step = out["rules"][0]["steps"][0]
+    assert math.isnan(step["params"]["end_x"])
+    assert math.isinf(step["params"]["end_y"])
+
+
+def test_migrate_drag_end_huge_int_not_converted():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(10**400, 10**400))
+    step = out["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] == 10**400
+    assert step["params"]["end_y"] == 10**400
+
+
+def test_migrate_drag_end_ratio_not_converted_twice():
+    out = _MIG._migrate_roi_to_ratio(_drag_migration_task(960, 540))
+    out2 = _MIG._migrate_roi_to_ratio(out)
+    step = out2["rules"][0]["steps"][0]
+    assert step["params"]["end_x"] == pytest.approx(0.5)
+    assert step["params"]["end_y"] == pytest.approx(0.5)
+
+
+def test_migrate_drag_xy_and_end_pixels_together():
+    """x/y 與 end 同時是像素時，兩者都要轉成比例（end 分支不得蓋掉 x/y）。"""
+    task = _drag_migration_task(960, 540)
+    task["rules"][0]["steps"][0]["params"].update({"x": 480, "y": 270})
+    out = _MIG._migrate_roi_to_ratio(task)
+    p = out["rules"][0]["steps"][0]["params"]
+    assert p["x"] == pytest.approx(0.25)
+    assert p["y"] == pytest.approx(0.25)
+    assert p["end_x"] == pytest.approx(0.5)
+    assert p["end_y"] == pytest.approx(0.5)
+    # 重複 migration 不再變動
+    out2 = _MIG._migrate_roi_to_ratio(out)
+    p2 = out2["rules"][0]["steps"][0]["params"]
+    assert p2["x"] == pytest.approx(0.25)
+    assert p2["end_x"] == pytest.approx(0.5)
+
+
+def test_migrate_drag_xy_pixel_with_unset_end_keeps_end_unset():
+    task = _drag_migration_task(None, None)
+    task["rules"][0]["steps"][0]["params"].update({"x": 480, "y": 270})
+    out = _MIG._migrate_roi_to_ratio(task)
+    p = out["rules"][0]["steps"][0]["params"]
+    assert p["x"] == pytest.approx(0.25)
+    assert p["y"] == pytest.approx(0.25)
+    assert p["end_x"] is None
+    assert p["end_y"] is None
+
+
 # ── D. 真實 JSON 載入整合測試 ───────────────────────────────────────────────
 
 

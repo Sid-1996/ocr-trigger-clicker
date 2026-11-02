@@ -53,6 +53,97 @@ def test_match_image_preview_uses_true_client_size(monkeypatch):
     assert "1608×908" not in text, text
 
 
+def test_dry_run_drag_end_uses_picked_end(monkeypatch):
+    img = np.zeros((900, 1600, 3), dtype=np.uint8)
+    step = SimpleNamespace(
+        type="drag",
+        params={
+            "target": "custom",
+            "x": 0.25,
+            "y": 0.3,
+            "roi_coord": "client",
+            "end_x": 0.6,
+            "end_y": 0.7,
+            "dx": 30,
+            "dy": 40,
+            "button": "left",
+        },
+    )
+    rule = SimpleNamespace(name="拖曳終點", steps=[step])
+    win = SimpleNamespace(
+        _current_task="",
+        _window_combo=SimpleNamespace(currentText=lambda: "StarSavior"),
+    )
+    monkeypatch.setattr(RC, "get_client_rect_for_image", lambda *a: (8, 31, 1600, 900))
+    monkeypatch.setattr(RC, "get_window_client_offset", lambda *a: (8, 31))
+    ctrl = RC.TestRunController(win, lambda raw: "", lambda rid, get_rules: rid)
+    _, log, _ = ctrl._run_dry_run(rule, img)
+    text = "\n".join(log)
+    assert "(968,661)" in text, text
+
+
+def test_dry_run_drag_end_space_is_independent_of_start(monkeypatch):
+    """起點走全視窗比例、終點走 client 比例：兩者不得互相影響。"""
+    img = np.zeros((900, 1600, 3), dtype=np.uint8)
+    step = SimpleNamespace(
+        type="drag",
+        params={
+            "target": "custom",
+            "x": 0.25,
+            "y": 0.3,
+            "end_x": 0.6,
+            "end_y": 0.7,
+            "end_roi_coord": "client",
+            "button": "left",
+        },
+    )
+    rule = SimpleNamespace(name="終點座標系", steps=[step])
+    win = SimpleNamespace(
+        _current_task="",
+        _window_combo=SimpleNamespace(currentText=lambda: "StarSavior"),
+    )
+    monkeypatch.setattr(RC, "get_client_rect_for_image", lambda *a: (8, 31, 1600, 900))
+    monkeypatch.setattr(RC, "get_window_client_offset", lambda *a: (8, 31))
+    ctrl = RC.TestRunController(win, lambda raw: "", lambda rid, get_rules: rid)
+    _, log, _ = ctrl._run_dry_run(rule, img)
+    text = "\n".join(log)
+    assert "(400,270) → (968,661)" in text, text
+
+
+def test_dry_run_invalid_end_is_fatal_not_success(monkeypatch):
+    img = np.zeros((900, 1600, 3), dtype=np.uint8)
+    drag = SimpleNamespace(
+        type="drag",
+        params={
+            "target": "custom",
+            "x": 0.25,
+            "y": 0.3,
+            "roi_coord": "client",
+            "end_x": float("nan"),
+            "end_y": 0.5,
+            "end_roi_coord": "client",
+            "dx": 30,
+            "dy": 40,
+            "button": "left",
+        },
+    )
+    wait = SimpleNamespace(type="wait", params={"ms": 100})
+    rule = SimpleNamespace(name="非法終點", steps=[drag, wait])
+    win = SimpleNamespace(
+        _current_task="",
+        _window_combo=SimpleNamespace(currentText=lambda: "StarSavior"),
+    )
+    monkeypatch.setattr(RC, "get_client_rect_for_image", lambda *a: (8, 31, 1600, 900))
+    monkeypatch.setattr(RC, "get_window_client_offset", lambda *a: (8, 31))
+    ctrl = RC.TestRunController(win, lambda raw: "", lambda rid, get_rules: rid)
+    markers, log, dead = ctrl._run_dry_run(rule, img)
+    text = "\n".join(log)
+    assert RC.T("exec_log.detail.drag_end_invalid") in text, text
+    assert not [m for m in markers if m.get("shape") == "drag"], markers
+    assert dead, "非法終點必須讓後續步驟死亡（terminal）"
+    assert RC.T("test.dead_legend") in text, text
+
+
 def test_fate_terminal_actions():
     f = RC._dry_fail_fate
     assert f("stop") == "terminal"

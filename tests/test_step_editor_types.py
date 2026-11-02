@@ -207,6 +207,437 @@ def test_existing_step_types_keep_their_form(step_list, qapp, step_type, expecte
     qapp.processEvents()
 
 
+def test_drag_form_unset_end_saves_none_pair(step_list, qapp):
+    step = Step(
+        type="drag",
+        params={"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20},
+    )
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form._end_x is None
+        assert form._end_y is None
+        form.save()
+        assert step.params["end_x"] is None
+        assert step.params["end_y"] is None
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_partial_end_not_saved(step_list, qapp):
+    step = Step(
+        type="drag",
+        params={"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20},
+    )
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._end_x_spin.setValue(0.3)
+        assert step.params.get("end_x") is None
+        assert step.params.get("end_y") is None
+        form._end_y_spin.setValue(0.8)
+        assert step.params["end_x"] == 0.3
+        assert step.params["end_y"] == 0.8
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_manual_zero_end_saves_zero_pair(step_list, qapp):
+    step = Step(
+        type="drag",
+        params={"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20},
+    )
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._end_x_spin.setValue(0.3)
+        form._end_y_spin.setValue(0.8)
+        form.save()
+        assert step.params["end_x"] == 0.3
+        assert step.params["end_y"] == 0.8
+        form._end_x_spin.setValue(0.0)
+        form._end_y_spin.setValue(0.0)
+        form.save()
+        assert step.params["end_x"] == 0.0
+        assert step.params["end_y"] == 0.0
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_cancel_end_pick_keeps_values(step_list, qapp):
+    step = Step(
+        type="drag",
+        params={
+            "target": "custom",
+            "x": 0.2,
+            "y": 0.3,
+            "dx": 10,
+            "dy": 20,
+            "end_x": 0.5,
+            "end_y": 0.8,
+        },
+    )
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form._end_x == 0.5
+        assert form._end_y == 0.8
+        form._pick_cb = lambda: None
+        form._pick_end()
+        assert form._end_x == 0.5
+        assert form._end_y == 0.8
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+# ── 5-1b：Drag 終點資料邊界（第三階段）─────────────────────────────────────
+
+
+def _drag_step(**end):
+    params = {"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20}
+    params.update(end)
+    return Step(type="drag", params=params)
+
+
+def test_drag_end_state_helper():
+    assert _GUI._drag_end_state(None, None) == "unset"
+    assert _GUI._drag_end_state(None, 0.5) == "incomplete"
+    assert _GUI._drag_end_state(0.5, None) == "incomplete"
+    assert _GUI._drag_end_state("bad", 0.3) == "invalid"
+    assert _GUI._drag_end_state(0.3, "bad") == "invalid"
+    assert _GUI._drag_end_state(True, False) == "invalid"
+    assert _GUI._drag_end_state(float("nan"), 0.3) == "invalid"
+    assert _GUI._drag_end_state(0.3, float("inf")) == "invalid"
+    assert _GUI._drag_end_state(10**400, 10**400) == "invalid"
+    assert _GUI._drag_end_state(0, 0) == "ratio"
+    assert _GUI._drag_end_state(0.5, 0) == "ratio"
+    assert _GUI._drag_end_state(960, 540) == "pixel"
+    assert _GUI._drag_end_state(1.5, 0.2) == "pixel"
+
+
+def test_drag_end_spin_value_never_clamps():
+    assert _GUI._end_spin_value(0.5) == 0.5
+    assert _GUI._end_spin_value(0) == 0.0
+    assert _GUI._end_spin_value(None) is None
+    assert _GUI._end_spin_value("bad") is None
+    assert _GUI._end_spin_value(True) is None
+    assert _GUI._end_spin_value(float("nan")) is None
+    assert _GUI._end_spin_value(float("inf")) is None
+    assert _GUI._end_spin_value(10**400) is None
+    assert _GUI._end_spin_value(960) is None
+    assert _GUI._end_spin_value(-0.5) is None
+
+
+def test_fmt_point_mixed_int_float_keeps_decimals():
+    assert _GUI._fmt_point(0.5, 0) == "(50%,0%)"
+    assert _GUI._fmt_point(0.5, 0.8) == "(50%,80%)"
+    assert _GUI._fmt_point(0, 0) == "(0,0)"
+    assert _GUI._fmt_point(960, 540) == "(960,540)"
+    # 非法值原樣顯示，不拋例外
+    assert _GUI._fmt_point("bad", 1) == "(bad,1)"
+
+
+@pytest.mark.parametrize(
+    "bad_end",
+    [
+        {"end_x": "bad", "end_y": 0.3},
+        {"end_x": 10**400, "end_y": 10**400},
+        {"end_x": float("nan"), "end_y": 0.3},
+        {"end_x": float("inf"), "end_y": 0.3},
+        {"end_x": True, "end_y": False},
+    ],
+)
+def test_drag_form_invalid_end_does_not_crash(step_list, qapp, bad_end):
+    step = _drag_step(**bad_end)
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form._end_display_text() == _GUI.T("step_form.end_invalid")
+        assert not form._end_x_spin.isEnabled()
+        assert not form._end_y_spin.isEnabled()
+        # 保存其他欄位可以，但不得改寫終點原始資料
+        assert form.save() is True
+        assert step.params["end_x"] is bad_end["end_x"]
+        assert step.params["end_y"] is bad_end["end_y"]
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_pixel_end_is_readonly_and_preserved(step_list, qapp):
+    step = _drag_step(end_x=960, end_y=540)
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert "960" in form._end_display_text()
+        assert "540" in form._end_display_text()
+        assert not form._end_x_spin.isEnabled()
+        assert not form._end_y_spin.isEnabled()
+        assert form.save() is True
+        assert step.params["end_x"] == 960
+        assert step.params["end_y"] == 540
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_partial_end_blocks_save_and_collapse(step_list, qapp):
+    step = _drag_step()
+    step_list.set_steps([step])
+    step_list._toggle_expand(0)
+    form = step_list._expanded_form
+    assert form is not None
+    form._end_x_spin.setValue(0.3)
+
+    assert form.save() is False
+    assert step.params.get("end_x") is None and step.params.get("end_y") is None
+    assert not form._end_hint.isHidden()
+    assert form._end_display_text() == _GUI.T("step_form.end_incomplete")
+
+    # 收合必須被拒絕，表單與使用者輸入都要留著
+    assert step_list._collapse() is False
+    assert step_list._expanded_form is form
+    assert form._end_x == 0.3
+
+    # 補齊另一軸後即可保存與收合
+    form._end_y_spin.setValue(0.8)
+    assert step.params["end_x"] == 0.3
+    assert step.params["end_y"] == 0.8
+    assert form._end_hint.isHidden()
+    assert step_list._collapse() is True
+    assert step_list._expanded_form is None
+
+
+def test_drag_form_complete_end_edit_one_axis_keeps_other(step_list, qapp):
+    step = _drag_step(end_x=0.4, end_y=0.6)
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._end_x_spin.setValue(0.7)
+        assert step.params["end_x"] == 0.7
+        assert step.params["end_y"] == 0.6
+        form._end_y_spin.setValue(0.9)
+        assert step.params["end_x"] == 0.7
+        assert step.params["end_y"] == 0.9
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_clear_end_restores_unset(step_list, qapp):
+    step = _drag_step(end_x=0.4, end_y=0.6, end_roi_coord="client")
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._clear_end()
+        assert step.params["end_x"] is None
+        assert step.params["end_y"] is None
+        assert "end_roi_coord" not in step.params
+        assert form._end_display_text() == _GUI.T("step_form.end_unset")
+        assert form._end_x_spin.isEnabled() and form._end_y_spin.isEnabled()
+        # 清除後再手動輸入是新的終點（client 比例）
+        form._end_x_spin.setValue(0.25)
+        form._end_y_spin.setValue(0.75)
+        assert step.params["end_roi_coord"] == "client"
+        assert step.params["end_x"] == 0.25
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_pick_end_uses_own_coord_space(step_list, qapp):
+    step = Step(
+        type="drag",
+        params={"target": "text_center", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20},
+    )
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._pick_cb = lambda: (0.25, 0.75)
+        form._pick_end()
+        assert step.params["end_x"] == 0.25
+        assert step.params["end_y"] == 0.75
+        assert step.params["end_roi_coord"] == "client"
+        # 起點資料與座標系完全不受影響
+        assert "roi_coord" not in step.params
+        assert step.params["x"] == 0.2 and step.params["y"] == 0.3
+        assert step.params["target"] == "text_center"
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_pick_cancel_from_unset_stays_unset(step_list, qapp):
+    step = _drag_step()
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._pick_cb = lambda: None
+        form._pick_end()
+        assert form._end_x is None and form._end_y is None
+        assert step.params.get("end_x") is None and step.params.get("end_y") is None
+        assert step.params.get("end_roi_coord") is None
+        assert form._end_display_text() == _GUI.T("step_form.end_unset")
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_form_save_other_fields_when_end_unset(step_list, qapp):
+    step = _drag_step()
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._dx.setValue(55)
+        assert form.save() is True
+        assert step.params["dx"] == 55
+        assert step.params["end_x"] is None and step.params["end_y"] is None
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+# ── 5-1c：半套終點在「重建 / 替換表單」入口的保存保護（P2-1）───────────────
+#
+# 背景：`_DragStepForm.save()` 遇到 incomplete 終點會拒絕保存，但部分呼叫端
+# 忽略 `_save_expanded()` / `get_steps()` 的失敗結果 → 使用者剛輸入的單軸終點
+# 被靜默丟棄。以下測試鎖住「任何會重建或替換表單的操作都必須中止」。
+
+
+def _open_partial_end(step_list, idx: int = 0):
+    """展開 idx 的 drag 步驟，只填終點 X（Y 維持未設定）。"""
+    step_list._toggle_expand(idx)
+    form = step_list._expanded_form
+    assert form is not None, "drag 表單必須展開"
+    form._end_x_spin.setValue(0.4)
+    assert form.save() is False, "半套終點必須被 save() 拒絕"
+    return form
+
+
+def test_step_list_partial_end_blocks_move_down(step_list):
+    drag = _drag_step()
+    step_list.set_steps([drag, Step(type="wait", params={"ms": 100})])
+    form = _open_partial_end(step_list, 0)
+
+    step_list._move_down(0)
+
+    assert [s.type for s in step_list._steps] == ["drag", "wait"], "順序不得改變"
+    assert step_list._expanded_idx == 0, "展開步驟不得改變"
+    assert step_list._expanded_form is form, "表單不得被銷毀"
+    assert form._end_x == 0.4 and form._end_y is None, "使用者輸入必須保留"
+    assert not form._end_hint.isHidden(), "未完成提示必須保留"
+    assert "end_x" not in drag.params, "半套終點不得寫入 params"
+
+
+def test_step_list_partial_end_blocks_move_up(step_list):
+    drag = _drag_step()
+    step_list.set_steps([Step(type="wait", params={"ms": 100}), drag])
+    form = _open_partial_end(step_list, 1)
+
+    step_list._move_up(1)
+
+    assert [s.type for s in step_list._steps] == ["wait", "drag"]
+    assert step_list._expanded_idx == 1
+    assert step_list._expanded_form is form
+    assert form._end_x == 0.4 and form._end_y is None
+    assert "end_x" not in drag.params
+
+
+def test_step_list_partial_end_blocks_delete_step(step_list):
+    drag = _drag_step()
+    step_list.set_steps([drag, Step(type="wait", params={"ms": 100})])
+    form = _open_partial_end(step_list, 0)
+
+    step_list._delete_step(0)
+    assert len(step_list._steps) == 2, "步驟不得被刪除"
+    assert step_list._expanded_form is form
+    assert form._end_x == 0.4
+
+    step_list._delete_selected_step()
+    assert len(step_list._steps) == 2, "Delete 快捷鍵路徑同樣不得刪除"
+    assert step_list._expanded_form is form
+
+
+def test_step_list_partial_end_blocks_set_steps(step_list):
+    drag = _drag_step()
+    step_list.set_steps([drag])
+    form = _open_partial_end(step_list, 0)
+
+    replaced = [Step(type="wait", params={"ms": 999})]
+    assert step_list.set_steps(replaced) is False, "替換必須被拒絕"
+    assert step_list._steps == [drag], "舊步驟必須保留"
+    assert step_list._expanded_form is form
+    assert form._end_x == 0.4
+
+
+def test_step_list_partial_end_blocks_rebuild_and_get_steps_keeps_list(step_list):
+    drag = _drag_step()
+    step_list.set_steps([drag])
+    form = _open_partial_end(step_list, 0)
+
+    assert step_list._rebuild() is False, "_rebuild 必須回報失敗且不動狀態"
+    assert step_list._expanded_form is form and step_list._expanded_idx == 0
+
+    # get_steps 維持既有 list 契約：不得把失敗轉成空清單或半套資料
+    assert step_list.get_steps() == [drag]
+    assert "end_x" not in drag.params
+    assert step_list._expanded_form is form
+
+
+def test_step_list_complete_end_still_moves_deletes_and_replaces(step_list):
+    """完整終點不得被保護機制阻擋（正常流程回歸）。"""
+    drag = _drag_step(end_x=0.4, end_y=0.6)
+    wait = Step(type="wait", params={"ms": 100})
+    assert step_list.set_steps([drag, wait]) is True
+
+    step_list._toggle_expand(0)
+    assert step_list._expanded_form is not None
+    step_list._move_down(0)
+    assert [s.type for s in step_list._steps] == ["wait", "drag"]
+    assert step_list._expanded_idx is None
+
+    step_list._delete_step(1)
+    assert [s.type for s in step_list._steps] == ["wait"]
+    assert step_list.set_steps([wait]) is True
+    assert step_list.get_steps() == [wait]
+
+
+def test_partial_drag_end_blocks_task_save_then_recovers(
+    real_mainwindow, write_task, make_step, make_rule, isolated_data_dir
+):
+    """真正的存檔呼叫端：半套終點必須中止寫檔，補齊後才落地。"""
+    win = real_mainwindow
+    drag = make_step("drag", target="custom", x=0.2, y=0.3, dx=10, dy=20, button="left")
+    task_path = isolated_data_dir / "tasks" / "t1.json"
+    write_task("t1", [make_rule("r0", "規則零", [drag, make_step("wait", ms=100)])])
+    before = task_path.read_text(encoding="utf-8")
+
+    win._on_task_changed("t1")
+    win._step_list._collapse()
+    win._step_list._toggle_expand(0)
+    form = win._step_list._expanded_form
+    assert form is not None
+    form._end_x_spin.setValue(0.4)
+    assert form._end_y is None
+
+    assert win._flush_save() is False, "半套終點必須中止存檔"
+    assert task_path.read_text(encoding="utf-8") == before, "磁碟不得被覆寫"
+    assert win._step_list._expanded_form is form, "表單與輸入必須保留"
+    assert form._end_x == 0.4
+
+    # 補齊另一軸後即可存檔，且標記為 client 座標系
+    form._end_y_spin.setValue(0.6)
+    assert win._flush_save() is True
+    disk = json.loads(task_path.read_text(encoding="utf-8"))
+    params = disk["rules"][0]["steps"][0]["params"]
+    assert params["end_x"] == 0.4 and params["end_y"] == 0.6
+    assert params["end_roi_coord"] == "client"
+
+
 # ── 5-2：Wait Step ──────────────────────────────────────────────────────────
 
 

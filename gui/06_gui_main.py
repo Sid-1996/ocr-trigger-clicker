@@ -376,9 +376,49 @@ def _fmt_capture_size(capture_size) -> str | None:
 
 
 def _fmt_point(px, py) -> str:
-    if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
-        return f"({px:.0%},{py:.0%})"
-    return f"({int(px)},{int(py)})"
+    """座標顯示：兩軸皆為比例（且至少一軸是浮點）時用百分比，否則用像素整數。
+
+    非法值（字串、NaN/Infinity、巨整數）原樣顯示，不猜測也不改寫。
+    """
+    try:
+        if (isinstance(px, float) or isinstance(py, float)) and px <= 1.0 and py <= 1.0:
+            return f"({px:.0%},{py:.0%})"
+        return f"({int(px)},{int(py)})"
+    except (TypeError, ValueError, OverflowError):
+        return f"({px},{py})"
+
+
+def _drag_end_state(x, y) -> str:
+    """Drag 終點資料狀態：unset / incomplete / invalid / ratio / pixel。"""
+    if x is None and y is None:
+        return "unset"
+    if x is None or y is None:
+        return "incomplete"
+    if isinstance(x, bool) or isinstance(y, bool):
+        return "invalid"
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        return "invalid"
+    try:
+        xf, yf = float(x), float(y)
+    except (OverflowError, ValueError):
+        return "invalid"
+    if not math.isfinite(xf) or not math.isfinite(yf):
+        return "invalid"
+    # 與 core resolve_drag_end → _resolve_point 同一判斷：兩軸都 <=1 才是比例
+    return "ratio" if xf <= 1.0 and yf <= 1.0 else "pixel"
+
+
+def _end_spin_value(value):
+    """終點軸在 0..1 SpinBox 裡可顯示的值；不可表示時回 None（不夾值）。"""
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        v = float(value)
+    except (OverflowError, ValueError):
+        return None
+    if not math.isfinite(v) or v < 0.0 or v > 1.0:
+        return None
+    return v
 
 
 def _step_summary(step, rules_provider=None) -> str:
@@ -799,20 +839,36 @@ class _StepListWidget(QWidget):
     def set_rule_id(self, rule_id: str):
         self._rule_id = rule_id
 
-    def set_steps(self, steps: list):
+    def set_steps(self, steps: list) -> bool:
+        """替換步驟清單；展開中的表單拒絕保存時不替換並回傳 False。"""
+        if not self.commit_pending():
+            return False
         self._steps = list(steps)
-        self._rebuild()
+        return self._rebuild()
 
-    def _save_expanded(self):
+    def _save_expanded(self) -> bool:
+        """保存目前展開的表單；回傳 False 代表表單拒絕保存（例如半套終點）。"""
         if self._expanded_form and hasattr(self._expanded_form, "save"):
-            self._expanded_form.save()
+            return self._expanded_form.save() is not False
+        return True
+
+    def commit_pending(self) -> bool:
+        """提交展開中的表單；被拒絕時保留表單與使用者輸入並提示，回傳 False。"""
+        if self._save_expanded():
+            return True
+        notify = getattr(self._expanded_form, "notify_blocked", None)
+        if notify:
+            notify()
+        return False
 
     def get_steps(self) -> list:
         self._save_expanded()
         return list(self._steps)
 
-    def _rebuild(self):
-        self._save_expanded()
+    def _rebuild(self) -> bool:
+        """重建步驟列；展開中的表單拒絕保存時不動任何狀態並回傳 False。"""
+        if not self._save_expanded():
+            return False
         self._expanded_idx = None
         self._expanded_form = None
         while self._layout.count():
@@ -827,6 +883,7 @@ class _StepListWidget(QWidget):
             self._rows.append(row)
             self._layout.addWidget(row)
         self._layout.addStretch()
+        return True
 
     def _build_row(self, idx: int, step) -> QWidget:
         row = QFrame()
@@ -908,7 +965,8 @@ class _StepListWidget(QWidget):
         if self._expanded_idx == idx:
             self._collapse()
             return
-        self._collapse()
+        if not self._collapse():
+            return
         form = self._build_form(idx, self._steps[idx])
         if form:
             self._expanded_idx = idx
@@ -916,17 +974,22 @@ class _StepListWidget(QWidget):
             self._layout.insertWidget(self._rows.index(self._rows[idx]) + 1, form)
             self._expand_advanced(form)
 
-    def _collapse(self):
+    def _collapse(self) -> bool:
+        """收合目前表單；表單拒絕保存時保留表單與使用者輸入並回傳 False。"""
         if self._expanded_form:
-            self._save_expanded()
+            if not self.commit_pending():
+                return False
             self._layout.removeWidget(self._expanded_form)
             self._expanded_form.deleteLater()
             self._expanded_form = None
             self._expanded_idx = None
             self._rebuild()
+        return True
 
     def _move_up(self, idx: int):
         if idx <= 0:
+            return
+        if not self.commit_pending():
             return
         self._steps[idx], self._steps[idx - 1] = self._steps[idx - 1], self._steps[idx]
         self._rebuild()
@@ -935,11 +998,15 @@ class _StepListWidget(QWidget):
     def _move_down(self, idx: int):
         if idx >= len(self._steps) - 1:
             return
+        if not self.commit_pending():
+            return
         self._steps[idx], self._steps[idx + 1] = self._steps[idx + 1], self._steps[idx]
         self._rebuild()
         self.steps_changed.emit()
 
     def _delete_step(self, idx: int):
+        if not self.commit_pending():
+            return
         self._steps.pop(idx)
         self._rebuild()
         self.steps_changed.emit()
@@ -969,7 +1036,8 @@ class _StepListWidget(QWidget):
 
     def dropEvent(self, e):
         src = int(e.mimeData().data("step/index").data().decode())
-        self._collapse()
+        if not self._collapse():
+            return
         target = self._drag_indicator_idx
         self._drag_indicator_idx = -1
         if target < 0 or target > len(self._steps):
@@ -3505,6 +3573,10 @@ class _DragStepForm(QWidget):
         self._step_count = step_count
         self._pick_cb = pick_cb
         p = step.params
+        self._end_x = p.get("end_x")
+        self._end_y = p.get("end_y")
+        # 開啟表單時終點是否已有資料（決定手動輸入要走哪個座標系）
+        self._end_was_set = self._end_x is not None or self._end_y is not None
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
@@ -3531,6 +3603,43 @@ class _DragStepForm(QWidget):
         cl.addWidget(self._pick_btn)
         self._coord_row.setVisible(p.get("target", "") == "custom")
         form.addRow(T("step_form.start_coord"), self._coord_row)
+
+        state = _drag_end_state(self._end_x, self._end_y)
+        self._end_label = QLabel(self._end_display_text())
+        self._end_pick_btn = QPushButton(T("step_form.pick_end"))
+        if pick_cb:
+            self._end_pick_btn.clicked.connect(self._pick_end)
+        self._end_clear_btn = QPushButton(T("step_form.end_clear"))
+        self._end_clear_btn.clicked.connect(self._clear_end)
+        self._end_row = QWidget()
+        el = QHBoxLayout(self._end_row)
+        el.setContentsMargins(0, 0, 0, 0)
+        el.addWidget(self._end_label)
+        el.addWidget(self._end_pick_btn)
+        el.addWidget(self._end_clear_btn)
+        form.addRow(T("step_form.end_coord"), self._end_row)
+
+        self._end_hint = QLabel(T("step_form.end_incomplete_hint"))
+        self._end_hint.setStyleSheet("color:#c0392b; font-size:11px;")
+        self._end_hint.setVisible(state == "incomplete")
+        form.addRow("", self._end_hint)
+
+        # 只有 unset / ratio / incomplete 能在 0..1 SpinBox 正確呈現；
+        # pixel 與 invalid 一律唯讀，避免夾值後與實際資料不一致。
+        spin_ok = state in ("unset", "ratio", "incomplete")
+        self._end_x_spin = _NoWheelDoubleSpin()
+        self._end_x_spin.setRange(0.0, 1.0)
+        self._end_x_spin.setDecimals(4)
+        self._end_y_spin = _NoWheelDoubleSpin()
+        self._end_y_spin.setRange(0.0, 1.0)
+        self._end_y_spin.setDecimals(4)
+        for spin, val in ((self._end_x_spin, self._end_x), (self._end_y_spin, self._end_y)):
+            shown = _end_spin_value(val)
+            spin.setValue(shown if shown is not None else 0.0)
+            spin.setEnabled(spin_ok and (shown is not None or val is None))
+        self._end_x_spin.valueChanged.connect(lambda v: self._set_end_value(0, float(v)))
+        self._end_y_spin.valueChanged.connect(lambda v: self._set_end_value(1, float(v)))
+
         self._dx = _NoWheelSpin()
         self._dx.setRange(-9999, 9999)
         self._dx.setSuffix(" px")
@@ -3591,16 +3700,96 @@ class _DragStepForm(QWidget):
                 self.save()
                 self._list.steps_changed.emit()
 
-    def save(self):
+    def _update_end_label(self):
+        self._end_label.setText(self._end_display_text())
+        self._end_hint.setVisible(_drag_end_state(self._end_x, self._end_y) == "incomplete")
+
+    def _end_display_text(self) -> str:
+        state = _drag_end_state(self._end_x, self._end_y)
+        if state == "unset":
+            return T("step_form.end_unset")
+        if state == "incomplete":
+            return T("step_form.end_incomplete")
+        if state == "invalid":
+            return T("step_form.end_invalid")
+        if state == "pixel":
+            return T("step_form.end_pixel", point=_fmt_point(self._end_x, self._end_y))
+        return _fmt_point(self._end_x, self._end_y)
+
+    def _set_end_spins(self, x, y, enabled=True):
+        for spin, val in ((self._end_x_spin, x), (self._end_y_spin, y)):
+            spin.blockSignals(True)
+            spin.setValue(_end_spin_value(val) or 0.0)
+            spin.setEnabled(enabled)
+            spin.blockSignals(False)
+
+    def _pick_end(self):
+        if self._pick_cb:
+            result = self._pick_cb()
+            if result:
+                # 拾取器回傳 client 比例：終點自帶座標系，不動起點的 roi_coord
+                self._end_x = float(result[0])
+                self._end_y = float(result[1])
+                self._end_was_set = True
+                self._step.params["end_roi_coord"] = "client"
+                self._set_end_spins(self._end_x, self._end_y, enabled=True)
+                self._update_end_label()
+                self.save()
+                self._list.steps_changed.emit()
+
+    def _clear_end(self):
+        self._end_x = None
+        self._end_y = None
+        self._end_was_set = False
+        self._step.params.pop("end_roi_coord", None)
+        self._set_end_spins(None, None, enabled=True)
+        self._update_end_label()
+        self.save()
+        self._list.steps_changed.emit()
+
+    def _set_end_value(self, idx, val):
+        if idx == 0:
+            self._end_x = val
+        else:
+            self._end_y = val
+        self._update_end_label()
+        self.save()
+
+    def notify_blocked(self):
+        """保存/收合被拒時，把焦點移到缺少的那一軸。"""
+        if self._end_x is None:
+            self._end_x_spin.setFocus()
+        elif self._end_y is None:
+            self._end_y_spin.setFocus()
+
+    def save(self) -> bool:
+        state = _drag_end_state(self._end_x, self._end_y)
+        if state == "incomplete":
+            # 半套終點：整筆不寫入（不覆蓋原資料），保留輸入讓使用者補齊或清除
+            self._update_end_label()
+            return False
         self._step.params["target"] = self._target.currentData()
         self._step.params["dx"] = self._dx.value()
         self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
         self._step.params["after_delay_ms"] = self._after_delay_raw.value()
+        if state == "unset":
+            self._step.params["end_x"] = None
+            self._step.params["end_y"] = None
+            self._step.params.pop("end_roi_coord", None)
+        elif state == "ratio":
+            self._step.params["end_x"] = self._end_x
+            self._step.params["end_y"] = self._end_y
+            if not self._end_was_set:
+                # 原本未設定 → GUI 手動輸入與拾取同為 client 比例
+                self._step.params["end_roi_coord"] = "client"
+        # pixel / invalid：保留原始資料不動，不得靜默改成合法值
+        self._update_end_label()
         try:
             self._verify.save()
         except Exception:
             pass
+        return True
 
 
 class _ScrollStepForm(QWidget):
@@ -6537,6 +6726,14 @@ class MainWindow(QMainWindow):
         if previous:
             prev_data = previous.data(0, Qt.ItemDataRole.UserRole)
             if prev_data and prev_data[0] == "rule":
+                if not self._ensure_steps_committed():
+                    # 未完成的輸入無法提交：維持原規則與原表單，把選取復原
+                    self._rule_list.blockSignals(True)
+                    try:
+                        self._rule_list.setCurrentItem(previous)
+                    finally:
+                        self._rule_list.blockSignals(False)
+                    return
                 prev_id = prev_data[1]
                 prev_rule = next((r for r in self._rules if r.id == prev_id), None)
                 if prev_rule:
@@ -6856,6 +7053,8 @@ class MainWindow(QMainWindow):
             )
             return
         rule_count = len([rid for rid in group.rule_ids if any(r.id == rid for r in self._rules)])
+        if not self._ensure_steps_committed():
+            return
         msg = T("dialog.delete_group_confirm", name=group.name)
         if rule_count > 0:
             msg += T("dialog.delete_group_has_rules", count=rule_count)
@@ -6920,6 +7119,8 @@ class MainWindow(QMainWindow):
             return
         cur = self._get_current_rule()
         if cur is not None:
+            if not self._ensure_steps_committed():
+                return
             cur.steps = self._step_list.get_steps()
 
         # find target group from current selection
@@ -7017,6 +7218,8 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
+        if not self._ensure_steps_committed():
+            return
         rule.steps.append(step)
         self._step_list.set_steps(rule.steps)
         self._save_current_rule()
@@ -7038,6 +7241,8 @@ class MainWindow(QMainWindow):
                 return
         rule = self._get_current_rule()
         if rule is None:
+            return
+        if not self._ensure_steps_committed():
             return
 
         # 檢查是否有其他規則參照此規則
@@ -7181,6 +7386,8 @@ class MainWindow(QMainWindow):
             return
         cur = self._get_current_rule()
         if cur is not None:
+            if not self._ensure_steps_committed():
+                return
             cur.steps = self._step_list.get_steps()
         src = self._get_current_rule()
         if src is None:
@@ -7213,6 +7420,8 @@ class MainWindow(QMainWindow):
             return
         cur = self._get_current_rule()
         if cur is not None:
+            if not self._ensure_steps_committed():
+                return
             cur.steps = self._step_list.get_steps()
         src_rule = self._get_current_rule()
         if src_rule is None:
@@ -7255,6 +7464,8 @@ class MainWindow(QMainWindow):
         src_rule = self._get_current_rule()
         if src_rule is None:
             return
+        if not self._ensure_steps_committed():
+            return
         src_rule.steps = self._step_list.get_steps()
         if any(src_rule.id in g.rule_ids for g in self._groups if g.id == target_gid):
             return
@@ -7289,6 +7500,18 @@ class MainWindow(QMainWindow):
     def _schedule_save(self):
         self._save_timer.start()
 
+    def _ensure_steps_committed(self) -> bool:
+        """preflight：展開中的 Step 表單若無法提交就中止呼叫端。
+
+        使用者可能只填了 Drag 終點的一軸；此時 Step 表單的 save() 會拒絕並保留
+        表單。任何會寫檔、切換規則/任務或重建表單的操作都必須先經過這裡，
+        否則未完成的輸入會被靜默丟棄。
+        """
+        step_list = getattr(self, "_step_list", None)
+        if step_list is None:
+            return True
+        return step_list.commit_pending()
+
     def _commit_open_step_form(self) -> bool:
         """把目前展開的 Step 表單的最新值寫回 Step.params。
 
@@ -7305,7 +7528,8 @@ class MainWindow(QMainWindow):
         if step_list is None:
             return True
         try:
-            step_list.get_steps()
+            if not step_list.commit_pending():
+                return False
         except RuntimeError as exc:
             if "has been deleted" in str(exc):
                 # 表單已被 Qt 銷毀：已無可提交的內容，仍要保存其餘資料，但必須留下紀錄。
@@ -7383,6 +7607,8 @@ class MainWindow(QMainWindow):
             return
         rule = self._get_current_rule()
         if rule is None:
+            return
+        if not self._ensure_steps_committed():
             return
         rule.name = self._edit_name.text()
         rule.enabled = self._edit_enabled.isChecked()
@@ -7529,6 +7755,8 @@ class MainWindow(QMainWindow):
     def _on_debug_rule_requested(self, rule_data: dict):
         import uuid
 
+        if not self._ensure_steps_committed():
+            return
         cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",
@@ -7597,6 +7825,8 @@ class MainWindow(QMainWindow):
         rule = self._get_current_rule()
         if rule is None:
             return
+        if not self._ensure_steps_committed():
+            return
         rule.steps.append(
             Step(
                 type="detect",
@@ -7629,6 +7859,8 @@ class MainWindow(QMainWindow):
     def _on_debug_template_requested(self, data: dict):
         import uuid
 
+        if not self._ensure_steps_committed():
+            return
         cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
             id=f"rule_{uuid.uuid4().hex[:8]}",

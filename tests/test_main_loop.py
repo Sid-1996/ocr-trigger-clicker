@@ -61,6 +61,232 @@ def test_to_screen_coords():
     assert sx == 150 and sy == 260
 
 
+# ── resolve_drag_end (Drag 終點) ──
+
+
+def _noop_resolve(_px, _py, _roi):
+    return (_px, _py)
+
+
+def test_resolve_drag_end_unset_falls_back_to_dx_dy():
+    p = {"end_x": None, "end_y": None, "dx": 30, "dy": 40}
+    assert _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve) == (130, 240)
+
+
+def test_resolve_drag_end_zero_end_is_valid():
+    p = {"end_x": 0, "end_y": 0, "dx": 30, "dy": 40}
+    assert _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve) == (0, 0)
+
+
+def test_resolve_drag_end_picked_end_wins():
+    p = {"end_x": 0.5, "end_y": 0.8, "dx": 30, "dy": 40}
+    assert _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve) == (0.5, 0.8)
+
+
+def test_resolve_drag_end_incomplete_rejected():
+    p = {"end_x": 0.5, "end_y": None, "dx": 30, "dy": 40}
+    try:
+        _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve)
+        raise AssertionError("incomplete drag end must raise")
+    except ValueError:
+        pass
+
+
+def test_resolve_drag_end_invalid_nan_rejected():
+    p = {"end_x": float("nan"), "end_y": 0.8, "dx": 30, "dy": 40}
+    try:
+        _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve)
+        raise AssertionError("nan drag end must raise")
+    except ValueError:
+        pass
+
+
+def test_resolve_drag_end_huge_int_rejected():
+    p = {"end_x": 10**400, "end_y": 10**400, "dx": 30, "dy": 40}
+    try:
+        _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve)
+        raise AssertionError("huge drag end must raise")
+    except ValueError:
+        pass
+
+
+def test_resolve_drag_end_bool_rejected():
+    p = {"end_x": True, "end_y": False, "dx": 30, "dy": 40}
+    try:
+        _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve)
+        raise AssertionError("bool drag end must raise")
+    except ValueError:
+        pass
+
+
+def test_resolve_drag_end_infinity_rejected():
+    p = {"end_x": float("inf"), "end_y": float("inf"), "dx": 30, "dy": 40}
+    try:
+        _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve)
+        raise AssertionError("inf drag end must raise")
+    except ValueError:
+        pass
+
+
+def test_resolve_drag_end_normal_int_float_accepted():
+    p = {"end_x": 3, "end_y": 4, "dx": 30, "dy": 40}
+    assert _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve) == (3, 4)
+
+
+# ── 終點座標系（end_roi_coord）與實際像素落點 ──
+#
+# 實機案例：1920×1080 視窗、client 1912×1041、chrome offset (4,31)。
+# 拾取器回傳 client 比例，若被當成全視窗比例解讀，垂直會偏 12px。
+
+
+def _ml_with_chrome():
+    ml = _make_ml()
+    ml._frame_chrome = (4, 31)
+    ml._frame_client_size = (1912, 1041)
+    return ml
+
+
+def _resolve_with_ml(ml, params, start=(0, 0), size=(1920, 1080)):
+    rect = {"x": 0, "y": 0, "w": size[0], "h": size[1]}
+    return _ml_mod.resolve_drag_end(
+        params, start, lambda px, py, roi: ml._resolve_point(px, py, rect, roi)
+    )
+
+
+def test_picked_end_uses_client_space():
+    """client 中心拾取必須落在 client 中心，而不是全視窗中心。"""
+    ml = _ml_with_chrome()
+    params = {"end_x": 0.5, "end_y": 0.5, "end_roi_coord": "client"}
+    assert _resolve_with_ml(ml, params) == (960, 551)
+
+
+def test_end_without_marker_keeps_legacy_space():
+    """舊資料（無 end_roi_coord）沿用 roi_coord；無起點 roi_coord 時是全視窗比例。"""
+    ml = _ml_with_chrome()
+    params = {"end_x": 0.5, "end_y": 0.5}
+    assert _resolve_with_ml(ml, params) == (960, 540)
+
+
+def test_end_roi_coord_overrides_start_space():
+    ml = _ml_with_chrome()
+    params = {"end_x": 0.5, "end_y": 0.5, "end_roi_coord": "window", "roi_coord": "client"}
+    assert _resolve_with_ml(ml, params) == (960, 540)
+
+
+def test_client_end_corners_map_to_client_bounds():
+    ml = _ml_with_chrome()
+    assert _resolve_with_ml(ml, {"end_x": 0.0, "end_y": 0.0, "end_roi_coord": "client"}) == (
+        4,
+        31,
+    )
+    assert _resolve_with_ml(ml, {"end_x": 1.0, "end_y": 1.0, "end_roi_coord": "client"}) == (
+        4 + 1912,
+        31 + 1041,
+    )
+
+
+def test_borderless_window_client_and_window_space_agree():
+    ml = _make_ml()
+    ml._frame_chrome = (0, 0)
+    ml._frame_client_size = (1920, 1080)
+    params = {"end_x": 0.5, "end_y": 0.5, "end_roi_coord": "client"}
+    assert _resolve_with_ml(ml, params) == (960, 540)
+
+
+def test_picking_end_does_not_change_start_space():
+    """起點 text_center 沒有 roi_coord；設定端點後起點解析必須完全不變。"""
+    ml = _ml_with_chrome()
+    start_params = {"target": "text_center", "x": 0.2, "y": 0.3, "roi_coord": None}
+    before = ml._resolve_point(
+        start_params["x"], start_params["y"], {"x": 0, "y": 0, "w": 1920, "h": 1080}, None
+    )
+    start_params.update({"end_x": 0.5, "end_y": 0.5, "end_roi_coord": "client"})
+    after = ml._resolve_point(
+        start_params["x"], start_params["y"], {"x": 0, "y": 0, "w": 1920, "h": 1080}, None
+    )
+    assert before == after == (384, 324)
+
+
+# ── _handle_drag：非法終點不得送出任何輸入 ──
+
+
+def _drag_ctx():
+    return StepContext(
+        img=np.zeros((1080, 1920, 3), dtype=np.uint8),
+        rect={"x": 0, "y": 0, "w": 1920, "h": 1080},
+    )
+
+
+def _drag_loop(monkeypatch):
+    ml = _ml_with_chrome()
+    ml._config_store = type(
+        "FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "pynput"}
+    )()
+    sent = []
+    monkeypatch.setattr(
+        _ml_mod._input_mod, "send_drag", lambda *a, **k: sent.append(("pynput", a)) or True
+    )
+    monkeypatch.setattr(
+        _ml_mod._bg_input, "drag", lambda *a, **k: sent.append(("frida", a)) or True
+    )
+    clicks = []
+    monkeypatch.setattr(ml._perf, "record_click", lambda *a, **k: clicks.append(1))
+    return ml, sent, clicks
+
+
+def test_handle_drag_invalid_end_sends_no_input(monkeypatch):
+    ml, sent, clicks = _drag_loop(monkeypatch)
+    rule = Rule(id="r-drag", name="Drag", enabled=True, steps=[])
+    bad_ends = (
+        {"end_x": 0.5, "end_y": None},
+        {"end_x": None, "end_y": 0.5},
+        {"end_x": float("nan"), "end_y": 0.5},
+        {"end_x": float("inf"), "end_y": -float("inf")},
+        {"end_x": 10**400, "end_y": 10**400},
+        {"end_x": "bad", "end_y": 0.5},
+        {"end_x": True, "end_y": False},
+    )
+    for bad in bad_ends:
+        params = {"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20, **bad}
+        result = ml._handle_drag(params, _drag_ctx(), rule)
+        assert result.action == "stop", (bad, result)
+        assert result.detail == _ml_mod.T("exec_log.detail.drag_end_invalid"), bad
+    assert sent == []
+    assert clicks == []
+
+
+def test_handle_drag_valid_picked_end_sends_client_coords(monkeypatch):
+    ml, sent, clicks = _drag_loop(monkeypatch)
+    rule = Rule(id="r-drag", name="Drag", enabled=True, steps=[])
+    params = {
+        "target": "custom",
+        "x": 0.25,
+        "y": 0.3,
+        "roi_coord": "client",
+        "end_x": 0.5,
+        "end_y": 0.5,
+        "end_roi_coord": "client",
+    }
+    result = ml._handle_drag(params, _drag_ctx(), rule)
+    assert result.action == "continue"
+    assert len(sent) == 1 and len(clicks) == 1
+    mode, args = sent[0]
+    assert mode == "pynput"
+    # 起點 (4+478, 31+312) → (4+956, 31+520)
+    assert args[:4] == (482, 343, 960, 551), args
+
+
+def test_handle_drag_unset_end_keeps_dx_dy(monkeypatch):
+    ml, sent, clicks = _drag_loop(monkeypatch)
+    rule = Rule(id="r-drag", name="Drag", enabled=True, steps=[])
+    params = {"target": "custom", "x": 0.25, "y": 0.3, "roi_coord": "client", "dx": 10, "dy": 20}
+    result = ml._handle_drag(params, _drag_ctx(), rule)
+    assert result.action == "continue"
+    mode, args = sent[0]
+    assert mode == "pynput"
+    assert args[:4] == (482, 343, 492, 363), args
+
+
 # ── 刻意等待不觸發過慢誤報 ──
 
 

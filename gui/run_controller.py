@@ -202,7 +202,8 @@ class TestRunController:
 
         def _resolve_point(px, py, roi_coord=None):
             W, H = img.shape[1], img.shape[0]
-            if isinstance(px, float) and px <= 1.0 and isinstance(py, float) and py <= 1.0:
+            # 與 core/05_main_loop.py `_resolve_point` 同一比例判斷（含 int 0/0）
+            if px <= 1.0 and py <= 1.0:
                 if roi_coord == "client":
                     if _client_rect:
                         cx, cy, client_w, client_h = _client_rect
@@ -417,8 +418,18 @@ class TestRunController:
                     if sx is not None:
                         dx = p.get("dx", 0)
                         dy = p.get("dy", 0)
-                        ex = sx + dx
-                        ey = sy + dy
+                        try:
+                            if p.get("end_x") is None and p.get("end_y") is None:
+                                ex = sx + dx
+                                ey = sy + dy
+                            else:
+                                ex, ey = _main_loop_mod.resolve_drag_end(
+                                    p, (sx, sy), lambda px, py, roi: _resolve_point(px, py, roi)
+                                )
+                        except ValueError:
+                            log.append(T("exec_log.detail.drag_end_invalid"))
+                            _fatal(idx, "terminal")
+                            continue
                         s = T(
                             "test.drag_action",
                             idx=idx + 1,

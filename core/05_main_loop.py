@@ -84,6 +84,29 @@ def _is_finite_number(value) -> bool:
         return False
 
 
+def resolve_drag_end(params: dict, start: tuple, resolve_point) -> tuple:
+    """Drag 終點解析：end_x/end_y 有效時優先；未設定時走舊行為 start + dx/dy。
+
+    終點座標系由 `end_roi_coord` 決定（GUI 拾取固定寫 "client"）；舊資料沒有
+    此欄位時沿用 `roi_coord`，與加欄位前的解讀完全相同。
+    """
+    end_x = params.get("end_x")
+    end_y = params.get("end_y")
+    if end_x is None and end_y is None:
+        return (start[0] + int(params.get("dx") or 0), start[1] + int(params.get("dy") or 0))
+    if end_x is None or end_y is None:
+        raise ValueError("drag_end_incomplete")
+    if isinstance(end_x, bool) or isinstance(end_y, bool):
+        raise ValueError("drag_end_invalid_type")
+    if not _is_finite_number(end_x) or not _is_finite_number(end_y):
+        raise ValueError("drag_end_invalid_value")
+    end_x_f, end_y_f = float(end_x), float(end_y)
+    end_coord = params.get("end_roi_coord")
+    if end_coord is None:
+        end_coord = params.get("roi_coord")
+    return resolve_point(end_x_f, end_y_f, end_coord)
+
+
 Rule = _rule.Rule
 RuleGroup = _rule.RuleGroup
 load_rules = _rule.load_rules
@@ -1560,12 +1583,17 @@ class MainLoop:
         if self._is_tool_foreground():
             return StepResult("stop", detail=T("exec_log.detail.tool_foreground"))
 
-        dx = params.get("dx", 0)
-        dy = params.get("dy", 0)
         button = params.get("button", "left")
 
+        try:
+            end = resolve_drag_end(
+                params, (sx, sy), lambda px, py, roi: self._resolve_point(px, py, ctx.rect, roi)
+            )
+        except ValueError:
+            return StepResult("stop", detail=T("exec_log.detail.drag_end_invalid"))
+
         ssx, ssy = self._to_screen_coords(ctx.rect, sx, sy)
-        sex, sey = self._to_screen_coords(ctx.rect, sx + dx, sy + dy)
+        sex, sey = self._to_screen_coords(ctx.rect, end[0], end[1])
 
         with self._focus_guard() as focus_ok:
             if not focus_ok:
