@@ -602,6 +602,10 @@ class MainLoop:
     def _load_rules(self):
         error_msg = ""
         with self._rules_lock:
+            # reload 邊界同時重設「通知去重鎖存」：規則重載後是新的觀察期，
+            # 舊的「已通知」記錄不得抑制重載後的首次命中——舊記錄可能屬於
+            # 已被移除、或即將以相同 id 重新加入的規則。
+            self._notified_conditions.clear()
             try:
                 rules = load_rules(self._rules_path)
                 groups = load_groups(self._rules_path)
@@ -2849,6 +2853,10 @@ class MainLoop:
         self._last_exec_log.clear()
         self._rule_completed.clear()
         self._last_completed_log.clear()
+        # 通知去重鎖存屬於「本次執行」的狀態：每次啟動都是新的觀察期，
+        # 舊的「已通知」記錄不得抑制本次啟動後的首次命中
+        # （GUI 每次啟動都是新的 MainLoop 實例，此處讓同一實例重啟的行為一致）。
+        self._notified_conditions.clear()
         self._reset_black_state()
         self._frame_count = 0
         for k in self._phase_sums:
