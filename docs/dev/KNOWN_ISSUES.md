@@ -36,7 +36,7 @@
 | R-2 | P3 | 後台輸入失敗現在每次都寫 log → 若某規則每幀都失敗（約 500ms／幀），一天約 17 萬筆，可能撐大日誌檔 | `core/05_main_loop.py` `_report_bg_failure()` | 需產品決策是否對 log 也限流（與 C-3「每次都要寫」衝突） |
 | R-3 | P3 | ✅ **已修（2026-11-04，`45aefbd`）**：循環啟動前已建立的 OCR Debug 驗證 worker 仍會跑完 → 該窗口內仍與主循環共用後台輸入 | `gui/09_ocr_debug.py` 驗證 worker | 已於循環啟動時以既有 generation id 作廢在途驗證＋worker 送出輸入前的自我中止閘；已送出的 DOWN 不受阻斷 |
 | R-4 | P3 | Frida UP 失敗後該規則視為未 triggered → 群組指標不推進，下一幀會再試一次按鍵（與既有 click 失敗語意一致，受 CPS 上限約束） | `core/05_main_loop.py` `_handle_key` | 觀察；對「按鍵卡住」反而有助於放開 |
-| R-5 | P3 | 主循環啟動到 GUI 通知面板之間有毫秒級窗口（`InitWorker.run()` 的 `loop.start()` 先於 `finished.emit`）→ 該窗口內 key 驗證 worker 仍可能送出一次按鍵 | `gui/06_gui_main.py` `InitWorker.run` | worker 送出輸入前已有閘；窗口無法完全消除，接受為殘餘風險 |
+| R-5 | P3 | ✅ **已修（2026-11-04，`0f77931`）**：主循環啟動到 GUI 通知面板之間有毫秒級窗口（`InitWorker.run()` 的 `loop.start()` 先於 `finished.emit`）→ 該窗口內 key 驗證 worker 仍可能送出一次按鍵 | `gui/06_gui_main.py` `_start_loop()`／`InitWorker.run()` | 已於啟動 InitWorker **之前**先 `set_run_active(True)`；啟動失敗（含執行緒起不來）時恢復。`set_run_active` 本身冪等，不會重複作廢 |
 | R-6 | P3 | 被作廢的驗證 worker 結果會因 request id 過期而被忽略 → 使用者只看到按鈕恢復，沒有「已中止」提示 | `gui/09_ocr_debug.py` `_abort_running_verifications()` | 產品決策是否要補提示；不影響輸入安全 |
 
 ## C-2a-1 Closeout 查核（2026-11-03）

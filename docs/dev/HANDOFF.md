@@ -6,8 +6,9 @@
 
 完成 **Global Stop 控制流程、輸入取消鏈、Frida 邊界、後台錯誤生命週期、通知去重鎖存**
 與 **後台失敗回報／OCR Debug 測試按鈕停用** 的必要修正、測試補強與文件更新；
-另補齊 **Click PostMessage 失敗原因（R-1）** 與 **在途驗證 worker 中止（R-3）**，
-收斂進 commit `2f1aa9c` 與 `45aefbd`，工作區僅剩兩個工具檔。
+另補齊 **Click PostMessage 失敗原因（R-1）**、**在途驗證 worker 中止（R-3）**、
+**MainLoop 啟動競態（R-5）**，收斂進 commit `2f1aa9c`、`45aefbd`、`0f77931`，
+工作區僅剩兩個工具檔。
 
 ## 本階段做了什麼
 
@@ -54,6 +55,11 @@
 - **R-1**：`core/16_bg_input.py` `_click_postmessage()` 的 DOWN／UP 失敗改以 `_set_error()` 記錄原因（另含例外路徑）→ MainLoop 的 `_report_bg_failure()` 與 OCR Debug 失敗分支讀得到「為什麼失敗」。回傳值語意與 finally 的 UP 釋放路徑不變；取消不算失敗。
 - **R-3**：`gui/09_ocr_debug.py` 主循環啟動時以既有 generation id 作廢在途 click／key 驗證 worker，歸零 in-progress 旗標並還原按鈕文字與可用性；worker 於送出輸入前再確認一次主循環狀態。**已送出的 DOWN 不受阻斷**，必要的 UP 仍由後端層必定送出（`threading.Event` 作為跨執行緒閘）。
 
+### R-5（MainLoop 啟動競態，`0f77931`）
+
+- `InitWorker.run()` 的 `loop.start()` 先於 `finished.emit` → GUI 收到 finished 才 `set_run_active(True)`，兩者之間的窗口內 key 驗證 worker 仍會送出一次按鍵。
+- 修正：`_start_loop()` 在啟動 InitWorker **之前**先 `set_run_active(True)`；啟動失敗（`finished(False, …)` 或執行緒起不來）時恢復。新增 `_set_debug_run_active()` 作為面板狀態同步的單一入口，不影響編輯區啟用狀態。
+
 ## 驗證結果（實測）
 
 ```
@@ -68,7 +74,8 @@ tests/test_drag_legacy.py（C-2a-1）                   → 34 passed
 tests/test_run_controller.py（C-2a-1）                → 2 passed
 tests/test_bg_click_error_reporting.py（新增 R-1）    → 12 passed
 tests/test_debug_verify_abort_on_run.py（新增 R-3）   → 16 passed
-完整套件                                          → 1325 passed, 0 failed（78.74s）
+tests/test_debug_gate_before_loop_start.py（新增 R-5）→ 11 passed
+完整套件                                          → 1336 passed, 0 failed（78.78s）
 ruff check                                        → All checks passed（exit 0）
 git diff --check                                  → exit 0
 core self-check（4 檔）                             → 全 exit=0
@@ -79,14 +86,15 @@ coordinate_calibration --e2e                       → 6/6 通過，最大偏差
 
 新測試的鑑別力已逐一驗證（以 runtime patch 模擬「修正不存在」）：
 C-1 → 2 項失敗、C-2 scroll → 2 項、C-2 drag → 3 項、C-2 回報 → 7 項、C-3 → 2 項、C-5 → 4 項；
-**R-1 → 5 項失敗**（DOWN／UP／例外原因＋MainLoop 靜默回報）、**R-3 → 11 項失敗**（16 項中）。
+**R-1 → 5 項失敗**（DOWN／UP／例外原因＋MainLoop 靜默回報）、**R-3 → 11 項失敗**（16 項中）、
+**R-5 → 7 項失敗**（11 項中）。
 
 ## 交接重點
 
-- **工作區已收斂**：E2／P2 階段的程式碼與測試在 `2f1aa9c`（31 檔，+5153／−112）；本次 R-1／R-3 修正與新測試在 `45aefbd`（6 檔，+779／−100）；文件為本次文件 commit。
+- **工作區已收斂**：E2／P2 階段的程式碼與測試在 `2f1aa9c`（31 檔，+5153／−112）；R-1／R-3 修正與新測試在 `45aefbd`（6 檔，+779／−100）；R-5 修正與新測試在 `0f77931`（3 檔，+331／−4）；文件為本次文件 commit。
 - **保留未納入 commit**：`.agents/`、`skills-lock.json`（工具檔，不刪除、不納入）。
-- branch `master`，HEAD `45aefbd`，`origin/master` = `d1184e0`（前次已 push），本次領先 1 顆，**尚未 push**。
-- 距上次發布（`v0.4.8`）累計 24 顆 commit 未發布（含本次文件 commit）；下一步是 `release.ps1 -Version "0.4.9" -FeedTest`。
+- branch `master`，HEAD `0f77931`，`origin/master` = `d1184e0`（前次已 push），本次領先 3 顆，**尚未 push**。
+- 距上次發布（`v0.4.8`）累計 26 顆 commit 未發布（含本次文件 commit）；下一步是 `release.ps1 -Version "0.4.9" -FeedTest`。
 - 既有假 `_migration` **不清洗**（產品決策 keep）——使用者任務檔內既有標記保持原狀。
 - 並行（∥）群組「**全員**被擋下」＝等待語義，修好→儲存→自動恢復；全員停用（disabled）的並行群組 stall **另案**。
 - **真機 frida／hybrid 拖曳、frida 輸入取消與 Release 仍未驗證。**
@@ -96,7 +104,7 @@ C-1 → 2 項失敗、C-2 scroll → 2 項、C-2 drag → 3 項、C-2 回報 →
 C-2a-2 Drag Repair UI；假 marker 清洗；parallel 全員 disabled stall；fingerprint 效能重構（F-08）、
 `_preflight_last_fingerprint`（F-09）、dead binding（F-10）、`RuleRunOutcome` 死成員；
 C-4 跨執行緒錯誤歸屬（僅以 C-5 限制重疊）；C-6 群組輪替重新武裝；C-9 pynput/hybrid 失敗回報語意；
-R-2 log 限流；R-4 UP 失敗後重試；R-5 主循環啟動的毫秒級窗口；R-6 作廢驗證無中止提示。
+R-2 log 限流；R-4 UP 失敗後重試；R-6 作廢驗證無中止提示。
 
 ---
 
