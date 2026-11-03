@@ -1,7 +1,7 @@
 # 已知問題（KNOWN_ISSUES）
 
 > 最後更新：2026-11-04
-> 來源：E1-R 查核（F-1～F-12，舊編號）、E1-R2-V 查核（F-13～F-17，舊編號）、**C-2a-1 Closeout（2026-11-03）**、**E2／P2 階段查核（2026-11-04）**
+> 來源：E1-R 查核（F-1～F-12，舊編號）、E1-R2-V 查核（F-13～F-17，舊編號）、**C-2a-1 Closeout（2026-11-03）**、**E2／P2 階段查核（2026-11-04）**、**v0.4.9 發布前修正 R-1／R-3（2026-11-04）**
 
 ## E2／P2 階段查核（2026-11-04）
 
@@ -32,10 +32,12 @@
 
 | ID | 嚴重度 | 問題 | 位置 | 建議 |
 |---|---|---|---|---|
-| R-1 | P3 | Click 路徑的 DOWN／UP 失敗仍不記錄原因 → `_handle_click` 的 `_report_bg_failure()` 可能讀到空錯誤而靜默返回（同 C-2 類型，本次只修 drag／scroll） | `core/16_bg_input.py` `_click_postmessage()` | 後續版本補 `_set_error()` |
+| R-1 | P3 | ✅ **已修（2026-11-04，`45aefbd`）**：Click 路徑的 DOWN／UP 失敗不記錄原因 → `_handle_click` 的 `_report_bg_failure()` 讀到空錯誤而靜默返回 | `core/16_bg_input.py` `_click_postmessage()` | 已補 `_set_error()`（DOWN／UP／例外三種路徑）；取消不算失敗；finally 的 UP 釋放路徑不變 |
 | R-2 | P3 | 後台輸入失敗現在每次都寫 log → 若某規則每幀都失敗（約 500ms／幀），一天約 17 萬筆，可能撐大日誌檔 | `core/05_main_loop.py` `_report_bg_failure()` | 需產品決策是否對 log 也限流（與 C-3「每次都要寫」衝突） |
-| R-3 | P3 | 循環啟動前已建立的 OCR Debug 驗證 worker 仍會跑完 → 該窗口內仍與主循環共用後台輸入 | `gui/09_ocr_debug.py` 驗證 worker | 循環啟動時作廢在途驗證（generation id 機制已存在） |
+| R-3 | P3 | ✅ **已修（2026-11-04，`45aefbd`）**：循環啟動前已建立的 OCR Debug 驗證 worker 仍會跑完 → 該窗口內仍與主循環共用後台輸入 | `gui/09_ocr_debug.py` 驗證 worker | 已於循環啟動時以既有 generation id 作廢在途驗證＋worker 送出輸入前的自我中止閘；已送出的 DOWN 不受阻斷 |
 | R-4 | P3 | Frida UP 失敗後該規則視為未 triggered → 群組指標不推進，下一幀會再試一次按鍵（與既有 click 失敗語意一致，受 CPS 上限約束） | `core/05_main_loop.py` `_handle_key` | 觀察；對「按鍵卡住」反而有助於放開 |
+| R-5 | P3 | 主循環啟動到 GUI 通知面板之間有毫秒級窗口（`InitWorker.run()` 的 `loop.start()` 先於 `finished.emit`）→ 該窗口內 key 驗證 worker 仍可能送出一次按鍵 | `gui/06_gui_main.py` `InitWorker.run` | worker 送出輸入前已有閘；窗口無法完全消除，接受為殘餘風險 |
+| R-6 | P3 | 被作廢的驗證 worker 結果會因 request id 過期而被忽略 → 使用者只看到按鈕恢復，沒有「已中止」提示 | `gui/09_ocr_debug.py` `_abort_running_verifications()` | 產品決策是否要補提示；不影響輸入安全 |
 
 ## C-2a-1 Closeout 查核（2026-11-03）
 
@@ -74,7 +76,7 @@
 | **F-14** | P2 | ✅ 已修（F1＋C-2） | 鍵盤／捲軸路徑忽略 `PostMessageW` 回傳值 → 鍵盤於 F1 修正；滾輪於 2026-11-04 的 C-2 修正 |
 | F-11 | P3 | ⬜ 未修 | 競態測試未真正製造競態（hold 僅 5ms） |
 | F-12 | P3 | ✅ 已修（F1） | Background Frida drag 的 up 訊息無保護 → DOWN 成功後 UP 必定嘗試送出 |
-| **F-15** | P3 | ✅ 部分修（2026-11-04） | 後台點擊失敗未打通統一回報通道 → drag／scroll 已打通（C-2）；click 失敗仍缺錯誤原因（R-1） |
+| **F-15** | P3 | ✅ 已修（F1＋C-2＋R-1） | 後台點擊失敗未打通統一回報通道 → drag／scroll 已於 C-2 打通；click 失敗的錯誤原因已於 R-1（`45aefbd`）補上，點擊失敗可被回報 |
 | F-16 | P3 | ⬜ 未修 | WM_ACTIVATE 的「不中斷」只對回傳 0 成立 |
 | F-17 | P3 | ⬜ 未修 | 測試缺口彙整 |
 
