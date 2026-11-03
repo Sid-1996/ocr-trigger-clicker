@@ -8117,7 +8117,19 @@ class MainWindow(QMainWindow):
             config_path=self._config_path,
         )
         self._init_worker.finished.connect(self._on_init_finished)
-        self._init_worker.start()
+        # R-5：MainLoop 真正開始執行（InitWorker.run() 內的 loop.start()）之前，
+        # 先讓 OCR Debug 的驗證 worker 看見「主循環執行中」閘門。
+        # 否則 loop.start() 到 GUI 收到 finished 訊號之間存在窗口，
+        # 該窗口內先前的驗證 worker 仍會送出按鍵，與主循環重疊操作後台輸入。
+        # 這裡只關 OCR Debug 的輸入測試閘門，不動編輯區的啟用狀態。
+        self._set_debug_run_active(True)
+        try:
+            self._init_worker.start()
+        except Exception:
+            # 連執行緒都起不來 → 同樣要恢復 Debug 的閘門，
+            # 否則輸入測試按鈕會永久停用（例外照原樣往外拋，語意不變）。
+            self._set_debug_run_active(False)
+            raise
 
     def _on_init_finished(self, success: bool, error_msg: str):
         self._btn_toggle.setEnabled(True)
@@ -8145,6 +8157,9 @@ class MainWindow(QMainWindow):
             self._exec_log_widget.setVisible(True)
             self._exec_log_toggle.setText(T("exec_log.hide"))
         else:
+            # 啟動失敗 → 恢復 OCR Debug 的閘門（啟動前已先關上），
+            # 否則輸入測試按鈕會永久停用。
+            self._set_debug_run_active(False)
             QMessageBox.critical(
                 self, T("dialog.init_failed"), T("dialog.loop_start_failed", error=error_msg)
             )
@@ -8338,12 +8353,23 @@ class MainWindow(QMainWindow):
         # 測試鈕會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
         # 後端狀態 → 兩邊同時送輸入會互相干擾。
         # 面板尚未建立或已關閉時安全略過（不直接操作面板內部 widget）。
-        panel = getattr(self, "_debug_panel", None)
-        if panel is not None:
-            panel.set_run_active(not enabled)
+        self._set_debug_run_active(not enabled)
 
         if editing:
             self._show_rule_detail(self._get_current_rule())
+
+    def _set_debug_run_active(self, active: bool) -> None:
+        """只同步 OCR Debug 面板的「主循環執行中」狀態。
+
+        與 _update_edit_enabled 分開的原因：啟動流程需要在 MainLoop 真正開始
+        執行之前先關上 Debug 的輸入測試閘門（R-5），但不能連帶把編輯區也
+        停用（啟動流程的既有語意不變）。
+
+        面板尚未建立或已關閉時安全略過。
+        """
+        panel = getattr(self, "_debug_panel", None)
+        if panel is not None:
+            panel.set_run_active(active)
 
     # === Thread-safe callbacks ===
     def _on_window_lost_from_thread(self):

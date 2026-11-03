@@ -98,6 +98,8 @@ def _edit_widgets():
         _step_list=_Widget(),
         _get_current_rule=lambda: None,
         _show_rule_detail=lambda rule: None,
+        # OCR Debug 面板的同步（_update_edit_enabled 會呼叫）
+        _set_debug_run_active=lambda active: None,
     )
 
 
