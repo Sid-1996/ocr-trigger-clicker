@@ -363,6 +363,10 @@ def _click_postmessage(
 
     down 送出後一定會嘗試送出 up；up 失敗會再試一次並留下 warning。
     回傳值反映 down/up 是否成功「提交」給目標視窗，不會假裝成功。
+
+    DOWN / UP 失敗都記錄錯誤原因（_set_error）：呼叫端（MainLoop 的
+    _report_bg_failure、OCR Debug 的失敗分支）要能讀到「為什麼失敗」，
+    否則只會拿到空字串而無法回報。取消（cancel）不是失敗，不記錯誤。
     """
     down_sent = False
     released = True
@@ -393,6 +397,7 @@ def _click_postmessage(
         if not _post_message_ok(hwnd, down_msg, mk, lparam, "按下滑鼠訊息失敗"):
             # down 沒提交成功 → 不得標記 down_sent（否則會送出無意義的 up）
             ok = False
+            _set_error(f"點擊按下訊息送出失敗（msg=0x{down_msg:04X}, hwnd={hwnd}）")
         else:
             down_sent = True
             if hold_ms > 0:
@@ -400,10 +405,14 @@ def _click_postmessage(
     except Exception as e:
         _log.error("PostMessage click failed: %s", e)
         ok = False
+        _set_error(f"點擊訊息送出例外：{e}")
     finally:
         if down_sent:
             # 無論正常、取消或例外，都必須嘗試送出 up
             released = _post_up_with_retry(hwnd, up_msg, lparam)
+            if not released:
+                # 放開失敗代表按鈕可能卡在遊戲裡 → 不得只留在 log
+                _set_error("點擊放開訊息送出失敗，滑鼠按鈕可能卡在遊戲內")
     return ok and released
 
 

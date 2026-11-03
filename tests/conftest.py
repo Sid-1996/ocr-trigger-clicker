@@ -320,3 +320,106 @@ def real_mainwindow(qt_app, isolated_data_dir, call_recorder, monkeypatch):
         # DeferredDelete 必須用 sendPostedEvents 才會被處理（processEvents 不會）
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         qt_app.processEvents()
+
+
+# ── 假後台輸入環境（frida 模式的 Win32 / RPC） ─────────────────────────────
+#
+# 放在 conftest 是為了讓多個測試檔共用同一份假環境：測試檔若自行 import
+# fixture 函式，ruff 會把測試參數視為重複定義（F811），共用 fixture 由
+# pytest 自動發現即可，不需要各檔案 import。
+
+
+class _FakeUser32:
+    """只記錄訊息的假 user32。
+
+    fail 模擬 PostMessageW 回傳 0（真實 Win32 失敗模式）。
+    """
+
+    def __init__(self):
+        self.sent = []
+        self.fail = set()
+
+    def PostMessageW(self, hwnd, msg, wparam, lparam):
+        self.sent.append(msg)
+        return 0 if msg in self.fail else 1
+
+    def ClientToScreen(self, hwnd, point):
+        return None
+
+    def GetAsyncKeyState(self, vk):
+        return 0
+
+    def MapVirtualKeyW(self, vk, mode):
+        return vk
+
+
+class _FakeExports:
+    """假 rpc.exports：可注入失敗來模擬腳本端異常。"""
+
+    def __init__(self, env):
+        self.env = env
+
+    def key(self, vk, down):
+        n = self.env.get("fail_key_rpc_times", 0)
+        if n > 0:
+            self.env["fail_key_rpc_times"] = n - 1
+            return 0  # 腳本回傳異常 → _sync_key 失敗
+        return 1
+
+    def update(self, sx, sy, cx, cy):
+        if self.env.get("fail_sync"):
+            return 0
+        return 1
+
+
+class _FakeScript:
+    def __init__(self, exports):
+        self.exports = exports
+        self.unloaded = False
+
+    def unload(self):
+        self.unloaded = True
+
+
+class _FakeSession:
+    is_detached = False
+
+    def detach(self):
+        self.is_detached = True
+
+
+@pytest.fixture
+def bg_env(monkeypatch):
+    """可控的假後台環境（假 Win32 + 假 Frida session/script/RPC）。"""
+    from _loader import load_sibling
+
+    bg = load_sibling("bg_input", "core/16_bg_input.py")
+    fr = load_sibling("frida_bg", "core/18_frida_bg.py")
+
+    prev_method = bg.get_method()
+    user32 = _FakeUser32()
+    env: dict = {"fail_key_rpc_times": 0, "fail_sync": False, "user32": user32}
+    script = _FakeScript(_FakeExports(env))
+    session = _FakeSession()
+
+    monkeypatch.setattr(bg, "user32", user32)
+    monkeypatch.setattr(bg, "_last_error", "")
+    monkeypatch.setattr(fr, "_last_error", "")
+    monkeypatch.setattr(fr, "_script", script)
+    monkeypatch.setattr(fr, "_session", session)
+    monkeypatch.setattr(fr, "_pid", 1234)
+    monkeypatch.setattr(bg, "_frida", lambda: fr)
+
+    def _ensure_attached(_hwnd):
+        fr._script = script
+        fr._session = session
+        fr._pid = 1234
+        fr.clear_error()
+        return True
+
+    monkeypatch.setattr(fr, "ensure_attached", _ensure_attached)
+    bg.set_method("frida")
+    try:
+        yield env
+    finally:
+        bg.set_method(prev_method)

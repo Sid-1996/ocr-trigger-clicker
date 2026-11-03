@@ -58,6 +58,7 @@ def _find_text_after_click(block_results: list, target: str) -> bool:
 
 _KEY_TEST_DEFAULT = "space"  # 16_bg_input / 03_pynput_input 兩邊都相容的按鍵名
 _ERR_MODE_SWITCHED = "mode changed to pynput"  # key verify 的假失敗（非注入問題）
+_ERR_RUN_ACTIVE = "main loop running"  # 主循環執行中 → 驗證 worker 自我中止（非注入問題）
 _KEY_TEST_OPTIONS = (
     "space",
     "enter",
@@ -192,7 +193,9 @@ class OcrDebugPanel(QWidget):
         # 2) 主循環是否執行中：_run_active
         #    測試鈕會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
         #    後端狀態 → 循環執行期間一律停用，避免兩邊同時送輸入互相干擾。
-        self._run_active = False
+        #    用 threading.Event：驗證 worker 在背景執行緒讀取這個狀態，
+        #    Event 的讀寫是原子的，跨執行緒的閘語意明確。
+        self._run_active = threading.Event()
         self._click_test_available = False
         self._key_test_available = True
         self._last_verify_guidance = ""
@@ -653,14 +656,58 @@ class OcrDebugPanel(QWidget):
         self._update_step_btn_state()
 
     def set_run_active(self, active: bool) -> None:
-        """主循環執行期間停用輸入測試按鈕。
+        """主循環執行期間停用輸入測試按鈕，並作廢在途的驗證工作。
 
         輸入測試會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
         後端狀態 → 循環執行期間必須停用，避免兩邊同時送輸入互相干擾。
         循環停止後依面板原本狀態還原（不覆蓋面板自己的啟用／停用邏輯）。
+
+        「停用按鈕」只擋住新的測試；先前已啟動的驗證 worker 仍在背景執行緒，
+        因此主循環啟動時必須另外作廢它們（見 _abort_running_verifications）。
         """
-        self._run_active = bool(active)
+        active = bool(active)
+        was_active = self._run_active.is_set()
+        if active:
+            # 先關閘再作廢：worker 讀的是 _run_active，先 set 才能讓正在
+            # 邊界上檢查的 worker 立刻看到「主循環執行中」。
+            self._run_active.set()
+            if not was_active:
+                self._abort_running_verifications()
+        else:
+            self._run_active.clear()
         self._sync_test_buttons()
+
+    def _abort_running_verifications(self) -> None:
+        """作廢在途的 click／key 驗證工作（主循環啟動時呼叫）。
+
+        以既有的 generation id 機制作廢：worker 回來的結果 request id 已過期
+        → _on_click_verify_done／_on_key_verify_done 安全忽略，不覆蓋面板狀態。
+        同時歸零 in-progress 旗標並還原按鈕文字／可用性，否則按鈕會永久卡在
+        「驗證中」（與 clear_results 的既有做法一致）。
+
+        已送出 DOWN 的部分不受影響：放開（UP）由後端層必定送出，不阻擋。
+        """
+        self._click_verify_request_id += 1
+        self._key_verify_request_id += 1
+        self._verif_in_progress = False
+        self._key_verif_in_progress = False
+        try:
+            # 選取結果仍在 → 點擊測試維持可用；按鍵測試本來就可用。
+            self._click_test_available = self._selected_index >= 0
+            self._key_test_available = True
+            self._click_test_btn.setText(T("ocr_debug.click_test"))
+            self._key_test_btn.setText(T("ocr_debug.key_test"))
+            self._sync_test_buttons()
+        except RuntimeError:
+            logging.debug("ocr debug panel closed: skip verify abort UI restore")
+
+    def _verify_input_blocked(self) -> bool:
+        """True 代表主循環執行中，驗證 worker 不得再送出輸入或繼續擷取。
+
+        worker 在背景執行緒執行，主循環啟動後必須讓它停下來，避免與主循環
+        重疊操作後台輸入（已送出的 DOWN 不受影響：UP 由後端層必定送出）。
+        """
+        return self._run_active.is_set()
 
     def _sync_test_buttons(self) -> None:
         """套用輸入測試按鈕的可用性：面板自身狀態 AND 非主循環執行中。
@@ -669,9 +716,10 @@ class OcrDebugPanel(QWidget):
         不該用」；主循環執行中則一律停用。視窗已關閉（C++ 物件已刪除）時
         安全忽略，不讓狀態更新拖垮 GUI。
         """
+        run_active = self._run_active.is_set()
         try:
-            self._click_test_btn.setEnabled(self._click_test_available and not self._run_active)
-            self._key_test_btn.setEnabled(self._key_test_available and not self._run_active)
+            self._click_test_btn.setEnabled(self._click_test_available and not run_active)
+            self._key_test_btn.setEnabled(self._key_test_available and not run_active)
         except RuntimeError:
             logging.debug("ocr debug panel closed: skip test button state")
 
@@ -1048,6 +1096,11 @@ class OcrDebugPanel(QWidget):
         try:
             # 等 ~0.6s 過場，再重拍目標區塊確認點擊是否有實際反應
             time.sleep(0.6)
+            # 主循環若已啟動 → 不得繼續驗證：主循環會改變畫面，繼續比對只會
+            # 得出「沒有反應」的假結論。此時結果會因 generation id 作廢而被忽略。
+            if self._verify_input_blocked():
+                emit("skipped", "?", 0.0, _ERR_RUN_ACTIVE)
+                return
             mode = _get_interaction_mode()
             hwnd = _screenshot.get_window_hwnd(self._window_title)
             t0 = time.monotonic()
@@ -1201,6 +1254,10 @@ class OcrDebugPanel(QWidget):
             )
 
         try:
+            # 主循環已啟動 → 立即中止（尚未送出任何輸入）
+            if self._verify_input_blocked():
+                emit("fail", err=_ERR_RUN_ACTIVE)
+                return
             mode = _get_interaction_mode()
             if mode == "pynput":
                 emit("fail", err=_ERR_MODE_SWITCHED)
@@ -1209,6 +1266,11 @@ class OcrDebugPanel(QWidget):
             before = capture_frame(mode, self._window_title, hwnd=hwnd)
             if before is None or is_black_capture(before):
                 emit("black")
+                return
+            # 送出輸入前再確認一次：主循環可能在擷取期間啟動。
+            # 已送出的 DOWN 不受這道閘影響（放開由後端層必定送出）。
+            if self._verify_input_blocked():
+                emit("fail", err=_ERR_RUN_ACTIVE)
                 return
             if mode == "hybrid":
                 with _hybrid.focus_guard(self._window_title, activate_window):
@@ -1279,8 +1341,9 @@ class OcrDebugPanel(QWidget):
             logging.warning(
                 "ocr_dbg key verify=%s key=%s err=%s", key, test_key, out.get("err", "")
             )
-            # 假失敗（使用者已切回前景）不觸發服務對話框；其餘失敗簽名一律請求
-            if not (key == "fail" and out.get("err") == _ERR_MODE_SWITCHED):
+            # 假失敗（使用者已切回前景／主循環已啟動）不觸發服務對話框；
+            # 其餘失敗簽名一律請求
+            if not (key == "fail" and out.get("err") in (_ERR_MODE_SWITCHED, _ERR_RUN_ACTIVE)):
                 self.bg_inject_fail.emit()
 
     def _open_click_detail(self):
