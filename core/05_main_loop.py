@@ -12,6 +12,7 @@ from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
 from ctypes import wintypes
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -29,6 +30,8 @@ _input_mod = load_sibling("pynput_input", "core/03_pynput_input.py")
 _bg_input = load_sibling("bg_input", "core/16_bg_input.py")
 _hybrid = load_sibling("hybrid_input", "core/19_hybrid_input.py")
 _rule = load_sibling("rule_engine", "core/04_rule_engine.py")
+_preflight_mod = load_sibling("rule_preflight", "core/rule_preflight.py")
+PreflightResult = _preflight_mod.PreflightResult
 group_display_name = load_sibling("rule_models", "core/rule_models.py").group_display_name
 _perf = load_sibling("performance_monitor", "core/10_performance_monitor.py")
 PerformanceMonitor = _perf.PerformanceMonitor
@@ -85,15 +88,16 @@ def _is_finite_number(value) -> bool:
 
 
 def resolve_drag_end(params: dict, start: tuple, resolve_point) -> tuple:
-    """Drag 終點解析：end_x/end_y 有效時優先；未設定時走舊行為 start + dx/dy。
+    """Drag 終點解析：僅接受明確的 end_x/end_y，兩者必須完整且合法。
 
     終點座標系由 `end_roi_coord` 決定（GUI 拾取固定寫 "client"）；舊資料沒有
     此欄位時沿用 `roi_coord`，與加欄位前的解讀完全相同。
+
+    未設定終點時不再推算 start + dx/dy，直接由呼叫方以 stop 結束步驟，
+    避免將舊 PX offset 靜默當作新終點。
     """
     end_x = params.get("end_x")
     end_y = params.get("end_y")
-    if end_x is None and end_y is None:
-        return (start[0] + int(params.get("dx") or 0), start[1] + int(params.get("dy") or 0))
     if end_x is None or end_y is None:
         raise ValueError("drag_end_incomplete")
     if isinstance(end_x, bool) or isinstance(end_y, bool):
@@ -109,6 +113,10 @@ def resolve_drag_end(params: dict, start: tuple, resolve_point) -> tuple:
 
 Rule = _rule.Rule
 RuleGroup = _rule.RuleGroup
+# Step 取自同一個 rule_models 模組實例（_rule 內部以 load_sibling("rule_models", ...) 載入），
+# 因此與正式載入路徑（rule_serialization.load_rules、GUI 建構）產生的 Step 是同一個
+# class object，可安全用 isinstance 判斷，不需以 __class__.__name__ 猜測。
+Step = _rule.Step
 load_rules = _rule.load_rules
 load_groups = _rule.load_groups
 save_rules = _rule.save_rules
@@ -144,6 +152,19 @@ def crop_roi(img: np.ndarray, roi: dict) -> np.ndarray | None:
     return img[y1:y2, x1:x2]
 
 
+class RuleRunOutcome(Enum):
+    """單條規則一次執行的結果。
+
+    BLOCKED 代表 Preflight 判定此規則目前不可執行（規則結構或步驟參數有問題）；
+    呼叫端據此推進 group pointer 或略過本輪，不得用 ctx.force_advance 偽裝。
+    """
+
+    COMPLETED = "completed"
+    BLOCKED = "blocked"
+    STOPPED = "stopped"
+    PENDING = "pending"
+
+
 @dataclass
 class StepContext:
     img: np.ndarray
@@ -158,6 +179,9 @@ class StepContext:
     # 否則當前一步是 click/key/drag/scroll（設 triggered=True）的規則執行 jump 時，
     # 下一幀 _advance_rule_in_group() 會把 ptr 再 +1 蓋掉跳轉目標，導致目標規則從未執行。
     jumped: bool = False
+    # 群組被 notify 移除時設 True。語意不同於 jumped（跳轉）：_process_rules
+    # 不得再推進 pointer，否則會對「下一個群組」多做一次 +1，跳過其第一條規則。
+    group_removed: bool = False
     step_idx: int = -1
     best_confidence: float = -1.0
     ocr_elapsed_ms: float = 0
@@ -405,6 +429,9 @@ class MainLoop:
         self._fail_since: dict[
             str, float
         ] = {}  # key=f"{rule_id}:{step_idx}" → first-fail monotonic timestamp
+        # Preflight cache 狀態：統一由 _init_preflight_state() 建立，
+        # 測試 fixture（tests/conftest.py）也走同一入口，避免兩邊欄位漂移。
+        self._init_preflight_state()
         self._last_active_rule_id: str | None = None
         self._execution_log: deque = deque(maxlen=100)
         self._quiet_names: set[str] = set()
@@ -602,6 +629,15 @@ class MainLoop:
     def _load_rules(self):
         error_msg = ""
         with self._rules_lock:
+            # 重置 Preflight cache：規則檔重載後舊的 fingerprint 一律失效。
+            # 走 _init_preflight_state() 也能讓未經 __init__ 建立的實例（例如
+            # sim_task.py / devtools 工具）安全呼叫本方法。
+            self._init_preflight_state()
+            # reload 邊界同時重設「執行日誌去重」：讓 save/reload 後
+            # 同一問題可再記錄一列（且 completed 的 1 秒節流一併重置）。
+            # execution_log deque（歷史紀錄）刻意保留不清。
+            self._last_exec_log.clear()
+            self._last_completed_log.clear()
             # reload 邊界同時重設「通知去重鎖存」：規則重載後是新的觀察期，
             # 舊的「已通知」記錄不得抑制重載後的首次命中——舊記錄可能屬於
             # 已被移除、或即將以相同 id 重新加入的規則。
@@ -667,8 +703,8 @@ class MainLoop:
         mode = self._config_store.get("interaction_mode")
         if mode == "frida" and self._window_hwnd:
             _bg_input.set_method(mode)
-            return _bg_input.send_key(self._window_hwnd, key)
-        return _input_mod.send_key(key)
+            return _bg_input.send_key(self._window_hwnd, key, self._stop_event)
+        return _input_mod.send_key(key, self._stop_event)
 
     def _send_scroll(self, direction: str) -> bool:
         mode = self._config_store.get("interaction_mode")
@@ -680,8 +716,8 @@ class MainLoop:
                 amount = 1 if direction == "WheelRight" else -1
             else:
                 amount = -1 if direction == "WheelDown" else 1
-            return _bg_input.scroll(self._window_hwnd, 0, 0, amount, horizontal)
-        return _input_mod.send_scroll(1, direction)
+            return _bg_input.scroll(self._window_hwnd, 0, 0, amount, horizontal, self._stop_event)
+        return _input_mod.send_scroll(1, direction, self._stop_event)
 
     def _activate_window(self) -> bool:
         """Activate window using the appropriate method based on interaction mode."""
@@ -704,18 +740,21 @@ class MainLoop:
         return contextlib.nullcontext(True)
 
     def _report_bg_failure(self) -> None:
-        """後台（frida）輸入失敗的統一回報：30s 節流 + 寫 log + 通知 GUI。
+        """後台（frida）輸入失敗的統一回報：寫 log ＋ 30s 節流後通知 GUI。
 
         呈現（診斷對話框／前景切換建議）由 GUI 層決定，core 只負責偵測與節流。
+
+        節流只作用於 GUI 通知（on_bg_fail）：每一次後台輸入失敗都要寫 log，
+        否則 30 秒內的後續失敗在診斷紀錄中會完全消失（使用者只看到第一次）。
         """
         err = _bg_input.last_error()
         if not err:
             return
         now = time.monotonic()
+        self._log(f"後台輸入失敗：{err}")
         if now - self._last_frida_err_ts <= self._FRIDA_ERR_THROTTLE_SEC:
             return
         self._last_frida_err_ts = now
-        self._log(f"後台輸入失敗：{err}")
         if self.on_bg_fail:
             self.on_bg_fail()
 
@@ -760,6 +799,16 @@ class MainLoop:
                 if interrupted:
                     return False
         return self._perf.check_rate_limit()
+
+    def _stop_gate(self) -> StepResult | None:
+        """Handler 入口的停止閘：全域停止已送出時不得開始新的輸入。
+
+        回傳 None 代表可以繼續執行；回傳 StepResult("stop") 代表已中止。
+        已送出的 DOWN 不受此閘影響——必要的 UP / Release 一律照常送出。
+        """
+        if not self._stop_event.is_set():
+            return None
+        return StepResult("stop", detail=T("exec_log.detail.interrupted"))
 
     def _update_has_detect(self):
         self._has_detect_rules = any(
@@ -1346,6 +1395,10 @@ class MainLoop:
         return T("notify.group_sep").join(names)
 
     def _handle_on_fail(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        # 全域停止時不執行一般 on_fail（不再補送按鍵、不再跳轉、不再通知）。
+        gate = self._stop_gate()
+        if gate is not None:
+            return gate
         raw = params.get("on_fail", "stop")
 
         fail_duration = raw.get("fail_duration_sec", 0) if isinstance(raw, dict) else 0
@@ -1431,6 +1484,7 @@ class MainLoop:
                     self._active_group_ids.remove(gid)
                 if group and group.id not in self._active_group_ids:
                     self._rule_in_group_ptr = 0
+                    ctx.group_removed = True
                     stopped = True
                 self._log(
                     f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 通知並停止群組 {stopped_groups}"
@@ -1439,6 +1493,7 @@ class MainLoop:
                 if group:
                     self._active_group_ids.remove(group.id)
                     self._rule_in_group_ptr = 0
+                    ctx.group_removed = True
                     stopped = True
                     self._log(
                         f"規則「{rule.name}」步驟{ctx.step_idx} 失敗 → 通知「{message}」，停止當前群組"
@@ -1459,6 +1514,9 @@ class MainLoop:
         return StepResult("stop", detail=T("exec_log.detail.fail_stop"))
 
     def _handle_click(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        gate = self._stop_gate()
+        if gate is not None:
+            return gate
         target = params.get("target", "text_center")
         off = params.get("random_offset", 0)
         dx = random.randint(-off, off) if off else 0
@@ -1516,6 +1574,9 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
+            gate = self._stop_gate()
+            if gate is not None:
+                return gate
             ok = self._send_click(sx, sy, button, params.get("hold_ms", 0))
         if ok:
             self._perf.record_click()
@@ -1531,6 +1592,9 @@ class MainLoop:
         return StepResult("continue")
 
     def _handle_key(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        gate = self._stop_gate()
+        if gate is not None:
+            return gate
         key = params.get("key", "")
         if not key:
             return StepResult("stop", detail=T("exec_log.detail.key_empty"))
@@ -1544,6 +1608,9 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
+            gate = self._stop_gate()
+            if gate is not None:
+                return gate
 
             hold_ms = params.get("hold_ms", 0)
             if hold_ms > 0:
@@ -1569,6 +1636,9 @@ class MainLoop:
         return StepResult("continue")
 
     def _handle_drag(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        gate = self._stop_gate()
+        if gate is not None:
+            return gate
         target = params.get("target", "text_center")
         if target == "text_center":
             if ctx.matched_text is None:
@@ -1603,6 +1673,9 @@ class MainLoop:
             if not focus_ok:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
+            gate = self._stop_gate()
+            if gate is not None:
+                return gate
             mode = self._config_store.get("interaction_mode")
             if mode == "frida" and self._window_hwnd:
                 _bg_input.set_method(mode)
@@ -1613,10 +1686,16 @@ class MainLoop:
                 user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt1))
                 pt2 = wintypes.POINT(sex, sey)
                 user32.ScreenToClient(self._window_hwnd, ctypes.byref(pt2))
-                ok = _bg_input.drag(self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button)
+                ok = _bg_input.drag(
+                    self._window_hwnd, pt1.x, pt1.y, pt2.x, pt2.y, button, self._stop_event
+                )
             else:
-                ok = _input_mod.send_drag(ssx, ssy, sex, sey, button)
+                ok = _input_mod.send_drag(ssx, ssy, sex, sey, button, self._stop_event)
         if not ok:
+            # 與 click / key 同一套判斷原則：只有 frida 模式有後台錯誤通道，
+            # 失敗時走既有回報機制（寫 log ＋節流後通知 GUI），不得吞掉原因。
+            if mode == "frida":
+                self._report_bg_failure()
             return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
         self._perf.record_click()
         ctx.triggered = True
@@ -1628,6 +1707,9 @@ class MainLoop:
         return StepResult("continue")
 
     def _handle_scroll(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        gate = self._stop_gate()
+        if gate is not None:
+            return gate
         if not self._can_perform_action():
             return StepResult("stop", detail=T("exec_log.detail.cps_limit"))
         if self._is_tool_foreground():
@@ -1642,8 +1724,14 @@ class MainLoop:
                 return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
             self._activate_window()
             for _ in range(amount):
+                gate = self._stop_gate()
+                if gate is not None:
+                    return gate
                 ok = self._send_scroll(direction)
                 if not ok:
+                    # 與 click / key 同一套判斷原則：只有 frida 模式有後台錯誤通道。
+                    if self._config_store.get("interaction_mode") == "frida":
+                        self._report_bg_failure()
                     return StepResult("stop", detail=T("exec_log.detail.comms_fail"))
                 if delay_ms > 0:
                     if self._stop_event.wait(timeout=delay_ms / 1000.0):
@@ -1928,6 +2016,21 @@ class MainLoop:
             return StepResult("stop", detail=T("exec_log.detail.unknown_step"))
         return handler(step.params, ctx, rule)
 
+    def _stopped_outcome(self, rule: Rule, ctx: StepContext) -> "RuleRunOutcome | None":
+        """Rule 結束時的回傳值：只有全域停止才回 STOPPED，其餘（含局部 stop）回 None。
+
+        StepResult("stop") 有兩種語意：全域取消（_stop_event）與單條規則局部終止
+        （on_fail=stop、設定錯誤）。Scheduler 只把前者視為停止，後者維持原本
+        下一幀重試的語意；回傳 STOPPED 時一併清掉可能造成誤完成的旗標，
+        但既有 cleanup（加總浮層）仍須執行。
+        """
+        if not self._stop_event.is_set():
+            return None
+        ctx.triggered = False
+        ctx.force_advance = False
+        self._clear_sum(rule.id)
+        return RuleRunOutcome.STOPPED
+
     def _run_rule(
         self,
         rule: Rule,
@@ -1935,11 +2038,18 @@ class MainLoop:
         rect: dict,
         ctx: StepContext | None = None,
         background: bool = False,
-    ) -> None:
+    ) -> "RuleRunOutcome | None":
         if ctx is None:
             ctx = StepContext(img=img, rect=rect)
+        if self._stop_event.is_set():
+            return self._stopped_outcome(rule, ctx)
+        outcome = self._preflight_result(rule, background)
+        if outcome is RuleRunOutcome.BLOCKED:
+            return outcome
         i = 0
         while i < len(rule.steps):
+            if self._stop_event.is_set():
+                return self._stopped_outcome(rule, ctx)
             ctx.step_idx = i
             step = rule.steps[i]
             ctx.on_fail_fired = False  # 每步重設，避免上一步 on_fail=key 的旗標污染本步判斷
@@ -1948,12 +2058,34 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
+            # 通知去重重新武裝：偵測步驟失敗＝本次條件不成立，該次「已通知」記錄
+            # 必須失效，條件再次成立時才會再通知。
+            # 位置約束：必須排在「步驟後的全域停止閘」之前——停止發生在偵測步驟
+            # 之後時，重新武裝仍要執行，否則會留下失效鎖存並抑制後續的首次命中。
+            # （步驟「前」的停止閘直接 return，偵測步驟未執行，本就無從重新武裝；
+            #   該路徑留下的鎖存由 start() / _load_rules() 的清除兜底。）
             if (
                 i == 0
                 and step.type in self._DETECT_STEP_TYPES
                 and (result.action != "continue" or ctx.on_fail_fired)
             ):
                 self._notified_conditions.discard(rule.id)
+            # E2-A2：全域停止優先於任何 StepResult。
+            # 只要 _stop_event 已設定，continue / stop / jump_step 一律轉成 STOPPED：
+            # 不重送輸入、不執行下一個 Step、不計入 completed、不推進 pointer。
+            if self._stop_event.is_set():
+                if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
+                    self._rule_completed.discard(rule.id)
+                if not background:
+                    detail = result.detail or self._infer_stop_detail(step, ctx)
+                    self._log_exec(
+                        rule.name,
+                        i,
+                        step.type,
+                        "stop",
+                        detail or T("exec_log.detail.interrupted"),
+                    )
+                return self._stopped_outcome(rule, ctx)
             if step.type in self._DETECT_STEP_TYPES and result.action == "continue":
                 ctx.matched_ns = time.monotonic_ns()
             ms = step.params.get("after_delay_ms", 0) or 0
@@ -1966,7 +2098,7 @@ class MainLoop:
                 # 動作成功後固定延遲（社群「動作後 sleep」慣例）：與 _handle_wait 同款之中斷式等待，
                 # 讓下一幀/下一規則以新畫面續接；中斷（暫停/停止）即止。
                 if self._stop_event.wait(timeout=ms / 1000.0):
-                    return StepResult("stop", detail=T("exec_log.detail.interrupted"))
+                    return self._stopped_outcome(rule, ctx)
                 self._frame_waited_ms += ms  # 刻意等待：過慢判定時扣除
             # Verify: optional post-condition on new frames (not ctx.img) — 僅動作四類（追溯 ADR-0005）
             if (
@@ -1978,6 +2110,10 @@ class MainLoop:
                 verify = step.params.get("verify")
                 # invalid verify (e.g. verify+stop) was dropped in normalize, so None here means skip
                 if verify:
+                    # E2-A2：Verify 開始前檢查 Stop。全域停止不得進入驗證流程，
+                    # 也不得被當成一般 Verify failure（不觸發 retry / on_fail）。
+                    if self._stop_event.is_set():
+                        return self._stopped_outcome(rule, ctx)
                     # ponytail: 循環群組＋長驗證會卡住同組其他規則——軟護欄只警告一次，不擋執行。
                     # _current_group() 會跳過 loop+parallel，故用 rule.id 反查所屬群組才準。
                     try:
@@ -2042,7 +2178,7 @@ class MainLoop:
                                     "stop",
                                     cancel_detail,
                                 )
-                            return StepResult("stop", detail=cancel_detail)
+                            return self._stopped_outcome(rule, ctx)
                         # timeout
                         if poll_res == "no_frame":
                             # 一張畫面都拿不到時重跑動作只會造成重複輸入
@@ -2068,8 +2204,23 @@ class MainLoop:
                                             "stop",
                                             retry_cancel,
                                         )
-                                    return StepResult("stop", detail=retry_cancel)
+                                    return self._stopped_outcome(rule, ctx)
                                 self._frame_waited_ms += (time.monotonic() - t0) * 1000
+                            # E2-A2：Retry delay 結束後再次檢查 Stop。
+                            # 停止後不得重新執行原始輸入（否則使用者按了停止仍會再點一次）。
+                            if self._stop_event.is_set():
+                                ctx.triggered = False
+                                ctx.force_advance = False
+                                retry_cancel = self._get_verify_cancel_detail()
+                                if not background:
+                                    self._log_exec(
+                                        rule.name,
+                                        i,
+                                        step.type,
+                                        "stop",
+                                        retry_cancel,
+                                    )
+                                return self._stopped_outcome(rule, ctx)
                             # 重跑動作再驗（解決「點沒點到」）
                             if not background:
                                 self._log(
@@ -2096,7 +2247,7 @@ class MainLoop:
                                 "stop",
                                 late_cancel,
                             )
-                        return StepResult("stop", detail=late_cancel)
+                        return self._stopped_outcome(rule, ctx)
                     else:  # timeout after retries exhausted
                         # 缺省／None 採 advance；不可回退 step 的 on_fail，兩者層級不同。
                         v_on_fail = verify.get("on_fail")
@@ -2119,9 +2270,7 @@ class MainLoop:
                                     "stop",
                                     T("exec_log.detail.verification_timeout"),
                                 )
-                            return StepResult(
-                                "stop", detail=T("exec_log.detail.verification_timeout")
-                            )
+                            return self._stopped_outcome(rule, ctx)
                         tmp_params = {"on_fail": v_on_fail}
                         if not background:
                             hint = self._verify_timeout_hint(verify)
@@ -2155,7 +2304,7 @@ class MainLoop:
                     else:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
                 self._clear_sum(rule.id)
-                return
+                return self._stopped_outcome(rule, ctx)
             elif result.action == "jump_step":
                 idx = result.step_index
                 if idx < 0:
@@ -2171,7 +2320,7 @@ class MainLoop:
                             "jump",
                             T("exec_log.detail.skip_to_end"),
                         )
-                    return
+                    return self._stopped_outcome(rule, ctx)
                 if not background:
                     self._log_exec(
                         rule.name,
@@ -2190,7 +2339,7 @@ class MainLoop:
                             "stop",
                             T("exec_log.detail.jump_invalid"),
                         )
-                    return
+                    return self._stopped_outcome(rule, ctx)
                 i = idx
                 continue
             else:
@@ -2204,6 +2353,7 @@ class MainLoop:
                         self._log_exec(rule.name, i, step.type, "ok", detail)
                 self._rule_completed.discard(rule.id)
             i += 1
+        return self._stopped_outcome(rule, ctx)
 
     def _infer_stop_detail(self, step, ctx: StepContext) -> str:
         t = step.type
@@ -2375,6 +2525,126 @@ class MainLoop:
             y2 = max(r[1] + r[3] for r in members)
             self._ocr_region(img, {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1})
 
+    def _init_preflight_state(self) -> None:
+        """建立／重置 Preflight cache 狀態。
+
+        正式 MainLoop.__init__、_load_rules() 與測試 fixture
+        （tests/conftest.py make_main_loop）都走這裡，三個欄位才不會漂移。
+        """
+        # key=(obj_id, background_mode, rule_fingerprint).
+        # value=(rule_object_reference, background_mode, rule_fingerprint, PreflightResult).
+        # Cache 只保存活的 Rule 物件參照與產生結果時的 fingerprint，
+        # 因此不會跨 Rule 誤用，也不會因 id() 重用而命中錯誤結果。
+        self._preflight_cache: dict[
+            tuple[int, bool, str], tuple[object, bool, str, "PreflightResult"]
+        ] = {}
+        self._preflight_last_fingerprint: dict[int, str] = {}
+        # 使用者通知去重：(rule.id, fingerprint 或 problems 分類) -> monotonic 時間。
+        # reload（_load_rules）會走這裡整體重建，因此修好再存檔後可再次通知。
+        self._preflight_notified: dict[tuple, float] = {}
+
+    def _preflight_fingerprint(self, rule, background: bool) -> str | None:
+        try:
+            parts: list[str] = []
+            steps = getattr(rule, "steps", None)
+            if not isinstance(steps, list):
+                return None
+
+            for idx, step in enumerate(steps):
+                if not isinstance(step, Step):
+                    return None
+                step_type = step.type if isinstance(step.type, str) else "invalid"
+                params = step.params if isinstance(step.params, dict) else {}
+
+                if step_type == "detect":
+                    text = params.get("text", "<missing>")
+                    parts.append(f"{idx}|detect|text={text!r}")
+                elif step_type == "click":
+                    parts.append(
+                        f"{idx}|click|target={params.get('target', '<missing>')!r}|"
+                        f"x={params.get('x', 0)!r}|y={params.get('y', 0)!r}"
+                    )
+                else:
+                    parts.append(f"{idx}|{step_type}")
+
+            return "|".join(parts)
+        except Exception:
+            return None
+
+    def _preflight_key(self, rule, background: bool):
+        fp = self._preflight_fingerprint(rule, background)
+        if fp is None:
+            return None
+        return (id(rule), bool(background), fp)
+
+    def _preflight_lookup(self, rule, background: bool):
+        key = self._preflight_key(rule, background)
+        if key is None:
+            return None
+        entry = self._preflight_cache.get(key)
+        if entry is None:
+            return None
+
+        cached_rule, cached_bg, cached_fp, result = entry
+        if cached_rule is rule and cached_bg == background and cached_fp == key[2]:
+            return entry
+        return None
+
+    def _preflight_store(self, rule, result, background: bool) -> None:
+        fp = self._preflight_fingerprint(rule, background)
+        if fp is None:
+            return
+        key = (id(rule), bool(background), fp)
+        self._preflight_cache[key] = (rule, bool(background), fp, result)
+
+    def _preflight_result(self, rule, background: bool) -> "RuleRunOutcome | None":
+        entry = self._preflight_lookup(rule, background)
+        if entry is not None:
+            result = entry[3]
+            if result.status == "blocked":
+                return RuleRunOutcome.BLOCKED
+            return None
+
+        result = _preflight_mod.rule_preflight(rule)
+        if result.status == "blocked":
+            self._record_preflight_block(rule, result, background)
+            self._preflight_store(rule, result, background)
+            return RuleRunOutcome.BLOCKED
+
+        self._preflight_store(rule, result, background)
+        return None
+
+    def _record_preflight_block(self, rule, result, background: bool) -> None:
+        """BLOCKED 的使用者可見通知（含去重）。
+
+        同一規則、同一問題只通知一次：
+        - fp 可得時 key=(rule.id, fp)
+        - fp=None（非 canonical Step 等）時 key=(rule.id, problems 分類)
+        reload 會重建 _preflight_notified，因此修復後可再次通知。
+        前景：execution log + on_warning（toast/狀態列）。
+        背景：只寫 execution log，不彈 toast。
+        """
+        fp = self._preflight_fingerprint(rule, background)
+        rid = getattr(rule, "id", None) or f"#{id(rule)}"
+        key = (rid, fp) if fp is not None else (rid, tuple(result.problems or ("invalid_rule",)))
+        if key in self._preflight_notified:
+            return
+        self._preflight_notified[key] = time.monotonic()
+
+        labels = [T(f"exec_log.reason.{p}") for p in (result.problems or ["invalid_rule"])]
+        problems_text = "、".join(labels)
+        # 完整問題放 execution log（背景與前景皆寫）
+        self._log_exec(rule.name, -1, "preflight", "blocked", problems_text)
+        self._log(f"preflight blocked rule={rule.name} problems=[{problems_text}]")
+        if background:
+            return
+        if self.on_warning:
+            # toast 摘要：最多兩項 + 數量；完整內容在 execution log
+            brief = "、".join(labels[:2])
+            if len(labels) > 2:
+                brief += T("exec_log.reason.and_more", n=len(labels) - 2)
+            self.on_warning(T("notif.rule_blocked", rule=rule.name, problems=brief))
+
     def _process_rules(self, img: np.ndarray, rect: dict) -> None:
         self._sum_frame_start()
         self._frame_ocr_cache.clear()
@@ -2403,18 +2673,26 @@ class MainLoop:
         phase_started = time.monotonic()
         for rule in rules_snapshot:
             if rule.enabled and rule.background:
+                if self._stop_event.is_set():
+                    return
                 self._process_counter += 1
-                saved_ptr = self._rule_pointer
+                # M6：背景 jump/on_fail 會改寫 _rule_in_group_ptr；_rule_pointer 從未被
+                # 讀取，保護不到前景 pointer，這裡保存／還原真正會被排程使用的欄位。
+                saved_ptr = self._rule_in_group_ptr
                 bg_ctx = StepContext(img=img, rect=rect)
+                outcome = None
                 try:
-                    self._run_rule(rule, img, rect, bg_ctx, background=True)
+                    outcome = self._run_rule(rule, img, rect, bg_ctx, background=True)
                 except Exception as e:
                     self._logger.exception("背景規則「%s」異常: %s", rule.name, e)
                     if self.on_warning:
                         self.on_warning(f"背景規則「{rule.name}」異常: {e}")
+                finally:
+                    self._rule_in_group_ptr = saved_ptr
+                if outcome is RuleRunOutcome.STOPPED:
+                    return
                 if bg_ctx.triggered:
                     self._log_exec(rule.name, 0, "background", "triggered")
-                self._rule_pointer = saved_ptr
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
         self._phase_sums["background"] += (time.monotonic() - phase_started) * 1000
@@ -2426,6 +2704,8 @@ class MainLoop:
                 and g.mode == "loop"
                 and g.order == "parallel"
             ):
+                if self._stop_event.is_set():
+                    return
                 self._run_parallel_group(g, img, rect)
 
         # ── Group-based rule pointer (sequential / once / repeat) ──
@@ -2452,13 +2732,21 @@ class MainLoop:
         ctx = StepContext(img=img, rect=rect)
 
         try:
-            self._run_rule(rule, img, rect, ctx)
+            outcome = self._run_rule(rule, img, rect, ctx)
         except Exception as e:
             self._logger.exception("規則「%s」處理異常: %s", rule.name, e)
             if self.on_warning:
                 self.on_warning(f"規則「{rule.name}」異常: {e}")
+            outcome = None
 
-        if (ctx.triggered or ctx.force_advance) and not ctx.jumped:
+        if outcome is RuleRunOutcome.STOPPED:
+            return
+
+        if outcome is RuleRunOutcome.BLOCKED:
+            self._advance_rule_in_group()
+            return
+
+        if (ctx.triggered or ctx.force_advance) and not ctx.jumped and not ctx.group_removed:
             if ctx.triggered:
                 self._rule_completed.add(rule.id)
                 self._log_exec(rule.name, -1, "completed", "completed")
@@ -2470,6 +2758,8 @@ class MainLoop:
         # 把純 match_template 計算丟進執行緒池平行跑，結果以 rule_id 為鍵存入手稿 ctx.prematch。
         # ponytail: 不跳過任何規則、不改執行路徑（warning/log/on_fail 仍由 _run_rule 依序處理），
         # 只把「找圖計算」平行化後由 _handle_match_image 消費——行為完全等價。
+        if self._stop_event.is_set():
+            return
         pending: dict[str, object] = {}
         pool = getattr(self, "_prematch_pool", None)
         if pool is not None or len(group.rule_ids) >= 2:
@@ -2514,7 +2804,7 @@ class MainLoop:
 
         triggered = False
         for rid in group.rule_ids:
-            if triggered:
+            if triggered or self._stop_event.is_set():
                 break
             r = self._rule_map.get(rid)
             if r is None or not r.enabled:
@@ -2527,12 +2817,15 @@ class MainLoop:
                 except Exception:
                     r_ctx.prematch = None
             self._process_counter += 1
+            outcome = None
             try:
-                self._run_rule(r, img, rect, r_ctx)
+                outcome = self._run_rule(r, img, rect, r_ctx)
             except Exception as e:
                 self._logger.exception("並行規則「%s」異常: %s", r.name, e)
                 if self.on_warning:
                     self.on_warning(f"並行規則「{r.name}」異常: {e}")
+            if outcome is RuleRunOutcome.STOPPED or r_ctx.group_removed:
+                return
             if r_ctx.triggered:
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.id)
@@ -3059,6 +3352,7 @@ if __name__ == "__main__":
     ml._rules_lock = threading.RLock()
     ml._window_lock = threading.RLock()
     ml._process_counter = 0
+    ml._init_preflight_state()  # 與 __init__ / conftest fixture 同一來源，避免欄位漂移
     ml._rules_dirty = False
     ml._tracking_hwnd = None
     ml._tool_hwnd = None
@@ -3216,7 +3510,8 @@ if __name__ == "__main__":
 
     mock_called = []
     _orig_k = _input_mod.send_key
-    _input_mod.send_key = lambda k: mock_called.append(k) or True  # type: ignore[assignment]
+    # E2-A2：send_key 現在會多帶一個 cancel 參數（_stop_event），自檢需接受新簽章。
+    _input_mod.send_key = lambda *a, **k: mock_called.append(a[0]) or True  # type: ignore[assignment]
     result = ml._handle_on_fail({"on_fail": {"action": "key", "key": "Escape"}}, ctx, test_rule)
     _input_mod.send_key = _orig_k
     assert result.action == "continue", "on_fail key should return continue"
@@ -3866,6 +4161,10 @@ if __name__ == "__main__":
     print("  [OK] Scroll direction WheelLeft → 左 x3")
 
     # ── Test 28: Stop suppression — rule not completed → logs ──
+    # Preflight 會把 text="" 的偵測判為無效（blocked），本組檢查的是 stop 記錄抑制，
+    # 與 Preflight 無關，暫時停用以隔離，Test 30 後還原。
+    _preflight_backup = ml._preflight_result
+    ml._preflight_result = lambda rule, background=False: None
     ml._rules = []
     ml._rule_map = {}
     ml._rule_completed.clear()
@@ -3895,6 +4194,7 @@ if __name__ == "__main__":
     assert len(ml._execution_log) == 1
     assert ml._execution_log[0]["result"] == "stop"
     print("  [OK] Suppression: completed → second stop logged again")
+    ml._preflight_result = _preflight_backup
 
     # ── Test 30b: _log sliding-window rate limit ──
     class _Probe(logging.Handler):

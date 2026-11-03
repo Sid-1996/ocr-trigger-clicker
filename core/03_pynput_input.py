@@ -263,16 +263,22 @@ def send_drag(x1: int, y1: int, x2: int, y2: int, button: str = "left", cancel=N
             time.sleep(0.02)
             mouse.press(btn)
             ledger.record(f"滑鼠按鈕 {btn}", lambda: mouse.release(btn))
+            # DOWN 已送出 → 之後只能停止 MOVE，不能跳過 Release（ledger 離開時釋放）。
             if cancel is not None and cancel.is_set():
                 _log.info("拖曳已取消，提前放開滑鼠按鈕")
                 return True
-            time.sleep(0.02)
+            if _interruptible_wait(20, cancel):
+                _log.info("拖曳已取消，停止移動並提前放開滑鼠按鈕")
+                return True
             mouse.position = (x2, y2)
             time.sleep(0.02)
     return True
 
 
-def send_scroll(amount: int = 1, direction: str = "WheelDown") -> bool:
+def send_scroll(amount: int = 1, direction: str = "WheelDown", cancel=None) -> bool:
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過滾輪")
+        return False
     dx = 0
     dy = 0
     if direction == "WheelDown":
@@ -285,6 +291,8 @@ def send_scroll(amount: int = 1, direction: str = "WheelDown") -> bool:
         dx = amount
     mouse = pynput.mouse.Controller()
     with _lock:
+        if cancel is not None and cancel.is_set():
+            return False
         mouse.scroll(dx, dy)
     return True
 

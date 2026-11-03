@@ -1803,3 +1803,171 @@ def test_gui_numeric_ranges_not_widened(qt_app):
     )
     assert scroll._amount.minimum() == 1
     assert scroll._amount.maximum() == 99
+
+
+# ── 7：NEW-A — Drag GUI 寫回不得污染（新式 endpoint drag）─────────────────────
+# 新式 endpoint drag 的 params 不含 dx/dy；表單不得在儲存時新增它們，
+# 否則 reload 會被 migration 誤判為 legacy / mixed（假 _migration marker）。
+
+
+def _new_endpoint_step() -> Step:
+    return Step(
+        type="drag",
+        params={
+            "target": "custom",
+            "x": 0.2,
+            "y": 0.3,
+            "end_x": 0.5,
+            "end_y": 0.6,
+            "end_roi_coord": "client",
+        },
+    )
+
+
+def _legacy_drag_step() -> Step:
+    return Step(
+        type="drag",
+        params={"target": "custom", "x": 0.2, "y": 0.3, "dx": 10, "dy": 20},
+    )
+
+
+def test_drag_new_endpoint_save_adds_no_dx_dy(step_list, qapp):
+    step = _new_endpoint_step()
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form.save() is True
+        assert "dx" not in step.params and "dy" not in step.params
+        out = _MIG._normalize_step_params("drag", dict(step.params))
+        assert "_migration" not in out
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_new_unset_end_save_adds_no_dx_dy(step_list, qapp):
+    step = Step(type="drag", params={"target": "custom", "x": 0.2, "y": 0.3})
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form.save() is True
+        assert "dx" not in step.params and "dy" not in step.params
+        out = _MIG._normalize_step_params("drag", dict(step.params))
+        assert "_migration" not in out
+        assert _MIG.validate_drag_endpoint(out)["status"] == "unset"
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_legacy_roundtrip_preserves_dx_dy(step_list, qapp, tmp_path):
+    step = _legacy_drag_step()
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form.save() is True
+        assert step.params["dx"] == 10 and step.params["dy"] == 20
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+    p = tmp_path / "task.json"
+    rule = Rule(id="r1", name="R1", enabled=True, steps=[step])
+    assert _SER.save_rules([rule], str(p)) is True
+    loaded = _SER.load_rules(str(p))
+    assert loaded[0].steps[0].params["dx"] == 10
+    assert loaded[0].steps[0].params["dy"] == 20
+    assert loaded[0].steps[0].params["_migration"]["reason"] == "legacy_px_offset"
+
+
+def test_drag_legacy_edit_other_fields_keeps_dx_dy(step_list, qapp):
+    step = _legacy_drag_step()
+    before = _MIG._normalize_step_params("drag", dict(step.params))
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._button.setCurrentIndex(form._button.findData("right"))
+        assert form.save() is True
+        assert step.params["dx"] == 10 and step.params["dy"] == 20
+        after = _MIG._normalize_step_params("drag", dict(step.params))
+        assert before.get("_migration") == after.get("_migration")
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_mixed_legacy_and_endpoint_marker_preserved(step_list, qapp):
+    """舊 dx/dy + 新 end_x/end_y 的真混合資料必須維持 mixed_legacy_and_endpoint。"""
+    step = Step(
+        type="drag",
+        params={
+            "target": "custom",
+            "x": 0.2,
+            "y": 0.3,
+            "dx": 10,
+            "dy": 20,
+            "end_x": 0.5,
+            "end_y": 0.6,
+            "end_roi_coord": "client",
+        },
+    )
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form.save() is True
+        assert step.params["dx"] == 10 and step.params["dy"] == 20
+        out = _MIG._normalize_step_params("drag", dict(step.params))
+        assert out["_migration"]["reason"] == "mixed_legacy_and_endpoint"
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_user_edit_marks_dirty_and_writes_back(step_list, qapp):
+    step = _legacy_drag_step()
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form._dx_was_set is True and form._dy_was_set is True
+        assert form._dx_dirty is False and form._dy_dirty is False
+        form._dx.setValue(55)
+        assert form._dx_dirty is True and form._dy_dirty is False
+        assert form.save() is True
+        assert step.params["dx"] == 55
+        assert step.params["dy"] == 20  # dy 未動，原值保留
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_new_form_dirty_tracks_only_user_edit(step_list, qapp):
+    """新式 drag：使用者只改 dx → 只寫 dx，dy 不得出現。"""
+    step = Step(type="drag", params={"target": "custom", "x": 0.2, "y": 0.3})
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        assert form._dx_was_set is False and form._dy_was_set is False
+        assert form._dx_dirty is False and form._dy_dirty is False
+        form._dx.setValue(40)
+        assert form.save() is True
+        assert step.params["dx"] == 40
+        assert "dy" not in step.params
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_drag_cancel_keeps_params_untouched(step_list, qapp):
+    """取消（不提交）：params 逐欄位不變。"""
+    step = _new_endpoint_step()
+    before = json.loads(json.dumps(step.params))
+    form = step_list._build_form(0, step)
+    assert form is not None
+    try:
+        form._dx.setValue(999)
+        form._dy.setValue(888)
+        form._button.setCurrentIndex(form._button.findData("right"))
+        # 不呼叫 save() → 直接關閉（取消）
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+    assert step.params == before

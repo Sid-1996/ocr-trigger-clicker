@@ -24,6 +24,43 @@ import time
 _log = logging.getLogger(__name__)
 _lock = threading.Lock()
 
+# 後端層級的最後一次錯誤（放開訊息失敗等）。GUI 透過 last_error() 讀取並回報，
+# 不可只寫 log 就當作沒發生——放開失敗代表按鈕可能卡在遊戲裡。
+_last_error = ""
+
+
+def _set_error(msg: str) -> None:
+    """記錄後端層級錯誤（供 last_error() 讀取）。"""
+    global _last_error
+    _last_error = msg
+    if msg:
+        _log.error(msg)
+
+
+def _reset_error_state() -> None:
+    """在每次後台操作開始時歸零兩層的錯誤狀態。
+
+    為什麼需要：last_error() 的每一個讀取點都緊接在「剛失敗的操作」之後
+    （core/05_main_loop.py 的 _report_bg_failure、gui/09_ocr_debug.py 的失敗分支），
+    語意是「剛才那次操作失敗的原因」，不是「歷史上最後一次錯誤」。
+
+    兩層的 _last_error 若不歸零會造成兩個問題：
+    1. 遮蔽：last_error() 優先回傳 bg 層的錯誤，bg 層的舊錯誤會蓋住 frida 層
+       較新的錯誤（例如新的座標同步失敗被舊的放開失敗遮住）。
+    2. 殘留：舊錯誤永久存在 → 成功之後仍讀得到；被取消的操作（回傳 False 但
+       不是失敗）也會讓 _report_bg_failure 回報一個過期原因。
+
+    歸零時機選「操作開始」而非「操作結束」：錯誤一律在失敗當下寫入，而所有
+    讀取點都在操作返回之後才讀，因此不會吃掉尚未回報的有效錯誤。
+    """
+    global _last_error
+    _last_error = ""
+    try:
+        _frida().clear_error()
+    except Exception:
+        pass
+
+
 user32 = ctypes.windll.user32
 
 
@@ -344,6 +381,12 @@ def _click_postmessage(
         else:
             return False
 
+        # 送出 DOWN 前的最後一道取消閘：上游的 sync_cursor / ensure_attached
+        # 可能阻塞數秒，attach 期間抵達的 Stop 不可變成一次真實點擊。
+        if cancel is not None and cancel.is_set():
+            _log.info("已取消，略過背景點擊")
+            return False
+
         # 激活訊息失敗不中斷點擊（維持原行為），但留下紀錄
         _post_message_ok(hwnd, WM_ACTIVATE, WA_ACTIVE, 0, "視窗激活訊息失敗")
         time.sleep(0.02)
@@ -365,7 +408,16 @@ def _click_postmessage(
 
 
 def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
-    """Send key using PostMessage."""
+    """Send key using PostMessage.
+
+    檢查 PostMessageW 的 BOOL 回傳值：ctypes windll 未設 errcheck，失敗時是
+    回傳 0 而不拋例外，只靠 Python exception 判斷會完全漏掉真實的 Win32 失敗。
+    DOWN / UP 失敗都記錄錯誤資訊，且失敗時回傳 False——不得把放開失敗回報成成功
+    （放開失敗代表按鍵可能卡在遊戲裡）。
+
+    WM_CHAR 是補充訊息（文字輸入路徑）；它失敗時 WM_KEYDOWN 已送出，不可因此
+    回傳 False——呼叫端會據此判斷「按鍵沒送出」而漏送 UP。僅留下 warning。
+    """
     try:
         scan_code = user32.MapVirtualKeyW(vk_code, 0)
         lparam = (scan_code << 16) | 1
@@ -380,28 +432,39 @@ def _key_postmessage(hwnd: int, vk_code: int, down: bool = True) -> bool:
             if alt_down
             else (WM_KEYDOWN if down else WM_KEYUP)
         )
-        user32.PostMessageW(hwnd, msg, vk_code, lparam)
+        if not _post_message_ok(hwnd, msg, vk_code, lparam, "按鍵訊息失敗"):
+            _set_error(f"按鍵訊息送出失敗（msg=0x{msg:04X}, hwnd={hwnd}），按鍵可能卡在遊戲內")
+            return False
         # 可列印字元在按下時補送 WM_CHAR，cover 走 TranslateMessage/字元輸入的遊戲
         if down and not alt_down:
             char = _vk_to_char(vk_code)
             if char is not None:
-                user32.PostMessageW(hwnd, WM_CHAR, char, lparam)
+                _post_message_ok(hwnd, WM_CHAR, char, lparam, "按鍵字元訊息失敗")
         return True
     except Exception as e:
         _log.error("PostMessage key failed: %s", e)
+        _set_error(f"按鍵訊息送出例外：{e}")
         return False
 
 
 def _scroll_postmessage(hwnd: int, x: int, y: int, amount: int, horizontal: bool = False) -> bool:
-    """Scroll using PostMessage."""
+    """Scroll using PostMessage.
+
+    檢查 PostMessageW 的 BOOL 回傳值：ctypes windll 未設 errcheck，失敗時回傳 0
+    而不拋例外，只靠 exception 判斷會完全漏掉真實的 Win32 失敗（舊 F-14）。
+    失敗必須留下錯誤原因，否則呼叫端回報時拿不到可讀的訊息。
+    """
     try:
         lparam = _make_lparam(x, y)
         wParam = (WHEEL_DELTA * amount) << 16
         msg = WM_MOUSEHWHEEL if horizontal else WM_MOUSEWHEEL
-        user32.PostMessageW(hwnd, msg, wParam, lparam)
+        if not _post_message_ok(hwnd, msg, wParam, lparam, "滾輪訊息失敗"):
+            _set_error(f"滾輪訊息送出失敗（msg=0x{msg:04X}, hwnd={hwnd}）")
+            return False
         return True
     except Exception as e:
         _log.error("PostMessage scroll failed: %s", e)
+        _set_error(f"滾輪訊息送出例外：{e}")
         return False
 
 
@@ -476,8 +539,18 @@ def _scroll_pynput(hwnd: int, x: int, y: int, amount: int, horizontal: bool = Fa
 
 # ── Public API ──
 def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None) -> bool:
-    """Click at (x, y) in client coordinates using the current method."""
+    """Click at (x, y) in client coordinates using the current method.
+
+    cancel 為可選的 threading.Event：送出 DOWN 前可取消（後台路徑的 attach
+    可能阻塞數秒，必須在各階段邊界確認）。
+    """
+    _reset_error_state()
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過背景點擊")
+        return False
     with _lock:
+        if cancel is not None and cancel.is_set():
+            return False
         if _method == "frida":
             return _frida().click(hwnd, x, y, button, hold_ms, cancel)
         elif _method == "pynput":
@@ -494,7 +567,14 @@ def detach() -> None:
 
 
 def last_error() -> str:
-    """Last Frida error message (empty if none)."""
+    """最近一次後台操作失敗的原因（成功或未失敗時為空字串）。
+
+    每次操作開始時由 _reset_error_state() 歸零，因此這裡回傳的是「剛才那次
+    操作」的錯誤，不會是歷史上殘留的舊錯誤。bg 層錯誤優先於 frida 層錯誤
+    （bg 層通常是更具體的後果描述，例如放開失敗）。
+    """
+    if _last_error:
+        return _last_error
     try:
         return _frida().last_error()
     except Exception:
@@ -502,38 +582,71 @@ def last_error() -> str:
 
 
 def send_key(hwnd: int, key: str, cancel=None) -> bool:
-    """Send a key press and release."""
+    """Send a key press and release.
+
+    cancel 為可選的 threading.Event：按下前可取消；按下後的持窗等待可被中斷，
+    但 DOWN 已送出就一定會送出 UP（放開不受取消閘阻擋）。
+
+    回傳值代表「整個按鍵操作是否成功」：DOWN 失敗或 UP 失敗都回傳 False。
+    UP 失敗代表按鍵可能卡在遊戲裡 → 不得回報成功（錯誤由 _set_error 記錄，
+    呼叫端以 last_error() 取得原因）。
+    """
+    _reset_error_state()
     vk = _resolve_vk(key)
     if vk is None:
         _log.warning("Cannot parse key: %s", key)
         return False
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過背景按鍵")
+        return False
 
     with _lock:
+        if cancel is not None and cancel.is_set():
+            return False
         if _method == "frida":
             f = _frida()
-            if not f.key(hwnd, vk, True):
+            if not f.key(hwnd, vk, True, cancel):
                 return False
+            released = True
             try:
                 # 持窗 120ms：確保遊戲以 60Hz（16.7ms/tick）輪詢鍵盤狀態時至少
-                # 涵蓋多個 tick，避免 down/up 落在同一個 tick 內被當成沒按下
-                time.sleep(0.12)
-                return True
+                # 涵蓋多個 tick，避免 down/up 落在同一個 tick 內被當成沒按下。
+                # 可中斷等待：使用者中途停止時立即進入 finally 放開按鍵。
+                if _interruptible_wait(120, cancel):
+                    _log.info("背景按鍵已取消，提前放開按鍵")
             finally:
-                f.key(hwnd, vk, False)
+                # DOWN 已送出 → UP 一定要嘗試，且不得被取消閘阻擋。
+                # UP 失敗不得回報整體成功（放開失敗代表按鍵可能卡在遊戲內），
+                # 但無論成敗都不得跳過這次釋放。
+                if not f.key(hwnd, vk, False):
+                    released = False
+                    _set_error(f"背景按鍵放開失敗（vk={vk}），按鍵可能卡住")
+            return released
         elif _method == "pynput":
             # 只有按下確認成功才登記釋放；未登記者不送出 release（不誤放）。
             with _PressLedger() as ledger:
                 ok = _key_pynput(hwnd, vk, True)
                 if ok:
                     ledger.record(f"按鍵 vk={vk}", lambda: _key_pynput(hwnd, vk, False))
-                time.sleep(0.02)
+                _interruptible_wait(20, cancel)
             return ok
         return False
 
 
-def scroll(hwnd: int, x: int, y: int, amount: int = 1, horizontal: bool = False) -> bool:
-    """Scroll at (x, y). Positive = up/right, negative = down/left."""
+def scroll(
+    hwnd: int, x: int, y: int, amount: int = 1, horizontal: bool = False, cancel=None
+) -> bool:
+    """Scroll at (x, y). Positive = up/right, negative = down/left.
+
+    cancel 為可選的 threading.Event：送出前可取消。
+    """
+    _reset_error_state()
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過背景滾輪")
+        return False
     with _lock:
+        if cancel is not None and cancel.is_set():
+            return False
         if _method == "frida":
             return _scroll_postmessage(hwnd, x, y, amount, horizontal)
         elif _method == "pynput":
@@ -553,6 +666,7 @@ def activate_window_bg(hwnd: int) -> bool:
 
 def send_hold_key(hwnd: int, key: str, hold_ms: float, cancel=None) -> bool:
     """Hold a key for hold_ms milliseconds in background mode."""
+    _reset_error_state()
     vk = _resolve_vk(key)
     if vk is None:
         _log.warning("Cannot parse key for hold: %s", key)
@@ -564,7 +678,9 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float, cancel=None) -> bool:
     with _lock:
         if _method == "frida":
             f = _frida()
-            if not f.key(hwnd, vk, True):
+            # cancel 必須傳進 frida key()：attach 可能阻塞數秒，frida 端才知道
+            # DOWN 送出前該不該放棄。UP 則不帶 cancel（放開永不受閘阻擋）。
+            if not f.key(hwnd, vk, True, cancel):
                 return False
             try:
                 # 週期 re-arm spoof 寬限期，支援任意長度的按住；500ms 重送確保
@@ -582,7 +698,7 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float, cancel=None) -> bool:
                     elif cancel.wait(min(remaining, 0.5)):
                         _log.info("按住已取消，提前放開按鍵")
                         return True
-                    f.key(hwnd, vk, True)
+                    f.key(hwnd, vk, True, cancel)
                 return True
             finally:
                 # 取消或例外都會走到這裡：key(up) 一定被嘗試送出。
@@ -593,7 +709,13 @@ def send_hold_key(hwnd: int, key: str, hold_ms: float, cancel=None) -> bool:
 
 
 def drag(
-    hwnd: int, start_x: int, start_y: int, end_x: int, end_y: int, button: str = "left"
+    hwnd: int,
+    start_x: int,
+    start_y: int,
+    end_x: int,
+    end_y: int,
+    button: str = "left",
+    cancel=None,
 ) -> bool:
     """Perform a drag operation in background mode.
 
@@ -602,12 +724,20 @@ def drag(
     - 全程只取得一次 _lock：不得呼叫會自行取同一把鎖的 click()，否則同執行緒
       重入非重入 Lock 會永久死鎖。
     - DOWN 成功後，無論 MOVE 成功與否都一定會嘗試 UP（避免遊戲內卡住按鈕）。
+    - cancel 為可選的 threading.Event：DOWN 前可取消；DOWN 後的 MOVE 階段可取消；
+      但 UP 一定會被嘗試，且不受取消閘阻擋（放開失敗必須保留錯誤資訊）。
     - 回傳值反映 DOWN／MOVE／UP 是否成功「提交」訊息，不代表遊戲已處理。
     """
+    _reset_error_state()
+    if cancel is not None and cancel.is_set():
+        _log.info("已取消，略過背景拖曳")
+        return False
     with _lock:
         if _method != "frida":
             return False
         if _mouse_messages(button) is None:
+            return False
+        if cancel is not None and cancel.is_set():
             return False
         f = _frida()
         # frida 必須先把注入腳本裡的假造游標移到起點，遊戲才會認為按在該處；
@@ -616,24 +746,37 @@ def drag(
             return False
         # 激活訊息失敗不中斷拖曳（維持 click 的既有行為），但留下紀錄
         _post_message_ok(hwnd, WM_ACTIVATE, WA_ACTIVE, 0, "視窗激活訊息失敗")
+        if cancel is not None and cancel.is_set():
+            _log.info("拖曳已取消，略過按下")
+            return False
         if not _post_mouse_down(hwnd, button, start_x, start_y):
             # DOWN 沒提交成功 → 不得送出 MOVE 或 UP
+            _set_error(f"拖曳按下訊息送出失敗（hwnd={hwnd}），拖曳未開始")
             return False
+        down_sent = True
         moved = False
         released = False
         try:
-            time.sleep(0.05)
-            # 拖曳過程遊戲讀的是假造游標 → MOVE 前必須先同步到終點
-            if not f.sync_cursor(hwnd, end_x, end_y):
-                _log.warning("拖曳終點游標同步失敗，跳過移動訊息")
+            if _interruptible_wait(50, cancel):
+                # 取消發生在 MOVE 之前：停止移動，但仍必須放開按鈕
+                _log.info("拖曳已取消，停止移動並放開按鈕")
             else:
-                moved = _post_message_ok(
-                    hwnd, WM_MOUSEMOVE, 0, _make_lparam(end_x, end_y), "滑鼠移動訊息失敗"
-                )
-            time.sleep(0.05)
+                # 拖曳過程遊戲讀的是假造游標 → MOVE 前必須先同步到終點
+                if not f.sync_cursor(hwnd, end_x, end_y):
+                    _log.warning("拖曳終點游標同步失敗，跳過移動訊息")
+                else:
+                    moved = _post_message_ok(
+                        hwnd, WM_MOUSEMOVE, 0, _make_lparam(end_x, end_y), "滑鼠移動訊息失敗"
+                    )
+                    if not moved:
+                        _set_error("拖曳移動訊息送出失敗，拖曳未完成")
+                _interruptible_wait(50, cancel)
         finally:
             # 無論正常、取消或例外，都必須嘗試送出 UP（DOWN 已成功）
-            released = _post_mouse_up(hwnd, button, end_x, end_y)
+            if down_sent:
+                released = _post_mouse_up(hwnd, button, end_x, end_y)
+                if not released:
+                    _set_error("拖曳放開訊息送出失敗，滑鼠按鈕可能卡在遊戲內")
         return moved and released
 
 

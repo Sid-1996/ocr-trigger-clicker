@@ -171,7 +171,7 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `sum` | ROI 內整數快照加總；同一總和穩定 0.35s 後寫入檔案日誌。前景模式（且非背景規則）經 `on_sum` 顯示浮層，前置條件失效經 `on_sum_hide` 淡出；後台／混合模式與背景規則只寫日誌（無條件回 `continue`） | `roi`（必填；未設定則略過） |
 | `notify` | 右下角疊加通知提示（經 `on_warning` → GUI `NotificationStack` 顯示；回 `continue`，不設 `ctx.triggered`，不影響規則流程） | `message` |
 | `scroll` | 滑鼠滾輪（設 `ctx.triggered = True） | `direction`, `amount`, `delay_ms`, `after_delay_ms` |
-| `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`, `dx`, `dy`, `button`, `after_delay_ms` |
+| `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`、`end_x`/`end_y`（client 比例，GUI 拾取）；舊資料含 `dx`/`dy` 時視為 legacy（載入時自動標記 `_migration`，不自動轉換）、`button`、`after_delay_ms` |
 
 **動作後延遲 `after_delay_ms`（毫秒，預設 0）**：動作步驟（click/key/drag/scroll）成功送出後，固定等待指定毫秒才執行下一步驟。實作於 `_run_rule`（core/05_main_loop.py 單一 choke point）——動作步驟回 `continue` 且 `ms>0` 時用 `_stop_event.wait(ms/1000)` 中斷式等待（暫停/停止立即中止、回 stop interrupted），尾隨步驟不執行。等價社群慣用「動作後 sleep」，可取代 `[動作, wait]` 成對步驟；0 = 不等待。語意與 scroll 的 `delay_ms` 不同（後者是滾輪格間延遲）。不影響 `fail_duration_sec` 容忍邏輯。
 
@@ -280,6 +280,7 @@ on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動�
 ### 舊格式自動遷移
 
 - `_migrate_v1_to_v2()` 偵測 JSON 中無 `"steps"` 欄位時自動將舊格式轉換為新步驟結構，保障 v0.0.1 任務不遺失
+- Drag 舊 PX offset（`dx`/`dy`）：載入時於 `_normalize_step_params()` 自動標記 `_migration`（`kind=drag_endpoint`、`status=needs_repair`），保留原值、不自動轉換；`validate_drag_endpoint()` 可查狀態（valid／unset／incomplete／invalid／needs_repair）。既有檔案中的 marker 一律保留，不自動清洗
 
 ## 主循環資料流 — 群組兩層指標模型
 
@@ -344,6 +345,32 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
                     │  fps 控制 ~2fps  │  time.sleep(interval)
                     └────────────────────┘
 ```
+
+### Preflight 與 BLOCKED 語義
+
+規則執行前，會由 `core/rule_preflight.py` 的 `rule_preflight()` 做純資料預檢（不接觸 HWND、OCR、輸入後端）。判定為 BLOCKED 的規則**不會執行任何步驟**，並依群組模式採取不同處置：
+
+| 情境 | 行為 |
+|---|---|
+| once／依序群組 | BLOCKED 規則被跳過，指標推進（`_advance_rule_in_group`），不計入 completed |
+| repeat／循環群組 | 輪數照常計算（含 BLOCKED 規則），被擋規則每輪都被跳過；整輪結束後才重新檢查 |
+| 並行（Parallel）once | 全部規則 BLOCKED 時，群組**保持等待**——不視為完成、不推進 queue、不觸發 stop；使用者修復規則並儲存（觸發 reload）後，下一幀重新預檢，規則通過後依原 once 語義推進 |
+| 並行群組（部分 BLOCKED） | BLOCKED 規則不執行；其餘規則照常執行；once 群組的推進只取決於有無規則 triggered |
+| 背景規則 | BLOCKED 規則每幀被略過；只寫 execution log，**不彈 toast**，不影響 pointer／completed／queue |
+
+通知機制：
+
+- 前景 BLOCKED：execution log 一列（步驟欄顯示「預檢」、結果「⊘ 略過」）+ 狀態列／toast 提示（摘要最多顯示兩項問題，完整問題列在 log）。
+- 同一規則、同一問題**只通知一次**；問題改變（fingerprint 或問題分類不同）或 reload 後可再次通知。
+- 背景 BLOCKED：只寫 execution log，不呼叫 `on_warning`。
+- Dry Run（測試執行）對 BLOCKED 規則顯示「因設定錯誤不會執行」，並把全部步驟標為不可執行，不會假裝成功。
+
+不變量：
+
+- BLOCKED **不是** completed、**不是** triggered；不會計入 `_rule_completed`，不會觸發 `_advance_group_queue()`。
+- 被擋規則**不會自動修復**；要恢復執行，請修正規則後儲存——任務會自動 reload 並重新預檢。
+- fp=None（規則內含非 canonical Step，例如測試替身物件）時，以問題分類做 fallback 去重；不會靜默、也不會每幀刷屏。
+- `isinstance(step, Step)` 嚴格驗證，不以 duck typing 或類別名稱代替。
 
 ### ctx.triggered 推進機制
 

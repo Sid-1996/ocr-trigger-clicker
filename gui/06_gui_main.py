@@ -3577,6 +3577,12 @@ class _DragStepForm(QWidget):
         self._end_y = p.get("end_y")
         # 開啟表單時終點是否已有資料（決定手動輸入要走哪個座標系）
         self._end_was_set = self._end_x is not None or self._end_y is not None
+        # dx/dy 僅在「舊資料本來就有」或「使用者實際改過」時才寫回；
+        # 新式 endpoint drag 一律不新增 dx/dy（避免 reload 後被誤判 legacy/mixed）。
+        self._dx_was_set = "dx" in p
+        self._dy_was_set = "dy" in p
+        self._dx_dirty = False
+        self._dy_dirty = False
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
@@ -3643,13 +3649,19 @@ class _DragStepForm(QWidget):
         self._dx = _NoWheelSpin()
         self._dx.setRange(-9999, 9999)
         self._dx.setSuffix(" px")
+        self._dx.blockSignals(True)
         self._dx.setValue(p.get("dx", 0))
+        self._dx.blockSignals(False)
+        self._dx.valueChanged.connect(self._mark_dx_dirty)
         form.addRow(T("format.horizontal_offset"), self._dx)
 
         self._dy = _NoWheelSpin()
         self._dy.setRange(-9999, 9999)
         self._dy.setSuffix(" px")
+        self._dy.blockSignals(True)
         self._dy.setValue(p.get("dy", 0))
+        self._dy.blockSignals(False)
+        self._dy.valueChanged.connect(self._mark_dy_dirty)
         form.addRow(T("format.vertical_offset"), self._dy)
 
         self._button = _NoWheelCombo()
@@ -3747,6 +3759,12 @@ class _DragStepForm(QWidget):
         self.save()
         self._list.steps_changed.emit()
 
+    def _mark_dx_dirty(self, _value):
+        self._dx_dirty = True
+
+    def _mark_dy_dirty(self, _value):
+        self._dy_dirty = True
+
     def _set_end_value(self, idx, val):
         if idx == 0:
             self._end_x = val
@@ -3769,8 +3787,10 @@ class _DragStepForm(QWidget):
             self._update_end_label()
             return False
         self._step.params["target"] = self._target.currentData()
-        self._step.params["dx"] = self._dx.value()
-        self._step.params["dy"] = self._dy.value()
+        if self._dx_was_set or self._dx_dirty:
+            self._step.params["dx"] = self._dx.value()
+        if self._dy_was_set or self._dy_dirty:
+            self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
         self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         if state == "unset":
@@ -8311,6 +8331,16 @@ class MainWindow(QMainWindow):
         self._edit_background.setEnabled(editing)
         self._edit_quiet.setEnabled(editing)
         self._step_list.setEnabled(editing)
+
+        # 主循環執行期間停用 OCR Debug 的輸入測試按鈕。
+        # enabled 的語意在所有呼叫點都是「循環未執行」（_start/_stop/emergency/
+        # 任務載入皆同），因此 not enabled 即「循環執行中」。
+        # 測試鈕會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
+        # 後端狀態 → 兩邊同時送輸入會互相干擾。
+        # 面板尚未建立或已關閉時安全略過（不直接操作面板內部 widget）。
+        panel = getattr(self, "_debug_panel", None)
+        if panel is not None:
+            panel.set_run_active(not enabled)
 
         if editing:
             self._show_rule_detail(self._get_current_rule())

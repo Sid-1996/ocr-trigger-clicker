@@ -10,6 +10,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from _loader import load_sibling
 
 RC = load_sibling("run_controller", "gui/run_controller.py")
+_models = load_sibling("rule_models", "core/rule_models.py")
+Rule = _models.Rule
+Step = _models.Step
 
 
 def test_match_image_preview_uses_true_client_size(monkeypatch):
@@ -23,7 +26,7 @@ def test_match_image_preview_uses_true_client_size(monkeypatch):
     template = np.random.default_rng(0).integers(0, 256, (33, 245, 3), dtype=np.uint8)
     ok, buf = cv2.imencode(".png", template)
     assert ok
-    step = SimpleNamespace(
+    step = Step(
         type="match_image",
         params={
             "template_data": base64.b64encode(buf).decode("ascii"),
@@ -38,7 +41,7 @@ def test_match_image_preview_uses_true_client_size(monkeypatch):
             "threshold": 0.85,
         },
     )
-    rule = SimpleNamespace(name="尺寸回歸", steps=[step])
+    rule = Rule(id="r-match", name="尺寸回歸", enabled=True, steps=[step])
     win = SimpleNamespace(
         _current_task="",
         _window_combo=SimpleNamespace(currentText=lambda: title),
@@ -55,7 +58,7 @@ def test_match_image_preview_uses_true_client_size(monkeypatch):
 
 def test_dry_run_drag_end_uses_picked_end(monkeypatch):
     img = np.zeros((900, 1600, 3), dtype=np.uint8)
-    step = SimpleNamespace(
+    step = Step(
         type="drag",
         params={
             "target": "custom",
@@ -69,7 +72,7 @@ def test_dry_run_drag_end_uses_picked_end(monkeypatch):
             "button": "left",
         },
     )
-    rule = SimpleNamespace(name="拖曳終點", steps=[step])
+    rule = Rule(id="r-drag1", name="拖曳終點", enabled=True, steps=[step])
     win = SimpleNamespace(
         _current_task="",
         _window_combo=SimpleNamespace(currentText=lambda: "StarSavior"),
@@ -85,7 +88,7 @@ def test_dry_run_drag_end_uses_picked_end(monkeypatch):
 def test_dry_run_drag_end_space_is_independent_of_start(monkeypatch):
     """起點走全視窗比例、終點走 client 比例：兩者不得互相影響。"""
     img = np.zeros((900, 1600, 3), dtype=np.uint8)
-    step = SimpleNamespace(
+    step = Step(
         type="drag",
         params={
             "target": "custom",
@@ -97,7 +100,7 @@ def test_dry_run_drag_end_space_is_independent_of_start(monkeypatch):
             "button": "left",
         },
     )
-    rule = SimpleNamespace(name="終點座標系", steps=[step])
+    rule = Rule(id="r-drag2", name="終點座標系", enabled=True, steps=[step])
     win = SimpleNamespace(
         _current_task="",
         _window_combo=SimpleNamespace(currentText=lambda: "StarSavior"),
@@ -112,7 +115,7 @@ def test_dry_run_drag_end_space_is_independent_of_start(monkeypatch):
 
 def test_dry_run_invalid_end_is_fatal_not_success(monkeypatch):
     img = np.zeros((900, 1600, 3), dtype=np.uint8)
-    drag = SimpleNamespace(
+    drag = Step(
         type="drag",
         params={
             "target": "custom",
@@ -127,8 +130,8 @@ def test_dry_run_invalid_end_is_fatal_not_success(monkeypatch):
             "button": "left",
         },
     )
-    wait = SimpleNamespace(type="wait", params={"ms": 100})
-    rule = SimpleNamespace(name="非法終點", steps=[drag, wait])
+    wait = Step(type="wait", params={"ms": 100})
+    rule = Rule(id="r-drag3", name="非法終點", enabled=True, steps=[drag, wait])
     win = SimpleNamespace(
         _current_task="",
         _window_combo=SimpleNamespace(currentText=lambda: "StarSavior"),

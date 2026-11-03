@@ -231,6 +231,25 @@ def _set_error(msg: str):
         _log.error(msg)
 
 
+def clear_error() -> None:
+    """清除最後一次錯誤。
+
+    bg 層在每次後台操作開始時呼叫，讓 last_error() 只反映「最近一次操作」的結果：
+    舊錯誤若一直黏著，會遮蔽較新的錯誤，也會讓 _report_bg_failure 回報過期原因。
+    """
+    global _last_error
+    _last_error = ""
+
+
+def _cancelled(cancel) -> bool:
+    """True 代表取消訊號已到達（cancel=None 視為未取消）。
+
+    Frida 的 rpc.exports 是同步呼叫，Python 端的 threading.Event 無法中斷
+    「正在執行中」的 RPC——取消只能體現在階段邊界（阻塞操作結束後、送出前）。
+    """
+    return cancel is not None and cancel.is_set()
+
+
 def last_error() -> str:
     """Last error message (empty if last operation succeeded)."""
     return _last_error
@@ -303,7 +322,7 @@ def ensure_attached(hwnd: int) -> bool:
             if _script_error:
                 raise RuntimeError(_script_error)
             _pid = cur_pid
-            _last_error = ""
+            clear_error()
             _log.info("Frida 已注入 pid=%d (hwnd=%d)", cur_pid, hwnd)
             _arm_focus(hwnd)
             return True
@@ -339,9 +358,18 @@ def _sync_update(hwnd: int, x: int, y: int) -> tuple[bool, str]:
 def click(hwnd: int, x: int, y: int, button: str = "left", hold_ms: int = 0, cancel=None) -> bool:
     """Click at (x, y) client coords via spoofed cursor + PostMessage.
 
-    cancel 為可選的 threading.Event：等待按住期間可被中斷並提前放開按鈕。
+    cancel 為可選的 threading.Event：等待按住期間可被中斷並提前放開按鈕；
+    送出 DOWN 前也會檢查，確保 attach 期間抵達的 Stop 不會變成一次真實點擊。
     """
+    if _cancelled(cancel):
+        _log.info("已取消，略過 Frida 點擊")
+        return False
     if not sync_cursor(hwnd, x, y):
+        return False
+    # sync_cursor 內含 ensure_attached（可能阻塞最多 _ATTACH_READY_TIMEOUT 秒）；
+    # 返回後必須再次確認取消，否則 attach 期間的 Stop 仍會送出 WM_LBUTTONDOWN。
+    if _cancelled(cancel):
+        _log.info("已取消（attach 後），略過 Frida 點擊")
         return False
     return _bg()._click_postmessage(hwnd, x, y, button, hold_ms, cancel)
 
@@ -383,9 +411,22 @@ def _sync_key(vk: int, down: bool) -> tuple[bool, str]:
         return False, str(e)
 
 
-def key(hwnd: int, vk: int, down: bool) -> bool:
-    """Press (down=True) or release (down=False) a key via spoofed key-state + PostMessage."""
+def key(hwnd: int, vk: int, down: bool, cancel=None) -> bool:
+    """Press (down=True) or release (down=False) a key via spoofed key-state + PostMessage.
+
+    cancel 為可選的 threading.Event：只在「按下」階段檢查。Frida 的 RPC 是同步
+    呼叫，Python 端的 threading.Event 無法中斷「正在執行中」的 RPC，因此取消
+    只能體現在階段邊界（阻塞操作結束後、送出前）；放開（down=False）永不受取消閘阻擋。
+    """
+    if down and _cancelled(cancel):
+        _log.info("已取消，略過 Frida 按鍵按下")
+        return False
     if not ensure_attached(hwnd):
+        return False
+    # ensure_attached 可能阻塞最多 _ATTACH_READY_TIMEOUT 秒（等待注入腳本 ready 心跳）；
+    # attach 期間抵達的 Stop 必須在送出 DOWN 前被攔下，否則使用者按了停止仍會按到按鍵。
+    if down and _cancelled(cancel):
+        _log.info("已取消（attach 後），略過 Frida 按鍵按下")
         return False
     with _lock:
         if _script is None:
@@ -395,6 +436,10 @@ def key(hwnd: int, vk: int, down: bool) -> bool:
             # 注入可能已死亡 → 重新 attach 重試一次，避免需重開 app 才恢復
             _log.warning("Frida 鍵盤狀態同步失敗 (%s)，重新 attach 重試", err)
             detach()
+            # 重新 attach 同樣會阻塞；返回後再次確認取消，避免重試路徑漏掉 Stop。
+            if down and _cancelled(cancel):
+                _log.info("已取消（重新 attach 後），略過 Frida 按鍵按下")
+                return False
             if ensure_attached(hwnd) and _script is not None:
                 ok, err = _sync_key(vk, down)
         if not ok:

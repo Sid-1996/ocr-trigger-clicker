@@ -25,8 +25,6 @@ _STEP_DEFAULTS = {
         "target": "text_center",
         "x": 0,
         "y": 0,
-        "dx": 0,
-        "dy": 0,
         "button": "left",
         "after_delay_ms": 0,
     },
@@ -88,6 +86,179 @@ def _as_optional_float(value) -> float | None:
     其他欄位仍走 _as_float 的 default 回退語義。
     """
     return _as_float(value, None)
+
+
+def _is_finite_number(value: object) -> bool:
+    """value 是否為有限數值（非 bool、非 NaN/±Infinity、可轉 float）。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except (OverflowError, ValueError):
+        return False
+
+
+_VALID_MIGRATION_REASONS = frozenset(
+    {
+        "legacy_px_offset",
+        "incomplete_legacy_offset",
+        "mixed_legacy_and_endpoint",
+        "invalid_legacy_offset",
+    }
+)
+
+
+def _is_valid_migration(marker: object) -> bool:
+    """_migration marker 是否為合法的 drag_endpoint 待修復標記。"""
+    return (
+        isinstance(marker, dict)
+        and marker.get("kind") == "drag_endpoint"
+        and marker.get("status") == "needs_repair"
+        and marker.get("reason") in _VALID_MIGRATION_REASONS
+    )
+
+
+def _detect_drag_legacy_marker(params: dict) -> dict | None:
+    """依據「原始 JSON params」偵測 Drag 舊 PX offset，回傳 _migration marker 或 None。
+
+    偵測發生在 normalize 覆寫之前，故不會因 normalize 產生的預設值而誤判。
+    不會自動把 dx/dy 換算成 end_x/end_y，也不會刪除原始 dx/dy。
+
+    回傳 None 表示「不建立 legacy marker」（含現有合法 marker 維持不動、
+    以及純新格式/無舊 PX 欄位的情形）。
+    """
+    if not isinstance(params, dict):
+        return None
+
+    # rule 8：資料已存在合法 marker，不可任意覆蓋原有 reason → 回 None 表示保留現有。
+    if _is_valid_migration(params.get("_migration")):
+        return None
+
+    has_dx = "dx" in params
+    has_dy = "dy" in params
+    dx_val = params.get("dx")
+    dy_val = params.get("dy")
+
+    dx_valid = has_dx and _is_finite_number(dx_val)
+    dy_valid = has_dy and _is_finite_number(dy_val)
+
+    # rule 5：非法舊 PX 欄位優先分類為 invalid_legacy_offset。
+    if (has_dx and not dx_valid) or (has_dy and not dy_valid):
+        return {
+            "_migration": {
+                "kind": "drag_endpoint",
+                "status": "needs_repair",
+                "reason": "invalid_legacy_offset",
+            }
+        }
+
+    # rule 7：無舊 PX 欄位 → 不建立 legacy marker（end 欄位由終點驗證判定）。
+    if not has_dx and not has_dy:
+        return None
+
+    has_end_x = "end_x" in params and params["end_x"] is not None
+    has_end_y = "end_y" in params and params["end_y"] is not None
+    end_complete = has_end_x and has_end_y
+
+    # rule 4：同時存在舊 PX 欄位與完整 end_x/end_y → mixed。
+    if end_complete:
+        return {
+            "_migration": {
+                "kind": "drag_endpoint",
+                "status": "needs_repair",
+                "reason": "mixed_legacy_and_endpoint",
+            }
+        }
+
+    # rule 2：dx/dy 都存在且合法 → legacy_px_offset。
+    if has_dx and has_dy:
+        return {
+            "_migration": {
+                "kind": "drag_endpoint",
+                "status": "needs_repair",
+                "reason": "legacy_px_offset",
+            }
+        }
+
+    # rule 3：只有一邊存在 → incomplete_legacy_offset。
+    return {
+        "_migration": {
+            "kind": "drag_endpoint",
+            "status": "needs_repair",
+            "reason": "incomplete_legacy_offset",
+        }
+    }
+
+
+def _validation_result(status: str, reason: str, message: str) -> dict:
+    return {"status": status, "reason": reason, "message": message}
+
+
+def validate_drag_endpoint(params: dict) -> dict:
+    """純函式：判斷 Drag 終點資料狀態。
+
+    回傳 {"status", "reason", "message"}，status in {
+        "valid", "unset", "incomplete", "invalid", "needs_repair"
+    }。
+
+    unset/incomplete/invalid 不等於 needs_repair；新建但尚未設定終點的 Drag
+    不會被錯誤標記為 legacy。僅讀取 params，不會修改原始資料。
+    """
+    params = params if isinstance(params, dict) else {}
+
+    migration = params.get("_migration")
+    if _is_valid_migration(migration):
+        # rule 8：合法 marker 直接信任，不重新分類也不覆寫 reason。
+        return _validation_result(
+            "needs_repair",
+            migration.get("reason", "legacy_px_offset"),
+            f"Drag 終點待修復（{migration.get('reason')}）。",
+        )
+
+    has_dx = "dx" in params
+    has_dy = "dy" in params
+    end_x = params.get("end_x")
+    end_y = params.get("end_y")
+    has_end_x = "end_x" in params and end_x is not None
+    has_end_y = "end_y" in params and end_y is not None
+
+    # 存在舊 PX 欄位 → needs_repair（與 valid/incomplete/invalid 並列，不等於它們）。
+    if has_dx or has_dy:
+        dx_valid = has_dx and _is_finite_number(params.get("dx"))
+        dy_valid = has_dy and _is_finite_number(params.get("dy"))
+        if not dx_valid or not dy_valid:
+            return _validation_result(
+                "needs_repair", "invalid_legacy_offset", "舊版 PX offset 不合法。"
+            )
+        if has_end_x and has_end_y:
+            return _validation_result(
+                "needs_repair",
+                "mixed_legacy_and_endpoint",
+                "新舊終點格式混合。",
+            )
+        if has_dx and has_dy:
+            return _validation_result("needs_repair", "legacy_px_offset", "使用舊版 PX offset。")
+        return _validation_result(
+            "needs_repair",
+            "incomplete_legacy_offset",
+            "舊版 PX offset 僅設定一軸。",
+        )
+
+    # 無舊 PX：依 end_x/end_y 判斷。
+    if not has_end_x and not has_end_y:
+        return _validation_result("unset", "unset", "Drag 終點尚未設定。")
+    if has_end_x != has_end_y:
+        return _validation_result("incomplete", "incomplete", "Drag 僅設定一端終點。")
+    # 兩端皆設定：數值、範圍、end_roi_coord 必須都合法。
+    if not _is_finite_number(end_x) or not _is_finite_number(end_y):
+        return _validation_result("invalid", "invalid_value", "終點座標不是合法數值。")
+    xf, yf = float(end_x), float(end_y)
+    if not (0.0 <= xf <= 1.0 and 0.0 <= yf <= 1.0):
+        return _validation_result("invalid", "out_of_range", "終點座標超出有效比例範圍（0~1）。")
+    end_coord = params.get("end_roi_coord")
+    if end_coord is not None and end_coord != "client":
+        return _validation_result("invalid", "invalid_end_roi_coord", "end_roi_coord 不合法。")
+    return _validation_result("valid", "valid", "Drag 終點完整。")
 
 
 def _sanitize_roi(roi: dict | None) -> dict:
@@ -306,6 +477,13 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
     params = params if isinstance(params, dict) else {}
     base.update(params)
 
+    # Drag 舊 PX offset 偵測：必須在 normalize 覆寫之前，依據原始 params 判斷，
+    # 並將 _migration marker 寫入 params，貫穿 serialize / save / reload / 複製。
+    if step_type == "drag":
+        _legacy_marker = _detect_drag_legacy_marker(params)
+        if _legacy_marker is not None:
+            base["_migration"] = _legacy_marker["_migration"]
+
     # verify is action-only optional; normalize after base merge — 僅動作四類，match_image 已收斂（追溯 ADR-0005）
     if step_type in ("click", "key", "drag", "scroll"):
         raw_verify = params.get("verify", None)
@@ -362,8 +540,9 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
         if step_type == "click":
             base["random_offset"] = max(0, _as_int(base.get("random_offset", 3), 3))
         else:
-            base["dx"] = _as_int(base.get("dx", 0), 0)
-            base["dy"] = _as_int(base.get("dy", 0), 0)
+            # drag：不再自動注入 dx/dy 預設。raw dx/dy 若存在已由 base.update(params)
+            # 保留（不自動改成 0、不換算、不刪除）；不存在則不補值。
+            pass
     elif step_type == "key":
         base["key"] = str(base.get("key", ""))
         base["hold_ms"] = max(0, _as_int(base.get("hold_ms", 0), 0))

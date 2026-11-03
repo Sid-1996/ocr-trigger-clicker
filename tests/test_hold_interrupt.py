@@ -398,7 +398,7 @@ def test_frida_hold_key_attempts_key_up_on_cancel(monkeypatch, bg_method):
     first_down = threading.Event()
 
     class _FakeFrida:
-        def key(self, hwnd, vk, down):
+        def key(self, hwnd, vk, down, cancel=None):
             calls.append("down" if down else "up")
             if down:
                 first_down.set()

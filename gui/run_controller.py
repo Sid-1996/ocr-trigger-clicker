@@ -34,6 +34,7 @@ get_client_rect_for_image = getattr(
 
 _rule_engine = load_sibling("rule_engine", "core/04_rule_engine.py")
 _get_interaction_mode = _rule_engine.get_config_interaction_mode
+_preflight_mod = load_sibling("rule_preflight", "core/rule_preflight.py")
 
 
 def _dry_fail_fate(on_fail_raw):
@@ -220,6 +221,20 @@ class TestRunController:
             win._window_combo.currentText(), img.shape[1], img.shape[0]
         )
         _chrome_offset = get_window_client_offset(win._window_combo.currentText()) or (0, 0)
+
+        # ── Preflight：被擋下的規則明確顯示 BLOCKED，不得呈現假成功 ──
+        # （dry-run 與主循環使用同一份 preflight / fingerprint 判定）
+        pre = _preflight_mod.rule_preflight(rule)
+        if pre.status == "blocked":
+            labels = [T(f"exec_log.reason.{p}") for p in (pre.problems or ["invalid_rule"])]
+            log = [
+                T("test.rule_header", name=rule.name, count=len(rule.steps)),
+                "─" * 40,
+                T("test.rule_blocked_header", name=rule.name, problems="、".join(labels)),
+            ]
+            dead_lines = {2}  # 0-based：BLOCKED 行（insert legend 後會位移）
+            log.insert(2, T("test.dead_legend"))
+            return [], log, {d + 1 for d in dead_lines}
         markers = []
         log = []
         log.append(T("test.rule_header", name=rule.name, count=len(rule.steps)))
@@ -416,16 +431,11 @@ class TestRunController:
                             _fatal(idx, "terminal")  # 引擎：drag 無 on_fail，直接 stop
                             continue
                     if sx is not None:
-                        dx = p.get("dx", 0)
-                        dy = p.get("dy", 0)
                         try:
-                            if p.get("end_x") is None and p.get("end_y") is None:
-                                ex = sx + dx
-                                ey = sy + dy
-                            else:
-                                ex, ey = _main_loop_mod.resolve_drag_end(
-                                    p, (sx, sy), lambda px, py, roi: _resolve_point(px, py, roi)
-                                )
+                            # Drag 終點只接受明確 end_x/end_y；不再以 start + dx/dy 推算。
+                            ex, ey = _main_loop_mod.resolve_drag_end(
+                                p, (sx, sy), lambda px, py, roi: _resolve_point(px, py, roi)
+                            )
                         except ValueError:
                             log.append(T("exec_log.detail.drag_end_invalid"))
                             _fatal(idx, "terminal")

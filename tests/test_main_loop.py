@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
@@ -15,7 +16,14 @@ if str(_root) not in sys.path:
 from conftest import make_main_loop as _make_ml  # noqa: E402
 
 from _loader import load_sibling  # noqa: E402
-from core.rule_models import Rule, RuleGroup, Step  # noqa: E402
+
+# 正式產品路徑的 Rule/Step class object（load_sibling 的共用 rule_models 模組實例）。
+# Preflight 與 fingerprint 都以這個 class object 判定；測試必須用同一份建構，
+# 否則規則會被判 invalid_step、fingerprint 回 None。
+_models = load_sibling("rule_models", "core/rule_models.py")
+Rule = _models.Rule
+RuleGroup = _models.RuleGroup
+Step = _models.Step
 
 _tmpl = load_sibling("template_matching", "core/11_template_matching.py")
 img_to_b64 = _tmpl.img_to_b64
@@ -68,9 +76,11 @@ def _noop_resolve(_px, _py, _roi):
     return (_px, _py)
 
 
-def test_resolve_drag_end_unset_falls_back_to_dx_dy():
+def test_resolve_drag_end_unset_rejected():
+    """終點未設定時必須報錯，不得退回舊版 start + dx/dy 推算。"""
     p = {"end_x": None, "end_y": None, "dx": 30, "dy": 40}
-    assert _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve) == (130, 240)
+    with pytest.raises(ValueError):
+        _ml_mod.resolve_drag_end(p, (100, 200), _noop_resolve)
 
 
 def test_resolve_drag_end_zero_end_is_valid():
@@ -276,15 +286,15 @@ def test_handle_drag_valid_picked_end_sends_client_coords(monkeypatch):
     assert args[:4] == (482, 343, 960, 551), args
 
 
-def test_handle_drag_unset_end_keeps_dx_dy(monkeypatch):
+def test_handle_drag_unset_end_rejected_no_dxdy_fallback(monkeypatch):
+    """終點未設定時步驟必須停止，不得退回舊版 dx/dy 送出拖曳。"""
     ml, sent, clicks = _drag_loop(monkeypatch)
     rule = Rule(id="r-drag", name="Drag", enabled=True, steps=[])
     params = {"target": "custom", "x": 0.25, "y": 0.3, "roi_coord": "client", "dx": 10, "dy": 20}
     result = ml._handle_drag(params, _drag_ctx(), rule)
-    assert result.action == "continue"
-    mode, args = sent[0]
-    assert mode == "pynput"
-    assert args[:4] == (482, 343, 492, 363), args
+    assert result.action == "stop"
+    assert result.detail == _ml_mod.T("exec_log.detail.drag_end_invalid")
+    assert sent == [] and clicks == []
 
 
 # ── 刻意等待不觸發過慢誤報 ──
@@ -2402,3 +2412,898 @@ def test_verify_without_any_frame_does_not_rerun_action(monkeypatch):
     ml._run_rule(rule, blank, rect, StepContext(img=blank, rect=rect))
 
     assert executed == ["click"], f"取不到畫面不應重跑動作: {executed}"
+
+
+# ── Preflight 整合測試（Phase C-2a-1）────────────────────────────────────
+#
+# 驗證 MainLoop 端的 Preflight 整合行為：
+#   - BLOCKED 必須是明確 outcome，不得用 ctx.force_advance 偽裝
+#   - Sequential 遇 BLOCKED 必須推進 group pointer，且不得標記完成
+#   - Parallel / Background 的 BLOCKED 不得中斷後續 Rule、不得標記完成
+#   - Cache 以 Rule 物件 identity + fingerprint 為基礎，background 與一般規則隔離
+#   - fingerprint 取得失敗時必須重跑 Preflight，不得沿用舊結果
+#   - _load_rules() 必須清除 Cache
+#
+# Preflight 自身的單元測試另見 tests/test_rule_preflight.py（此處不重複）。
+#
+# 型別注意：Preflight 與 fingerprint 都以「正式載入路徑的 Step class object」
+# （load_sibling("rule_models", ...) 的共用模組實例）做判定；本檔頂端已改用同一份
+# Rule/Step/RuleGroup，因此兩邊判定基準一致，不會出現「Preflight 判定合法、
+# fingerprint 卻回 None」的靜默失效。
+
+
+def _setup_rules(
+    ml, rules, rule_ids, group_order="sequential", group_enabled=True, group_mode="once"
+):
+    """把 ml 設定成單一群組、pointer 由 0 起算的排程狀態。"""
+    ml._rules = list(rules)
+    ml._rule_map = {r.id: r for r in rules}
+    ml._groups = [
+        RuleGroup(
+            id="g1",
+            name="g1",
+            rule_ids=rule_ids,
+            order=group_order,
+            enabled=group_enabled,
+            mode=group_mode,
+        )
+    ]
+    ml._active_group_ids = ["g1"]
+    ml._rule_in_group_ptr = 0
+    ml._group_queue_idx = 0
+    ml._rule_completed.clear()
+    ml._last_active_rule_id = None
+    ml._process_counter = 0
+
+
+def _blocked_rule(rule_id="A", name="Blocked"):
+    """Preflight 會擋下的規則：detect 的關鍵字是空字串。"""
+    return Rule(
+        id=rule_id,
+        name=name,
+        enabled=True,
+        steps=[Step(type="detect", params={"text": ""})],
+    )
+
+
+def _acting_rule(rule_id="B", name="Next"):
+    """可觸發的規則：custom click（測試中 _send_click 已 stub，不會真的送滑鼠）。"""
+    return Rule(
+        id=rule_id,
+        name=name,
+        enabled=True,
+        steps=[Step(type="click", params={"target": "custom", "x": 0.5, "y": 0.5})],
+    )
+
+
+def _blank_frame():
+    img = np.zeros((10, 10, 3), dtype=np.uint8)
+    rect = {"x": 0, "y": 0, "w": 100, "h": 100}
+    return img, rect
+
+
+def test_preflight_blocked_sequential_advances_pointer():
+    """Sequential：BLOCKED 必須推進 group pointer，且不得標記完成。"""
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    nxt = _acting_rule("B", "Next")
+    _setup_rules(ml, [blocked, nxt], ["A", "B"])
+    img, rect = _blank_frame()
+
+    ml._process_rules(img, rect)
+
+    # 第一幀只評估 A：A 被 BLOCKED → pointer 推進到 B，且不得標記完成
+    assert ml._rule_in_group_ptr == 1
+    assert ml._rule_completed == set()
+    assert ml._process_counter == 1
+
+    # 第二幀評估 B：BLOCKED 沒有讓整組停下來
+    ml._process_rules(img, rect)
+    assert ml._process_counter == 2
+    assert ml._rule_completed == {"B"}
+
+
+def test_preflight_blocked_parallel_does_not_stop_following_rule():
+    """Parallel：BLOCKED 不得中斷後續 Rule，也不得標記完成。"""
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    nxt = _acting_rule("B", "Next")
+    _setup_rules(ml, [blocked, nxt], ["A", "B"], group_order="parallel")
+    img, rect = _blank_frame()
+
+    ml._process_rules(img, rect)
+
+    # A 被 BLOCKED，但 B 仍被評估並完成
+    assert ml._process_counter == 2
+    assert ml._rule_completed == {"B"}
+    assert ml._last_active_rule_id == "B"
+    # parallel 群組不使用 group pointer 推進
+    assert ml._rule_in_group_ptr == 0
+
+
+def test_preflight_background_blocked_is_not_marked_completed():
+    """Background：BLOCKED 的背景規則不得標記完成，也不得影響一般規則。"""
+    ml = _ml_with_chrome()
+    blocked_bg = Rule(
+        id="B",
+        name="Bg",
+        enabled=True,
+        background=True,
+        steps=[Step(type="detect", params={"text": ""})],
+    )
+    normal = _acting_rule("N", "Normal")
+    _setup_rules(ml, [blocked_bg, normal], ["N"])
+    img, rect = _blank_frame()
+
+    ml._process_rules(img, rect)
+
+    # 背景規則評估一次 + 群組內一般規則評估一次
+    assert ml._process_counter == 2
+    assert "B" not in ml._rule_completed
+    assert ml._rule_completed == {"N"}
+
+
+def test_preflight_cache_respects_rule_object_identity():
+    """Cache 以 Rule 物件 identity 為基礎：內容相同但物件不同者不得共用。"""
+    ml = _make_ml()
+    rule_a = Rule(
+        id="X",
+        name="X",
+        enabled=True,
+        steps=[Step(type="detect", params={"text": "hello"})],
+    )
+    rule_b = Rule(
+        id="X",
+        name="X",
+        enabled=True,
+        steps=[Step(type="detect", params={"text": "hello"})],
+    )
+    rule_c = Rule(
+        id="Y",
+        name="Y",
+        enabled=True,
+        steps=[Step(type="detect", params={"text": "hello"})],
+    )
+
+    ml._preflight_cache.clear()
+    ml._preflight_notified.clear()
+
+    assert ml._preflight_result(rule_a, background=False) is None
+    assert ml._preflight_result(rule_b, background=False) is None
+    assert ml._preflight_result(rule_c, background=False) is None
+
+    # 三個物件各自一筆 cache，key 的第一段就是 id(rule)
+    assert len(ml._preflight_cache) == 3
+    assert {key[0] for key in ml._preflight_cache} == {id(rule_a), id(rule_b), id(rule_c)}
+
+    # 同一物件重複查詢 → 命中既有 cache，不新增項目
+    assert ml._preflight_result(rule_a, background=False) is None
+    assert len(ml._preflight_cache) == 3
+
+    # cache 保存的是同一個 Rule 物件參照（identity 而非內容比對）
+    fp_a = ml._preflight_fingerprint(rule_a, False)
+    assert fp_a is not None
+    entry = ml._preflight_cache[(id(rule_a), False, fp_a)]
+    assert entry[0] is rule_a
+
+
+def test_preflight_blocked_cache_hit_does_not_duplicate_log(monkeypatch):
+    """BLOCKED 的規則第二次查詢必須命中 Cache，不得重新進入 BLOCKED 記錄流程。
+
+    以 _record_preflight_block() 的呼叫次數判定，而不是日誌行數：
+    日誌行數會被 1 秒節流掩蓋 —— Cache 完全失效時也可能只有一行日誌，
+    只看行數的斷言沒有鑑別力（見 test_preflight_cache_hit_assertion_is_discriminating）。
+    """
+    ml = _make_ml()
+    blocked = _blocked_rule("B", "Blocked")
+    ml._preflight_cache.clear()
+    ml._preflight_notified.clear()
+
+    record_calls: list[str] = []
+    original_record = ml._record_preflight_block
+
+    def spy_record(rule, result, background):
+        record_calls.append(rule.id)
+        return original_record(rule, result, background)
+
+    monkeypatch.setattr(ml, "_record_preflight_block", spy_record)
+
+    # 第一次查詢：判定為 BLOCKED 並記錄一次
+    first = ml._preflight_result(blocked, background=False)
+    assert first is _ml_mod.RuleRunOutcome.BLOCKED
+    assert len(record_calls) == 1
+
+    # 第二次查詢：同一個 Rule、同一個 fingerprint → 命中 Cache，不得再記錄一次
+    second = ml._preflight_result(blocked, background=False)
+    assert second is _ml_mod.RuleRunOutcome.BLOCKED
+    assert len(record_calls) == 1, "第二次查詢必須命中 Cache，不得再次進入 BLOCKED 記錄流程"
+
+    # Cache 內確實存在對應 entry，且指向同一個 Rule 物件
+    fp = ml._preflight_fingerprint(blocked, False)
+    assert fp is not None
+    entry = ml._preflight_cache[(id(blocked), False, fp)]
+    assert entry[0] is blocked
+    assert entry[3].status == "blocked"
+
+
+def test_preflight_cache_hit_assertion_is_discriminating(monkeypatch):
+    """反向驗證：停用 Cache lookup 後，第二次查詢必須再次進入 BLOCKED 記錄流程。
+
+    確保 test_preflight_blocked_cache_hit_does_not_duplicate_log 具有鑑別力：
+    否則即使 Cache 命中路徑失效（只靠 1 秒日誌節流），測試仍會綠燈。
+    monkeypatch 於測試結束後自動還原，不污染其他測試。
+    """
+    ml = _make_ml()
+    blocked = _blocked_rule("B", "Blocked")
+    ml._preflight_cache.clear()
+    ml._preflight_notified.clear()
+
+    record_calls: list[str] = []
+    original_record = ml._record_preflight_block
+
+    def spy_record(rule, result, background):
+        record_calls.append(rule.id)
+        return original_record(rule, result, background)
+
+    monkeypatch.setattr(ml, "_record_preflight_block", spy_record)
+    # 停用 Cache lookup → 強制每次都重新判定（僅限本測試範圍）
+    monkeypatch.setattr(ml, "_preflight_lookup", lambda *args, **kwargs: None)
+
+    assert ml._preflight_result(blocked, background=False) is _ml_mod.RuleRunOutcome.BLOCKED
+    assert ml._preflight_result(blocked, background=False) is _ml_mod.RuleRunOutcome.BLOCKED
+    assert len(record_calls) == 2, "Cache 失效時第二次查詢必須再次進入 BLOCKED 記錄流程"
+
+
+def test_preflight_load_rules_clears_cache():
+    """_load_rules() 必須清除 Cache（規則重載後舊 fingerprint 一律失效）。"""
+    ml = _make_ml()
+    ml._preflight_cache["dummy"] = "invalid"
+    ml._preflight_notified["dummy"] = 0.0
+    ml._preflight_last_fingerprint[1] = "invalid"
+
+    old_path = ml._rules_path
+    old_rules = ml._rules
+    old_rule_map = ml._rule_map
+    old_groups = ml._groups
+    try:
+        ml._rules_path = "missing_task"
+        with ml._rules_lock:
+            ml._load_rules()
+    finally:
+        ml._rules_path = old_path
+        ml._rules = old_rules
+        ml._rule_map = old_rule_map
+        ml._groups = old_groups
+
+    assert ml._preflight_cache == {}
+    assert ml._preflight_notified == {}
+    assert ml._preflight_last_fingerprint == {}
+
+
+def test_preflight_fingerprint_failure_does_not_cache_old_result(monkeypatch):
+    """fingerprint 取得失敗時必須重跑 Preflight，不得沿用舊結果。"""
+    ml = _make_ml()
+    bad = _blocked_rule("BAD", "BAD")
+    ok = Rule(
+        id="OK",
+        name="OK",
+        enabled=True,
+        steps=[Step(type="detect", params={"text": "hello"})],
+    )
+
+    # 模擬 fingerprint 取得失敗（規則物件異常等情況）
+    monkeypatch.setattr(ml, "_preflight_fingerprint", lambda *args, **kwargs: None)
+
+    ml._preflight_cache.clear()
+    ml._preflight_notified.clear()
+
+    # 沒有 fingerprint 一樣要重新判定 BLOCKED
+    assert ml._preflight_result(bad, background=False) is _ml_mod.RuleRunOutcome.BLOCKED
+    assert ml._preflight_result(ok, background=False) is None
+
+    # fingerprint 失敗 → 不寫入 cache（下次仍會重跑）
+    assert ml._preflight_cache == {}
+
+
+# ── F-03／NEW-B：BLOCKED 使用者可見性、去重與背景隔離 ─────────────────────
+
+def _blocked_entries(ml):
+    return [e for e in ml._execution_log if e.get("result") == "blocked"]
+
+
+def test_blocked_foreground_warns_once_across_frames():
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    healthy = _acting_rule("B", "Next")
+    _setup_rules(ml, [blocked, healthy], ["A", "B"], group_mode="loop")
+    img, rect = _blank_frame()
+
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    for _ in range(3):
+        ml._process_rules(img, rect)
+
+    assert len(warnings) == 1, f"BLOCKED 應只通知一次：{warnings}"
+    assert "Blocked" in warnings[0]
+    entries = _blocked_entries(ml)
+    assert len(entries) == 1
+    assert entries[0]["step_type"] == "preflight"
+    assert entries[0]["rule_name"] == "Blocked"
+
+
+def test_blocked_background_logs_without_toast():
+    ml = _ml_with_chrome()
+    blocked_bg = Rule(
+        id="BG",
+        name="Bg",
+        enabled=True,
+        background=True,
+        steps=[Step(type="detect", params={"text": ""})],
+    )
+    normal = _acting_rule("N", "Normal")
+    _setup_rules(ml, [blocked_bg, normal], ["N"])
+    img, rect = _blank_frame()
+
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    ml._process_rules(img, rect)
+    ml._process_rules(img, rect)
+
+    assert not warnings, "背景 BLOCKED 不得呼叫 on_warning"
+    assert len(_blocked_entries(ml)) == 1
+
+
+def test_blocked_notification_repeats_after_fingerprint_change():
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_mode="loop")
+    img, rect = _blank_frame()
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    ml._process_rules(img, rect)
+    assert len(warnings) == 1
+    # 問題改變（fp 不同、仍 BLOCKED）：允許再次通知
+    blocked.steps[0].params["text"] = "   "
+    ml._process_rules(img, rect)
+    assert len(warnings) == 2
+    # 問題未變：不再通知
+    ml._process_rules(img, rect)
+    assert len(warnings) == 2
+
+
+def test_blocked_notification_repeats_after_reload():
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_mode="loop")
+    img, rect = _blank_frame()
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    ml._process_rules(img, rect)
+    assert len(warnings) == 1
+
+    old_path = ml._rules_path
+    try:
+        # 正式路徑：儲存後 GUI 會呼叫 reload_rules（內含 _load_rules，後者統一重設
+        # preflight 與執行日誌去重）；載入失敗保留舊規則，並以 on_warning 通知 → 清掉只計 BLOCKED 訊息
+        ml._rules_path = "missing_task"
+        ml.reload_rules()
+    finally:
+        ml._rules_path = old_path
+    warnings.clear()
+    _setup_rules(ml, [blocked], ["A"])
+    ml._process_rules(img, rect)
+    assert len(warnings) == 1, "reload 後允許再次通知"
+    assert len(_blocked_entries(ml)) == 2
+
+
+def test_load_rules_direct_call_resets_log_dedup(tmp_path):
+    """GUI save 路徑（save_task_with_groups → _load_rules）：
+
+    reload 後同一 BLOCKED 問題應可再產生新的 execution log 列；
+    execution_log deque 的舊歷史紀錄必須保留。
+    """
+    _SER = load_sibling("rule_serialization", "core/rule_serialization.py")
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_mode="loop")
+    img, rect = _blank_frame()
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    ml._process_rules(img, rect)
+    assert len(_blocked_entries(ml)) == 1
+    history_before = list(ml._execution_log)
+
+    # 寫入真實檔案後 reload（模擬 GUI 存檔路徑，規則從磁碟重建為新物件）
+    p = tmp_path / "task.json"
+    grp = RuleGroup(
+        id="g1", name="g1", rule_ids=["A"], order="sequential", enabled=True, mode="loop"
+    )
+    assert _SER.save_task_with_groups([blocked], [grp], str(p)) is True
+    ml._rules_path = str(p)
+    ml._load_rules()
+
+    history_after = list(ml._execution_log)
+    assert history_after[: len(history_before)] == history_before, "reload 不得清空歷史"
+
+    ml._process_rules(img, rect)
+    entries = _blocked_entries(ml)
+    assert len(entries) == 2, "reload 後同問題應可再記錄一列"
+    assert len(warnings) == 2, "reload 後允許再次通知（去重狀態一併重建）"
+
+
+def test_load_rules_resets_completed_log_throttle():
+    """reload 後 completed 的 1 秒節流應一併重置（與 reload_rules 語義一致）。"""
+    ml = _make_ml()
+    assert len(ml._execution_log) == 0
+
+    ml._log_exec("R", -1, "completed", "completed")
+    assert len(ml._execution_log) == 1
+    # 1 秒節流內：不再記錄
+    ml._log_exec("R", -1, "completed", "completed")
+    assert len(ml._execution_log) == 1
+
+    old_path = ml._rules_path
+    try:
+        ml._rules_path = "missing_task"
+        ml._load_rules()
+    finally:
+        ml._rules_path = old_path
+
+    ml._log_exec("R", -1, "completed", "completed")
+    assert len(ml._execution_log) == 2, "reload 後 completed 節流應重置"
+
+
+def test_blocked_fp_none_notifies_once(monkeypatch):
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_mode="loop")
+    img, rect = _blank_frame()
+    monkeypatch.setattr(ml, "_preflight_fingerprint", lambda *a, **k: None)
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    for _ in range(3):
+        ml._process_rules(img, rect)
+
+    assert len(warnings) == 1, f"fp=None 不得每幀通知：{warnings}"
+    assert len(_blocked_entries(ml)) == 1
+
+
+def test_blocked_fp_none_renotifies_on_problem_change(monkeypatch):
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_mode="loop")
+    img, rect = _blank_frame()
+    monkeypatch.setattr(ml, "_preflight_fingerprint", lambda *a, **k: None)
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    ml._process_rules(img, rect)
+    assert len(warnings) == 1
+    ml._process_rules(img, rect)
+    assert len(warnings) == 1, "同規則同問題不得重複通知"
+    # 問題分類改變：應再次通知
+    blocked.steps[0].params["text"] = 123  # empty_detect_text → invalid_detect_text
+    ml._process_rules(img, rect)
+    assert len(warnings) == 2
+
+
+# ── NEW-C：Parallel Once 全 BLOCKED 保持等待（不推進 queue、不假完成）───────
+
+def test_parallel_all_blocked_keeps_queue_waiting():
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_order="parallel")
+    img, rect = _blank_frame()
+    ml._stop_event.clear()
+    warnings: list[str] = []
+    ml.on_warning = lambda msg: warnings.append(msg)
+
+    for _ in range(3):
+        ml._process_rules(img, rect)
+
+    assert ml._group_queue_idx == 0, "全 BLOCKED 不得推進 queue"
+    assert ml._rule_completed == set(), "BLOCKED 不得計入 completed"
+    assert not ml._stop_event.is_set(), "BLOCKED 不得觸發停止"
+    assert len(warnings) == 1, "等待中只通知一次"
+    assert len(_blocked_entries(ml)) == 1
+
+
+def test_parallel_blocked_recovers_after_reload(monkeypatch):
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    _setup_rules(ml, [blocked], ["A"], group_order="parallel")
+    img, rect = _blank_frame()
+    ml._process_rules(img, rect)
+    assert ml._group_queue_idx == 0
+
+    # 修復（換成可執行規則，id 相同）並 reload：queue 仍從原位繼續
+    fixed = _acting_rule("A", "Blocked")
+    grp = RuleGroup(
+        id="g1", name="g1", rule_ids=["A"], order="parallel", enabled=True
+    )
+    monkeypatch.setattr(_ml_mod, "load_rules", lambda path: [fixed])
+    monkeypatch.setattr(_ml_mod, "load_groups", lambda path: [grp])
+    ml.reload_rules()
+
+    ml._process_rules(img, rect)
+    assert ml._group_queue_idx == 1, "修復並 reload 後，Parallel Once 應照常推進"
+    assert "A" in ml._rule_completed
+
+
+def test_parallel_partial_blocked_healthy_rule_still_runs():
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    healthy = _acting_rule("B", "Next")
+    _setup_rules(ml, [blocked, healthy], ["A", "B"], group_order="parallel")
+    img, rect = _blank_frame()
+    ml._stop_event.clear()
+
+    ml._process_rules(img, rect)
+
+    assert "B" in ml._rule_completed, "健康規則不受 BLOCKED 影響"
+    assert "A" not in ml._rule_completed
+    # once 語義：只有健康規則觸發才推進 queue
+    assert ml._group_queue_idx == 1
+
+
+# ── F-07：Preflight gate 鑑別力（spy _run_step）─────────────────────────────
+
+def test_blocked_background_rule_never_executes_steps(monkeypatch):
+    ml = _ml_with_chrome()
+    blocked_bg = Rule(
+        id="BG",
+        name="Bg",
+        enabled=True,
+        background=True,
+        steps=[Step(type="detect", params={"text": ""})],
+    )
+    healthy = _acting_rule("N", "Normal")
+    _setup_rules(ml, [blocked_bg, healthy], ["N"])
+    img, rect = _blank_frame()
+
+    calls: list[str] = []
+    original_run_step = ml._run_step
+
+    def spy_run_step(step, ctx, rule):
+        calls.append(rule.id)
+        return original_run_step(step, ctx, rule)
+
+    monkeypatch.setattr(ml, "_run_step", spy_run_step)
+    ml._process_rules(img, rect)
+
+    assert "BG" not in calls, "BLOCKED 背景規則不得執行任何步驟"
+    assert "N" in calls, "健康規則必須正常執行"
+
+
+def test_blocked_parallel_rule_never_executes_steps(monkeypatch):
+    ml = _ml_with_chrome()
+    blocked = _blocked_rule("A", "Blocked")
+    healthy = _acting_rule("B", "Next")
+    _setup_rules(ml, [blocked, healthy], ["A", "B"], group_order="parallel")
+    img, rect = _blank_frame()
+
+    calls: list[str] = []
+    original_run_step = ml._run_step
+
+    def spy_run_step(step, ctx, rule):
+        calls.append(rule.id)
+        return original_run_step(step, ctx, rule)
+
+    monkeypatch.setattr(ml, "_run_step", spy_run_step)
+    ml._process_rules(img, rect)
+
+    assert "A" not in calls, "BLOCKED 並行規則不得執行任何步驟"
+    assert "B" in calls, "健康規則必須正常執行"
+    assert ml._group_queue_idx == 1, "只有健康規則觸發，once 群組照常推進"
+    assert "A" not in ml._rule_completed
+
+
+def test_blocked_parallel_all_blocked_no_step_execution(monkeypatch):
+    ml = _ml_with_chrome()
+    blocked_a = _blocked_rule("A", "BlockedA")
+    blocked_b = _blocked_rule("B", "BlockedB")
+    _setup_rules(ml, [blocked_a, blocked_b], ["A", "B"], group_order="parallel")
+    img, rect = _blank_frame()
+
+    calls: list[str] = []
+
+    def spy_run_step(step, ctx, rule):
+        calls.append(rule.id)
+        raise AssertionError("BLOCKED 規則不得進入 _run_step")
+
+    monkeypatch.setattr(ml, "_run_step", spy_run_step)
+    ml._process_rules(img, rect)
+
+    assert calls == [], "全 BLOCKED 群組不得執行任何步驟"
+    assert ml._group_queue_idx == 0
+    assert ml._rule_completed == set()
+
+
+# ── E2-A1：Stop 控制流程（M1 / M2 / M5 / M6）────────────────────────────────
+#
+# 全域停止（_stop_event 已設）必須是 RuleRunOutcome.STOPPED：不計完成、不推進
+# pointer / queue / round，也不再執行下一條規則；局部終止（on_fail=stop 等）
+# 仍維持「本規則結束、下一幀重試」的原語意，不得升級為全域停止。
+
+
+def test_sequential_global_stop_does_not_complete_or_advance():
+    """M1/M2：click 後收到全域停止，不送後續按鍵、不計完成、不推進 pointer。"""
+    ml = _ml_with_chrome()
+    rule = Rule(
+        id="A",
+        name="StopMid",
+        enabled=True,
+        steps=[
+            Step("click", {"target": "custom", "x": 0.5, "y": 0.5}),
+            Step("key", {"key": "space"}),
+        ],
+    )
+    nxt = _acting_rule("B", "Next")
+    _setup_rules(ml, [rule, nxt], ["A", "B"])
+    img, rect = _blank_frame()
+    keys: list[str] = []
+
+    def _click_then_stop(*_a, **_k):
+        ml._stop_event.set()
+        return True
+
+    ml._send_click = _click_then_stop
+    ml._send_key = lambda k, *_a, **_k: keys.append(k) or True
+
+    ml._process_rules(img, rect)
+
+    assert keys == [], "停止後不得再送出後續按鍵"
+    assert ml._rule_completed == set(), "全域停止不得計為 completed"
+    assert ml._rule_in_group_ptr == 0, "全域停止不得推進 pointer"
+    assert ml._group_rounds_completed == {}, "全域停止不得推進 round count"
+    assert ml._last_active_rule_id is None
+
+
+def test_sequential_global_stop_blocks_next_rule_on_next_frame():
+    """M1/M2：停止後下一幀不得改跑下一條規則（不得假完成推進）。"""
+    ml = _ml_with_chrome()
+    stopper = Rule(
+        id="A",
+        name="Stopper",
+        enabled=True,
+        steps=[Step("click", {"target": "custom", "x": 0.5, "y": 0.5})],
+    )
+    nxt = _acting_rule("B", "Next")
+    _setup_rules(ml, [stopper, nxt], ["A", "B"])
+    img, rect = _blank_frame()
+    clicks: list[str] = []
+
+    def _click(*_a, **_k):
+        clicks.append("A")
+        ml._stop_event.set()
+        return True
+
+    ml._send_click = _click
+
+    ml._process_rules(img, rect)
+    ml._process_rules(img, rect)
+
+    assert clicks == ["A"], "停止後不得再執行任何規則"
+    assert ml._rule_in_group_ptr == 0
+    assert ml._rule_completed == set()
+
+
+def test_parallel_global_stop_skips_remaining_rules():
+    """M1/M2：Parallel 全域停止後不得執行同群組後續 Rule，也不得假完成推進。"""
+    ml = _ml_with_chrome()
+    _setup_rules(
+        ml,
+        [_acting_rule("A", "A"), _acting_rule("B", "B")],
+        ["A", "B"],
+        group_order="parallel",
+    )
+    img, rect = _blank_frame()
+    clicks: list[str] = []
+
+    def _click(*_a, **_k):
+        clicks.append("x")
+        if len(clicks) == 1:
+            ml._stop_event.set()
+        return True
+
+    ml._send_click = _click
+
+    ml._process_rules(img, rect)
+
+    assert len(clicks) == 1, "停止後不得執行同群組剩餘規則"
+    assert ml._rule_completed == set()
+    assert ml._group_queue_idx == 0, "停止不得推進 queue"
+
+
+def test_background_global_stop_does_not_run_foreground():
+    """M1/M2：Background 全域停止不得污染 Foreground 狀態或執行前景規則。"""
+    ml = _ml_with_chrome()
+    bg = Rule(
+        id="BG",
+        name="Bg",
+        enabled=True,
+        background=True,
+        steps=[Step("click", {"target": "custom", "x": 0.5, "y": 0.5})],
+    )
+    fg = _acting_rule("A", "Foreground")
+    _setup_rules(ml, [bg, fg], ["A"])
+    img, rect = _blank_frame()
+    clicks: list[str] = []
+    keys: list[str] = []
+
+    def _click(*_a, **_k):
+        clicks.append("bg")
+        ml._stop_event.set()
+        return True
+
+    ml._send_click = _click
+    ml._send_key = lambda k, *_a, **_k: keys.append(k) or True
+
+    ml._process_rules(img, rect)
+
+    assert clicks == ["bg"], "背景停止後不得再執行前景規則"
+    assert keys == []
+    assert ml._rule_completed == set()
+    assert ml._rule_in_group_ptr == 0
+
+
+def test_local_on_fail_stop_is_not_global_stop():
+    """局部 on_fail=stop 不得升級為全域 STOPPED：下一幀仍會重試同一條規則。"""
+    ml = _ml_with_chrome()
+    rule = Rule(
+        id="A",
+        name="LocalStop",
+        enabled=True,
+        steps=[Step("detect", {"text": "zzz-never-present", "on_fail": "stop"})],
+    )
+    _setup_rules(ml, [rule], ["A"])
+    img, rect = _blank_frame()
+    ml._ocr_region = lambda *_a, **_k: []  # 永遠沒命中 → 走 on_fail
+
+    ml._process_rules(img, rect)
+
+    assert not ml._stop_event.is_set(), "局部 stop 不得設 _stop_event"
+    assert ml._rule_completed == set()
+    assert ml._rule_in_group_ptr == 0
+    assert ml._process_counter == 1
+
+    ml._process_rules(img, rect)
+
+    assert ml._process_counter == 2, "局部 stop 下一幀仍應重試"
+    assert ml._rule_completed == set()
+
+
+def test_notify_group_removal_does_not_skip_next_group_first_rule():
+    """M5：G1 被 notify 移除後，G2 的第一條規則不得被 pointer advance 跳過。"""
+    ml = _ml_with_chrome()
+    a = _acting_rule("A", "A")
+    b = Rule(
+        id="B",
+        name="NotifyStop",
+        enabled=True,
+        steps=[
+            Step(
+                "detect",
+                {
+                    "text": "zzz-never-present",
+                    "on_fail": {"action": "notify", "message": "stop"},
+                },
+            )
+        ],
+    )
+    c = _acting_rule("C", "C")
+    d = _acting_rule("D", "D")
+    ml._rules = [a, b, c, d]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [
+        RuleGroup(
+            id="g1",
+            name="G1",
+            rule_ids=["A", "B"],
+            order="sequential",
+            enabled=True,
+            mode="once",
+        ),
+        RuleGroup(
+            id="g2",
+            name="G2",
+            rule_ids=["C", "D"],
+            order="sequential",
+            enabled=True,
+            mode="once",
+        ),
+    ]
+    ml._active_group_ids = ["g1", "g2"]
+    ml._rule_in_group_ptr = 0
+    ml._group_queue_idx = 0
+    ml._rule_completed.clear()
+    ml._last_active_rule_id = None
+    ml._process_counter = 0
+    ml._stop_event.clear()
+    ml._ocr_region = lambda *_a, **_k: []
+    img, rect = _blank_frame()
+
+    ml._process_rules(img, rect)  # A：觸發（ptr → B）
+    ml._process_rules(img, rect)  # B：notify 移除 G1
+
+    assert "g1" not in ml._active_group_ids
+    assert ml._rule_in_group_ptr == 0, "群組移除後不得留下舊 pointer"
+    assert ml._group_rounds_completed == {}, "群組移除不得計入完成回合"
+    assert "B" not in ml._rule_completed
+
+    ml._process_rules(img, rect)  # 應執行 G2 的 C，而不是跳過它
+
+    assert "C" in ml._rule_completed, "不得跳過下一群組第一條規則"
+    assert "D" not in ml._rule_completed, "C 完成後應推進到 D，而非直接跑 D"
+    assert ml._rule_in_group_ptr == 1
+    assert ml._group_rounds_completed == {}
+
+
+def test_background_jump_does_not_move_foreground_pointer(monkeypatch):
+    """M6：背景 jump 改寫 _rule_in_group_ptr 後必須還原，不得跳過前景規則。"""
+    ml = _ml_with_chrome()
+    bg = Rule(
+        id="BG",
+        name="Bg",
+        enabled=True,
+        background=True,
+        steps=[Step("jump", {"rule_id": "C"})],
+    )
+    a = Rule(id="A", name="A", enabled=True, steps=[Step("wait", {"ms": 0})])
+    c = _acting_rule("C", "C")
+    ml._rules = [bg, a, c]
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = [
+        RuleGroup(
+            id="g1",
+            name="G1",
+            rule_ids=["A", "C"],
+            order="sequential",
+            enabled=True,
+            mode="once",
+        )
+    ]
+    ml._active_group_ids = ["g1"]
+    ml._rule_in_group_ptr = 0
+    ml._group_queue_idx = 0
+    ml._rule_completed.clear()
+    ml._last_active_rule_id = None
+    ml._process_counter = 0
+    img, rect = _blank_frame()
+
+    calls: list[str] = []
+    original_run_step = ml._run_step
+
+    def spy_run_step(step, ctx, rule):
+        calls.append(rule.id)
+        return original_run_step(step, ctx, rule)
+
+    monkeypatch.setattr(ml, "_run_step", spy_run_step)
+    ml._process_rules(img, rect)
+
+    assert "BG" in calls, "背景規則應執行"
+    assert "A" in calls, "前景應從指標位置（A）開始"
+    assert "C" not in calls, "背景 jump 不得把前景 pointer 移到 C"
+    assert ml._rule_in_group_ptr == 0
+
+
+def test_sequential_normal_completion_still_advances():
+    """M2 對照組：正常完成仍照原行為計完成、推進 pointer 與回合。"""
+    ml = _ml_with_chrome()
+    _setup_rules(ml, [_acting_rule("A", "A"), _acting_rule("B", "B")], ["A", "B"])
+    img, rect = _blank_frame()
+
+    ml._process_rules(img, rect)
+    assert ml._rule_in_group_ptr == 1
+    assert ml._rule_completed == {"A"}
+
+    ml._process_rules(img, rect)
+    assert ml._rule_completed == {"A", "B"}
+    assert ml._group_rounds_completed == {"g1": 1}
+    assert ml._group_queue_idx == 1

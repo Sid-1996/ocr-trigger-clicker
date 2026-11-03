@@ -733,6 +733,20 @@
     </div>
 
     <div class="faq-item">
+      <button class="faq-question" aria-expanded="false">規則為什麼沒有執行？</button>
+      <div class="faq-answer">
+        規則可能因設定錯誤而被標記為「無法執行」並整條跳過，常見原因是偵測關鍵字是空白、步驟類型無法辨識等。
+        <ul>
+          <li>被擋下的規則不會執行任何步驟，也不會被當成「已完成」；單一規則被擋不影響其他規則。</li>
+          <li>右下「執行日誌」會列出原因（同一個問題只提示一次，不會每幀洗版）；前景模式會額外跳出提示，背景規則只記錄日誌。</li>
+          <li><strong>並行（∥）群組</strong>裡如果全部規則都被擋下，群組會保持等待——不會假裝完成，也不會往下推進。</li>
+          <li>測試執行（Dry Run）也會明確顯示「因設定錯誤不會執行」，不會假裝成功。</li>
+        </ul>
+        解法：修正規則（例如把偵測關鍵字填上）→ 儲存 → 任務會自動重新載入並重新檢查，恢復後即可正常執行。被擋下的規則不會自動修復。
+      </div>
+    </div>
+
+    <div class="faq-item">
       <button class="faq-question" aria-expanded="false">多個規則可以同時執行嗎？</button>
       <div class="faq-answer">群組內的規則依序執行，一次只執行一條。常駐監控規則則每幀都會執行，不受群組順序影響。</div>
     </div>

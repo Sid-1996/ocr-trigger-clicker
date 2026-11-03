@@ -2,12 +2,20 @@ import numpy as np
 from conftest import make_main_loop
 
 from _loader import load_sibling
-from core.rule_models import Rule, RuleGroup, Step
 
 _ml_mod = load_sibling("main_loop", "core/05_main_loop.py")
 RuleMig = load_sibling("rule_migration", "core/rule_migration.py")
 StepContext = _ml_mod.StepContext
 StepResult = _ml_mod.StepResult
+
+# 正式產品路徑的 Rule/Step class object（load_sibling 的共用 rule_models 模組實例）。
+# Preflight 與 fingerprint 都以這個 class object 判定，測試必須用同一份建構；
+# 用別名實例（from core.rule_models import ...）會讓規則被判 invalid_step 而 BLOCKED，
+# 動作不會執行。
+_models = load_sibling("rule_models", "core/rule_models.py")
+Rule = _models.Rule
+RuleGroup = _models.RuleGroup
+Step = _models.Step
 
 _BLANK = np.zeros((100, 100, 3), dtype=np.uint8)
 _RECT = {"x": 0, "y": 0, "w": 100, "h": 100}

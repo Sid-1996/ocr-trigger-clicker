@@ -62,7 +62,7 @@ class FakeFrida:
     def click(self, hwnd, x, y, button="left", hold_ms=0, cancel=None):
         return _BG._click_postmessage(hwnd, x, y, button, hold_ms, cancel)
 
-    def key(self, hwnd, vk, down):
+    def key(self, hwnd, vk, down, cancel=None):
         self.keys.append((vk, down))
         return True
 

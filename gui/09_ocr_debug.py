@@ -186,6 +186,15 @@ class OcrDebugPanel(QWidget):
         self._has_active_rule = False
         self._verif_in_progress = False
         self._key_verif_in_progress = False
+        # 輸入測試按鈕（點擊／按鍵）的可用性由兩個條件決定：
+        # 1) 面板自身狀態：_click_test_available / _key_test_available
+        #    （有選取結果、驗證進行中…由面板自己維護）
+        # 2) 主循環是否執行中：_run_active
+        #    測試鈕會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
+        #    後端狀態 → 循環執行期間一律停用，避免兩邊同時送輸入互相干擾。
+        self._run_active = False
+        self._click_test_available = False
+        self._key_test_available = True
         self._last_verify_guidance = ""
         self._last_verify_dev = ""
         self._signals = _OcrSignals()
@@ -207,7 +216,6 @@ class OcrDebugPanel(QWidget):
         self._click_test_btn = QPushButton(T("ocr_debug.click_test"))
         self._click_test_btn.setMinimumWidth(80)
         self._click_test_btn.setToolTip(T("ocr_debug.click_test.tooltip"))
-        self._click_test_btn.setEnabled(False)
         self._click_test_btn.clicked.connect(self._on_click_test)
         toolbar.addWidget(self._click_test_btn)
         self._key_test_combo = QComboBox()
@@ -221,6 +229,8 @@ class OcrDebugPanel(QWidget):
         self._key_test_btn.setToolTip(T("ocr_debug.key_test.tooltip"))
         self._key_test_btn.clicked.connect(self._on_key_test)
         toolbar.addWidget(self._key_test_btn)
+        # 測試按鈕的初始可用性一律走 _sync_test_buttons（面板狀態 × 非循環執行中）
+        self._sync_test_buttons()
         toolbar.addStretch()
         self._info_label = QLabel("")
         toolbar.addWidget(self._info_label)
@@ -453,7 +463,8 @@ class OcrDebugPanel(QWidget):
         self._result_table.blockSignals(False)
         self._add_rule_btn.setEnabled(False)
         self._template_btn.setEnabled(False)
-        self._click_test_btn.setEnabled(False)
+        self._click_test_available = False
+        self._sync_test_buttons()
         self._update_step_btn_state()
 
         raw, src = self._minimize_and_capture()
@@ -581,12 +592,13 @@ class OcrDebugPanel(QWidget):
                 self._template_btn.setEnabled(True)
                 # 驗證進行中不得提前解鎖，否則使用者可重複點擊測試
                 if not self._verif_in_progress:
-                    self._click_test_btn.setEnabled(True)
+                    self._click_test_available = True
             else:
                 self._selected_index = -1
                 self._add_rule_btn.setEnabled(False)
                 self._template_btn.setEnabled(False)
-                self._click_test_btn.setEnabled(False)
+                self._click_test_available = False
+            self._sync_test_buttons()
             self._update_step_btn_state()
             self._rebuild_annotated()
             self._update_display()
@@ -626,7 +638,8 @@ class OcrDebugPanel(QWidget):
                 self._result_table.blockSignals(False)
                 self._add_rule_btn.setEnabled(True)
                 self._template_btn.setEnabled(True)
-                self._click_test_btn.setEnabled(True)
+                self._click_test_available = True
+                self._sync_test_buttons()
                 self._update_step_btn_state()
                 try:
                     self._rebuild_annotated()
@@ -638,6 +651,29 @@ class OcrDebugPanel(QWidget):
     def set_has_active_rule(self, active: bool):
         self._has_active_rule = active
         self._update_step_btn_state()
+
+    def set_run_active(self, active: bool) -> None:
+        """主循環執行期間停用輸入測試按鈕。
+
+        輸入測試會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
+        後端狀態 → 循環執行期間必須停用，避免兩邊同時送輸入互相干擾。
+        循環停止後依面板原本狀態還原（不覆蓋面板自己的啟用／停用邏輯）。
+        """
+        self._run_active = bool(active)
+        self._sync_test_buttons()
+
+    def _sync_test_buttons(self) -> None:
+        """套用輸入測試按鈕的可用性：面板自身狀態 AND 非主循環執行中。
+
+        面板自己的意圖（是否有選取結果、驗證是否進行中）決定「測試鈕本來該
+        不該用」；主循環執行中則一律停用。視窗已關閉（C++ 物件已刪除）時
+        安全忽略，不讓狀態更新拖垮 GUI。
+        """
+        try:
+            self._click_test_btn.setEnabled(self._click_test_available and not self._run_active)
+            self._key_test_btn.setEnabled(self._key_test_available and not self._run_active)
+        except RuntimeError:
+            logging.debug("ocr debug panel closed: skip test button state")
 
     def _update_step_btn_state(self):
         enabled = self._selected_index >= 0 and self._has_active_rule
@@ -982,7 +1018,8 @@ class OcrDebugPanel(QWidget):
         self._click_verify_request_id += 1
         request_id = self._click_verify_request_id
         self._verif_in_progress = True
-        self._click_test_btn.setEnabled(False)
+        self._click_test_available = False
+        self._sync_test_buttons()
         self._click_test_btn.setText(T("ocr_debug.verifying"))
         frame_size = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
         threading.Thread(
@@ -1054,7 +1091,8 @@ class OcrDebugPanel(QWidget):
             # 過期任務：安全忽略，不得解鎖新任務的按鈕或覆蓋其狀態
             return
         self._verif_in_progress = False
-        self._click_test_btn.setEnabled(True)
+        self._click_test_available = True
+        self._sync_test_buttons()
         self._click_test_btn.setText(T("ocr_debug.click_test"))
         self._show_click_verify(
             out["state"],
@@ -1141,7 +1179,8 @@ class OcrDebugPanel(QWidget):
         self._key_verify_request_id += 1
         request_id = self._key_verify_request_id
         self._key_verif_in_progress = True
-        self._key_test_btn.setEnabled(False)
+        self._key_test_available = False
+        self._sync_test_buttons()
         self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
         threading.Thread(
             target=self._key_verify_worker, args=(hwnd, key, request_id), daemon=True
@@ -1205,7 +1244,8 @@ class OcrDebugPanel(QWidget):
             # 過期任務：安全忽略，不得解鎖新任務的按鈕或覆蓋其狀態
             return
         self._key_verif_in_progress = False
-        self._key_test_btn.setEnabled(True)
+        self._key_test_available = True
+        self._sync_test_buttons()
         self._key_test_btn.setText(T("ocr_debug.key_test"))
         self._show_key_verify(out)
 
@@ -1429,13 +1469,15 @@ class OcrDebugPanel(QWidget):
         self._click_error_label.hide()
         self._add_rule_btn.setEnabled(False)
         self._template_btn.setEnabled(False)
-        self._click_test_btn.setEnabled(False)
+        self._click_test_available = False
+        self._sync_test_buttons()
         self._click_test_btn.setText(T("ocr_debug.click_test"))
         # 在途的驗證工作已被 generation id 作廢，旗標一併歸零，
         # 否則過期 slot 被忽略後沒人能解鎖，按鈕會永久卡在「驗證中」。
         self._verif_in_progress = False
         self._key_verif_in_progress = False
-        self._key_test_btn.setEnabled(True)
+        self._key_test_available = True
+        self._sync_test_buttons()
         self._key_test_btn.setText(T("ocr_debug.key_test"))
         self._update_step_btn_state()
         self._image_label.setText(T("ocr_debug.switch_window"))

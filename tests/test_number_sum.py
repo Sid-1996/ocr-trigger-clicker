@@ -4,11 +4,18 @@ from conftest import make_main_loop
 
 from _loader import load_sibling
 from core.rule_migration import _normalize_step_params
-from core.rule_models import Rule, Step
 
 _number_sum = load_sibling("number_sum", "core/21_number_sum.py")
 _ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
 _ml = load_sibling("main_loop", "core/05_main_loop.py")
+
+# 正式產品路徑的 Rule/Step class object（load_sibling 的共用 rule_models 模組實例）。
+# Preflight 與 fingerprint 都以這個 class object 判定，測試必須用同一份建構；
+# 用別名實例（from core.rule_models import ...）會讓規則被判 invalid_step 而 BLOCKED，
+# 動作不會執行。
+_models = load_sibling("rule_models", "core/rule_models.py")
+Rule = _models.Rule
+Step = _models.Step
 
 
 def test_parse_numbers():
