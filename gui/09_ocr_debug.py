@@ -1346,8 +1346,6 @@ class OcrDebugPanel(QWidget):
             return result(BackendStatus.CANCELLED, cancelled=True), coords
         if self._run_active.is_set():
             return result(BackendStatus.NOT_EXECUTED, "main_loop_running"), coords
-        if not request.hwnd:
-            return result(BackendStatus.NOT_EXECUTED, "window_unavailable"), coords
 
         try:
             if request.kind == "click":
@@ -1356,6 +1354,8 @@ class OcrDebugPanel(QWidget):
                     return result(BackendStatus.NOT_EXECUTED, "target_unavailable"), coords
                 ox, oy = target.x + target.w // 2, target.y + target.h // 2
                 if request.mode == "frida":
+                    if not request.hwnd:
+                        return result(BackendStatus.NOT_EXECUTED, "window_unavailable"), coords
                     if request.capture_source_gdi:
                         x, y = ox, oy
                     else:
@@ -1381,6 +1381,8 @@ class OcrDebugPanel(QWidget):
                     from ctypes import wintypes
 
                     if request.mode == "hybrid" or request.capture_source_gdi:
+                        if not request.hwnd:
+                            return result(BackendStatus.NOT_EXECUTED, "window_unavailable"), coords
                         point = wintypes.POINT(0, 0)
                         if not ctypes.windll.user32.ClientToScreen(
                             request.hwnd, ctypes.byref(point)
@@ -1430,6 +1432,8 @@ class OcrDebugPanel(QWidget):
                     api_called = True
                     ok = bool(_pynput_input.send_key(request.key, cancel=cancel))
                 elif request.mode == "hybrid":
+                    if not request.hwnd:
+                        return result(BackendStatus.NOT_EXECUTED, "window_unavailable"), coords
                     with _hybrid.focus_guard(request.window_title, activate_window) as focus_ok:
                         if cancel.is_set() or self._run_active.is_set():
                             return result(
@@ -1443,6 +1447,8 @@ class OcrDebugPanel(QWidget):
                         api_called = True
                         ok = bool(_pynput_input.send_key(request.key, cancel=cancel))
                 elif request.mode == "frida":
+                    if not request.hwnd:
+                        return result(BackendStatus.NOT_EXECUTED, "window_unavailable"), coords
                     _bg_input.set_method(request.mode)
                     previous_error = _bg_input.last_error()
                     if cancel.is_set() or self._run_active.is_set():

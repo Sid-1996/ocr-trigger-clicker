@@ -24,7 +24,15 @@ def panel(qt_app):
     qt_app.processEvents()
 
 
-def _request(kind, mode, *, hwnd=123, generation=1):
+def _request(
+    kind,
+    mode,
+    *,
+    hwnd=123,
+    generation=1,
+    window_rect=(100, 200, 800, 600),
+    capture_source_gdi=False,
+):
     return _debug.BackendTestRequest(
         generation=generation,
         kind=kind,
@@ -33,7 +41,8 @@ def _request(kind, mode, *, hwnd=123, generation=1):
         hwnd=hwnd,
         key="space" if kind == "key" else "",
         target=_debug._OcrTarget("OK", 10, 20, 8, 6) if kind == "click" else None,
-        window_rect=(100, 200, 800, 600),
+        capture_source_gdi=capture_source_gdi,
+        window_rect=window_rect,
     )
 
 
@@ -73,7 +82,11 @@ def _install_input_fakes(monkeypatch, *, click_result=True, key_result=True, err
     monkeypatch.setattr(_debug, "_bg_input", FakeBackground())
     monkeypatch.setattr(_debug, "_pynput_input", FakePynput())
     monkeypatch.setattr(_debug._hybrid, "focus_guard", focus_guard)
-    monkeypatch.setattr(_debug, "activate_window", lambda *_: True)
+    monkeypatch.setattr(
+        _debug,
+        "activate_window",
+        lambda *args: calls.append(("activate", args, threading.get_ident())) or True,
+    )
     monkeypatch.setattr(_debug._screenshot, "get_window_client_offset", lambda *_: (0, 0))
     fake_user32 = SimpleNamespace(
         ClientToScreen=lambda hwnd, point_ref: (
@@ -115,6 +128,95 @@ def test_all_backend_modes_dispatch_on_worker_thread(panel, monkeypatch, kind, m
     assert len(api_calls) == 1
     assert api_calls[0][0] == expected
     assert api_calls[0][-1] != threading.get_ident()
+
+
+def test_pynput_key_without_hwnd_still_sends(panel, monkeypatch):
+    calls, _ = _install_input_fakes(monkeypatch)
+    result, _ = panel._dispatch_backend_test(_request("key", "pynput", hwnd=0), threading.Event())
+    assert result.backend_status is _debug.BackendStatus.SUCCESS
+    assert any(call[0] == "activate" and call[1] == ("Target",) for call in calls)
+    api_calls = [call for call in calls if call[0] == "pynput_key"]
+    assert len(api_calls) == 1
+
+
+def test_pynput_click_without_hwnd_uses_window_rect(panel, monkeypatch):
+    calls, _ = _install_input_fakes(monkeypatch)
+    result, coords = panel._dispatch_backend_test(
+        _request("click", "pynput", hwnd=0), threading.Event()
+    )
+    assert result.backend_status is _debug.BackendStatus.SUCCESS
+    assert coords == (114, 223)
+    assert [call for call in calls if call[0] == "pynput_click"] == [
+        ("pynput_click", 114, 223, threading.get_ident())
+    ]
+
+
+def test_pynput_gdi_click_without_hwnd_is_not_executed(panel, monkeypatch):
+    calls, _ = _install_input_fakes(monkeypatch)
+    result, _ = panel._dispatch_backend_test(
+        _request("click", "pynput", hwnd=0, capture_source_gdi=True), threading.Event()
+    )
+    assert result.backend_status is _debug.BackendStatus.NOT_EXECUTED
+    assert not [call for call in calls if call[0] == "pynput_click"]
+
+
+def test_pynput_click_without_hwnd_or_window_rect_is_not_executed(panel, monkeypatch):
+    calls, _ = _install_input_fakes(monkeypatch)
+    result, _ = panel._dispatch_backend_test(
+        _request("click", "pynput", hwnd=0, window_rect=None), threading.Event()
+    )
+    assert result.backend_status is _debug.BackendStatus.NOT_EXECUTED
+    assert not [call for call in calls if call[0] == "pynput_click"]
+
+
+@pytest.mark.parametrize(
+    ("kind", "mode"),
+    [
+        ("click", "frida"),
+        ("key", "frida"),
+        ("click", "hybrid"),
+        ("key", "hybrid"),
+    ],
+)
+def test_frida_and_hybrid_still_require_hwnd(panel, monkeypatch, kind, mode):
+    calls, _ = _install_input_fakes(monkeypatch)
+    result, _ = panel._dispatch_backend_test(_request(kind, mode, hwnd=0), threading.Event())
+    assert result.backend_status is _debug.BackendStatus.NOT_EXECUTED
+    assert not [
+        call
+        for call in calls
+        if call[0] in ("frida_click", "frida_key", "pynput_click", "pynput_key")
+    ]
+
+
+@pytest.mark.parametrize(
+    ("kind", "mode", "window_rect"),
+    [
+        ("key", "pynput", (100, 200, 800, 600)),
+        ("click", "pynput", (100, 200, 800, 600)),
+    ],
+)
+def test_cancel_and_mainloop_gate_still_block_without_hwnd(
+    panel, monkeypatch, kind, mode, window_rect
+):
+    calls, _ = _install_input_fakes(monkeypatch)
+    request = _request(kind, mode, hwnd=0, window_rect=window_rect)
+
+    cancelled = threading.Event()
+    cancelled.set()
+    result, _ = panel._dispatch_backend_test(request, cancelled)
+    assert result.backend_status is _debug.BackendStatus.CANCELLED
+    assert result.cancelled is True
+
+    panel.set_run_active(True)
+    result, _ = panel._dispatch_backend_test(request, threading.Event())
+    assert result.backend_status is _debug.BackendStatus.NOT_EXECUTED
+    assert result.error == "main_loop_running"
+    assert not [
+        call
+        for call in calls
+        if call[0] in ("frida_click", "frida_key", "pynput_click", "pynput_key")
+    ]
 
 
 @pytest.mark.parametrize(
