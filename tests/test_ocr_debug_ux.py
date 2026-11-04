@@ -19,6 +19,7 @@ if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
 from _loader import load_sibling  # noqa: E402
+from core._paths import get_data_path  # noqa: E402
 from i18n import T  # noqa: E402
 
 _mod = load_sibling("ocr_debug", "gui/09_ocr_debug.py")
@@ -33,7 +34,9 @@ def qapp():
 
 
 @pytest.fixture
-def panel(qapp):
+def panel(qapp, isolated_data_dir):
+    # isolated_data_dir 必須在面板建構前生效：OcrDebugPanel.__init__ 會讀
+    # config.json 的顯示偏好（未隔離時會讀到使用者真實設定檔）。
     p = _mod.OcrDebugPanel("", None)
     p.show()
     qapp.processEvents()
@@ -66,6 +69,34 @@ def _pixel(panel):
     assert pm is not None and not pm.isNull()
     img = pm.toImage()
     return img.pixelColor(2, 3)
+
+
+# ── 守門：測試不得讀寫使用者真實 config.json ─────────────────────────────
+
+
+def _real_user_config_path() -> Path:
+    """使用者真實設定檔路徑（測試期間只讀取，用來證明沒有被寫到）。"""
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        pytest.skip("此環境沒有 APPDATA，無法定位使用者真實設定檔")
+    return Path(appdata) / "ocr-trigger-clicker" / "config.json"
+
+
+def test_panel_uses_isolated_config_path(panel, isolated_data_dir):
+    """守門：面板的設定讀寫必須落在隔離目錄內（不得只靠 fixture 命名推定）。"""
+    path = Path(get_data_path("config.json"))
+    assert path.parent == isolated_data_dir
+    assert path != _real_user_config_path()
+
+
+def test_panel_never_writes_real_user_config(panel, isolated_data_dir):
+    """守門：切換顯示偏好後，使用者真實 config.json 必須位元組不變。"""
+    real = _real_user_config_path()
+    before = real.read_bytes() if real.exists() else None
+    panel._show_boxes_check.setChecked(not panel._show_boxes)
+    panel._show_boxes_check.setChecked(panel._show_boxes)
+    after = real.read_bytes() if real.exists() else None
+    assert before == after
 
 
 # ── P0：OCR 框顯示開關 ──────────────────────────────────────────────────────

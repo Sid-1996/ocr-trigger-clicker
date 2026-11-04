@@ -181,9 +181,16 @@ def qt_app():
     yield app
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def isolated_data_dir(tmp_path, monkeypatch):
-    """把應用資料（設定檔、任務檔）隔離到 tmp_path。"""
+    """把應用資料（設定檔、任務檔）隔離到 tmp_path。
+
+    autouse：每個測試都必須在使用者自己的 %APPDATA% 之外運作。產品端
+    ``core/_paths.py`` 的 ``get_data_path()`` 每次呼叫都讀 OCR_TRIGGER_DATA，
+    未隔離時測試會讀寫使用者真實的 config.json——OCR Debug 面板的顯示偏好
+    就是這樣被測試寫進使用者設定的（面板在 __init__ 讀偏好、切換時寫回）。
+    monkeypatch 確保測試失敗／例外／teardown 時都會還原環境變數。
+    """
     data_dir = tmp_path / "appdata"
     monkeypatch.setenv("OCR_TRIGGER_DATA", str(data_dir))
     return data_dir
