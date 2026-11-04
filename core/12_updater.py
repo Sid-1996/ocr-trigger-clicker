@@ -61,6 +61,21 @@ def check_for_update(_current_version: str) -> UpdateInfo | None:
     )
 
 
+def heal_appcompat() -> None:
+    """套用更新前自癒：移除自身執行檔上的「以系統管理員身分執行」相容性層級。
+
+    Velopack 以非提權 CreateProcess 啟動 ``--veloapp-install`` hook，若執行檔
+    帶著 RUNASADMIN 層級會被 Windows 拒絕（Win32 740），更新必定失敗。
+    細節見 ``core/13_appcompat.py``。
+    """
+    try:
+        from _loader import load_sibling
+
+        load_sibling("appcompat", "core/13_appcompat.py").heal()
+    except Exception as e:
+        log.info("相容性設定自癒略過：%s", e)
+
+
 def download_and_apply(_info: UpdateInfo, progress_cb=None) -> None:
     """下載並排程套用更新（框架會等本程序退出後換目錄並重啟）。
 
@@ -69,6 +84,7 @@ def download_and_apply(_info: UpdateInfo, progress_cb=None) -> None:
     """
     from velopack import GithubSource, UpdateManager
 
+    heal_appcompat()  # 更新鏈路必須全程非提權，否則 hook 啟動會被 Windows 拒絕
     um = UpdateManager(GithubSource(FEED_REPO_URL))
     pending = um.get_update_pending_restart()
     if pending is not None:

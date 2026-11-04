@@ -8856,6 +8856,14 @@ if __name__ == "__main__":
     # 內建 relaunch：帶 --wait-exit-pid=N 時先等舊程序退出並從 argv 移除
     _wait_exit_pid_arg()
 
+    # 自癒：移除自身執行檔上的「以系統管理員身分執行」相容性層級。
+    # 否則 Velopack 以非提權 CreateProcess 啟動 --veloapp-install hook 會被
+    # Windows 拒絕（Win32 740 / os error -2147024156），安裝與更新都會失敗。
+    try:
+        load_sibling("appcompat", "core/13_appcompat.py").heal()
+    except Exception:
+        logging.debug("appcompat 自癒不可用", exc_info=True)
+
     # Velopack 安裝／更新 hook：必須在任何 UI 建立前執行（開發模式為 no-op）
     try:
         from velopack import App
