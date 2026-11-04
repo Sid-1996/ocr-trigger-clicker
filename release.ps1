@@ -10,6 +10,22 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
+function Restore-FeedTestChanges {
+    param(
+        [hashtable]$Snapshots,
+        [string]$RootPath
+    )
+
+    foreach ($relativePath in $Snapshots.Keys) {
+        $path = Join-Path $RootPath $relativePath
+        $parent = Split-Path -Parent $path
+        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($Snapshots[$relativePath]))
+    }
+}
+
 if ($FeedTest) {
     $repoUrl = "https://github.com/Sid-1996/ocr-trigger-clicker-release-test"
 } else {
@@ -76,6 +92,18 @@ if (-not $Force) {
     }
 }
 
+$feedTestSnapshots = @{}
+if ($FeedTest) {
+    $feedTestTrackedFiles = @("_version.py", "pyproject.toml", "uv.lock", "docs/dev/CHANGELOG.md")
+    foreach ($relativePath in $feedTestTrackedFiles) {
+        $path = Join-Path $root $relativePath
+        if (Test-Path -LiteralPath $path) {
+            $feedTestSnapshots[$relativePath] = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
+        }
+    }
+}
+
+try {
 # ---- 從 docs/dev/CHANGELOG.md 解析 release notes ----
 
 Write-Output "從 docs/dev/CHANGELOG.md 解析 v$Version 發行說明..."
@@ -147,11 +175,6 @@ Write-Output "成功讀取發行說明 ($($noteLines.Count) 行)"
 # 注意：latest_version.txt 凍結於 0.3.0、刻意不再更新——
 # 讓仍使用自製更新器的舊客戶端永遠顯示「暫無更新」（斷糧，避免觸碰已拆除的更新路徑）
 # -FeedTest 模式：版本檔僅暫改不提交，流程結束自動還原（不污染正式庫歷史）
-
-if ($FeedTest) {
-    $savedVersionPy = Get-Content _version.py -Raw -Encoding utf8
-    $savedPyproject = Get-Content pyproject.toml -Raw -Encoding utf8
-}
 
 $versionPath = Join-Path $root "_version.py"
 $versionText = Get-Content -Path $versionPath -Raw -Encoding utf8
@@ -251,14 +274,6 @@ gh release edit $tagName -R $ghRepo --title $tagName --notes-file $notesFile
 if ($LASTEXITCODE -ne 0) { throw "gh release edit 失敗" }
 Remove-Item $notesFile -ErrorAction SilentlyContinue
 
-# ---- 測試模式收尾：還原版本檔，保持工作樹乾淨 ----
-
-if ($FeedTest) {
-    Set-Content _version.py -Value $savedVersionPy -Encoding utf8 -NoNewline
-    Set-Content pyproject.toml -Value $savedPyproject -Encoding utf8 -NoNewline
-    git checkout -- pyproject.toml 2>$null
-}
-
 if ($FeedTest) {
     Write-Output ""
     Write-Output "✅ 測試庫已公開發布 $tagName"
@@ -271,4 +286,9 @@ if ($FeedTest) {
     Write-Output ""
     Write-Output "請下載 Releases\$tagName 目錄下的 Setup.exe 安裝冒煙測試，"
     Write-Output "確認無誤後在 GitHub Releases 頁面按「Publish release」公開。"
+}
+} finally {
+    if ($FeedTest -and $feedTestSnapshots.Count -gt 0) {
+        Restore-FeedTestChanges -Snapshots $feedTestSnapshots -RootPath $root
+    }
 }
