@@ -75,6 +75,9 @@ from i18n import T, detect_system_language, get_language, set_language
 
 _here = _base
 _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
+# 啟動循環前最小化主視窗時，等候「已離開前景」的最長等待秒數。
+# showMinimized() 的前景切換由視窗管理員處理，給它一個上限避免卡住 GUI。
+_MINIMIZE_CONFIRM_TIMEOUT_SEC = 2.0
 
 from _version import __author__, __github__, __version__  # noqa: E402
 
@@ -5194,6 +5197,9 @@ class MainWindow(QMainWindow):
             self._collapsed_groups: set[str] = set()
             self._suppress_collapse = False
             self._is_starting = False
+            # hybrid 啟動前會最小化主視窗（見 _minimize_for_loop_start）；
+            # 啟動失敗時需依此旗標把視窗還原，避免使用者找不到工具。
+            self._minimized_for_loop = False
             self._notif_stack = NotificationStack()
             self._sum_overlay = SumOverlay()
             self._updating = False
@@ -8123,13 +8129,59 @@ class MainWindow(QMainWindow):
         # 該窗口內先前的驗證 worker 仍會送出按鍵，與主循環重疊操作後台輸入。
         # 這裡只關 OCR Debug 的輸入測試閘門，不動編輯區的啟用狀態。
         self._set_debug_run_active(True)
+        # Hybrid：主視窗留在前景時，MainLoop._is_tool_foreground() 會擋掉所有
+        # 輸入動作（click/key/drag/scroll 皆回 stop，規則本回合結束、下一幀重試）。
+        # 啟動前先最小化主視窗，讓第一次循環不必等使用者手動切換視窗。
+        # 只影響 hybrid：frida 不依賴前景；pynput 由 activate_window 交棒前景。
+        # Focus Guard 本身完全不動 —— 使用者把 GUI 切回前景時保護照舊生效。
+        if str(self._rule_config_ctrl.get_setting(self, "interaction_mode", "pynput")) == "hybrid":
+            self._minimized_for_loop = self._minimize_for_loop_start()
         try:
             self._init_worker.start()
         except Exception:
             # 連執行緒都起不來 → 同樣要恢復 Debug 的閘門，
             # 否則輸入測試按鈕會永久停用（例外照原樣往外拋，語意不變）。
             self._set_debug_run_active(False)
+            self._restore_window_if_minimized_for_loop()
             raise
+
+    def _minimize_for_loop_start(self) -> bool:
+        """啟動循環前最小化主視窗，並確認真的已離開前景。
+
+        ``showMinimized()`` 只是提出狀態變更；Windows 的前景切換由視窗管理員在
+        訊息迴圈中處理，呼叫後不會立刻完成 → 不可假設前景狀態已同步，
+        必須消化事件並輪詢確認，否則會出現「已呼叫最小化、第一次循環仍被擋下」
+        的競態。回傳是否已成功最小化並離開前景。
+        """
+        try:
+            # 記住最大化狀態，啟動失敗還原時要回到原本的版面。
+            self._was_maxed = self.isMaximized()
+            self.showMinimized()
+        except Exception:
+            return False
+        deadline = time.monotonic() + _MINIMIZE_CONFIRM_TIMEOUT_SEC
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            if self.isMinimized() and not self._is_foreground_window():
+                return True
+            time.sleep(0.02)
+        return self.isMinimized()
+
+    def _is_foreground_window(self) -> bool:
+        """主視窗自身是否為前景視窗（判準與 MainLoop._is_tool_foreground 相同）。"""
+        try:
+            import ctypes
+
+            return ctypes.windll.user32.GetForegroundWindow() == int(self.winId())
+        except Exception:
+            return False
+
+    def _restore_window_if_minimized_for_loop(self) -> None:
+        """啟動失敗時把主視窗還原，避免使用者找不到工具或看不到錯誤對話框。"""
+        if not getattr(self, "_minimized_for_loop", False):
+            return
+        self._minimized_for_loop = False
+        self._restore_window()
 
     def _on_init_finished(self, success: bool, error_msg: str):
         self._btn_toggle.setEnabled(True)
@@ -8160,6 +8212,9 @@ class MainWindow(QMainWindow):
             # 啟動失敗 → 恢復 OCR Debug 的閘門（啟動前已先關上），
             # 否則輸入測試按鈕會永久停用。
             self._set_debug_run_active(False)
+            # 啟動前有最小化主視窗 → 先還原，否則錯誤對話框會跟著最小化，
+            # 使用者會找不到工具也看不到錯誤。
+            self._restore_window_if_minimized_for_loop()
             QMessageBox.critical(
                 self, T("dialog.init_failed"), T("dialog.loop_start_failed", error=error_msg)
             )
