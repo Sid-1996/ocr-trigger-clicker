@@ -553,8 +553,10 @@ def test_render_updates_preview_widgets(panel):
         1, "key", "frida", 123, "space", None, _debug.BackendStatus.SUCCESS, 1.0, visual=visual
     )
     panel._render_diagnostic_result(result)
-    assert not panel._visual_preview.isHidden()
-    assert set(panel._visual_preview_pixmaps) == {"before", "after", "heatmap"}
+    # Phase 4-C：Visual 預覽 UI 已移除，分析資料仍完整保留
+    assert not hasattr(panel, "_visual_preview")
+    assert not hasattr(panel, "_visual_preview_pixmaps")
+    assert visual.before is not None and visual.after is not None and visual.heatmap is not None
     text = panel._diagnostic_label.text()
     assert "Visual" in text
     assert "ROI" not in text or "全影格" in text or "Full frame" in text or "全画面" in text

@@ -144,7 +144,7 @@ def test_show_boxes_hide_selection_highlight(panel):
     assert (px.red(), px.green(), px.blue()) != (255, 220, 0)
 
 
-# ── P1：比較畫面切換 ────────────────────────────────────────────────────────
+# ── Visual 僅供內部（Phase 4-C 移除使用者可見預覽） ────────────────────────
 
 
 def _render_visual(panel):
@@ -158,42 +158,26 @@ def _render_visual(panel):
     return result
 
 
-def test_visual_preview_default_after(panel):
-    assert panel._visual_preview_combo.currentData() == "after"
+def test_visual_no_preview_ui_widgets(panel):
+    # 使用者可見的比較預覽 UI 不存在
+    assert not hasattr(panel, "_visual_preview")
+    assert not hasattr(panel, "_visual_preview_combo")
+    assert not hasattr(panel, "_visual_preview_panes")
+    assert not hasattr(panel, "_visual_preview_pixmaps")
+    assert not hasattr(panel, "_render_visual_preview")
+    assert not hasattr(panel, "_update_visual_preview")
 
 
-def test_visual_preview_switch_shows_only_selected_pane(panel):
-    _render_visual(panel)
-    for key in ("before", "heatmap"):
-        idx = panel._visual_preview_combo.findData(key)
-        panel._visual_preview_combo.setCurrentIndex(idx)
-        visible = [
-            k
-            for k, w in panel._visual_preview_panes.items()
-            if w.isVisibleTo(panel._visual_preview)
-        ]
-        assert visible == [key]
-
-
-def test_visual_preview_switch_keeps_pixmap_cache(panel):
-    _render_visual(panel)
-    before_ids = {k: id(v) for k, v in panel._visual_preview_pixmaps.items()}
-    panel._visual_preview_combo.setCurrentIndex(panel._visual_preview_combo.findData("before"))
-    after_ids = {k: id(v) for k, v in panel._visual_preview_pixmaps.items()}
-    assert before_ids == after_ids
-    assert set(panel._visual_preview_pixmaps) == {"before", "after", "heatmap"}
-
-
-def test_visual_preview_resize_keeps_selection(panel):
-    _render_visual(panel)
-    panel._visual_preview_combo.setCurrentIndex(panel._visual_preview_combo.findData("heatmap"))
-    panel.resize(1000, 900)
-    panel._update_visual_preview()
-    assert panel._visual_preview_combo.currentData() == "heatmap"
-    visible = [
-        k for k, w in panel._visual_preview_panes.items() if w.isVisibleTo(panel._visual_preview)
-    ]
-    assert visible == ["heatmap"]
+def test_visual_result_still_has_arrays_and_status_shown(panel):
+    result = _render_visual(panel)
+    # 後端資料契約不變：before/after/heatmap 仍完整產生
+    assert result.visual.before is not None
+    assert result.visual.after is not None
+    assert result.visual.heatmap is not None
+    # 診斷主層仍顯示 Visual 狀態
+    assert "Visual" in panel._diagnostic_label.text()
+    # 不產生任何 pixmap 預覽
+    assert not hasattr(panel, "_visual_preview_pixmaps")
 
 
 # ── P1：診斷摘要精簡 ────────────────────────────────────────────────────────

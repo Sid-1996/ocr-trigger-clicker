@@ -376,23 +376,6 @@ def _compare_visual(
     )
 
 
-def _bgr_to_pixmap(arr: np.ndarray):
-    img = np.ascontiguousarray(arr[:, :, ::-1])
-    h, w, ch = img.shape
-    q_img = QImage(img.tobytes(), w, h, ch * w, QImage.Format.Format_RGB888)
-    return QPixmap.fromImage(q_img)
-
-
-def _mask_to_pixmap(mask: np.ndarray):
-    m = np.ascontiguousarray(mask)
-    rgb = np.zeros((*m.shape[:2], 3), dtype=np.uint8)
-    rgb[m > 0] = (255, 0, 0)
-    rgb = np.ascontiguousarray(rgb)
-    h, w, _ = rgb.shape
-    q_img = QImage(rgb.tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
-    return QPixmap.fromImage(q_img)
-
-
 def _error_for_backend_failure(previous: str, current: str) -> str:
     """Only use last_error when this call can be distinguished from its prior value."""
     return current if current and current != previous else ""
@@ -602,50 +585,6 @@ class OcrDebugPanel(QWidget):
         self._diagnostic_detail_btn.toggled.connect(self._on_diagnostic_detail_toggled)
         self._diagnostic_detail_btn.hide()
         layout.addWidget(self._diagnostic_detail_btn)
-
-        self._visual_preview = QWidget()
-        preview_layout = QVBoxLayout(self._visual_preview)
-        preview_layout.setContentsMargins(0, 0, 0, 0)
-        preview_layout.setSpacing(4)
-        self._visual_preview_combo = QComboBox()
-        preview_keys = {
-            "before": "ocr_debug.diagnostic.preview.before",
-            "after": "ocr_debug.diagnostic.preview.after",
-            "heatmap": "ocr_debug.diagnostic.preview.heatmap",
-        }
-        for preview_key, caption_key in preview_keys.items():
-            self._visual_preview_combo.addItem(T(caption_key), preview_key)
-        self._visual_preview_combo.setCurrentIndex(self._visual_preview_combo.findData("after"))
-        self._visual_preview_combo.currentIndexChanged.connect(
-            lambda *_a: self._update_visual_preview()
-        )
-        preview_layout.addWidget(self._visual_preview_combo)
-        preview_row = QHBoxLayout()
-        preview_row.setContentsMargins(0, 0, 0, 0)
-        preview_row.setSpacing(6)
-        self._visual_preview_labels: dict[str, QLabel] = {}
-        self._visual_preview_panes: dict[str, QWidget] = {}
-        self._visual_preview_pixmaps: dict[str, QPixmap] = {}
-        for preview_key, caption_key in preview_keys.items():
-            pane_widget = QWidget()
-            pane = QVBoxLayout(pane_widget)
-            pane.setContentsMargins(0, 0, 0, 0)
-            pane.setSpacing(2)
-            caption = QLabel(T(caption_key))
-            caption.setStyleSheet("color:#555; font-size:10px;")
-            pane.addWidget(caption)
-            image = QLabel()
-            image.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            image.setMinimumSize(80, 48)
-            image.setMaximumHeight(96)
-            image.setStyleSheet("background:#1e1e1e; color:#888; font-size:10px;")
-            pane.addWidget(image)
-            preview_row.addWidget(pane_widget, 1)
-            self._visual_preview_panes[preview_key] = pane_widget
-            self._visual_preview_labels[preview_key] = image
-        preview_layout.addLayout(preview_row, 1)
-        self._visual_preview.hide()
-        layout.addWidget(self._visual_preview)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -1638,7 +1577,6 @@ class OcrDebugPanel(QWidget):
         self._diagnostic_detail_label.hide()
         self._diagnostic_detail_btn.setChecked(False)
         self._diagnostic_detail_btn.hide()
-        self._visual_preview.hide()
         self._click_test_btn.setText(T("ocr_debug.verifying"))
         self._sync_test_buttons()
         self._start_backend_test(request)
@@ -1664,7 +1602,6 @@ class OcrDebugPanel(QWidget):
         self._diagnostic_detail_label.hide()
         self._diagnostic_detail_btn.setChecked(False)
         self._diagnostic_detail_btn.hide()
-        self._visual_preview.hide()
         self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
         self._sync_test_buttons()
         self._start_backend_test(request)
@@ -2079,9 +2016,7 @@ class OcrDebugPanel(QWidget):
                     default=result.visual.reason,
                 )
                 detail_lines.append(T("ocr_debug.diagnostic.visual_reason_line", reason=reason))
-            self._render_visual_preview(result.visual)
-        else:
-            self._render_visual_preview(result.visual)
+            # Visual 僅供內部判斷：結果存於 BackendTestResult.visual，不產生任何圖片預覽
         if result.text_diff.status != ObservationStatus.NOT_RUN:
             td_scope = (
                 T(f"ocr_debug.diagnostic.text_scope.{result.text_diff.scope}")
@@ -2149,55 +2084,6 @@ class OcrDebugPanel(QWidget):
         self._diagnostic_detail_btn.setText(
             T("ocr_debug.diagnostic.detail_hide") if expanded else T("ocr_debug.diagnostic.detail")
         )
-
-    def _render_visual_preview(self, visual: VisualAnalysis) -> None:
-        try:
-            pixmaps: dict[str, QPixmap] = {}
-            if visual.before is not None:
-                pixmaps["before"] = _bgr_to_pixmap(visual.before)
-            if visual.after is not None:
-                pixmaps["after"] = _bgr_to_pixmap(visual.after)
-            if visual.heatmap is not None:
-                pixmaps["heatmap"] = _mask_to_pixmap(visual.heatmap)
-        except Exception:
-            logging.exception("visual preview render failed")
-            pixmaps = {}
-        self._visual_preview_pixmaps = pixmaps
-        if pixmaps:
-            self._visual_preview.show()
-            self._update_visual_preview()
-        else:
-            self._visual_preview.hide()
-
-    def _update_visual_preview(self) -> None:
-        active = (
-            self._visual_preview_combo.currentData()
-            if hasattr(self, "_visual_preview_combo")
-            else "after"
-        )
-        if active not in self._visual_preview_panes:
-            active = "after"
-        for key, pane_widget in self._visual_preview_panes.items():
-            pane_widget.setVisible(key == active)
-            if key != active:
-                continue
-            label = self._visual_preview_labels.get(key)
-            if label is None:
-                continue
-            pixmap = self._visual_preview_pixmaps.get(key)
-            if pixmap is None or pixmap.isNull():
-                label.clear()
-                continue
-            target = label.size()
-            if target.width() < 10 or target.height() < 10:
-                target = label.size() if label.size().width() > 10 else label.minimumSize()
-            label.setPixmap(
-                pixmap.scaled(
-                    target,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
 
     def _finish_test_ui(self, kind: str):
         self._test_cancel_events.pop(kind, None)
@@ -2615,8 +2501,6 @@ class OcrDebugPanel(QWidget):
         self._diagnostic_detail_label.hide()
         self._diagnostic_detail_btn.setChecked(False)
         self._diagnostic_detail_btn.hide()
-        self._visual_preview.hide()
-        self._visual_preview_pixmaps = {}
         self._update_step_btn_state()
         self._image_label.setText(T("ocr_debug.switch_window"))
         self._image_label.setPixmap(QPixmap())
@@ -2631,7 +2515,6 @@ class OcrDebugPanel(QWidget):
         super().resizeEvent(event)
         self._update_display()
         self._update_crop_preview()
-        self._update_visual_preview()
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.Resize:
