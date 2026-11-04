@@ -97,7 +97,7 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 - **根因**：`-2147024156` = `0x800702E4` = Win32 **740 `ERROR_ELEVATION_REQUIRED`**。Windows 把「以系統管理員身分執行」記在 `HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`（值名 = 執行檔完整路徑，值內容含 `RUNASADMIN` 或 `~ RUNASADMIN`）。Velopack 的安裝器以**非提權** `CreateProcess` 啟動 `--veloapp-install` / `--veloapp-uninstall` hook；一旦該執行檔帶著此層級，Windows 直接拒絕啟動 → hook 失敗 → 安裝失敗
 - **不是 manifest 問題**：應用程式的 `requestedExecutionLevel` 一直是 `asInvoker`（build 產出的 exe 與 nupkg 內的 exe 都已驗證）；Velopack 對 per-user 安裝刻意不提權。兩者都不是原因，升級 Velopack 也無效
 - **誰寫入的**：`ShellExecuteW(..., "runas", ...)`（`gui/06_gui_main.py` 的 `_relaunch_as_admin()`）**不會**寫入 Layers；實測寫入者是外部動作（Explorer 相容性設定勾「以系統管理員身分執行」、或第三方提權工具）
-- **修正**：`core/13_appcompat.py` 於**啟動時**（`gui/06_gui_main.py` 的 `__main__`）與**套用更新前**（`core/12_updater.py` 的 `download_and_apply()`）移除「本程式安裝根目錄下、檔名屬本程式執行檔」的 RUNASADMIN 層級（同一條目裡其他相容性設定原樣保留）。使用者不需理解 registry 概念；需要提權時請用程式內的「以系統管理員身分重新啟動」按鈕
+- **修正**：`core/13_appcompat.py` 於**啟動時**（`gui/06_gui_main.py` 的 `__main__`）與**套用更新前**（`core/12_updater.py` 的 `download_and_apply()`）移除「**相對於安裝根目錄、屬於本程式執行檔**」的 RUNASADMIN 層級（同一條目裡其他相容性設定原樣保留）。判斷依據是相對路徑與 Velopack 根目錄結構（`current` + `packages`），**不是檔名**——安裝目錄內其他軟體的 `update.exe` 等同名檔案不受影響；路徑比對前會展開 `..`，`<root>\..\Other\x.exe` 不會被誤認為在根目錄之下。使用者不需理解 registry 概念；需要提權時請用程式內的「以系統管理員身分重新啟動」按鈕
 - **仍失敗時**：先啟動一次程式（會自動修復），再重新執行安裝檔；或手動刪除 Layers 中對應路徑的項目
 
 ---
