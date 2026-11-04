@@ -569,8 +569,12 @@ def test_backend_failed_text_changed_keeps_layers_independent(panel):
     assert panel._diagnostic_result.backend_status is _debug.BackendStatus.FAILED
     assert panel._diagnostic_result.visual.status is _debug.ObservationStatus.CHANGED
     assert panel._diagnostic_result.text_diff.status is _debug.ObservationStatus.CHANGED
+    # Phase 4-B：文字差異細節收進可展開區，主層只保留核心狀態
+    main = panel._diagnostic_label.text()
+    assert "OCR 文字" not in main and "OCR text" not in main and "OCR テキスト" not in main
+    panel._diagnostic_detail_btn.setChecked(True)
     assert (
-        "OCR 文字" in panel._diagnostic_label.text()
-        or "OCR text" in panel._diagnostic_label.text()
-        or "OCR テキスト" in panel._diagnostic_label.text()
+        "OCR 文字" in panel._diagnostic_detail_label.text()
+        or "OCR text" in panel._diagnostic_detail_label.text()
+        or "OCR テキスト" in panel._diagnostic_detail_label.text()
     )
