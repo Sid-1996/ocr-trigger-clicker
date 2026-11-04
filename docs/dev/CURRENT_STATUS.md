@@ -49,14 +49,14 @@
 | `tests/test_bg_click_error_reporting.py`（新增，R-1） | 12 passed ✅ |
 | `tests/test_debug_verify_abort_on_run.py`（新增，R-3） | 16 passed ✅ |
 | `tests/test_debug_gate_before_loop_start.py`（新增，R-5） | 11 passed ✅ |
-| **完整套件** | **1336 passed, 0 failed**（目前基線） |
+| **完整套件** | **1514 passed, 13 skipped**（2026-11-04 測試結果，非本次重跑） |
 
 ## 品質關卡狀態
 
 | 關卡 | 狀態 | 備註 |
 |---|---|---|
 | `ruff check` | ✅ All checks passed | exit 0 |
-| 完整 pytest | ✅ 1336 passed | 78.78s；含 i18n 三語測試 |
+| 完整 pytest | ✅ 1514 passed, 13 skipped | 2026-11-04 測試結果，非本次重跑；含 i18n 三語測試 |
 | `git diff --check` | ✅ exit 0 | 僅既有 LF→CRLF warning |
 | core self-check（4 檔） | ✅ 全 exit=0 | `03_pynput_input`／`05_main_loop`／`16_bg_input`／`18_frida_bg` |
 | 座標校正 `--self-check` | ✅ passed | |
