@@ -45,6 +45,11 @@ _pw_mod = load_sibling("print_window", "core/15_print_window.py")
 is_black_capture = _pw_mod.is_black_capture
 is_admin = _pw_mod.is_admin
 
+_config_store_mod = load_sibling("config_store", "core/config_store.py")
+_ConfigStore = _config_store_mod.ConfigStore
+
+from core._paths import get_data_path  # noqa: E402
+
 _rule_mod = load_sibling("rule_engine", "core/04_rule_engine.py")
 _get_interaction_mode = _rule_mod.get_config_interaction_mode
 
@@ -486,8 +491,10 @@ class OcrDebugPanel(QWidget):
         self._capture_source = ""
         self._black_warn_text = ""
         self._selected_index = -1
-        # 顯示偏好：是否在截圖上繪製 OCR 框/標籤。clear_results 不得重置此偏好。
-        self._show_boxes = False
+        # 顯示偏好：是否在截圖上繪製 OCR 框/標籤。從全域 config.json 還原，
+        # clear_results 不得重置此偏好，也不寫入任務 JSON／Rule／Step。
+        self._show_boxes = bool(self._load_show_boxes_pref())
+        self._config_store = _ConfigStore()
         # 三種背景任務各自的 generation id。
         # 遞增只代表「禁止舊結果回填」，不代表取消 Worker（Worker 仍會跑完）。
         self._ocr_request_id = 0
@@ -529,7 +536,7 @@ class OcrDebugPanel(QWidget):
         self._capture_btn.setToolTip(T("ocr_debug.capture.tooltip"))
         toolbar.addWidget(self._capture_btn)
         self._show_boxes_check = QCheckBox(T("ocr_debug.show_boxes"))
-        self._show_boxes_check.setChecked(False)
+        self._show_boxes_check.setChecked(self._show_boxes)
         self._show_boxes_check.toggled.connect(self._on_show_boxes_toggled)
         toolbar.addWidget(self._show_boxes_check)
         self._click_test_btn = QPushButton(T("ocr_debug.click_test"))
@@ -954,8 +961,32 @@ class OcrDebugPanel(QWidget):
 
     def _on_show_boxes_toggled(self, checked: bool):
         self._show_boxes = bool(checked)
+        self._save_show_boxes_pref()
         self._rebuild_annotated()
         self._update_display()
+
+    def _show_boxes_pref_key(self):
+        return "ocr_debug_show_boxes"
+
+    def _load_show_boxes_pref(self) -> bool:
+        try:
+            store = _ConfigStore()
+            return bool(
+                store.get(self._show_boxes_pref_key(), False, path=get_data_path("config.json"))
+            )
+        except Exception:
+            logging.exception("load show_boxes pref failed")
+            return False
+
+    def _save_show_boxes_pref(self):
+        try:
+            self._config_store.set(
+                self._show_boxes_pref_key(),
+                bool(self._show_boxes),
+                path=get_data_path("config.json"),
+            )
+        except Exception:
+            logging.exception("save show_boxes pref failed")
 
     def _sync_selection_widgets(self):
         has_selection = 0 <= self._selected_index < len(self._ocr_results)

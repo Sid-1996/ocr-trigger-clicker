@@ -71,9 +71,48 @@ def _pixel(panel):
 # ── P0：OCR 框顯示開關 ──────────────────────────────────────────────────────
 
 
-def test_show_boxes_default_off(panel):
+def test_show_boxes_default_off(panel, isolated_data_dir):
     assert panel._show_boxes is False
     assert panel._show_boxes_check.isChecked() is False
+
+
+def test_show_boxes_restored_true_on_panel_recreate(panel, isolated_data_dir, qapp):
+    panel._show_boxes_check.setChecked(True)
+    assert panel._show_boxes is True
+    panel.deleteLater()
+    qapp.processEvents()
+    p2 = _mod.OcrDebugPanel("", None)
+    try:
+        assert p2._show_boxes is True
+        assert p2._show_boxes_check.isChecked() is True
+    finally:
+        p2.deleteLater()
+        qapp.processEvents()
+
+
+def test_show_boxes_restored_false_on_panel_recreate(panel, isolated_data_dir, qapp):
+    panel._show_boxes_check.setChecked(True)
+    panel._show_boxes_check.setChecked(False)
+    assert panel._show_boxes is False
+    panel.deleteLater()
+    qapp.processEvents()
+    p2 = _mod.OcrDebugPanel("", None)
+    try:
+        assert p2._show_boxes is False
+        assert p2._show_boxes_check.isChecked() is False
+    finally:
+        p2.deleteLater()
+        qapp.processEvents()
+
+
+def test_show_boxes_no_saved_value_defaults_false(isolated_data_dir, qapp):
+    p = _mod.OcrDebugPanel("", None)
+    try:
+        assert p._show_boxes is False
+        assert p._show_boxes_check.isChecked() is False
+    finally:
+        p.deleteLater()
+        qapp.processEvents()
 
 
 def test_show_boxes_off_means_clean_pixmap(panel):
@@ -126,7 +165,7 @@ def test_show_boxes_toggle_does_not_rerun_ocr(panel, monkeypatch):
     assert called["n"] == 0
 
 
-def test_clear_results_keeps_show_boxes_preference(panel):
+def test_clear_results_keeps_show_boxes_preference(panel, isolated_data_dir):
     panel._show_boxes_check.setChecked(True)
     assert panel._show_boxes is True
     panel.clear_results()
