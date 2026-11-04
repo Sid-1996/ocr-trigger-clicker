@@ -79,6 +79,13 @@ class OcrResult:
         self.center_y = self.y + self.h // 2
 
 
+@dataclass(frozen=True)
+class OcrCallOutcome:
+    results: list[OcrResult]
+    status: str
+    reason: str = ""
+
+
 def _box_to_rect(box) -> tuple[int, int, int, int]:
     xs = [p[0] for p in box]
     ys = [p[1] for p in box]
@@ -282,16 +289,20 @@ def _run_engine(img, use_cls):
 _OCR_TIMEOUT = 30
 
 
-def recognize(
+def _recognize_impl(
     image: np.ndarray,
     roi_offset: dict | None = None,
     preprocess: bool = True,
     max_side_len: int = _DEFAULT_MAX_SIDE_LEN,
     min_confidence: float = 0.5,
-) -> list[OcrResult]:
+) -> OcrCallOutcome:
     if image is None or image.size == 0:
-        return []
-    img, scale = _prepare_image(image, max_side_len, preprocess)
+        return OcrCallOutcome([], "empty_input", "invalid_image")
+    try:
+        img, scale = _prepare_image(image, max_side_len, preprocess)
+    except Exception as exc:
+        _incr_ocr_failure()
+        return OcrCallOutcome([], "error", str(exc) or type(exc).__name__)
     ox, oy = (roi_offset["x"], roi_offset["y"]) if roi_offset else (0, 0)
 
     future = _ocr_executor.submit(_run_engine, img, False)
@@ -299,24 +310,48 @@ def recognize(
         result = future.result(timeout=_OCR_TIMEOUT)
     except FutureTimeout:
         _incr_ocr_failure()
-        return []
-    except Exception:
+        return OcrCallOutcome([], "timeout", "")
+    except Exception as exc:
         _incr_ocr_failure()
-        return []
+        return OcrCallOutcome([], "error", str(exc) or type(exc).__name__)
 
     if result is None:
-        return []
+        return OcrCallOutcome([], "error", "empty_result")
     rows = result[0]
     if rows is None:
-        return []
+        return OcrCallOutcome([], "error", "empty_result")
     _reset_ocr_failures()
     results: list[OcrResult] = []
-    for box, text, score in rows:
-        if score is None or score < min_confidence:
-            continue
-        rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
-        results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
-    return results
+    try:
+        for box, text, score in rows:
+            if score is None or score < min_confidence:
+                continue
+            rx, ry, rw, rh = _box_to_rect(_rescale_box(box, scale))
+            results.append(OcrResult(text=text, x=rx + ox, y=ry + oy, w=rw, h=rh, confidence=score))
+    except Exception as exc:
+        _incr_ocr_failure()
+        return OcrCallOutcome([], "error", str(exc) or type(exc).__name__)
+    return OcrCallOutcome(results, "ok", "")
+
+
+def recognize_detailed(
+    image: np.ndarray,
+    roi_offset: dict | None = None,
+    preprocess: bool = True,
+    max_side_len: int = _DEFAULT_MAX_SIDE_LEN,
+    min_confidence: float = 0.5,
+) -> OcrCallOutcome:
+    return _recognize_impl(image, roi_offset, preprocess, max_side_len, min_confidence)
+
+
+def recognize(
+    image: np.ndarray,
+    roi_offset: dict | None = None,
+    preprocess: bool = True,
+    max_side_len: int = _DEFAULT_MAX_SIDE_LEN,
+    min_confidence: float = 0.5,
+) -> list[OcrResult]:
+    return _recognize_impl(image, roi_offset, preprocess, max_side_len, min_confidence).results
 
 
 def find_text(

@@ -1,7 +1,9 @@
 import logging
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass, field, replace
+from difflib import SequenceMatcher
 from enum import Enum
 
 import numpy as np
@@ -48,6 +50,9 @@ _get_interaction_mode = _rule_mod.get_config_interaction_mode
 activate_window = _screenshot.activate_window
 capture_window_content = getattr(_screenshot, "capture_window_content", lambda title: None)
 recognize = _ocr.recognize
+recognize_detailed = _ocr.recognize_detailed
+OcrCallOutcome = _ocr.OcrCallOutcome
+OcrResult = _ocr.OcrResult
 
 
 def _find_text_after_click(block_results: list, target: str) -> bool:
@@ -120,6 +125,21 @@ class VisualAnalysis:
 
 
 @dataclass(frozen=True)
+class TextDiffAnalysis:
+    status: ObservationStatus = ObservationStatus.NOT_RUN
+    scope: str = ""
+    added: tuple[str, ...] = ()
+    disappeared: tuple[str, ...] = ()
+    changed: tuple[tuple[str, str], ...] = ()
+    moved: tuple[str, ...] = ()
+    before_ocr_status: str = ""
+    after_ocr_status: str = ""
+    reason: str = ""
+    before_results: tuple[OcrResult, ...] = ()
+    after_results: tuple[OcrResult, ...] = ()
+
+
+@dataclass(frozen=True)
 class BackendTestRequest:
     generation: int
     kind: str
@@ -149,6 +169,126 @@ class BackendTestResult:
     ocr_status: ObservationStatus = ObservationStatus.NOT_RUN
     observation: str = ""
     visual: VisualAnalysis = field(default_factory=VisualAnalysis)
+    text_diff: TextDiffAnalysis = field(default_factory=TextDiffAnalysis)
+
+
+def _text_unavailable(
+    reason: str, *, scope: str = "", before_status: str = "", after_status: str = ""
+) -> TextDiffAnalysis:
+    return TextDiffAnalysis(
+        status=ObservationStatus.UNAVAILABLE,
+        scope=scope,
+        before_ocr_status=before_status,
+        after_ocr_status=after_status,
+        reason=reason,
+    )
+
+
+def _normalize_ocr_text(text: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", text or "").casefold().split())
+
+
+def _text_similarity(a: str, b: str) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _center_distance(a, b) -> float:
+    ax, ay = a.x + a.w / 2, a.y + a.h / 2
+    bx, by = b.x + b.w / 2, b.y + b.h / 2
+    return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+
+
+def _box_iou(a, b) -> float:
+    x1, y1 = max(a.x, b.x), max(a.y, b.y)
+    x2, y2 = min(a.x + a.w, b.x + b.w), min(a.y + a.h, b.y + b.h)
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    if inter <= 0:
+        return 0.0
+    union = a.w * a.h + b.w * b.h - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _compare_ocr_texts(
+    before: list[OcrResult] | tuple[OcrResult, ...],
+    after: list[OcrResult] | tuple[OcrResult, ...],
+    *,
+    scope: str,
+    roi: tuple[int, int, int, int] | None = None,
+) -> TextDiffAnalysis:
+    before_items = list(before)
+    after_items = list(after)
+    roi_w = roi[2] if roi else 0
+    roi_h = roi[3] if roi else 0
+    base = max(
+        min(roi_w, roi_h),
+        max(before_items[0].w if before_items else 0, after_items[0].w if after_items else 0, 1),
+    )
+    move_tol = max(12.0, base * 0.35)
+    candidates: list[tuple[float, int, int, int, float, float]] = []
+    for bi, bitem in enumerate(before_items):
+        btext = _normalize_ocr_text(bitem.text)
+        for ai, aitem in enumerate(after_items):
+            atext = _normalize_ocr_text(aitem.text)
+            sim = _text_similarity(btext, atext)
+            iou = _box_iou(bitem, aitem)
+            dist = _center_distance(bitem, aitem)
+            if sim < 0.3 and dist > move_tol and iou <= 0:
+                continue
+            conf = 0.02 * ((bitem.confidence or 0.0) + (aitem.confidence or 0.0)) / 2
+            score = 0.8 * sim + 0.2 * iou + conf
+            candidates.append((score, bi, ai, sim, iou, dist))
+    candidates.sort(reverse=True)
+    used_b: set[int] = set()
+    used_a: set[int] = set()
+    pairs: list[tuple[int, int]] = []
+    for _, bi, ai, _, _, _ in candidates:
+        if bi not in used_b and ai not in used_a:
+            used_b.add(bi)
+            used_a.add(ai)
+            pairs.append((bi, ai))
+
+    unchanged = 0
+    changed_pairs: list[tuple[str, str]] = []
+    moved: list[str] = []
+    for bi, ai in pairs:
+        bitem, aitem = before_items[bi], after_items[ai]
+        btext, atext = _normalize_ocr_text(bitem.text), _normalize_ocr_text(aitem.text)
+        sim = _text_similarity(btext, atext)
+        dist = _center_distance(bitem, aitem)
+        if btext == atext and dist <= move_tol:
+            unchanged += 1
+        elif btext == atext:
+            moved.append(bitem.text)
+        elif sim >= 0.8:
+            if dist <= move_tol:
+                changed_pairs.append((bitem.text, aitem.text))
+            else:
+                moved.append(bitem.text)
+        else:
+            changed_pairs.append((bitem.text, aitem.text))
+
+    disappeared = tuple(b.text for i, b in enumerate(before_items) if i not in used_b)
+    added = tuple(a.text for i, a in enumerate(after_items) if i not in used_a)
+    if added or disappeared or changed_pairs or moved:
+        status = ObservationStatus.CHANGED
+    else:
+        status = ObservationStatus.NO_CHANGE
+    return TextDiffAnalysis(
+        status=status,
+        scope=scope,
+        added=added,
+        disappeared=disappeared,
+        changed=tuple(changed_pairs),
+        moved=tuple(moved),
+        before_ocr_status="ok",
+        after_ocr_status="ok",
+        before_results=tuple(before_items),
+        after_results=tuple(after_items),
+    )
 
 
 def _visual_unavailable(reason: str, *, scope: str = "") -> VisualAnalysis:
@@ -1151,6 +1291,7 @@ class OcrDebugPanel(QWidget):
             ms: float,
             err: str = "",
             visual: VisualAnalysis | None = None,
+            text_diff: TextDiffAnalysis | None = None,
         ):
             self._signals.click_verify_done.emit(
                 {
@@ -1163,6 +1304,8 @@ class OcrDebugPanel(QWidget):
                     "last_error": err,
                     "request_id": request_id,
                     "visual": visual or _visual_unavailable(visual_error or "capture_unavailable"),
+                    "text_diff": text_diff
+                    or _text_unavailable(visual_error or "capture_unavailable"),
                 }
             )
 
@@ -1198,14 +1341,29 @@ class OcrDebugPanel(QWidget):
                     0.0,
                     "",
                     _visual_unavailable(visual_error or "capture_unavailable"),
+                    _text_unavailable(visual_error or "capture_unavailable"),
                 )
                 return
             img = capture_frame(mode, title, hwnd=hwnd or None)
             if cancel is not None and cancel.is_set():
-                emit("skipped", "?", 0.0, "", _visual_unavailable("cancelled"))
+                emit(
+                    "skipped",
+                    "?",
+                    0.0,
+                    "",
+                    _visual_unavailable("cancelled"),
+                    _text_unavailable("cancelled"),
+                )
                 return
             if self._run_active.is_set():
-                emit("skipped", "?", 0.0, "", _visual_unavailable("main_loop_running"))
+                emit(
+                    "skipped",
+                    "?",
+                    0.0,
+                    "",
+                    _visual_unavailable("main_loop_running"),
+                    _text_unavailable("main_loop_running"),
+                )
                 return
             if img is None or is_black_capture(img):
                 emit(
@@ -1214,11 +1372,16 @@ class OcrDebugPanel(QWidget):
                     (time.monotonic() - t0) * 1000,
                     "",
                     _visual_unavailable("black_capture"),
+                    _text_unavailable("black_capture"),
                 )
                 return
             visual = self._analyze_visual(request, before, img, visual_error) if request else None
+            roi, scope = _select_visual_roi(request, img.shape) if request else (None, "")
+            text_diff = self._analyze_text_diff(
+                request, before, img, visual, roi, scope, visual_error, cancel
+            )
             if not can_ocr:
-                emit("skipped", "?", (time.monotonic() - t0) * 1000, "", visual)
+                emit("skipped", "?", (time.monotonic() - t0) * 1000, "", visual, text_diff)
                 return
             img_rgb = img[:, :, ::-1].copy()
             h, w = img_rgb.shape[:2]
@@ -1229,16 +1392,16 @@ class OcrDebugPanel(QWidget):
                     (time.monotonic() - t0) * 1000,
                     "",
                     _visual_unavailable("frame_size_changed"),
+                    _text_unavailable("frame_size_changed"),
                 )
                 return
-            crop = self._roi_patch(img_rgb, r)
-            results = recognize(crop, **self._ocr_options())
-            matched = _find_text_after_click(results, r.text)
+            matched = _find_text_after_click(list(text_diff.after_results), r.text)
             emit(
                 "no_response" if matched else "success",
                 "yes" if matched else "no",
                 (time.monotonic() - t0) * 1000,
                 visual=visual,
+                text_diff=text_diff,
             )
         except Exception as e:
             logging.exception("click verify failed")
@@ -1485,6 +1648,66 @@ class OcrDebugPanel(QWidget):
                 error=str(exc) or type(exc).__name__,
             )
             self._signals.backend_test_done.emit(result)
+
+    def _analyze_text_diff(
+        self,
+        request: BackendTestRequest,
+        before: np.ndarray | None,
+        after: np.ndarray | None,
+        visual: VisualAnalysis,
+        roi,
+        scope: str,
+        visual_error: str = "",
+        cancel: threading.Event | None = None,
+    ) -> TextDiffAnalysis:
+        if visual is not None and visual.status == ObservationStatus.UNAVAILABLE:
+            return _text_unavailable(visual.reason or "visual_unavailable")
+        if before is None:
+            return _text_unavailable(visual_error or "capture_unavailable", scope=scope)
+        if after is None:
+            return _text_unavailable("capture_unavailable", scope=scope)
+        if roi is None:
+            return _text_unavailable("roi_unavailable", scope=scope)
+        if cancel is not None and cancel.is_set():
+            return _text_unavailable("cancelled")
+        if self._run_active.is_set():
+            return _text_unavailable("main_loop_running")
+        try:
+            x, y, w, h = roi
+            bx, by = x + (w or 0), y + (h or 0)
+            opts = self._ocr_options()
+            before_img = before[y:by, x:bx]
+            after_img = after[y:by, x:bx]
+            before_outcome = recognize_detailed(before_img, **opts)
+            if cancel is not None and cancel.is_set():
+                return _text_unavailable("cancelled", before_status=before_outcome.status)
+            if self._run_active.is_set():
+                return _text_unavailable("main_loop_running", before_status=before_outcome.status)
+            after_outcome = recognize_detailed(after_img, **opts)
+            if before_outcome.status != "ok" or after_outcome.status != "ok":
+                reason = (
+                    before_outcome.reason if before_outcome.status != "ok" else after_outcome.reason
+                )
+                reason = reason or before_outcome.status or after_outcome.status
+                return TextDiffAnalysis(
+                    status=ObservationStatus.UNAVAILABLE,
+                    scope=scope,
+                    before_ocr_status=before_outcome.status,
+                    after_ocr_status=after_outcome.status,
+                    reason=reason,
+                    before_results=tuple(before_outcome.results),
+                    after_results=tuple(after_outcome.results),
+                )
+            return _compare_ocr_texts(
+                before_outcome.results, after_outcome.results, scope=scope, roi=roi
+            )
+        except Exception:
+            logging.exception("text diff failed")
+            return TextDiffAnalysis(
+                status=ObservationStatus.UNAVAILABLE,
+                scope=scope,
+                reason="worker_error",
+            )
 
     def _capture_visual_before(
         self, request: BackendTestRequest, cancel: threading.Event
@@ -1788,6 +2011,54 @@ class OcrDebugPanel(QWidget):
             self._render_visual_preview(result.visual)
         else:
             self._render_visual_preview(result.visual)
+        if result.text_diff.status != ObservationStatus.NOT_RUN:
+            td_scope = (
+                T(f"ocr_debug.diagnostic.text_scope.{result.text_diff.scope}")
+                if result.text_diff.scope in ("roi", "frame")
+                else T("ocr_debug.diagnostic.scope.none")
+            )
+            if result.text_diff.status == ObservationStatus.UNAVAILABLE:
+                lines.append(
+                    T(
+                        "ocr_debug.diagnostic.text_unavailable_line",
+                        reason=T(
+                            f"ocr_debug.diagnostic.text_reason.{result.text_diff.reason}",
+                            default=result.text_diff.reason,
+                        ),
+                    )
+                )
+            else:
+                parts = []
+                if result.text_diff.added:
+                    parts.append(
+                        T(
+                            "ocr_debug.diagnostic.text_added",
+                            texts="、".join(result.text_diff.added),
+                        )
+                    )
+                if result.text_diff.disappeared:
+                    parts.append(
+                        T(
+                            "ocr_debug.diagnostic.text_disappeared",
+                            texts="、".join(result.text_diff.disappeared),
+                        )
+                    )
+                if result.text_diff.changed:
+                    parts.append(
+                        T(
+                            "ocr_debug.diagnostic.text_changed",
+                            texts="、".join(f"{b}→{a}" for b, a in result.text_diff.changed),
+                        )
+                    )
+                if result.text_diff.moved:
+                    parts.append(
+                        T(
+                            "ocr_debug.diagnostic.text_moved",
+                            texts="、".join(result.text_diff.moved),
+                        )
+                    )
+                summary = "｜".join(parts) if parts else T("ocr_debug.diagnostic.text_no_change")
+                lines.append(T("ocr_debug.diagnostic.text_line", summary=summary, scope=td_scope))
         if result.error:
             error = (
                 T("ocr_debug.diagnostic.error_unavailable")
@@ -1856,9 +2127,11 @@ class OcrDebugPanel(QWidget):
         self._key_verif_in_progress = False
 
     def _key_observation_worker(self, request, before, visual_error, cancel):
-        def emit(state, visual=None, **kw):
+        def emit(state, visual=None, text_diff=None, **kw):
             if visual is None:
                 visual = _visual_unavailable(visual_error or "capture_unavailable")
+            if text_diff is None:
+                text_diff = _text_unavailable(visual_error or "capture_unavailable")
             self._signals.key_verify_done.emit(
                 {
                     "state": state,
@@ -1869,6 +2142,7 @@ class OcrDebugPanel(QWidget):
                     "mode": request.mode,
                     "request_id": request.generation,
                     "visual": visual,
+                    "text_diff": text_diff,
                     **kw,
                 }
             )
@@ -1876,31 +2150,71 @@ class OcrDebugPanel(QWidget):
         try:
             if cancel.is_set() or self._run_active.is_set():
                 reason = "main_loop_running" if self._run_active.is_set() else "cancelled"
-                emit("fail", _visual_unavailable(reason), err=_ERR_RUN_ACTIVE)
+                emit(
+                    "fail",
+                    _visual_unavailable(reason),
+                    _text_unavailable(reason),
+                    err=_ERR_RUN_ACTIVE,
+                )
                 return
             if before is None:
-                emit("black", err=visual_error or "capture_unavailable")
+                emit(
+                    "black",
+                    text_diff=_text_unavailable(visual_error or "capture_unavailable"),
+                    err=visual_error or "capture_unavailable",
+                )
                 return
             time.sleep(_KEY_TEST_WAIT_SEC)
             if cancel.is_set() or self._run_active.is_set():
                 reason = "main_loop_running" if self._run_active.is_set() else "cancelled"
-                emit("fail", _visual_unavailable(reason), err=_ERR_RUN_ACTIVE)
+                emit(
+                    "fail",
+                    _visual_unavailable(reason),
+                    _text_unavailable(reason),
+                    err=_ERR_RUN_ACTIVE,
+                )
                 return
             after = capture_frame(request.mode, request.window_title, hwnd=request.hwnd or None)
             if cancel.is_set():
-                emit("fail", _visual_unavailable("cancelled"), err=_ERR_RUN_ACTIVE)
+                emit(
+                    "fail",
+                    _visual_unavailable("cancelled"),
+                    _text_unavailable("cancelled"),
+                    err=_ERR_RUN_ACTIVE,
+                )
                 return
             if self._run_active.is_set():
-                emit("fail", _visual_unavailable("main_loop_running"), err=_ERR_RUN_ACTIVE)
+                emit(
+                    "fail",
+                    _visual_unavailable("main_loop_running"),
+                    _text_unavailable("main_loop_running"),
+                    err=_ERR_RUN_ACTIVE,
+                )
                 return
             if after is None:
-                emit("black", _visual_unavailable("capture_unavailable"))
+                emit(
+                    "black",
+                    _visual_unavailable("capture_unavailable"),
+                    _text_unavailable("capture_unavailable"),
+                )
             elif is_black_capture(after):
-                emit("black", _visual_unavailable("black_capture"))
+                emit(
+                    "black",
+                    _visual_unavailable("black_capture"),
+                    _text_unavailable("black_capture"),
+                )
             elif before.shape != after.shape:
-                emit("window_changed", _visual_unavailable("frame_size_changed"))
+                emit(
+                    "window_changed",
+                    _visual_unavailable("frame_size_changed"),
+                    _text_unavailable("frame_size_changed"),
+                )
             else:
                 visual = self._analyze_visual(request, before, after, visual_error)
+                roi, scope = _select_visual_roi(request, after.shape)
+                text_diff = self._analyze_text_diff(
+                    request, before, after, visual, roi, scope, visual_error, cancel
+                )
                 sim = _frame_similarity(before, after)
                 if visual.status == ObservationStatus.CHANGED:
                     state = "success"
@@ -1911,6 +2225,7 @@ class OcrDebugPanel(QWidget):
                 emit(
                     state,
                     visual,
+                    text_diff,
                     similar=round(sim * 100, 1),
                 )
         except Exception as exc:
@@ -1930,14 +2245,19 @@ class OcrDebugPanel(QWidget):
             if out.get("state") in ("black", "window_changed", "skipped"):
                 status = ObservationStatus.UNAVAILABLE
             visual = out.get("visual")
-            if isinstance(visual, VisualAnalysis):
-                self._diagnostic_result = replace(
-                    old,
-                    ocr_status=status,
-                    observation=out.get("state", ""),
-                    visual=visual,
-                    visual_status=visual.status,
-                )
+            text_diff = out.get("text_diff")
+            if isinstance(visual, VisualAnalysis) or isinstance(text_diff, TextDiffAnalysis):
+                changes = {
+                    "visual_status": visual.status
+                    if isinstance(visual, VisualAnalysis)
+                    else old.visual_status,
+                    "observation": out.get("state", ""),
+                }
+                if isinstance(visual, VisualAnalysis):
+                    changes["visual"] = visual
+                if isinstance(text_diff, TextDiffAnalysis):
+                    changes["text_diff"] = text_diff
+                self._diagnostic_result = replace(old, **changes)
             else:
                 self._diagnostic_result = replace(
                     old, ocr_status=status, observation=out.get("state", "")
@@ -1961,13 +2281,19 @@ class OcrDebugPanel(QWidget):
         old = self._diagnostic_result
         if old and old.test_id == out["request_id"]:
             visual = out.get("visual")
-            if isinstance(visual, VisualAnalysis):
-                self._diagnostic_result = replace(
-                    old,
-                    visual=visual,
-                    visual_status=visual.status,
-                    observation=out.get("state", ""),
-                )
+            text_diff = out.get("text_diff")
+            if isinstance(visual, VisualAnalysis) or isinstance(text_diff, TextDiffAnalysis):
+                changes = {
+                    "visual_status": visual.status
+                    if isinstance(visual, VisualAnalysis)
+                    else old.visual_status,
+                    "observation": out.get("state", ""),
+                }
+                if isinstance(visual, VisualAnalysis):
+                    changes["visual"] = visual
+                if isinstance(text_diff, TextDiffAnalysis):
+                    changes["text_diff"] = text_diff
+                self._diagnostic_result = replace(old, **changes)
             else:
                 legacy_visual = {
                     "success": ObservationStatus.CHANGED,
