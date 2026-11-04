@@ -196,6 +196,171 @@ def test_visual_hwnd_change_is_unavailable(panel, monkeypatch):
     assert v.reason == "window_changed"
 
 
+def test_visual_hwnd_gone_is_unavailable(panel, monkeypatch):
+    monkeypatch.setattr(_debug, "_get_interaction_mode", lambda: "frida")
+    monkeypatch.setattr(_debug._screenshot, "get_window_hwnd", lambda *_a, **_k: None)
+    v = panel._analyze_visual(_request("key", mode="frida"), _frame(), _frame())
+    assert v.status is _debug.ObservationStatus.UNAVAILABLE
+    assert v.reason == "window_changed"
+
+
+def test_visual_hwnd_same_is_available(panel, monkeypatch):
+    monkeypatch.setattr(_debug, "_get_interaction_mode", lambda: "frida")
+    monkeypatch.setattr(_debug._screenshot, "get_window_hwnd", lambda *_a, **_k: 123)
+    v = panel._analyze_visual(_request("key", mode="frida"), _frame(), _frame())
+    assert v.status is _debug.ObservationStatus.NO_CHANGE
+
+
+def test_visual_hwnd_empty_keeps_compatible_behavior(panel, monkeypatch):
+    monkeypatch.setattr(_debug, "_get_interaction_mode", lambda: "frida")
+    monkeypatch.setattr(_debug._screenshot, "get_window_hwnd", lambda *_a, **_k: None)
+    v = panel._analyze_visual(_request("key", mode="frida", hwnd=0), _frame(), _frame())
+    assert v.status is _debug.ObservationStatus.NO_CHANGE
+
+
+def _run_key_with_cancel_during_capture(panel, monkeypatch, *, run_active=False):
+    panel._run_active = threading.Event()
+    out = []
+    fake_signals = SimpleNamespace()
+    fake_signals.key_verify_done = SimpleNamespace(emit=lambda d: out.append(d))
+    panel._signals = fake_signals
+    monkeypatch.setattr(_debug.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(_debug, "_get_interaction_mode", lambda: "frida")
+    monkeypatch.setattr(_debug, "is_black_capture", lambda _img: False)
+    cancel = threading.Event()
+
+    def fake_capture(*_a, **_k):
+        if run_active:
+            panel._run_active.set()
+        else:
+            cancel.set()
+        return _frame()
+
+    monkeypatch.setattr(_debug, "capture_frame", fake_capture)
+    analyzed = []
+    monkeypatch.setattr(
+        panel,
+        "_analyze_visual",
+        lambda *a, **k: analyzed.append(True) or _debug.VisualAnalysis(),
+    )
+    panel._key_observation_worker(_request("key"), _frame(), "", cancel)
+    return out, analyzed
+
+
+def test_key_cancel_during_capture_skips_visual(monkeypatch, panel):
+    out, analyzed = _run_key_with_cancel_during_capture(panel, monkeypatch)
+    assert not analyzed
+    assert out[0]["visual"].status is _debug.ObservationStatus.UNAVAILABLE
+    assert out[0]["visual"].reason == "cancelled"
+    assert out[0]["state"] != "no_change"
+
+
+def test_key_mainloop_during_capture_skips_visual(monkeypatch, panel):
+    out, analyzed = _run_key_with_cancel_during_capture(panel, monkeypatch, run_active=True)
+    assert not analyzed
+    assert out[0]["visual"].status is _debug.ObservationStatus.UNAVAILABLE
+    assert out[0]["visual"].reason == "main_loop_running"
+    assert out[0]["state"] != "no_change"
+
+
+def _run_click_with_cancel_during_capture(panel, monkeypatch, *, run_active=False):
+    panel._run_active = threading.Event()
+    out = []
+    fake_signals = SimpleNamespace()
+    fake_signals.click_verify_done = SimpleNamespace(emit=lambda d: out.append(d))
+    panel._signals = fake_signals
+    monkeypatch.setattr(_debug.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(_debug, "_get_interaction_mode", lambda: "frida")
+    monkeypatch.setattr(_debug, "is_black_capture", lambda _img: False)
+    cancel = threading.Event()
+
+    def fake_capture(*_a, **_k):
+        if run_active:
+            panel._run_active.set()
+        else:
+            cancel.set()
+        return _frame()
+
+    monkeypatch.setattr(_debug, "capture_frame", fake_capture)
+    analyzed = []
+    monkeypatch.setattr(
+        panel,
+        "_analyze_visual",
+        lambda *a, **k: analyzed.append(True) or _debug.VisualAnalysis(),
+    )
+    recognized = []
+    monkeypatch.setattr(_debug, "recognize", lambda *a, **k: recognized.append(True) or [])
+    backend = _debug.BackendTestResult(
+        1, "click", "frida", 123, "", (10, 20), _debug.BackendStatus.SUCCESS, 1.0
+    )
+    panel._click_verify_request_id = 1
+    panel._diagnostic_result = backend
+    panel._click_verify_worker(
+        _target(),
+        10,
+        20,
+        30,
+        20,
+        1,
+        request=_request("click", target=_target()),
+        cancel=cancel,
+        before=_frame(),
+    )
+    return out, analyzed, recognized, backend
+
+
+def test_click_cancel_during_capture_skips_visual_and_ocr(monkeypatch, panel):
+    out, analyzed, recognized, backend = _run_click_with_cancel_during_capture(panel, monkeypatch)
+    assert not analyzed
+    assert not recognized
+    assert out[0]["visual"].status is _debug.ObservationStatus.UNAVAILABLE
+    assert out[0]["visual"].reason == "cancelled"
+    assert panel._diagnostic_result is backend
+
+
+def test_click_mainloop_during_capture_skips_visual_and_ocr(monkeypatch, panel):
+    out, analyzed, recognized, backend = _run_click_with_cancel_during_capture(
+        panel, monkeypatch, run_active=True
+    )
+    assert not analyzed
+    assert not recognized
+    assert out[0]["visual"].status is _debug.ObservationStatus.UNAVAILABLE
+    assert out[0]["visual"].reason == "main_loop_running"
+    assert panel._diagnostic_result is backend
+
+
+@pytest.mark.parametrize(
+    ("status", "reason", "expected_state"),
+    [
+        (_debug.ObservationStatus.CHANGED, "", "success"),
+        (_debug.ObservationStatus.NO_CHANGE, "", "no_change"),
+        (_debug.ObservationStatus.UNAVAILABLE, "source_changed", "fail"),
+        (_debug.ObservationStatus.UNAVAILABLE, "roi_unavailable", "fail"),
+    ],
+)
+def test_key_state_maps_from_visual_status(monkeypatch, panel, status, reason, expected_state):
+    panel._run_active = threading.Event()
+    out = []
+    fake_signals = SimpleNamespace()
+    fake_signals.key_verify_done = SimpleNamespace(emit=lambda d: out.append(d))
+    panel._signals = fake_signals
+    monkeypatch.setattr(_debug.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(_debug, "is_black_capture", lambda _img: False)
+    monkeypatch.setattr(_debug, "capture_frame", lambda *a, **_k: _frame())
+    monkeypatch.setattr(
+        panel,
+        "_analyze_visual",
+        lambda *a, **k: _debug.VisualAnalysis(status=status, reason=reason),
+    )
+    panel._key_observation_worker(_request("key"), _frame(), "", threading.Event())
+    payload = out[0]
+    assert payload["state"] == expected_state
+    assert payload["visual"].status is status
+    assert payload["visual"].reason == reason
+    if expected_state == "fail":
+        assert payload["state"] != "no_change"
+
+
 def test_visual_worker_exception_reports_unavailable(panel, monkeypatch):
     monkeypatch.setattr(_debug, "_get_interaction_mode", lambda: "frida")
     monkeypatch.setattr(

@@ -1201,6 +1201,12 @@ class OcrDebugPanel(QWidget):
                 )
                 return
             img = capture_frame(mode, title, hwnd=hwnd or None)
+            if cancel is not None and cancel.is_set():
+                emit("skipped", "?", 0.0, "", _visual_unavailable("cancelled"))
+                return
+            if self._run_active.is_set():
+                emit("skipped", "?", 0.0, "", _visual_unavailable("main_loop_running"))
+                return
             if img is None or is_black_capture(img):
                 emit(
                     "black",
@@ -1516,7 +1522,7 @@ class OcrDebugPanel(QWidget):
                 return _visual_unavailable("source_changed")
             if request.hwnd:
                 current = _screenshot.get_window_hwnd(request.window_title)
-                if current and int(current) != int(request.hwnd):
+                if not current or int(current) != int(request.hwnd):
                     return _visual_unavailable("window_changed")
             roi, scope = _select_visual_roi(request, after.shape)
             if roi is None:
@@ -1881,6 +1887,12 @@ class OcrDebugPanel(QWidget):
                 emit("fail", _visual_unavailable(reason), err=_ERR_RUN_ACTIVE)
                 return
             after = capture_frame(request.mode, request.window_title, hwnd=request.hwnd or None)
+            if cancel.is_set():
+                emit("fail", _visual_unavailable("cancelled"), err=_ERR_RUN_ACTIVE)
+                return
+            if self._run_active.is_set():
+                emit("fail", _visual_unavailable("main_loop_running"), err=_ERR_RUN_ACTIVE)
+                return
             if after is None:
                 emit("black", _visual_unavailable("capture_unavailable"))
             elif is_black_capture(after):
@@ -1890,8 +1902,14 @@ class OcrDebugPanel(QWidget):
             else:
                 visual = self._analyze_visual(request, before, after, visual_error)
                 sim = _frame_similarity(before, after)
+                if visual.status == ObservationStatus.CHANGED:
+                    state = "success"
+                elif visual.status == ObservationStatus.NO_CHANGE:
+                    state = "no_change"
+                else:
+                    state = "fail"
                 emit(
-                    "success" if visual.status == ObservationStatus.CHANGED else "no_change",
+                    state,
                     visual,
                     similar=round(sim * 100, 1),
                 )
