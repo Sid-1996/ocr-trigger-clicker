@@ -1,6 +1,8 @@
 import logging
 import threading
 import time
+from dataclasses import dataclass, replace
+from enum import Enum
 
 import numpy as np
 from PyQt6.QtCore import QEvent, QObject, Qt, QTimer, pyqtSignal
@@ -74,6 +76,68 @@ _KEY_TEST_OPTIONS = (
 _KEY_TEST_WAIT_SEC = 0.6
 _KEY_PIXEL_TOLERANCE = 12
 _KEY_SIMILAR_THRESHOLD = 0.90
+
+
+class BackendStatus(str, Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    NOT_EXECUTED = "not_executed"
+
+
+class ObservationStatus(str, Enum):
+    NOT_RUN = "not_run"
+    CHANGED = "changed"
+    NO_CHANGE = "no_change"
+    TEXT_PRESENT = "text_present"
+    TEXT_MISSING = "text_missing"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True)
+class _OcrTarget:
+    text: str
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+@dataclass(frozen=True)
+class BackendTestRequest:
+    generation: int
+    kind: str
+    mode: str
+    window_title: str
+    hwnd: int
+    key: str = ""
+    target: _OcrTarget | None = None
+    capture_source_gdi: bool = False
+    window_rect: tuple[int, int, int, int] | None = None
+    frame_size: tuple[int, int] = (0, 0)
+
+
+@dataclass(frozen=True)
+class BackendTestResult:
+    test_id: int
+    kind: str
+    mode: str
+    hwnd: int
+    key: str
+    coordinates: tuple[int, int] | None
+    backend_status: BackendStatus
+    elapsed_ms: float
+    error: str = ""
+    cancelled: bool = False
+    visual_status: ObservationStatus = ObservationStatus.NOT_RUN
+    ocr_status: ObservationStatus = ObservationStatus.NOT_RUN
+    observation: str = ""
+
+
+def _error_for_backend_failure(previous: str, current: str) -> str:
+    """Only use last_error when this call can be distinguished from its prior value."""
+    return current if current and current != previous else ""
+
 
 # ── Verify 狀態 → i18n key 對照 ────────────────────────────────────────────
 # 狀態名不等於 i18n key（key_test 的成功文案是 ok 不是 success），而且長文與
@@ -155,6 +219,7 @@ class _OcrSignals(QObject):
     ocr_status = pyqtSignal(str, int)  # (訊息, request_id)
     click_verify_done = pyqtSignal(dict)
     key_verify_done = pyqtSignal(dict)
+    backend_test_done = pyqtSignal(object)
 
 
 class OcrDebugPanel(QWidget):
@@ -184,6 +249,8 @@ class OcrDebugPanel(QWidget):
         self._ocr_request_id = 0
         self._click_verify_request_id = 0
         self._key_verify_request_id = 0
+        self._test_cancel_events: dict[str, threading.Event] = {}
+        self._diagnostic_result: BackendTestResult | None = None
         self._has_active_rule = False
         self._verif_in_progress = False
         self._key_verif_in_progress = False
@@ -206,6 +273,7 @@ class OcrDebugPanel(QWidget):
         self._signals.ocr_status.connect(self._on_ocr_status)
         self._signals.click_verify_done.connect(self._on_click_verify_done)
         self._signals.key_verify_done.connect(self._on_key_verify_done)
+        self._signals.backend_test_done.connect(self._on_backend_test_done)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -244,6 +312,15 @@ class OcrDebugPanel(QWidget):
         self._click_error_label.setStyleSheet("color: #c62828;")
         self._click_error_label.clicked.connect(self._open_click_detail)
         layout.addWidget(self._click_error_label)
+
+        self._diagnostic_label = QLabel()
+        self._diagnostic_label.setWordWrap(True)
+        self._diagnostic_label.setStyleSheet(
+            "QLabel { background:#f6f7f9; color:#222; border:1px solid #d9dde3; "
+            "border-radius:6px; padding:6px; font-size:11px; }"
+        )
+        self._diagnostic_label.hide()
+        layout.addWidget(self._diagnostic_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -668,6 +745,8 @@ class OcrDebugPanel(QWidget):
         active = bool(active)
         was_active = self._run_active.is_set()
         if active:
+            for cancel_event in self._test_cancel_events.values():
+                cancel_event.set()
             # 先關閘再作廢：worker 讀的是 _run_active，先 set 才能讓正在
             # 邊界上檢查的 worker 立刻看到「主循環執行中」。
             self._run_active.set()
@@ -905,179 +984,16 @@ class OcrDebugPanel(QWidget):
             T("ocr_debug.template_step_added", text=r.text, tw=t_w, th=t_h)
         )
 
-    def _on_click_test(self):
-        if self._verif_in_progress:
-            # 上一輪驗證還沒回來：不得重複送出實際點擊
-            return
-        if self._selected_index < 0 or self._selected_index >= len(self._ocr_results):
-            return
-        r = self._ocr_results[self._selected_index]
-        self._click_error_label.hide()
-
-        from _loader import load_sibling
-
-        _screenshot = load_sibling("screenshot", "core/01_screenshot.py")
-        _input = load_sibling("pynput_input", "core/03_pynput_input.py")
-
-        ocr_center_x = int(r.x + r.w / 2)
-        ocr_center_y = int(r.y + r.h / 2)
-
-        rect = _screenshot.get_window_rect(self._window_title)
-
-        # Check if background mode is active
-        mode = _get_interaction_mode()
-
-        if mode == "frida":
-            # Background mode: use bg_input.click with client coordinates
-            hwnd_val = _screenshot.get_window_hwnd(self._window_title)
-            if not hwnd_val:
-                self._status_bar.showMessage(
-                    T("ocr_debug.window_coords_failed", title=self._window_title)
-                )
-                return
-            # OCR coordinates are relative to the capture image
-            # For GDI/PrintWindow capture, they are client-relative
-            # For mss capture, they are window-relative (need to subtract chrome)
-            if self._capture_source == T("ocr_debug.source_gdi"):
-                client_x = ocr_center_x
-                client_y = ocr_center_y
-            else:
-                # mss capture: subtract chrome offset to get client coordinates
-                chrome = _screenshot.get_window_client_offset(self._window_title) or (0, 0)
-                client_x = ocr_center_x - chrome[0]
-                client_y = ocr_center_y - chrome[1]
-            _bg_input.set_method(mode)
-            click_ok = _bg_input.click(hwnd_val, client_x, client_y)
-            cx, cy = client_x, client_y
-        elif mode == "hybrid":
-            # 混合模式：PrintWindow 截圖座標為 client 系，物理點擊需 ClientToScreen；
-            # 激活與使用者狀態還原交給 focus_guard
-            hwnd_val = _screenshot.get_window_hwnd(self._window_title)
-            if not hwnd_val:
-                self._status_bar.showMessage(
-                    T("ocr_debug.window_coords_failed", title=self._window_title)
-                )
-                return
-            import ctypes
-            from ctypes import wintypes as _wt
-
-            pt = _wt.POINT()
-            pt.x, pt.y = 0, 0
-            ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
-            cx = pt.x + ocr_center_x
-            cy = pt.y + ocr_center_y
-            with _hybrid.focus_guard(self._window_title, activate_window, hwnd_val) as focus_ok:
-                click_ok = _input.send_click(cx, cy) if focus_ok else False
-        else:
-            # Foreground mode: use existing pynput logic
-            _screenshot.activate_window(self._window_title)
-            QApplication.processEvents()
-            time.sleep(0.15)
-
-            if self._capture_source == T("ocr_debug.source_gdi"):
-                import ctypes
-                from ctypes import wintypes
-
-                hwnd_val = _screenshot.get_window_hwnd(self._window_title)
-                if hwnd_val:
-                    pt = wintypes.POINT()
-                    pt.x, pt.y = 0, 0
-                    ctypes.windll.user32.ClientToScreen(hwnd_val, ctypes.byref(pt))
-                    cx = pt.x + ocr_center_x
-                    cy = pt.y + ocr_center_y
-                elif rect is not None:
-                    cx = rect["x"] + ocr_center_x
-                    cy = rect["y"] + ocr_center_y
-                else:
-                    self._status_bar.showMessage(
-                        T("ocr_debug.window_coords_failed", title=self._window_title)
-                    )
-                    return
-                if rect is None:
-                    rect = {"x": cx - ocr_center_x, "y": cy - ocr_center_y, "w": 0, "h": 0}
-            else:
-                if rect is None:
-                    self._status_bar.showMessage(
-                        T("ocr_debug.window_coords_failed", title=self._window_title)
-                    )
-                    return
-                cx = rect["x"] + ocr_center_x
-                cy = rect["y"] + ocr_center_y
-
-            click_ok = _input.send_click(cx, cy)
-        time.sleep(0.1)
-
-        from PyQt6.QtCore import QPoint
-        from PyQt6.QtWidgets import QToolTip
-
-        btn_pos = self._click_test_btn.mapToGlobal(QPoint(0, self._click_test_btn.height()))
-        status_icon = "✓" if click_ok else "✗"
-        status_text = T("ocr_debug.click_success") if click_ok else T("ocr_debug.click_failed")
-        if not click_ok and mode == "frida":
-            err_detail = _bg_input.last_error()
-            if err_detail:
-                status_text = f"{status_text} ({err_detail})"
-            self._show_click_verify(
-                "inject_fail",
-                text=r.text,
-                api_ok=False,
-                sx=cx,
-                sy=cy,
-                last_error=err_detail,
-            )
-        tooltip = T(
-            "ocr_debug.click_test_tooltip",
-            icon=status_icon,
-            status=status_text,
-            text=r.text,
-            source=self._capture_source,
-            rx=rect["x"],
-            ry=rect["y"],
-            rw=rect["w"],
-            rh=rect["h"],
-            cx=ocr_center_x,
-            cy=ocr_center_y,
-            sx=cx,
-            sy=cy,
-        )
-        QToolTip.showText(btn_pos, tooltip, self._click_test_btn)
-        QTimer.singleShot(2500, QToolTip.hideText)
-
-        self._status_bar.showMessage(
-            T(
-                "ocr_debug.click_test_status",
-                status=status_text,
-                text=r.text,
-                rx=rect["x"],
-                ry=rect["y"],
-                cx=ocr_center_x,
-                cy=ocr_center_y,
-                sx=cx,
-                sy=cy,
-            )
-        )
-
-        if click_ok and mode != "pynput":
-            self._start_click_verify(r, cx, cy)
-
-    def _start_click_verify(self, r, sx: int, sy: int):
-        if self._verif_in_progress:
-            return
-        self._click_verify_request_id += 1
-        request_id = self._click_verify_request_id
-        self._verif_in_progress = True
-        self._click_test_available = False
-        self._sync_test_buttons()
-        self._click_test_btn.setText(T("ocr_debug.verifying"))
-        frame_size = self._latest_raw.shape[:2] if self._latest_raw is not None else (0, 0)
-        threading.Thread(
-            target=self._click_verify_worker,
-            args=(r, sx, sy, frame_size[1], frame_size[0], request_id),
-            daemon=True,
-        ).start()
-
     def _click_verify_worker(
-        self, r, sx: int, sy: int, frame_w: int, frame_h: int, request_id: int
+        self,
+        r,
+        sx: int,
+        sy: int,
+        frame_w: int,
+        frame_h: int,
+        request_id: int,
+        request: BackendTestRequest | None = None,
+        cancel: threading.Event | None = None,
     ):
         def emit(state: str, still: str, ms: float, err: str = ""):
             self._signals.click_verify_done.emit(
@@ -1098,18 +1014,19 @@ class OcrDebugPanel(QWidget):
             time.sleep(0.6)
             # 主循環若已啟動 → 不得繼續驗證：主循環會改變畫面，繼續比對只會
             # 得出「沒有反應」的假結論。此時結果會因 generation id 作廢而被忽略。
-            if self._verify_input_blocked():
+            if self._verify_input_blocked() or (cancel is not None and cancel.is_set()):
                 emit("skipped", "?", 0.0, _ERR_RUN_ACTIVE)
                 return
-            mode = _get_interaction_mode()
-            hwnd = _screenshot.get_window_hwnd(self._window_title)
+            mode = request.mode if request else _get_interaction_mode()
+            title = request.window_title if request else self._window_title
+            hwnd = request.hwnd if request else _screenshot.get_window_hwnd(title)
             t0 = time.monotonic()
             if mode == "pynput" or not hwnd:
                 # 目標視窗消失或互動模式改變 → 必須回報完成，
                 # 否則 in-progress 永遠卡住，點擊測試按鈕會永久停用。
                 emit("skipped", "?", 0.0, _ERR_MODE_SWITCHED if mode == "pynput" else "")
                 return
-            img = capture_frame(mode, self._window_title, hwnd=hwnd)
+            img = capture_frame(mode, title, hwnd=hwnd)
             if img is None or is_black_capture(img):
                 emit("black", "?", (time.monotonic() - t0) * 1000)
                 return
@@ -1138,25 +1055,6 @@ class OcrDebugPanel(QWidget):
         x1 = min(w, r.x + r.w + pad)
         y1 = min(h, r.y + r.h + pad)
         return img[y0:y1, x0:x1]
-
-    def _on_click_verify_done(self, out: dict):
-        if out.get("request_id") != self._click_verify_request_id:
-            # 過期任務：安全忽略，不得解鎖新任務的按鈕或覆蓋其狀態
-            return
-        self._verif_in_progress = False
-        self._click_test_available = True
-        self._sync_test_buttons()
-        self._click_test_btn.setText(T("ocr_debug.click_test"))
-        self._show_click_verify(
-            out["state"],
-            text=out["text"],
-            api_ok=True,
-            sx=out["sx"],
-            sy=out["sy"],
-            last_error=out.get("last_error", ""),
-            ms=out.get("ms", 0.0),
-            still=out.get("still", "?"),
-        )
 
     def _show_click_verify(
         self,
@@ -1193,51 +1091,8 @@ class OcrDebugPanel(QWidget):
         self._click_error_label.show()
         QTimer.singleShot(15000, self._click_error_label.hide)
         if key in ("inject_fail", "no_response", "black"):
-            # 後台測試失敗簽名：注入層失敗／遊戲無視輸入／截圖轉黑 → 請求主視窗開服務對話框。
-            # 帶 last_error 的 black 是 verify 例外（非真全黑），不誤導使用者去提權/切前景
-            logging.warning("ocr_dbg click verify=%s text=%s last_error=%s", key, text, last_error)
-            if key != "black" or not last_error:
-                self.bg_inject_fail.emit()
-
-    def _on_key_test(self):
-        self._click_error_label.hide()
-        key = self._key_test_combo.currentData() or _KEY_TEST_DEFAULT
-        mode = _get_interaction_mode()
-        if mode != "pynput":
-            hwnd = _screenshot.get_window_hwnd(self._window_title)
-            if not hwnd:
-                self._status_bar.showMessage(
-                    T("ocr_debug.window_coords_failed", title=self._window_title)
-                )
-                return
-            self._start_key_verify(hwnd, key)
-            return
-        from _loader import load_sibling
-
-        _input = load_sibling("pynput_input", "core/03_pynput_input.py")
-        _screenshot.activate_window(self._window_title)
-        QApplication.processEvents()
-        time.sleep(0.15)
-        ok = _input.send_key(key)
-        if ok:
-            self._status_bar.showMessage(T("ocr_debug.key_test_sent", key=key))
-        else:
-            self._status_bar.showMessage(
-                T("ocr_debug.key_test_failed", err=getattr(_input, "last_error", lambda: "")())
-            )
-
-    def _start_key_verify(self, hwnd: int, key: str):
-        if self._key_verif_in_progress:
-            return
-        self._key_verify_request_id += 1
-        request_id = self._key_verify_request_id
-        self._key_verif_in_progress = True
-        self._key_test_available = False
-        self._sync_test_buttons()
-        self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
-        threading.Thread(
-            target=self._key_verify_worker, args=(hwnd, key, request_id), daemon=True
-        ).start()
+            # Legacy OCR observation is independent of the Backend result.
+            logging.info("ocr_dbg click observation=%s text=%s", key, text)
 
     def _key_verify_worker(self, hwnd: int, key: str, request_id: int):
         def emit(state: str, **kw):
@@ -1301,16 +1156,6 @@ class OcrDebugPanel(QWidget):
             logging.exception("key verify failed")
             emit("fail", err=str(e))
 
-    def _on_key_verify_done(self, out: dict):
-        if out.get("request_id") != self._key_verify_request_id:
-            # 過期任務：安全忽略，不得解鎖新任務的按鈕或覆蓋其狀態
-            return
-        self._key_verif_in_progress = False
-        self._key_test_available = True
-        self._sync_test_buttons()
-        self._key_test_btn.setText(T("ocr_debug.key_test"))
-        self._show_key_verify(out)
-
     def _show_key_verify(self, out: dict):
         state = out.get("state", "black")
         key = state if state in _KEY_VERIFY_STATES else "black"
@@ -1338,13 +1183,449 @@ class OcrDebugPanel(QWidget):
         self._click_error_label.show()
         QTimer.singleShot(15000, self._click_error_label.hide)
         if key in ("no_change", "fail", "black"):
-            logging.warning(
-                "ocr_dbg key verify=%s key=%s err=%s", key, test_key, out.get("err", "")
+            # Legacy pixel observation cannot overwrite Backend or imply receipt.
+            logging.info("ocr_dbg key observation=%s key=%s", key, test_key)
+
+    # Phase 1 worker path. These definitions intentionally replace the legacy
+    # callbacks above; all user initiated input now enters through this path.
+    def _on_click_test(self):
+        if self._verif_in_progress or self._run_active.is_set():
+            return
+        if not 0 <= self._selected_index < len(self._ocr_results):
+            return
+        selected = self._ocr_results[self._selected_index]
+        target = _OcrTarget(
+            selected.text, int(selected.x), int(selected.y), int(selected.w), int(selected.h)
+        )
+        rect = _screenshot.get_window_rect(self._window_title)
+        request_id = self._click_verify_request_id + 1
+        request = BackendTestRequest(
+            generation=request_id,
+            kind="click",
+            mode=_get_interaction_mode(),
+            window_title=str(self._window_title),
+            hwnd=int(_screenshot.get_window_hwnd(self._window_title) or 0),
+            target=target,
+            capture_source_gdi=self._capture_source == T("ocr_debug.source_gdi"),
+            window_rect=(
+                (int(rect["x"]), int(rect["y"]), int(rect["w"]), int(rect["h"])) if rect else None
+            ),
+            frame_size=(
+                (int(self._latest_raw.shape[1]), int(self._latest_raw.shape[0]))
+                if self._latest_raw is not None
+                else (0, 0)
+            ),
+        )
+        self._click_verify_request_id = request_id
+        self._verif_in_progress = True
+        self._click_test_available = False
+        self._click_error_label.hide()
+        self._diagnostic_label.hide()
+        self._click_test_btn.setText(T("ocr_debug.verifying"))
+        self._sync_test_buttons()
+        self._start_backend_test(request)
+
+    def _on_key_test(self):
+        if self._key_verif_in_progress or self._run_active.is_set():
+            return
+        request_id = self._key_verify_request_id + 1
+        request = BackendTestRequest(
+            generation=request_id,
+            kind="key",
+            mode=_get_interaction_mode(),
+            window_title=str(self._window_title),
+            hwnd=int(_screenshot.get_window_hwnd(self._window_title) or 0),
+            key=str(self._key_test_combo.currentData() or _KEY_TEST_DEFAULT),
+        )
+        self._key_verify_request_id = request_id
+        self._key_verif_in_progress = True
+        self._key_test_available = False
+        self._click_error_label.hide()
+        self._diagnostic_label.hide()
+        self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
+        self._sync_test_buttons()
+        self._start_backend_test(request)
+
+    def _start_key_verify(self, hwnd: int, key: str):
+        """Compatibility entry point; the backend operation still runs in a worker."""
+        if self._key_verif_in_progress or self._run_active.is_set():
+            return
+        request_id = self._key_verify_request_id + 1
+        self._key_verify_request_id = request_id
+        request = BackendTestRequest(
+            generation=request_id,
+            kind="key",
+            mode=_get_interaction_mode(),
+            window_title=str(self._window_title),
+            hwnd=int(hwnd or 0),
+            key=str(key),
+        )
+        self._key_verif_in_progress = True
+        self._key_test_available = False
+        self._sync_test_buttons()
+        self._start_backend_test(request)
+
+    def _start_backend_test(self, request: BackendTestRequest):
+        cancel = threading.Event()
+        self._test_cancel_events[request.kind] = cancel
+        try:
+            threading.Thread(
+                target=self._run_backend_test, args=(request, cancel), daemon=False
+            ).start()
+        except Exception as exc:
+            logging.exception("OCR Debug worker start failed")
+            result = BackendTestResult(
+                request.generation,
+                request.kind,
+                request.mode,
+                request.hwnd,
+                request.key,
+                None,
+                BackendStatus.FAILED,
+                0.0,
+                error=str(exc) or type(exc).__name__,
             )
-            # 假失敗（使用者已切回前景／主循環已啟動）不觸發服務對話框；
-            # 其餘失敗簽名一律請求
-            if not (key == "fail" and out.get("err") in (_ERR_MODE_SWITCHED, _ERR_RUN_ACTIVE)):
-                self.bg_inject_fail.emit()
+            self._signals.backend_test_done.emit(result)
+
+    def _run_backend_test(self, request: BackendTestRequest, cancel: threading.Event):
+        before = None
+        visual_error = ""
+        if request.kind == "key" and request.mode != "pynput" and request.hwnd:
+            try:
+                before = capture_frame(request.mode, request.window_title, hwnd=request.hwnd)
+                if before is None or is_black_capture(before):
+                    before = None
+                    visual_error = "capture_unavailable"
+            except Exception:
+                logging.exception("key test baseline capture failed")
+                visual_error = "capture_unavailable"
+
+        result, coords = self._dispatch_backend_test(request, cancel)
+        try:
+            self._signals.backend_test_done.emit(result)
+        except RuntimeError:
+            logging.debug("OCR Debug panel closed before backend result delivery")
+            return
+        if result.backend_status != BackendStatus.SUCCESS or request.mode == "pynput":
+            return
+        if request.kind == "click" and request.target is not None:
+            self._click_verify_worker(
+                request.target,
+                *(coords or (0, 0)),
+                request.frame_size[0],
+                request.frame_size[1],
+                request.generation,
+                request=request,
+                cancel=cancel,
+            )
+        elif request.kind == "key":
+            self._key_observation_worker(request, before, visual_error, cancel)
+
+    def _dispatch_backend_test(self, request: BackendTestRequest, cancel: threading.Event):
+        started = time.monotonic()
+        coords = None
+        api_called = False
+        previous_error = ""
+        ok = False
+
+        def result(status, error="", cancelled=False):
+            return BackendTestResult(
+                test_id=request.generation,
+                kind=request.kind,
+                mode=request.mode,
+                hwnd=request.hwnd,
+                key=request.key,
+                coordinates=coords,
+                backend_status=status,
+                elapsed_ms=(time.monotonic() - started) * 1000 if api_called else 0.0,
+                error=error,
+                cancelled=cancelled,
+            )
+
+        if cancel.is_set():
+            return result(BackendStatus.CANCELLED, cancelled=True), coords
+        if self._run_active.is_set():
+            return result(BackendStatus.NOT_EXECUTED, "main_loop_running"), coords
+        if not request.hwnd:
+            return result(BackendStatus.NOT_EXECUTED, "window_unavailable"), coords
+
+        try:
+            if request.kind == "click":
+                target = request.target
+                if target is None:
+                    return result(BackendStatus.NOT_EXECUTED, "target_unavailable"), coords
+                ox, oy = target.x + target.w // 2, target.y + target.h // 2
+                if request.mode == "frida":
+                    if request.capture_source_gdi:
+                        x, y = ox, oy
+                    else:
+                        chrome = _screenshot.get_window_client_offset(request.window_title) or (
+                            0,
+                            0,
+                        )
+                        x, y = ox - int(chrome[0]), oy - int(chrome[1])
+                    coords = (x, y)
+                    _bg_input.set_method(request.mode)
+                    previous_error = _bg_input.last_error()
+                    if cancel.is_set() or self._run_active.is_set():
+                        return result(
+                            BackendStatus.CANCELLED
+                            if cancel.is_set()
+                            else BackendStatus.NOT_EXECUTED,
+                            cancelled=cancel.is_set(),
+                        ), coords
+                    api_called = True
+                    ok = bool(_bg_input.click(request.hwnd, x, y, cancel=cancel))
+                elif request.mode in ("hybrid", "pynput"):
+                    import ctypes
+                    from ctypes import wintypes
+
+                    if request.mode == "hybrid" or request.capture_source_gdi:
+                        point = wintypes.POINT(0, 0)
+                        if not ctypes.windll.user32.ClientToScreen(
+                            request.hwnd, ctypes.byref(point)
+                        ):
+                            return result(
+                                BackendStatus.NOT_EXECUTED, "coordinates_unavailable"
+                            ), coords
+                        coords = (int(point.x) + ox, int(point.y) + oy)
+                    elif request.window_rect:
+                        coords = (request.window_rect[0] + ox, request.window_rect[1] + oy)
+                    else:
+                        return result(BackendStatus.NOT_EXECUTED, "coordinates_unavailable"), coords
+                    if request.mode == "hybrid":
+                        with _hybrid.focus_guard(
+                            request.window_title, activate_window, request.hwnd
+                        ) as focus_ok:
+                            if cancel.is_set() or self._run_active.is_set():
+                                return result(
+                                    BackendStatus.CANCELLED
+                                    if cancel.is_set()
+                                    else BackendStatus.NOT_EXECUTED,
+                                    cancelled=cancel.is_set(),
+                                ), coords
+                            if not focus_ok:
+                                return result(
+                                    BackendStatus.NOT_EXECUTED, "focus_unavailable"
+                                ), coords
+                            api_called = True
+                            ok = bool(_pynput_input.send_click(*coords, cancel=cancel))
+                    else:
+                        activate_window(request.window_title)
+                        if cancel.wait(0.15):
+                            return result(BackendStatus.CANCELLED, cancelled=True), coords
+                        if self._run_active.is_set():
+                            return result(BackendStatus.NOT_EXECUTED, "main_loop_running"), coords
+                        api_called = True
+                        ok = bool(_pynput_input.send_click(*coords, cancel=cancel))
+                else:
+                    return result(BackendStatus.NOT_EXECUTED, "mode_unavailable"), coords
+            elif request.kind == "key":
+                if request.mode == "pynput":
+                    activate_window(request.window_title)
+                    if cancel.wait(0.15):
+                        return result(BackendStatus.CANCELLED, cancelled=True), coords
+                    if self._run_active.is_set():
+                        return result(BackendStatus.NOT_EXECUTED, "main_loop_running"), coords
+                    api_called = True
+                    ok = bool(_pynput_input.send_key(request.key, cancel=cancel))
+                elif request.mode == "hybrid":
+                    with _hybrid.focus_guard(request.window_title, activate_window) as focus_ok:
+                        if cancel.is_set() or self._run_active.is_set():
+                            return result(
+                                BackendStatus.CANCELLED
+                                if cancel.is_set()
+                                else BackendStatus.NOT_EXECUTED,
+                                cancelled=cancel.is_set(),
+                            ), coords
+                        if not focus_ok:
+                            return result(BackendStatus.NOT_EXECUTED, "focus_unavailable"), coords
+                        api_called = True
+                        ok = bool(_pynput_input.send_key(request.key, cancel=cancel))
+                elif request.mode == "frida":
+                    _bg_input.set_method(request.mode)
+                    previous_error = _bg_input.last_error()
+                    if cancel.is_set() or self._run_active.is_set():
+                        return result(
+                            BackendStatus.CANCELLED
+                            if cancel.is_set()
+                            else BackendStatus.NOT_EXECUTED,
+                            cancelled=cancel.is_set(),
+                        ), coords
+                    api_called = True
+                    ok = bool(_bg_input.send_key(request.hwnd, request.key, cancel=cancel))
+                else:
+                    return result(BackendStatus.NOT_EXECUTED, "mode_unavailable"), coords
+            else:
+                return result(BackendStatus.NOT_EXECUTED, "test_unavailable"), coords
+        except Exception as exc:
+            logging.exception("OCR Debug backend test failed")
+            return result(BackendStatus.FAILED, str(exc) or type(exc).__name__), coords
+
+        if cancel.is_set() or self._run_active.is_set():
+            return result(BackendStatus.CANCELLED, cancelled=True), coords
+        if ok:
+            return result(BackendStatus.SUCCESS), coords
+        error = ""
+        if request.mode == "frida":
+            try:
+                error = _error_for_backend_failure(previous_error, _bg_input.last_error())
+            except Exception:
+                pass
+        return result(BackendStatus.FAILED, error or "error_unavailable"), coords
+
+    def _on_backend_test_done(self, result: BackendTestResult):
+        current_id = (
+            self._click_verify_request_id if result.kind == "click" else self._key_verify_request_id
+        )
+        if result.test_id != current_id:
+            return
+        self._diagnostic_result = result
+        self._render_diagnostic_result(result)
+        if result.backend_status == BackendStatus.FAILED and result.mode == "frida":
+            self.bg_inject_fail.emit()
+        if result.backend_status != BackendStatus.SUCCESS or result.mode == "pynput":
+            self._finish_test_ui(result.kind)
+
+    def _render_diagnostic_result(self, result: BackendTestResult):
+        kind = T(f"ocr_debug.diagnostic.kind.{result.kind}")
+        target = (
+            f"{result.coordinates[0]}, {result.coordinates[1]}"
+            if result.coordinates
+            else result.key
+        )
+        backend = T(f"ocr_debug.diagnostic.backend.{result.backend_status.value}")
+        visual = T(f"ocr_debug.diagnostic.observation.{result.visual_status.value}")
+        ocr = T(f"ocr_debug.diagnostic.observation.{result.ocr_status.value}")
+        lines = [
+            T(
+                "ocr_debug.diagnostic.identity",
+                kind=kind,
+                mode=result.mode,
+                hwnd=result.hwnd,
+                target=target,
+            ),
+            T("ocr_debug.diagnostic.backend_line", status=backend, ms=round(result.elapsed_ms)),
+            T("ocr_debug.diagnostic.observation_line", visual=visual, ocr=ocr),
+        ]
+        if result.error:
+            error = (
+                T("ocr_debug.diagnostic.error_unavailable")
+                if result.error == "error_unavailable"
+                else T(f"ocr_debug.diagnostic.reason.{result.error}", default=result.error)
+            )
+            lines.append(T("ocr_debug.diagnostic.error_line", error=error))
+        self._diagnostic_label.setText("\\n".join(lines))
+        self._diagnostic_label.show()
+
+    def _finish_test_ui(self, kind: str):
+        self._test_cancel_events.pop(kind, None)
+        if kind == "click":
+            self._verif_in_progress = False
+            self._click_test_available = self._selected_index >= 0
+            self._click_test_btn.setText(T("ocr_debug.click_test"))
+        else:
+            self._key_verif_in_progress = False
+            self._key_test_available = True
+            self._key_test_btn.setText(T("ocr_debug.key_test"))
+        self._sync_test_buttons()
+
+    def cancel_active_tests(self):
+        """Cancel pending tests during application shutdown; backends still release sent input."""
+        for cancel_event in self._test_cancel_events.values():
+            cancel_event.set()
+        self._click_verify_request_id += 1
+        self._key_verify_request_id += 1
+        self._verif_in_progress = False
+        self._key_verif_in_progress = False
+
+    def _key_observation_worker(self, request, before, visual_error, cancel):
+        def emit(state, **kw):
+            self._signals.key_verify_done.emit(
+                {
+                    "state": state,
+                    "similar": "?",
+                    "err": "",
+                    "ms": 0.0,
+                    "key": request.key,
+                    "mode": request.mode,
+                    "request_id": request.generation,
+                    **kw,
+                }
+            )
+
+        try:
+            if cancel.is_set() or self._run_active.is_set():
+                emit("fail", err=_ERR_RUN_ACTIVE)
+                return
+            if before is None:
+                emit("black", err=visual_error or "capture_unavailable")
+                return
+            time.sleep(_KEY_TEST_WAIT_SEC)
+            if cancel.is_set() or self._run_active.is_set():
+                emit("fail", err=_ERR_RUN_ACTIVE)
+                return
+            after = capture_frame(request.mode, request.window_title, hwnd=request.hwnd)
+            if after is None or is_black_capture(after):
+                emit("black")
+            elif before.shape != after.shape:
+                emit("window_changed")
+            else:
+                sim = _frame_similarity(before, after)
+                emit(
+                    "success" if sim < _KEY_SIMILAR_THRESHOLD else "no_change",
+                    similar=round(sim * 100, 1),
+                )
+        except Exception as exc:
+            logging.exception("key observation failed")
+            emit("fail", err=str(exc) or type(exc).__name__)
+
+    def _on_click_verify_done(self, out: dict):
+        if out.get("request_id") != self._click_verify_request_id:
+            return
+        old = self._diagnostic_result
+        if old and old.test_id == out["request_id"]:
+            status = (
+                ObservationStatus.TEXT_PRESENT
+                if out.get("still") == "yes"
+                else ObservationStatus.TEXT_MISSING
+            )
+            if out.get("state") in ("black", "window_changed", "skipped"):
+                status = ObservationStatus.UNAVAILABLE
+            self._diagnostic_result = replace(
+                old, ocr_status=status, observation=out.get("state", "")
+            )
+            self._render_diagnostic_result(self._diagnostic_result)
+        self._finish_test_ui("click")
+        self._show_click_verify(
+            out["state"],
+            text=out.get("text", ""),
+            api_ok=bool(old and old.backend_status == BackendStatus.SUCCESS),
+            sx=out.get("sx", 0),
+            sy=out.get("sy", 0),
+            last_error=out.get("last_error", ""),
+            ms=out.get("ms", 0.0),
+            still=out.get("still", "?"),
+        )
+
+    def _on_key_verify_done(self, out: dict):
+        if out.get("request_id") != self._key_verify_request_id:
+            return
+        old = self._diagnostic_result
+        if old and old.test_id == out["request_id"]:
+            visual = {
+                "success": ObservationStatus.CHANGED,
+                "no_change": ObservationStatus.NO_CHANGE,
+                "black": ObservationStatus.UNAVAILABLE,
+                "window_changed": ObservationStatus.UNAVAILABLE,
+                "fail": ObservationStatus.UNAVAILABLE,
+            }.get(out.get("state"), ObservationStatus.UNAVAILABLE)
+            self._diagnostic_result = replace(
+                old, visual_status=visual, observation=out.get("state", "")
+            )
+            self._render_diagnostic_result(self._diagnostic_result)
+        self._finish_test_ui("key")
+        self._show_key_verify(out)
 
     def _open_click_detail(self):
         guidance = getattr(self, "_last_verify_guidance", "")
@@ -1508,6 +1789,8 @@ class OcrDebugPanel(QWidget):
         self._image_label.setPixmap(scaled)
 
     def clear_results(self):
+        for cancel_event in self._test_cancel_events.values():
+            cancel_event.set()
         # 遞增三種背景任務各自的 generation id，讓在途結果全部失效。
         # 注意：這「不代表取消 Worker」——Worker 仍會跑完，只是結果不得回填新畫面。
         self._ocr_request_id += 1
@@ -1542,6 +1825,9 @@ class OcrDebugPanel(QWidget):
         self._key_test_available = True
         self._sync_test_buttons()
         self._key_test_btn.setText(T("ocr_debug.key_test"))
+        self._diagnostic_result = None
+        self._diagnostic_label.clear()
+        self._diagnostic_label.hide()
         self._update_step_btn_state()
         self._image_label.setText(T("ocr_debug.switch_window"))
         self._image_label.setPixmap(QPixmap())

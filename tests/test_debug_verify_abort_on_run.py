@@ -209,15 +209,31 @@ def test_key_worker_stops_when_run_started_during_capture(panel, frida_mode, mon
 
 
 def test_run_active_failure_does_not_open_service_dialog(panel):
-    """因主循環啟動而中止不得觸發「診斷＋行動」服務對話框（不是注入失敗）。"""
+    """Observations cannot trigger the Backend failure service dialog."""
     triggered: list = []
     panel.bg_inject_fail.connect(lambda: triggered.append(1))
 
     panel._show_key_verify({"state": "fail", "err": _ERR_RUN_ACTIVE, "key": "space"})
     assert triggered == [], "主循環中止不得觸發服務對話框"
 
-    panel._show_key_verify({"state": "fail", "err": "真的注入失敗", "key": "space"})
-    assert triggered == [1], "真正的失敗仍必須觸發服務對話框"
+    panel._show_key_verify({"state": "fail", "err": "visual observation failed", "key": "space"})
+    assert triggered == [], "觀察階段失敗不能冒充 Backend API 失敗"
+
+    panel._key_verify_request_id = 4
+    panel._on_backend_test_done(
+        _debug.BackendTestResult(
+            4,
+            "key",
+            "frida",
+            1234,
+            "space",
+            None,
+            _debug.BackendStatus.FAILED,
+            1.0,
+            error="error_unavailable",
+        )
+    )
+    assert triggered == [1], "Backend API 失敗仍觸發服務對話框"
 
 
 # ── 3. 已開始輸入時不得阻斷必要釋放 ─────────────────────────────────

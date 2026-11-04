@@ -8724,6 +8724,8 @@ class MainWindow(QMainWindow):
         if not self._task_load_failed and not self._flush_save():
             self._report_task_save_failed()
             return False
+        if getattr(self, "_debug_panel", None) is not None:
+            self._debug_panel.cancel_active_tests()
         _hk_unregister(int(self.winId()))
         if getattr(self, "_recorder", None) and self._recorder.is_recording:
             try:
