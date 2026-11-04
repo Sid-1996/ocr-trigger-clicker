@@ -20,10 +20,30 @@ $tagName = "v$Version"
 
 # ---- pre-flight 檢查 ----
 
+function Get-BlockingGitStatus {
+    param([string[]]$StatusLines)
+    $allowedUntracked = @(".agents/", "skills-lock.json")
+    $blocking = @()
+    foreach ($line in $StatusLines) {
+        if (-not $line -or $line.Trim() -eq "") { continue }
+        $xy = $line.Substring(0, 2)
+        $p = $line.Substring(3).Trim()
+        $p = $p -replace "\\", "/"
+        if ($p.Length -ge 2 -and $p.StartsWith('"') -and $p.EndsWith('"')) {
+            $p = $p.Substring(1, $p.Length - 2)
+        }
+        $isAllowed = ($xy -ceq "??") -and ($allowedUntracked -ccontains $p)
+        if (-not $isAllowed) { $blocking += $line }
+    }
+    return ,$blocking
+}
+
 $status = git status --porcelain
-if ($status) {
+$blockingStatus = @(Get-BlockingGitStatus -StatusLines $status)
+if ($blockingStatus) {
     Write-Error "工作目錄有未提交的變更，請先 commit 或 stash："
-    $status | ForEach-Object { Write-Output "  $_" }
+    $blockingStatus | ForEach-Object { Write-Output "  $_" }
+    Write-Output "（.agents/、skills-lock.json 為既有工具檔，不列入阻擋）"
     exit 1
 }
 
