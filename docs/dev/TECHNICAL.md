@@ -91,6 +91,15 @@ feed 位址由 `build.py --feed prod|test` 烘入 `_update_feed.py`
 - **過場誤報防護**：執行中只在全黑持續 5 秒、且螢幕上未被遮擋的遊戲畫面確實有內容時才提示（`core/17_capture_pipeline.py` `screen_has_content()`）；純黑過場或全螢幕獨佔／被遮擋等無法判定情況不提示
 - **解法**：以**系統管理員**身分啟動工具（右鍵 → 以系統管理員身分執行）
 
+### 安裝／更新失敗：os error -2147024156（AppCompat RUNASADMIN 層級）⚠
+
+- **現象**：執行 `OCRTriggerClicker-win-Setup.exe` 或套用更新時跳出「安裝部分成功／部分安裝失敗」與「Setup 錯誤」兩個視窗。Velopack 記錄檔（`%LOCALAPPDATA%\Velopack\velopack.log`）出現 `Failed to start hook --veloapp-install: 要求的作業需要提升的權限。 (os error -2147024156)`
+- **根因**：`-2147024156` = `0x800702E4` = Win32 **740 `ERROR_ELEVATION_REQUIRED`**。Windows 把「以系統管理員身分執行」記在 `HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`（值名 = 執行檔完整路徑，值內容含 `RUNASADMIN` 或 `~ RUNASADMIN`）。Velopack 的安裝器以**非提權** `CreateProcess` 啟動 `--veloapp-install` / `--veloapp-uninstall` hook；一旦該執行檔帶著此層級，Windows 直接拒絕啟動 → hook 失敗 → 安裝失敗
+- **不是 manifest 問題**：應用程式的 `requestedExecutionLevel` 一直是 `asInvoker`（build 產出的 exe 與 nupkg 內的 exe 都已驗證）；Velopack 對 per-user 安裝刻意不提權。兩者都不是原因，升級 Velopack 也無效
+- **誰寫入的**：`ShellExecuteW(..., "runas", ...)`（`gui/06_gui_main.py` 的 `_relaunch_as_admin()`）**不會**寫入 Layers；實測寫入者是外部動作（Explorer 相容性設定勾「以系統管理員身分執行」、或第三方提權工具）
+- **修正**：`core/13_appcompat.py` 於**啟動時**（`gui/06_gui_main.py` 的 `__main__`）與**套用更新前**（`core/12_updater.py` 的 `download_and_apply()`）移除「本程式安裝根目錄下、檔名屬本程式執行檔」的 RUNASADMIN 層級（同一條目裡其他相容性設定原樣保留）。使用者不需理解 registry 概念；需要提權時請用程式內的「以系統管理員身分重新啟動」按鈕
+- **仍失敗時**：先啟動一次程式（會自動修復），再重新執行安裝檔；或手動刪除 Layers 中對應路徑的項目
+
 ---
 ---
 
