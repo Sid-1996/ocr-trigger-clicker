@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 import numpy as np
@@ -76,6 +76,8 @@ _KEY_TEST_OPTIONS = (
 _KEY_TEST_WAIT_SEC = 0.6
 _KEY_PIXEL_TOLERANCE = 12
 _KEY_SIMILAR_THRESHOLD = 0.90
+_VISUAL_PADDING_RATIO = 0.25
+_VISUAL_PIXEL_TOLERANCE = 12
 
 
 class BackendStatus(str, Enum):
@@ -101,6 +103,20 @@ class _OcrTarget:
     y: int
     w: int
     h: int
+
+
+@dataclass(frozen=True)
+class VisualAnalysis:
+    status: ObservationStatus = ObservationStatus.NOT_RUN
+    scope: str = ""
+    roi: tuple[int, int, int, int] | None = None
+    diff_pixels: int = 0
+    diff_ratio: float = 0.0
+    tolerance: int = _VISUAL_PIXEL_TOLERANCE
+    before: np.ndarray | None = None
+    after: np.ndarray | None = None
+    heatmap: np.ndarray | None = None
+    reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -132,6 +148,108 @@ class BackendTestResult:
     visual_status: ObservationStatus = ObservationStatus.NOT_RUN
     ocr_status: ObservationStatus = ObservationStatus.NOT_RUN
     observation: str = ""
+    visual: VisualAnalysis = field(default_factory=VisualAnalysis)
+
+
+def _visual_unavailable(reason: str, *, scope: str = "") -> VisualAnalysis:
+    return VisualAnalysis(status=ObservationStatus.UNAVAILABLE, scope=scope, reason=reason)
+
+
+def _roi_bounds(
+    target: _OcrTarget | None,
+    shape: tuple[int, ...],
+    *,
+    pad_ratio: float = _VISUAL_PADDING_RATIO,
+    fallback_full: bool = False,
+) -> tuple[int, int, int, int] | None:
+    """Return a clamped (x, y, w, h) ROI inside the frame, or None if empty."""
+    if len(shape) < 2:
+        return None
+    h, w = int(shape[0]), int(shape[1])
+    if h < 1 or w < 1:
+        return None
+    if target is None:
+        return (0, 0, w, h) if fallback_full else None
+    pad = max(4, int(max(target.w, target.h) * pad_ratio))
+    x0 = max(0, int(target.x) - pad)
+    y0 = max(0, int(target.y) - pad)
+    x1 = min(w, int(target.x) + int(target.w) + pad)
+    y1 = min(h, int(target.y) + int(target.h) + pad)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return (x0, y0, x1 - x0, y1 - y0)
+
+
+def _select_visual_roi(
+    request: BackendTestRequest, shape: tuple[int, ...]
+) -> tuple[tuple[int, int, int, int] | None, str]:
+    if request.target is not None:
+        return _roi_bounds(request.target, shape), "roi"
+    if request.kind == "key":
+        return _roi_bounds(None, shape, fallback_full=True), "frame"
+    return None, "roi"
+
+
+def _compare_visual(
+    before: np.ndarray | None,
+    after: np.ndarray | None,
+    roi: tuple[int, int, int, int] | None,
+    *,
+    scope: str,
+    tolerance: int = _VISUAL_PIXEL_TOLERANCE,
+) -> VisualAnalysis:
+    """Compare two BGR frames on a clamped ROI using only NumPy."""
+    if before is None or after is None:
+        return _visual_unavailable("capture_unavailable", scope=scope)
+    if before.shape != after.shape:
+        return _visual_unavailable("frame_size_changed", scope=scope)
+    if roi is None:
+        return _visual_unavailable("roi_unavailable", scope=scope)
+    x, y, w, h = roi
+    if w < 1 or h < 1:
+        return _visual_unavailable("roi_unavailable", scope=scope)
+    bh, bw = int(before.shape[0]), int(before.shape[1])
+    if x < 0 or y < 0 or x + w > bw or y + h > bh:
+        return _visual_unavailable("roi_out_of_bounds", scope=scope)
+    a = before[y : y + h, x : x + w]
+    b = after[y : y + h, x : x + w]
+    if a.size == 0 or b.size == 0:
+        return _visual_unavailable("roi_unavailable", scope=scope)
+    diff = np.abs(a.astype(np.int16) - b.astype(np.int16))
+    changed = (diff > tolerance).any(axis=2) if diff.ndim == 3 else diff > tolerance
+    diff_pixels = int(changed.sum())
+    total = int(changed.size)
+    ratio = diff_pixels / total if total else 0.0
+    heatmap = np.zeros(changed.shape, dtype=np.uint8)
+    heatmap[changed] = 255
+    return VisualAnalysis(
+        status=ObservationStatus.CHANGED if diff_pixels else ObservationStatus.NO_CHANGE,
+        scope=scope,
+        roi=roi,
+        diff_pixels=diff_pixels,
+        diff_ratio=ratio,
+        tolerance=tolerance,
+        before=a.copy(),
+        after=b.copy(),
+        heatmap=heatmap,
+    )
+
+
+def _bgr_to_pixmap(arr: np.ndarray):
+    img = np.ascontiguousarray(arr[:, :, ::-1])
+    h, w, ch = img.shape
+    q_img = QImage(img.tobytes(), w, h, ch * w, QImage.Format.Format_RGB888)
+    return QPixmap.fromImage(q_img)
+
+
+def _mask_to_pixmap(mask: np.ndarray):
+    m = np.ascontiguousarray(mask)
+    rgb = np.zeros((*m.shape[:2], 3), dtype=np.uint8)
+    rgb[m > 0] = (255, 0, 0)
+    rgb = np.ascontiguousarray(rgb)
+    h, w, _ = rgb.shape
+    q_img = QImage(rgb.tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
+    return QPixmap.fromImage(q_img)
 
 
 def _error_for_backend_failure(previous: str, current: str) -> str:
@@ -321,6 +439,35 @@ class OcrDebugPanel(QWidget):
         )
         self._diagnostic_label.hide()
         layout.addWidget(self._diagnostic_label)
+
+        self._visual_preview = QWidget()
+        preview_row = QHBoxLayout(self._visual_preview)
+        preview_row.setContentsMargins(0, 0, 0, 0)
+        preview_row.setSpacing(6)
+        self._visual_preview_labels: dict[str, QLabel] = {}
+        self._visual_preview_pixmaps: dict[str, QPixmap] = {}
+        preview_keys = {
+            "before": "ocr_debug.diagnostic.preview.before",
+            "after": "ocr_debug.diagnostic.preview.after",
+            "heatmap": "ocr_debug.diagnostic.preview.heatmap",
+        }
+        for preview_key, caption_key in preview_keys.items():
+            pane = QVBoxLayout()
+            pane.setContentsMargins(0, 0, 0, 0)
+            pane.setSpacing(2)
+            caption = QLabel(T(caption_key))
+            caption.setStyleSheet("color:#555; font-size:10px;")
+            pane.addWidget(caption)
+            image = QLabel()
+            image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            image.setMinimumSize(80, 48)
+            image.setMaximumHeight(96)
+            image.setStyleSheet("background:#1e1e1e; color:#888; font-size:10px;")
+            pane.addWidget(image)
+            preview_row.addLayout(pane, 1)
+            self._visual_preview_labels[preview_key] = image
+        self._visual_preview.hide()
+        layout.addWidget(self._visual_preview)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -994,8 +1141,17 @@ class OcrDebugPanel(QWidget):
         request_id: int,
         request: BackendTestRequest | None = None,
         cancel: threading.Event | None = None,
+        before: np.ndarray | None = None,
+        visual_error: str = "",
+        backend_ok: bool = True,
     ):
-        def emit(state: str, still: str, ms: float, err: str = ""):
+        def emit(
+            state: str,
+            still: str,
+            ms: float,
+            err: str = "",
+            visual: VisualAnalysis | None = None,
+        ):
             self._signals.click_verify_done.emit(
                 {
                     "state": state,
@@ -1006,6 +1162,7 @@ class OcrDebugPanel(QWidget):
                     "still": still,
                     "last_error": err,
                     "request_id": request_id,
+                    "visual": visual or _visual_unavailable(visual_error or "capture_unavailable"),
                 }
             )
 
@@ -1015,33 +1172,67 @@ class OcrDebugPanel(QWidget):
             # 主循環若已啟動 → 不得繼續驗證：主循環會改變畫面，繼續比對只會
             # 得出「沒有反應」的假結論。此時結果會因 generation id 作廢而被忽略。
             if self._verify_input_blocked() or (cancel is not None and cancel.is_set()):
-                emit("skipped", "?", 0.0, _ERR_RUN_ACTIVE)
+                reason = "main_loop_running" if self._run_active.is_set() else "cancelled"
+                emit("skipped", "?", 0.0, _ERR_RUN_ACTIVE, _visual_unavailable(reason))
                 return
             mode = request.mode if request else _get_interaction_mode()
             title = request.window_title if request else self._window_title
             hwnd = request.hwnd if request else _screenshot.get_window_hwnd(title)
             t0 = time.monotonic()
-            if mode == "pynput" or not hwnd:
+            can_ocr = backend_ok and mode != "pynput" and bool(hwnd)
+            if request is None and (mode == "pynput" or not hwnd):
                 # 目標視窗消失或互動模式改變 → 必須回報完成，
                 # 否則 in-progress 永遠卡住，點擊測試按鈕會永久停用。
-                emit("skipped", "?", 0.0, _ERR_MODE_SWITCHED if mode == "pynput" else "")
+                emit(
+                    "skipped",
+                    "?",
+                    0.0,
+                    _ERR_MODE_SWITCHED if mode == "pynput" else "",
+                    _visual_unavailable("capture_unavailable"),
+                )
                 return
-            img = capture_frame(mode, title, hwnd=hwnd)
+            if before is None and not can_ocr:
+                emit(
+                    "skipped",
+                    "?",
+                    0.0,
+                    "",
+                    _visual_unavailable(visual_error or "capture_unavailable"),
+                )
+                return
+            img = capture_frame(mode, title, hwnd=hwnd or None)
             if img is None or is_black_capture(img):
-                emit("black", "?", (time.monotonic() - t0) * 1000)
+                emit(
+                    "black",
+                    "?",
+                    (time.monotonic() - t0) * 1000,
+                    "",
+                    _visual_unavailable("black_capture"),
+                )
                 return
-            img = img[:, :, ::-1].copy()
-            h, w = img.shape[:2]
+            visual = self._analyze_visual(request, before, img, visual_error) if request else None
+            if not can_ocr:
+                emit("skipped", "?", (time.monotonic() - t0) * 1000, "", visual)
+                return
+            img_rgb = img[:, :, ::-1].copy()
+            h, w = img_rgb.shape[:2]
             if (w, h) != (frame_w, frame_h):
-                emit("window_changed", "?", (time.monotonic() - t0) * 1000)
+                emit(
+                    "window_changed",
+                    "?",
+                    (time.monotonic() - t0) * 1000,
+                    "",
+                    _visual_unavailable("frame_size_changed"),
+                )
                 return
-            crop = self._roi_patch(img, r)
+            crop = self._roi_patch(img_rgb, r)
             results = recognize(crop, **self._ocr_options())
             matched = _find_text_after_click(results, r.text)
             emit(
                 "no_response" if matched else "success",
                 "yes" if matched else "no",
                 (time.monotonic() - t0) * 1000,
+                visual=visual,
             )
         except Exception as e:
             logging.exception("click verify failed")
@@ -1221,6 +1412,7 @@ class OcrDebugPanel(QWidget):
         self._click_test_available = False
         self._click_error_label.hide()
         self._diagnostic_label.hide()
+        self._visual_preview.hide()
         self._click_test_btn.setText(T("ocr_debug.verifying"))
         self._sync_test_buttons()
         self._start_backend_test(request)
@@ -1242,6 +1434,7 @@ class OcrDebugPanel(QWidget):
         self._key_test_available = False
         self._click_error_label.hide()
         self._diagnostic_label.hide()
+        self._visual_preview.hide()
         self._key_test_btn.setText(T("ocr_debug.key_test.verifying"))
         self._sync_test_buttons()
         self._start_backend_test(request)
@@ -1287,18 +1480,56 @@ class OcrDebugPanel(QWidget):
             )
             self._signals.backend_test_done.emit(result)
 
+    def _capture_visual_before(
+        self, request: BackendTestRequest, cancel: threading.Event
+    ) -> tuple[np.ndarray | None, str]:
+        """Capture the pre-input frame in the worker thread (never on GUI thread)."""
+        try:
+            if request.mode == "pynput":
+                activate_window(request.window_title)
+                if cancel.wait(0.15):
+                    return None, "cancelled"
+            hwnd = request.hwnd or None
+            before = capture_frame(request.mode, request.window_title, hwnd=hwnd)
+            if before is None:
+                return None, "capture_unavailable"
+            if is_black_capture(before):
+                return None, "black_capture"
+            return before, ""
+        except Exception:
+            logging.exception("visual baseline capture failed")
+            return None, "capture_unavailable"
+
+    def _analyze_visual(
+        self,
+        request: BackendTestRequest,
+        before: np.ndarray | None,
+        after: np.ndarray | None,
+        visual_error: str = "",
+    ) -> VisualAnalysis:
+        if before is None:
+            return _visual_unavailable(visual_error or "capture_unavailable")
+        if after is None:
+            return _visual_unavailable("capture_unavailable")
+        try:
+            if _get_interaction_mode() != request.mode:
+                return _visual_unavailable("source_changed")
+            if request.hwnd:
+                current = _screenshot.get_window_hwnd(request.window_title)
+                if current and int(current) != int(request.hwnd):
+                    return _visual_unavailable("window_changed")
+            roi, scope = _select_visual_roi(request, after.shape)
+            if roi is None:
+                return _visual_unavailable("roi_unavailable", scope=scope)
+            return _compare_visual(before, after, roi, scope=scope)
+        except Exception:
+            logging.exception("visual comparison failed")
+            return _visual_unavailable("worker_error")
+
     def _run_backend_test(self, request: BackendTestRequest, cancel: threading.Event):
-        before = None
-        visual_error = ""
-        if request.kind == "key" and request.mode != "pynput" and request.hwnd:
-            try:
-                before = capture_frame(request.mode, request.window_title, hwnd=request.hwnd)
-                if before is None or is_black_capture(before):
-                    before = None
-                    visual_error = "capture_unavailable"
-            except Exception:
-                logging.exception("key test baseline capture failed")
-                visual_error = "capture_unavailable"
+        before, visual_error = None, ""
+        if request.kind in ("click", "key"):
+            before, visual_error = self._capture_visual_before(request, cancel)
 
         result, coords = self._dispatch_backend_test(request, cancel)
         try:
@@ -1306,8 +1537,9 @@ class OcrDebugPanel(QWidget):
         except RuntimeError:
             logging.debug("OCR Debug panel closed before backend result delivery")
             return
-        if result.backend_status != BackendStatus.SUCCESS or request.mode == "pynput":
+        if result.backend_status not in (BackendStatus.SUCCESS, BackendStatus.FAILED):
             return
+        backend_ok = result.backend_status == BackendStatus.SUCCESS
         if request.kind == "click" and request.target is not None:
             self._click_verify_worker(
                 request.target,
@@ -1317,6 +1549,9 @@ class OcrDebugPanel(QWidget):
                 request.generation,
                 request=request,
                 cancel=cancel,
+                before=before,
+                visual_error=visual_error,
+                backend_ok=backend_ok,
             )
         elif request.kind == "key":
             self._key_observation_worker(request, before, visual_error, cancel)
@@ -1501,7 +1736,10 @@ class OcrDebugPanel(QWidget):
             else result.key
         )
         backend = T(f"ocr_debug.diagnostic.backend.{result.backend_status.value}")
-        visual = T(f"ocr_debug.diagnostic.observation.{result.visual_status.value}")
+        visual_status = result.visual_status
+        if result.visual.status != ObservationStatus.NOT_RUN:
+            visual_status = result.visual.status
+        visual = T(f"ocr_debug.diagnostic.observation.{visual_status.value}")
         ocr = T(f"ocr_debug.diagnostic.observation.{result.ocr_status.value}")
         lines = [
             T(
@@ -1514,6 +1752,36 @@ class OcrDebugPanel(QWidget):
             T("ocr_debug.diagnostic.backend_line", status=backend, ms=round(result.elapsed_ms)),
             T("ocr_debug.diagnostic.observation_line", visual=visual, ocr=ocr),
         ]
+        if result.visual.status != ObservationStatus.NOT_RUN:
+            scope = (
+                T(f"ocr_debug.diagnostic.scope.{result.visual.scope}")
+                if result.visual.scope in ("roi", "frame")
+                else T("ocr_debug.diagnostic.scope.none")
+            )
+            roi_text = (
+                f"{result.visual.roi[0]},{result.visual.roi[1]},{result.visual.roi[2]},{result.visual.roi[3]}"
+                if result.visual.roi
+                else T("ocr_debug.diagnostic.scope.none")
+            )
+            lines.append(
+                T(
+                    "ocr_debug.diagnostic.visual_line",
+                    status=visual,
+                    ratio=round(result.visual.diff_ratio * 100, 2),
+                    pixels=result.visual.diff_pixels,
+                    scope=scope,
+                    roi=roi_text,
+                )
+            )
+            if result.visual.reason:
+                reason = T(
+                    f"ocr_debug.diagnostic.visual_reason.{result.visual.reason}",
+                    default=result.visual.reason,
+                )
+                lines.append(T("ocr_debug.diagnostic.visual_reason_line", reason=reason))
+            self._render_visual_preview(result.visual)
+        else:
+            self._render_visual_preview(result.visual)
         if result.error:
             error = (
                 T("ocr_debug.diagnostic.error_unavailable")
@@ -1521,8 +1789,44 @@ class OcrDebugPanel(QWidget):
                 else T(f"ocr_debug.diagnostic.reason.{result.error}", default=result.error)
             )
             lines.append(T("ocr_debug.diagnostic.error_line", error=error))
-        self._diagnostic_label.setText("\\n".join(lines))
+        self._diagnostic_label.setText("\n".join(lines))
         self._diagnostic_label.show()
+
+    def _render_visual_preview(self, visual: VisualAnalysis) -> None:
+        try:
+            pixmaps: dict[str, QPixmap] = {}
+            if visual.before is not None:
+                pixmaps["before"] = _bgr_to_pixmap(visual.before)
+            if visual.after is not None:
+                pixmaps["after"] = _bgr_to_pixmap(visual.after)
+            if visual.heatmap is not None:
+                pixmaps["heatmap"] = _mask_to_pixmap(visual.heatmap)
+        except Exception:
+            logging.exception("visual preview render failed")
+            pixmaps = {}
+        self._visual_preview_pixmaps = pixmaps
+        if pixmaps:
+            self._visual_preview.show()
+            self._update_visual_preview()
+        else:
+            self._visual_preview.hide()
+
+    def _update_visual_preview(self) -> None:
+        for key, label in self._visual_preview_labels.items():
+            pixmap = self._visual_preview_pixmaps.get(key)
+            if pixmap is None or pixmap.isNull():
+                label.clear()
+                continue
+            target = label.size()
+            if target.width() < 10 or target.height() < 10:
+                target = label.size() if label.size().width() > 10 else label.minimumSize()
+            label.setPixmap(
+                pixmap.scaled(
+                    target,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
 
     def _finish_test_ui(self, kind: str):
         self._test_cancel_events.pop(kind, None)
@@ -1546,7 +1850,9 @@ class OcrDebugPanel(QWidget):
         self._key_verif_in_progress = False
 
     def _key_observation_worker(self, request, before, visual_error, cancel):
-        def emit(state, **kw):
+        def emit(state, visual=None, **kw):
+            if visual is None:
+                visual = _visual_unavailable(visual_error or "capture_unavailable")
             self._signals.key_verify_done.emit(
                 {
                     "state": state,
@@ -1556,35 +1862,42 @@ class OcrDebugPanel(QWidget):
                     "key": request.key,
                     "mode": request.mode,
                     "request_id": request.generation,
+                    "visual": visual,
                     **kw,
                 }
             )
 
         try:
             if cancel.is_set() or self._run_active.is_set():
-                emit("fail", err=_ERR_RUN_ACTIVE)
+                reason = "main_loop_running" if self._run_active.is_set() else "cancelled"
+                emit("fail", _visual_unavailable(reason), err=_ERR_RUN_ACTIVE)
                 return
             if before is None:
                 emit("black", err=visual_error or "capture_unavailable")
                 return
             time.sleep(_KEY_TEST_WAIT_SEC)
             if cancel.is_set() or self._run_active.is_set():
-                emit("fail", err=_ERR_RUN_ACTIVE)
+                reason = "main_loop_running" if self._run_active.is_set() else "cancelled"
+                emit("fail", _visual_unavailable(reason), err=_ERR_RUN_ACTIVE)
                 return
-            after = capture_frame(request.mode, request.window_title, hwnd=request.hwnd)
-            if after is None or is_black_capture(after):
-                emit("black")
+            after = capture_frame(request.mode, request.window_title, hwnd=request.hwnd or None)
+            if after is None:
+                emit("black", _visual_unavailable("capture_unavailable"))
+            elif is_black_capture(after):
+                emit("black", _visual_unavailable("black_capture"))
             elif before.shape != after.shape:
-                emit("window_changed")
+                emit("window_changed", _visual_unavailable("frame_size_changed"))
             else:
+                visual = self._analyze_visual(request, before, after, visual_error)
                 sim = _frame_similarity(before, after)
                 emit(
-                    "success" if sim < _KEY_SIMILAR_THRESHOLD else "no_change",
+                    "success" if visual.status == ObservationStatus.CHANGED else "no_change",
+                    visual,
                     similar=round(sim * 100, 1),
                 )
         except Exception as exc:
             logging.exception("key observation failed")
-            emit("fail", err=str(exc) or type(exc).__name__)
+            emit("fail", _visual_unavailable("worker_error"), err=str(exc) or type(exc).__name__)
 
     def _on_click_verify_done(self, out: dict):
         if out.get("request_id") != self._click_verify_request_id:
@@ -1598,9 +1911,19 @@ class OcrDebugPanel(QWidget):
             )
             if out.get("state") in ("black", "window_changed", "skipped"):
                 status = ObservationStatus.UNAVAILABLE
-            self._diagnostic_result = replace(
-                old, ocr_status=status, observation=out.get("state", "")
-            )
+            visual = out.get("visual")
+            if isinstance(visual, VisualAnalysis):
+                self._diagnostic_result = replace(
+                    old,
+                    ocr_status=status,
+                    observation=out.get("state", ""),
+                    visual=visual,
+                    visual_status=visual.status,
+                )
+            else:
+                self._diagnostic_result = replace(
+                    old, ocr_status=status, observation=out.get("state", "")
+                )
             self._render_diagnostic_result(self._diagnostic_result)
         self._finish_test_ui("click")
         self._show_click_verify(
@@ -1619,16 +1942,25 @@ class OcrDebugPanel(QWidget):
             return
         old = self._diagnostic_result
         if old and old.test_id == out["request_id"]:
-            visual = {
-                "success": ObservationStatus.CHANGED,
-                "no_change": ObservationStatus.NO_CHANGE,
-                "black": ObservationStatus.UNAVAILABLE,
-                "window_changed": ObservationStatus.UNAVAILABLE,
-                "fail": ObservationStatus.UNAVAILABLE,
-            }.get(out.get("state"), ObservationStatus.UNAVAILABLE)
-            self._diagnostic_result = replace(
-                old, visual_status=visual, observation=out.get("state", "")
-            )
+            visual = out.get("visual")
+            if isinstance(visual, VisualAnalysis):
+                self._diagnostic_result = replace(
+                    old,
+                    visual=visual,
+                    visual_status=visual.status,
+                    observation=out.get("state", ""),
+                )
+            else:
+                legacy_visual = {
+                    "success": ObservationStatus.CHANGED,
+                    "no_change": ObservationStatus.NO_CHANGE,
+                    "black": ObservationStatus.UNAVAILABLE,
+                    "window_changed": ObservationStatus.UNAVAILABLE,
+                    "fail": ObservationStatus.UNAVAILABLE,
+                }.get(out.get("state"), ObservationStatus.UNAVAILABLE)
+                self._diagnostic_result = replace(
+                    old, visual_status=legacy_visual, observation=out.get("state", "")
+                )
             self._render_diagnostic_result(self._diagnostic_result)
         self._finish_test_ui("key")
         self._show_key_verify(out)
@@ -1834,6 +2166,8 @@ class OcrDebugPanel(QWidget):
         self._diagnostic_result = None
         self._diagnostic_label.clear()
         self._diagnostic_label.hide()
+        self._visual_preview.hide()
+        self._visual_preview_pixmaps = {}
         self._update_step_btn_state()
         self._image_label.setText(T("ocr_debug.switch_window"))
         self._image_label.setPixmap(QPixmap())
@@ -1847,6 +2181,7 @@ class OcrDebugPanel(QWidget):
         super().resizeEvent(event)
         self._update_display()
         self._update_crop_preview()
+        self._update_visual_preview()
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.Resize:
