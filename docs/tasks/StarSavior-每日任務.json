@@ -2442,12 +2442,12 @@
         {
           "type": "detect",
           "params": {
-            "text": "挑戰已準備好的防禦編制吧。",
+            "text": "高斯賽季",
             "roi": {
-              "x": 0.4172885572139303,
-              "y": 0.6927312775330396,
-              "w": 0.15733830845771143,
-              "h": 0.06607929515418502,
+              "x": 0.441875,
+              "y": 0.6533333333333333,
+              "w": 0.11,
+              "h": 0.06444444444444444,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
@@ -2550,11 +2550,11 @@
             },
             "match_mode": "contains",
             "fuzzy_threshold": 0.8,
-            "after_delay_ms": 250,
             "on_fail": {
               "action": "advance",
               "fail_duration_sec": 0.5
-            }
+            },
+            "after_delay_ms": 250
           }
         },
         {
@@ -3501,21 +3501,21 @@
     }
   ],
   "_collapsed_groups": [
-    "__default__",
-    "group_2f0c668c",
-    "group_f1d46de3",
-    "group_e8efb9ff",
-    "group_261f6f66",
-    "group_fdab3a16",
-    "group_266e1f8c",
     "group_40b2992f",
-    "group_39a1b80d",
-    "group_36068123",
+    "group_261f6f66",
+    "__default__",
     "group_8db83f5b",
-    "group_3c07d078",
     "group_c7a80073",
     "group_a1d5b815",
-    "group_53eec035"
+    "group_36068123",
+    "group_e8efb9ff",
+    "group_fdab3a16",
+    "group_266e1f8c",
+    "group_f1d46de3",
+    "group_2f0c668c",
+    "group_39a1b80d",
+    "group_53eec035",
+    "group_3c07d078"
   ],
   "capture_size": [
     1920,
