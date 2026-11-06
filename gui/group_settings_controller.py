@@ -97,7 +97,9 @@ class GroupSettingsController:
         def _on_mode_changed(idx):
             mode = mode_combo.currentData()
             repeat_widget.setVisible(mode == "repeat")
-            interval_widget.setVisible(mode in ("loop", "repeat"))
+            # 每輪間隔只對「重複 N 次」生效（循環執行跑完直接從頭開始，不受間隔影響）；
+            # 顯示一個引擎不會套用的欄位會讓使用者誤以為有效。
+            interval_widget.setVisible(mode == "repeat")
 
         mode_combo.currentIndexChanged.connect(_on_mode_changed)
         _on_mode_changed(mode_combo.currentIndex())

@@ -6620,7 +6620,7 @@ class MainWindow(QMainWindow):
         parts = [mode]
         if g.mode == "repeat":
             parts.append(f"{T('group_settings.repeat_times')}: {g.repeat_times}")
-        if g.mode in ("loop", "repeat") and g.between_rounds_sec:
+        if g.mode == "repeat" and g.between_rounds_sec:
             parts.append(f"{T('group_settings.interval')}: {g.between_rounds_sec}")
         if g.order == "parallel":
             parts.append(T("group_settings.order_parallel"))
