@@ -4,22 +4,6 @@ import sys
 from pathlib import Path
 
 
-def get_resource_path(relative_path: str) -> str:
-    if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.dirname(__file__), relative_path)
-
-
-def get_data_path(relative_path: str) -> str:
-    base = os.environ.get(
-        "OCR_TRIGGER_DATA",
-        os.path.join(os.environ.get("APPDATA", Path.home()), "ocr-trigger-clicker"),
-    )
-    path = os.path.join(base, relative_path)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    return path
-
-
 def main():
     try:
         import PyInstaller.__main__

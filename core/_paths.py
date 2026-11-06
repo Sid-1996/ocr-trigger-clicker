@@ -23,7 +23,3 @@ def get_data_path(relative_path: str) -> str:
     p = _appdata_path(relative_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     return str(p)
-
-
-def get_resource_path(relative_path: str) -> str:
-    return str(_bundle_root() / relative_path)

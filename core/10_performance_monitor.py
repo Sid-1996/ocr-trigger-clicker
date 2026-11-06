@@ -63,15 +63,6 @@ _IsIconic.restype = wintypes.BOOL
 _GetWindowThreadProcessId = _user32.GetWindowThreadProcessId
 _GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 
-_GetSystemMetrics = _user32.GetSystemMetrics
-_GetSystemMetrics.restype = ctypes.c_int
-_GetSystemMetrics.argtypes = [ctypes.c_int]
-
-_SM_XVIRTUALSCREEN = 76
-_SM_YVIRTUALSCREEN = 77
-_SM_CXVIRTUALSCREEN = 78
-_SM_CYVIRTUALSCREEN = 79
-
 _GetCurrentProcess = _kernel32.GetCurrentProcess
 _GetCurrentProcess.restype = wintypes.HANDLE
 
@@ -100,22 +91,6 @@ _MAX_CPS = 5
 _RATE_LIMIT_PENALTY_S = 2.0
 _RATE_LIMIT_MAX_VIOLATIONS = 3
 _RATE_LIMIT_WINDOW_S = 30.0
-
-
-def get_screen_bounds() -> dict:
-    x = _GetSystemMetrics(_SM_XVIRTUALSCREEN)
-    y = _GetSystemMetrics(_SM_YVIRTUALSCREEN)
-    w = _GetSystemMetrics(_SM_CXVIRTUALSCREEN)
-    h = _GetSystemMetrics(_SM_CYVIRTUALSCREEN)
-    return {"x": x, "y": y, "w": w, "h": h}
-
-
-def is_coordinate_safe(x: int, y: int) -> bool:
-    bounds = get_screen_bounds()
-    return (
-        bounds["x"] <= x < bounds["x"] + bounds["w"]
-        and bounds["y"] <= y < bounds["y"] + bounds["h"]
-    )
 
 
 def is_window_foreground(hwnd: int) -> bool:

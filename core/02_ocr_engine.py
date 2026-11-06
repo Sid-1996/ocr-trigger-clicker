@@ -25,11 +25,6 @@ _OCR_MAX_FAILURES = 5
 _OCR_HEALTH_CALLBACK: Optional[Callable[[str], None]] = None
 
 
-def get_ocr_failure_count() -> int:
-    with _OCR_FAILURE_LOCK:
-        return _OCR_FAILURE_COUNT
-
-
 def reset_ocr_failures():
     _reset_ocr_failures()
 

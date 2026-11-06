@@ -39,7 +39,7 @@ description: ocr-trigger-clicker 專案的架構知識、已知陷阱與子系�
 | `task_management.py` | 任務 CRUD | `list_tasks`/`load_task`/`save_task`/`import_task`/`export_task` |
 | `run_config.py` | 執行配置 | 視窗標題、執行模式、擷取尺寸 |
 | `file_utils.py` | 原子寫入 | `_replace_file()` |
-| `_paths.py` | 路徑集中 | `get_data_path`/`get_resource_path`/`_appdata_path` |
+| `_paths.py` | 路徑集中 | `get_data_path`/`_bundle_root`/`_appdata_path` |
 
 ### gui/
 
@@ -352,7 +352,7 @@ dev/frozen 雙軌模式 → 一律 `%APPDATA%\ocr-trigger-clicker\tasks\`。受 
 
 ### D. 路徑邏輯集中 core/_paths.py + build.py glob（commit `f45f9ad`）
 
-`core/_paths.py`（29 行）：`_is_frozen()`、`_bundle_root()`、`_appdata_path()`、`get_data_path()`、`get_resource_path()`。取代先前散落在 10+ 檔案中的內聯路徑邏輯。
+`core/_paths.py`（25 行）：`_is_frozen()`、`_bundle_root()`、`_appdata_path()`、`get_data_path()`。取代先前散落在 10+ 檔案中的內聯路徑邏輯。
 
 `build.py` 手動 25+ 條 `py_datas` → `core/` 與 `gui/` 各一行 `rglob("*.py")`。新增 `.py` 檔案不再需手動同步。
 

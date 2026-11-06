@@ -86,7 +86,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/run_config.py` | 任務視窗/互動模式/擷取尺寸存取 | `get_task_window()`, `get_config_interaction_mode()`, `get_capture_size()`, `get_effective_capture_size()` |
 | `core/group_selection.py` | 啟動群組選擇（記憶上次勾選／skip 旗標） | `should_skip()`, `build_entry()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
-| `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
+| `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `_bundle_root()` |
 | `core/05_main_loop.py` | 主偵測迴圈（群組兩層指標模型 + 重疊 ROI OCR 合併） | `MainLoop` class, `StepContext`, `StepResult`, `set_active_groups()` |
 | `core/15_print_window.py` | 後台截圖（PrintWindow）＋權限/全黑偵測 | `capture_print_window_hwnd()`, `capture_print_window()`, `is_admin()`, `is_black_capture()` |
 | `core/16_bg_input.py` | 後台互動（pynput / frida 切換，底層 PostMessage primitive 供 frida） | `set_method()`, `click()`, `send_key()`, `send_hold_key()`, `drag()`, `scroll()`, `detach()` |
@@ -95,7 +95,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/19_recorder.py` | 滑鼠示範錄製器（全域攔截＋動作前截圖＋前景重送） | `Recorder` class（`start(title, hwnd, session_dir)` / `stop()`）、session 輸出 `recordings/session-*` |
 | `core/20_recorder_convert.py` | 錄製 session → 規則轉換器（離線後處理） | `convert_sessions()`, `merge_rule_entries()`（OCR 錨點 / 模板錨點 / wait+click 三層）；延時預設來自「錄製操作」專屬設定（`record_*_after_delay_ms`，與全域延時分離，見 docs/adr/0002） |
 | `core/17_capture_pipeline.py` | 統一台式截圖管道（依互動模式選唯一來源，全路徑同源） | `capture_frame(mode, title, hwnd)` |
-| `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `get_screen_bounds()`, `is_window_foreground()`, `get_total_clicks()` |
+| `core/10_performance_monitor.py` | 效能監控 + 速率限制 + 點擊統計 | `PerformanceMonitor`, `is_window_foreground()`, `get_total_clicks()` |
 | `core/11_template_matching.py` | 圖示模板比對 + inline 模板 LRU 解碼快取 | `match_template()`, `nms_suppress()`, `MatchResult`, `clear_template_cache()` |
 | `gui/06_gui_main.py` | 主視窗（工具列、規則編輯、狀態列、系統托盤、設定對話框） | `MainWindow`, `SettingsDialog` |
 | `gui/07_gui_roi.py` | 框選偵測區域（全螢幕 overlay） | `select_roi()` |
