@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "reviewing-code-modularity-skill": {
+      "source": "tyshkovskii/reviewing-code-modularity-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "2c7f643f6ba6852e72a3f51a5dbfa3b890e64099fba4b9b61ffd46bc32ccde59"
+    }
+  }
+}

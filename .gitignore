@@ -11,6 +11,8 @@ _update_feed.py
 test_*.png
 *.log
 logs/
+# 本地安裝的 agent skill 內容（來源與 hash 由 skills-lock.json 鎖定）
+/.agents/
 _test_tmp_*
 _diag_*
 *.exe
