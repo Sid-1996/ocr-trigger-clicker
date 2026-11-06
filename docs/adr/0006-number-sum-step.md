@@ -1,6 +1,6 @@
 # 數字加總採獨立 `sum` 步驟：觸發後對當前幀做快照加總
 
-Status: accepted（2026-10-20；同日 amended：浮層僅前景顯示，非前景只寫日誌）
+Status: accepted（2026-10-20；同日 amended：浮層僅前景顯示，非前景只寫日誌；2026-11-07 amended by ADR-0007：新增選用閘門）
 
 ## 問題
 

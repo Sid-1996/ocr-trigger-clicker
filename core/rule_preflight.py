@@ -16,6 +16,7 @@ Does NOT access:
 
 from __future__ import annotations
 
+import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,6 +67,24 @@ _VALID_STEP_TYPES = frozenset(
     }
 )
 
+_SUM_GATE_OPERATORS = frozenset({">", "<", ">=", "<=", "==", "!="})
+_MATCH_SOURCE_STEP_TYPES = frozenset({"detect", "match_image", "compare"})
+
+
+def _finite_number(value) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value)
+
+
+def _roi_configured(roi) -> bool:
+    if not isinstance(roi, dict):
+        return False
+    try:
+        return float(roi.get("w", 0)) > 0 and float(roi.get("h", 0)) > 0
+    except (TypeError, ValueError):
+        return False
+
 
 def rule_preflight(rule: Rule) -> PreflightResult:
     """Run Rule-level preflight validation.
@@ -98,6 +117,9 @@ def rule_preflight(rule: Rule) -> PreflightResult:
         return PreflightResult(status="blocked", problems=problems, warnings=warnings)
 
     # ── 1. Step 物件結構與內容防護 ──────────────────────────────────────
+    # 加總閘門防呆：閘門開啟後，這條規則的成敗靠它，設定不完整就直接不執行。
+    gate_sum_seen = False
+    match_source_seen = False
     for idx, step in enumerate(rule.steps):
         # 必須是 canonical Step 類別的實例。Step 取自 load_sibling("rule_models", ...)
         # 的共用模組實例，與 core/05_main_loop.py 的 fingerprint 判定的是同一個
@@ -136,6 +158,28 @@ def rule_preflight(rule: Rule) -> PreflightResult:
             # 一旦發現未知類型標記 blocked，但繼續累積其他問題
             # 我們不 break，是為為累積其他潛在問題；但跳過後續 type-specific 檢查
             continue
+
+        # ── 3b. 加總閘門防呆 ──────────────────────────────────────────
+        if step_type == "sum" and params.get("gate"):
+            gate_sum_seen = True
+            if not _roi_configured(params.get("roi")):
+                problems.append("sum_gate_roi_unset")
+            if (
+                not _finite_number(params.get("value"))
+                or str(params.get("operator", ">=")) not in _SUM_GATE_OPERATORS
+            ):
+                problems.append("sum_gate_value_invalid")
+        elif step_type in _MATCH_SOURCE_STEP_TYPES:
+            match_source_seen = True
+        # 閘門成功不寫 ctx.matched_text（與 compare 不同），後續點擊辨識目標
+        # 必須有前面的偵測步驟；否則一定 no_target，存檔即擋下。
+        if (
+            gate_sum_seen
+            and not match_source_seen
+            and step_type in ("click", "drag")
+            and params.get("target", "text_center") == "text_center"
+        ):
+            problems.append("gate_sum_click_no_target")
 
         # ── 4. Custom Click (0,0) 警告 ────────────────────────────────
         if (

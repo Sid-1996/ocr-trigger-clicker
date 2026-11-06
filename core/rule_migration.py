@@ -565,6 +565,19 @@ def _normalize_step_params(step_type: str, params: dict | None, rule_name: str =
         base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
     elif step_type == "sum":
         base["roi"] = _sanitize_roi(base.get("roi"))
+        # 閘門預設關閉：關閉時移除所有閘門參數，保持與 ADR-0006 完全相容的形狀。
+        if base.get("gate"):
+            base["gate"] = True
+            base["operator"] = str(base.get("operator", ">="))
+            # 無效值（NaN/±Infinity/null）→ None：執行期據此安全失敗，不可用 0.0 代替
+            base["value"] = _as_optional_float(base.get("value"))
+            base["gate_timeout_sec"] = max(
+                0.0, min(60.0, _as_float(base.get("gate_timeout_sec", 5.0), 5.0))
+            )
+            base["on_fail"] = _normalize_on_fail(base.get("on_fail", "stop"), allow_skip=True)
+        else:
+            for key in ("gate", "operator", "value", "gate_timeout_sec", "on_fail"):
+                base.pop(key, None)
     elif step_type == "match_image":
         base["template"] = str(base.get("template", "")).strip()
         base["template_data"] = str(base.get("template_data", ""))

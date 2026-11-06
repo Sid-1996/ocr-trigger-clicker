@@ -361,6 +361,18 @@ def _select_combo_keep_unknown(combo, value) -> bool:
     return False
 
 
+# 加總閘門的判斷方式：operator → 白話標籤 key。表單與步驟摘要共用同一份，
+# 避免兩處各寫一次而漂移。
+_SUM_OP_LABEL_KEYS = {
+    ">=": "step_form.sum_op_at_least",
+    ">": "step_form.sum_op_more_than",
+    "<=": "step_form.sum_op_at_most",
+    "<": "step_form.sum_op_less_than",
+    "==": "step_form.sum_op_exactly",
+    "!=": "step_form.sum_op_not",
+}
+
+
 def _fmt_roi(roi: dict) -> str:
     x, y, w, h = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
     if w <= 1.0 and h <= 1.0 and not (x == 0 and y == 0 and w == 0 and h == 0):
@@ -552,7 +564,15 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         roi_str = T("summary.not_set") if zero_roi else _fmt_roi(roi)
-        return T("summary.sum_roi", roi=roi_str)
+        text = T("summary.sum_roi", roi=roi_str)
+        if p.get("gate"):
+            label = T(
+                _SUM_OP_LABEL_KEYS.get(str(p.get("operator", ">=")), "step_form.sum_op_at_least")
+            )
+            raw_value = p.get("value")
+            value = int(raw_value) if _num_is_finite(raw_value) else "?"
+            text += " " + T("summary.sum_gate", cond=f"{label} {value}")
+        return text
     return t
 
 
@@ -4244,6 +4264,7 @@ class _SumStepForm(QWidget):
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
 
+        # ── 1. 加總區域 ──
         roi = p.get("roi", {})
         self._roi = {
             "x": roi.get("x", 0),
@@ -4253,11 +4274,8 @@ class _SumStepForm(QWidget):
         }
         if "roi_coord" in roi:
             self._roi["roi_coord"] = roi["roi_coord"]
-        self._roi_label = QLabel(
-            T("summary.not_set")
-            if all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
-            else _fmt_roi(roi)
-        )
+        roi_empty = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
+        self._roi_label = QLabel(T("summary.not_set") if roi_empty else _fmt_roi(roi))
         self._roi_btn = QPushButton(T("step_form.detect_roi"))
         self._roi_btn.setToolTip(T("tooltip.sum_roi"))
         self._roi_btn.clicked.connect(self._pick_roi)
@@ -4268,10 +4286,101 @@ class _SumStepForm(QWidget):
         rr.addWidget(self._roi_btn)
         form.addRow(T("step_form.sum_region"), roi_row)
 
+        self._roi_warn = QLabel(T("step_form.sum_roi_warn"))
+        self._roi_warn.setWordWrap(True)
+        self._roi_warn.setStyleSheet("color: #e67e22;")
+        self._roi_warn.setVisible(roi_empty)
+        form.addRow(self._roi_warn)
+
         hint = QLabel(T("step_form.sum_hint"))
         hint.setWordWrap(True)
         hint.setStyleSheet("color: #888; font-size: 11px;")
         form.addRow(hint)
+
+        # ── 2. 閘門開關 ──
+        self._gate = QCheckBox(T("step_form.sum_gate_toggle"))
+        self._gate.setChecked(bool(p.get("gate")))
+        form.addRow(self._gate)
+        self._gate_hint = QLabel()
+        self._gate_hint.setWordWrap(True)
+        self._gate_hint.setStyleSheet("color: #888; font-size: 11px;")
+        form.addRow(self._gate_hint)
+
+        # ── 3~5. 閘門設定（只在開啟時顯示）──
+        self._gate_box = QWidget()
+        gf = QFormLayout(self._gate_box)
+        gf.setContentsMargins(0, 0, 0, 0)
+
+        self._op = _NoWheelCombo()
+        for op_key, label_key in _SUM_OP_LABEL_KEYS.items():
+            self._op.addItem(T(label_key), op_key)
+        cur_op = str(p.get("operator", ">="))
+        op_idx = self._op.findData(cur_op)
+        if op_idx < 0:
+            # 未知運算子保留原值，不靜默換成第一項（與 compare 一致）
+            self._op.addItem(cur_op, cur_op)
+            op_idx = self._op.count() - 1
+        self._op.setCurrentIndex(op_idx)
+
+        self._value = _NoWheelSpin()
+        self._value.setRange(0, 999_999_999)
+        self._value.setGroupSeparatorShown(True)
+        raw_value = p.get("value", 100)
+        self._value.setValue(int(raw_value) if _num_is_finite(raw_value) else 100)
+        cond_row = QWidget()
+        ch = QHBoxLayout(cond_row)
+        ch.setContentsMargins(0, 0, 0, 0)
+        ch.addWidget(self._op)
+        ch.addWidget(self._value)
+        ch.addStretch(1)
+        gf.addRow(T("step_form.sum_gate_condition"), cond_row)
+
+        self._wait = _NoWheelCombo()
+        for sec, label_key in (
+            (2, "step_form.sum_wait_short"),
+            (5, "step_form.sum_wait_medium"),
+            (10, "step_form.sum_wait_long"),
+        ):
+            self._wait.addItem(T(label_key), sec)
+        raw_wait = p.get("gate_timeout_sec", 5)
+        try:
+            raw_wait = float(raw_wait)
+        except (TypeError, ValueError):
+            raw_wait = 5.0
+        nearest = min((2, 5, 10), key=lambda s: abs(s - raw_wait))
+        self._wait.setCurrentIndex(self._wait.findData(nearest))
+        gf.addRow(T("step_form.sum_wait"), self._wait)
+
+        self._fail = _NoWheelCombo()
+        self._fail.addItem(T("step_form.sum_fail_stop"), "stop")
+        self._fail.addItem(T("step_form.sum_fail_advance"), "advance")
+        self._fail.addItem(T("step_form.sum_fail_notify"), "notify")
+        raw_of = p.get("on_fail", "stop")
+        cur_action = raw_of.get("action", "stop") if isinstance(raw_of, dict) else raw_of
+        fail_idx = self._fail.findData(cur_action)
+        self._fail.setCurrentIndex(fail_idx if fail_idx >= 0 else 0)
+        gf.addRow(T("step_form.sum_fail"), self._fail)
+
+        gate_hint = QLabel(T("step_form.sum_gate_hint"))
+        gate_hint.setWordWrap(True)
+        gate_hint.setStyleSheet("color: #888; font-size: 11px;")
+        gf.addRow(gate_hint)
+        neg_hint = QLabel(T("step_form.sum_neg_hint"))
+        neg_hint.setWordWrap(True)
+        neg_hint.setStyleSheet("color: #888; font-size: 11px;")
+        gf.addRow(neg_hint)
+
+        form.addRow(self._gate_box)
+        self._gate.toggled.connect(self._on_gate_toggled)
+        self._on_gate_toggled(self._gate.isChecked(), save=False)
+
+    def _on_gate_toggled(self, checked, save=True):
+        self._gate_box.setVisible(bool(checked))
+        self._gate_hint.setText(
+            T("step_form.sum_gate_on_hint") if checked else T("step_form.sum_gate_off_hint")
+        )
+        if save:
+            self.save()
 
     def _pick_roi(self):
         if not self._roi_cb:
@@ -4281,6 +4390,7 @@ class _SumStepForm(QWidget):
             self._roi = dict(result)
             z = all(v == 0 for v in self._roi.values())
             self._roi_label.setText(T("summary.not_set") if z else _fmt_roi(self._roi))
+            self._roi_warn.setVisible(z)
             self.save()
             self._list.steps_changed.emit()
 
@@ -4293,6 +4403,26 @@ class _SumStepForm(QWidget):
         }
         if "roi_coord" in self._roi:
             self._step.params["roi"]["roi_coord"] = self._roi["roi_coord"]
+        if not self._gate.isChecked():
+            # 閘門關閉：移除所有閘門參數，維持 ADR-0006 的相容形狀
+            for key in ("gate", "operator", "value", "gate_timeout_sec", "on_fail"):
+                self._step.params.pop(key, None)
+            return
+        self._step.params["gate"] = True
+        self._step.params["operator"] = self._op.currentData()
+        self._step.params["value"] = float(self._value.value())
+        self._step.params["gate_timeout_sec"] = float(self._wait.currentData())
+        action = self._fail.currentData()
+        if action == "notify":
+            self._step.params["on_fail"] = {
+                "action": "notify",
+                "message": "",
+                "stop_groups": [],
+            }
+        elif action == "advance":
+            self._step.params["on_fail"] = {"action": "advance"}
+        else:
+            self._step.params["on_fail"] = "stop"
 
 
 class _KeyStepForm(QWidget):

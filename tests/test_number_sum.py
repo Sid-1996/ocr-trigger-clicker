@@ -364,3 +364,296 @@ def test_sum_panel_log_in_all_modes():
     ml._run_rule(rule, img, rect, ctx)
     assert len(logged) == 2
     assert logged[1][2:4] == ("sum", "ok")
+
+
+# ── 加總閘門（ADR-0007）───────────────────────────────────────────────────
+
+_GATE_ROI = {"x": 10, "y": 20, "w": 100, "h": 50}
+
+
+def _gate_params(**over):
+    params = {
+        "roi": dict(_GATE_ROI),
+        "gate": True,
+        "operator": ">=",
+        "value": 50,
+        "gate_timeout_sec": 5,
+        "on_fail": "stop",
+    }
+    params.update(over)
+    return params
+
+
+def _sum_text(total):
+    return [_ocr.OcrResult(text=f"+{total}", x=0, y=0, w=20, h=10, confidence=0.9)]
+
+
+def test_sum_gate_normalization_off_strips_gate_keys():
+    params = _normalize_step_params(
+        "sum",
+        {
+            "roi": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4},
+            "operator": ">=",
+            "value": 0,
+            "on_fail": "stop",
+        },
+    )
+    for key in ("gate", "operator", "value", "gate_timeout_sec", "on_fail"):
+        assert key not in params
+
+
+def test_sum_gate_normalization_on_clamps_and_normalizes():
+    params = _normalize_step_params(
+        "sum",
+        {
+            "roi": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4},
+            "gate": True,
+            "operator": "<",
+            "value": "120",
+            "gate_timeout_sec": 999,
+            "on_fail": {"action": "advance"},
+        },
+    )
+    assert params["gate"] is True
+    assert params["operator"] == "<"
+    assert params["value"] == 120.0
+    assert params["gate_timeout_sec"] == 60.0
+    assert params["on_fail"] == {"action": "advance"}
+
+
+def test_sum_gate_normalization_keeps_invalid_value_as_none():
+    params = _normalize_step_params(
+        "sum",
+        {
+            "roi": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4},
+            "gate": True,
+            "value": "abc",
+        },
+    )
+    # 無效值不可被 0.0 取代：0 會讓 >= 恆真，變成永遠通過
+    assert params["value"] is None
+    assert params["gate_timeout_sec"] == 5.0
+
+
+def test_sum_gate_params_requires_explicit_flag():
+    assert _ml.MainLoop._sum_gate_params({"operator": ">=", "value": 0}) is None
+    gate = _ml.MainLoop._sum_gate_params({"gate": True})
+    assert gate == {"operator": ">=", "value": None, "timeout": 5.0}
+
+
+def test_is_detect_step_counts_only_gated_sum():
+    assert _ml.MainLoop._is_detect_step(Step(type="detect", params={})) is True
+    assert _ml.MainLoop._is_detect_step(Step(type="compare", params={})) is True
+    assert _ml.MainLoop._is_detect_step(Step(type="match_image", params={})) is True
+    assert _ml.MainLoop._is_detect_step(Step(type="sum", params={})) is False
+    assert _ml.MainLoop._is_detect_step(Step(type="sum", params={"gate": True})) is True
+
+
+def test_sum_gate_unreadable_waits_without_failing(monkeypatch):
+    ml = make_main_loop()
+    ml._ocr_region = lambda img, roi: []
+    rule = Rule(id="r", name="閘門", enabled=True, steps=[])
+    ctx = _ctx()
+    ctx.step_idx = 0
+
+    res = ml._handle_sum(_gate_params(on_fail={"action": "advance"}), ctx, rule)
+
+    assert res.action == "wait", "讀不出數字時必須擋住後續步驟，不可當 0 判失敗"
+    assert ctx.on_fail_fired is False
+    assert not ctx.force_advance
+    assert ("r", 0) in ml._sum_gate_wait
+
+
+def test_sum_gate_unstable_waits_and_keeps_candidate(monkeypatch):
+    ml = make_main_loop()
+    ml._ocr_region = lambda img, roi: _sum_text(80)
+    rule = Rule(id="r", name="閘門", enabled=True, steps=[])
+    ctx = _ctx()
+    ctx.step_idx = 0
+    now = [100.0]
+    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
+
+    res = ml._handle_sum(_gate_params(), ctx, rule)
+
+    assert res.action == "wait", "未穩定不可直接判失敗"
+    assert ctx.on_fail_fired is False
+    assert ("r", 0) in ml._sum_candidate, "等待中不可清掉候選值，否則永遠等不到穩定"
+
+    now[0] += 0.4
+    res = ml._handle_sum(_gate_params(), ctx, rule)
+
+    assert res.action == "continue"
+    assert ctx.sum_stable is True
+    assert ("r", 0) not in ml._sum_gate_wait
+
+
+def test_sum_gate_not_met_follows_on_fail(monkeypatch):
+    ml = make_main_loop()
+    ml._ocr_region = lambda img, roi: _sum_text(10)
+    rule = Rule(id="r", name="閘門", enabled=True, steps=[])
+    ctx = _ctx()
+    ctx.step_idx = 0
+    now = [100.0]
+    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
+
+    ml._handle_sum(_gate_params(), ctx, rule)
+    now[0] += 0.4
+    res = ml._handle_sum(_gate_params(), ctx, rule)
+
+    from i18n import T
+
+    assert res.action == "stop"
+    assert res.detail == T("exec_log.detail.sum_gate_not_met")
+    assert ctx.force_advance is False
+
+
+def test_sum_gate_not_met_honors_advance(monkeypatch):
+    ml = make_main_loop()
+    ml._ocr_region = lambda img, roi: _sum_text(10)
+    rule = Rule(id="r", name="閘門", enabled=True, steps=[])
+    ctx = _ctx()
+    ctx.step_idx = 0
+    now = [100.0]
+    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
+    params = _gate_params(on_fail={"action": "advance"})
+
+    ml._handle_sum(params, ctx, rule)
+    now[0] += 0.4
+    res = ml._handle_sum(params, ctx, rule)
+
+    assert res.action == "stop"
+    assert ctx.force_advance is True, "閘門不符合時必須真的走 on_fail 設定的動作"
+
+
+def test_sum_gate_empty_times_out_after_wait_budget(monkeypatch):
+    ml = make_main_loop()
+    ml._frame_count = 5
+    ml._ocr_region = lambda img, roi: []
+    rule = Rule(id="r", name="閘門", enabled=True, steps=[])
+    ctx = _ctx()
+    ctx.step_idx = 0
+    now = [100.0]
+    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
+
+    assert ml._handle_sum(_gate_params(), ctx, rule).action == "wait"
+
+    now[0] += 6.0
+    res = ml._handle_sum(_gate_params(), ctx, rule)
+
+    from i18n import T
+
+    assert res.action == "stop"
+    assert res.detail == T("exec_log.detail.sum_wait_timeout")
+    assert ("r", 0) not in ml._sum_gate_wait
+
+
+def test_sum_gate_invalid_threshold_fails_safely(monkeypatch):
+    ml = make_main_loop()
+    ml._ocr_region = lambda img, roi: _sum_text(80)
+    rule = Rule(id="r", name="閘門", enabled=True, steps=[])
+    ctx = _ctx()
+    ctx.step_idx = 0
+    now = [100.0]
+    monkeypatch.setattr(_ml.time, "monotonic", lambda: now[0])
+    params = _gate_params(value=None)
+
+    ml._handle_sum(params, ctx, rule)
+    now[0] += 0.4
+    res = ml._handle_sum(params, ctx, rule)
+
+    from i18n import T
+
+    assert res.action == "stop"
+    assert res.detail == T("exec_log.detail.value_invalid")
+
+
+def test_sum_gate_wait_blocks_following_steps():
+    ml = make_main_loop()
+    ml._ocr_region = lambda img, roi: []
+    clicks = []
+    ml._send_click = lambda *a, **k: clicks.append(a) or True
+    rule = Rule(
+        id="r",
+        name="閘門",
+        enabled=True,
+        steps=[
+            Step(type="sum", params=_gate_params()),
+            Step(type="click", params={"target": "custom", "x": 5, "y": 5}),
+        ],
+    )
+    img = np.zeros((600, 800, 3), dtype=np.uint8)
+    rect = {"x": 100, "y": 200, "w": 800, "h": 600}
+
+    outcome = ml._run_rule(rule, img, rect)
+
+    assert outcome is None
+    assert clicks == [], "等待中不可執行後續動作"
+
+
+def _preflight(steps):
+    from core.rule_preflight import rule_preflight
+
+    return rule_preflight(Rule(id="r", name="p", enabled=True, steps=steps))
+
+
+def test_preflight_gate_sum_requires_roi():
+    res = _preflight(
+        [
+            Step(
+                type="sum",
+                params={"gate": True, "operator": ">=", "value": 10, "roi": {}},
+            )
+        ]
+    )
+    assert res.status == "blocked"
+    assert "sum_gate_roi_unset" in res.problems
+
+
+def test_preflight_gate_sum_rejects_invalid_threshold():
+    res = _preflight(
+        [
+            Step(
+                type="sum",
+                params={
+                    "gate": True,
+                    "operator": "??",
+                    "value": None,
+                    "roi": _GATE_ROI,
+                },
+            )
+        ]
+    )
+    assert res.status == "blocked"
+    assert "sum_gate_value_invalid" in res.problems
+
+
+def test_preflight_gate_sum_click_needs_prior_detect():
+    sum_step = Step(
+        type="sum", params={"gate": True, "operator": ">=", "value": 10, "roi": _GATE_ROI}
+    )
+    click_step = Step(type="click", params={"target": "text_center"})
+
+    blocked = _preflight([sum_step, click_step])
+    assert blocked.status == "blocked"
+    assert "gate_sum_click_no_target" in blocked.problems
+
+    passed = _preflight([Step(type="detect", params={"text": "獎勵"}), sum_step, click_step])
+    assert passed.status == "passed"
+
+
+def test_preflight_gate_sum_allows_custom_click():
+    res = _preflight(
+        [
+            Step(
+                type="sum",
+                params={
+                    "gate": True,
+                    "operator": ">=",
+                    "value": 10,
+                    "roi": _GATE_ROI,
+                },
+            ),
+            Step(type="click", params={"target": "custom", "x": 5, "y": 5}),
+        ]
+    )
+    assert res.status == "passed"

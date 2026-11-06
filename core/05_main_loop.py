@@ -413,6 +413,9 @@ class MainLoop:
         self._last_sum_report: dict[str, dict[int, tuple[int, int]]] = {}
         self._sum_active_rule: str | None = None
         self._sum_seen: set[str] | None = None
+        # 加總閘門等待計時：(rule_id, step_idx) → (起始時間, 最後評估幀)。
+        # 最後評估幀不是上一幀就重新計時，避免規則輪替後帶著過期等待直接逾時。
+        self._sum_gate_wait: dict[tuple[str, int], tuple[float, int]] = {}
         self._verify_warn_counter: dict[str, int] = {}
         self._slow_loop_warned: bool = False
         # 本幀「刻意等待」時間（wait 步驟＋動作後延遲，不含驗證輪詢），由 _loop 重置、
@@ -567,6 +570,14 @@ class MainLoop:
 
     _DETECT_STEP_TYPES = frozenset({"detect", "compare", "match_image"})
 
+    @classmethod
+    def _is_detect_step(cls, step) -> bool:
+        """閘門開啟的 sum 具偵測語意（matched_ns／notify 去重）；關閉時不算。"""
+        if step.type in cls._DETECT_STEP_TYPES:
+            return True
+        params = getattr(step, "params", None)
+        return step.type == "sum" and isinstance(params, dict) and bool(params.get("gate"))
+
     def _log_exec(
         self,
         rule_name: str,
@@ -661,6 +672,7 @@ class MainLoop:
                 self._last_sum_report.clear()
                 self._sum_active_rule = None
                 self._sum_seen = None
+                self._sum_gate_wait.clear()
                 self._xframe_ocr_cache.clear()
                 self._tmpl_cache.clear()
                 self._fail_since.clear()
@@ -1239,6 +1251,80 @@ class MainLoop:
         }
         return StepResult("continue")
 
+    @staticmethod
+    def _sum_gate_params(params: dict) -> dict | None:
+        """閘門關閉時回 None；開啟時回正規化後的判定參數。
+
+        閘門必須用顯式 `gate` 旗標判定，不可用 operator/value 是否存在推斷：
+        value 預設 0 會讓 `>=0` 恆真，分不出「真的要 0」與「只是預設值」。
+        """
+        if not params.get("gate"):
+            return None
+        try:
+            timeout = float(params.get("gate_timeout_sec", 5.0))
+        except (TypeError, ValueError):
+            timeout = 5.0
+        return {
+            "operator": str(params.get("operator", ">=")),
+            "value": params.get("value"),
+            "timeout": max(0.0, timeout),
+        }
+
+    def _sum_gate_waiting(self, rule: Rule, ctx: StepContext, timeout: float) -> bool:
+        """回傳 True＝還在等待；False＝已超過等待上限。
+
+        等待只會擋住本幀後續步驟，不清候選值、不觸發 on_fail。最後評估幀不是
+        上一幀就重新計時：規則被輪替出去再回來時，不該帶著過期等待直接逾時。
+        """
+        key = (rule.id, ctx.step_idx)
+        now = time.monotonic()
+        state = self._sum_gate_wait.get(key)
+        if state is None or state[1] < self._frame_count - 1:
+            self._sum_gate_wait[key] = (now, self._frame_count)
+            return True
+        self._sum_gate_wait[key] = (state[0], self._frame_count)
+        return now - state[0] < timeout
+
+    def _sum_gate_timeout(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
+        """等不到可判定的數字：逾時後才依 on_fail 處理（等待中不走這條）。"""
+        self._sum_gate_wait.pop((rule.id, ctx.step_idx), None)
+        self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 加總閘門逾時：等不到可判定的數字")
+        res = self._handle_on_fail(params, ctx, rule)
+        if res.action == "stop":
+            res.detail = T("exec_log.detail.sum_wait_timeout")
+        return res
+
+    def _sum_gate_check(
+        self, gate: dict, total: int, params: dict, ctx: StepContext, rule: Rule
+    ) -> StepResult:
+        """穩定值已取得後才比對門檻；不符合走 on_fail。"""
+        ops = {
+            ">": lambda a, b: a > b,
+            "<": lambda a, b: a < b,
+            ">=": lambda a, b: a >= b,
+            "<=": lambda a, b: a <= b,
+            "==": lambda a, b: a == b,
+            "!=": lambda a, b: a != b,
+        }
+        op = gate["operator"]
+        value = gate["value"]
+        if op not in ops or not _is_finite_number(value):
+            # 門檻無效（null / NaN / ±Infinity / 未知運算子）：不可當 0，直接安全失敗
+            self._log(
+                f"規則「{rule.name}」步驟{ctx.step_idx} 加總閘門設定無效（{op} {value!r}），無法判定"
+            )
+            res = self._handle_on_fail(params, ctx, rule)
+            if res.action == "stop":
+                res.detail = T("exec_log.detail.value_invalid")
+            return res
+        if ops[op](float(total), float(value)):
+            return StepResult("continue")
+        self._log(f"規則「{rule.name}」步驟{ctx.step_idx} 加總不符合條件：{total} {op} {value:g}")
+        res = self._handle_on_fail(params, ctx, rule)
+        if res.action == "stop":
+            res.detail = T("exec_log.detail.sum_gate_not_met")
+        return res
+
     def _handle_sum(self, params: dict, ctx: StepContext, rule: Rule) -> StepResult:
         ctx.sum_total = 0
         ctx.sum_count = 0
@@ -1253,21 +1339,35 @@ class MainLoop:
             self._clear_sum(rule.id)
             return StepResult("continue")
 
+        gate = self._sum_gate_params(params)
         roi = self._resolve_roi(raw_roi, ctx.rect)
         results = self._ocr_region(ctx.img, roi)
         text = " ".join(r.text for r in results)
         confidences = [round(getattr(r, "confidence", 0.0), 3) for r in results]
         total, count = sum_numbers(text)
         if count == 0:
+            # 三態中的空區域／讀不出：不當 0、不立即失敗；候選值清掉但等待計時保留
             self._clear_sum(rule.id)
-            return StepResult("continue")
+            if gate is None:
+                return StepResult("continue")
+            if self._sum_gate_waiting(rule, ctx, gate["timeout"]):
+                return StepResult("wait")
+            return self._sum_gate_timeout(params, ctx, rule)
 
         ctx.sum_total = total
         ctx.sum_count = count
         if self._sum_seen is not None:
             self._sum_seen.add(rule.id)
         self._update_sum(rule, ctx, roi, total, count, text, confidences)
-        return StepResult("continue")
+        if gate is None:
+            return StepResult("continue")
+        if not ctx.sum_stable:
+            # 未穩定 ≠ 失敗：擋住後續步驟等下一幀，不可走 on_fail
+            if self._sum_gate_waiting(rule, ctx, gate["timeout"]):
+                return StepResult("wait")
+            return self._sum_gate_timeout(params, ctx, rule)
+        self._sum_gate_wait.pop((rule.id, ctx.step_idx), None)
+        return self._sum_gate_check(gate, total, params, ctx, rule)
 
     def _update_sum(
         self,
@@ -2058,6 +2158,10 @@ class MainLoop:
                 if not background:
                     self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
             result = self._run_step(step, ctx, rule)
+            if result.action == "wait":
+                # 加總閘門等待中：直接結束本次規則，不清候選值、不觸發 on_fail、
+                # 不推進指標；下一幀重試同一條規則（見 _sum_gate_waiting）。
+                return self._stopped_outcome(rule, ctx)
             # 通知去重重新武裝：偵測步驟失敗＝本次條件不成立，該次「已通知」記錄
             # 必須失效，條件再次成立時才會再通知。
             # 位置約束：必須排在「步驟後的全域停止閘」之前——停止發生在偵測步驟
@@ -2066,7 +2170,7 @@ class MainLoop:
             #   該路徑留下的鎖存由 start() / _load_rules() 的清除兜底。）
             if (
                 i == 0
-                and step.type in self._DETECT_STEP_TYPES
+                and self._is_detect_step(step)
                 and (result.action != "continue" or ctx.on_fail_fired)
             ):
                 self._notified_conditions.discard(rule.id)
@@ -2074,7 +2178,7 @@ class MainLoop:
             # 只要 _stop_event 已設定，continue / stop / jump_step 一律轉成 STOPPED：
             # 不重送輸入、不執行下一個 Step、不計入 completed、不推進 pointer。
             if self._stop_event.is_set():
-                if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
+                if rule.id in self._rule_completed and self._is_detect_step(step):
                     self._rule_completed.discard(rule.id)
                 if not background:
                     detail = result.detail or self._infer_stop_detail(step, ctx)
@@ -2086,7 +2190,7 @@ class MainLoop:
                         detail or T("exec_log.detail.interrupted"),
                     )
                 return self._stopped_outcome(rule, ctx)
-            if step.type in self._DETECT_STEP_TYPES and result.action == "continue":
+            if self._is_detect_step(step) and result.action == "continue":
                 ctx.matched_ns = time.monotonic_ns()
             ms = step.params.get("after_delay_ms", 0) or 0
             if (
@@ -2299,7 +2403,7 @@ class MainLoop:
                     detail = result.detail
                     if not detail:
                         detail = self._infer_stop_detail(step, ctx)
-                    if rule.id in self._rule_completed and step.type in self._DETECT_STEP_TYPES:
+                    if rule.id in self._rule_completed and self._is_detect_step(step):
                         self._rule_completed.discard(rule.id)
                     else:
                         self._log_exec(rule.name, i, step.type, "stop", detail)
@@ -3405,6 +3509,7 @@ if __name__ == "__main__":
     ml._last_sum_report = {}
     ml._sum_active_rule = None
     ml._sum_seen = None
+    ml._sum_gate_wait = {}
     ml._last_active_rule_id = None
     ml._frame_waited_ms = 0.0
     ml._reset_black_state()
