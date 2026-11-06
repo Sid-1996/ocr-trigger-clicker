@@ -269,7 +269,7 @@ on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動�
 | `delay_before_ms` | int 0..5000 | 首輪前等待（預設 0），計入 `timeout` 前 |
 | `on_fail` | 同主流程 | 逾時後執行的 `advance`/`notify`/`jump`/`key`/`skip` |
 
-**語義**：`Action → after_delay_ms → delay_before_ms → 每 poll 用新 `capture_frame()` 重拍並走既有 `_ocr_region/_tmpl_cache` 驗證 → 命中即 `advance`（`ctx.triggered=True`）→ 逾時進 `verify.on_fail` → `verification_cancelled`（`_stop_event/_pause/_emergency` 中斷）不觸 `on_fail`。
+**語義**：`Action → after_delay_ms → delay_before_ms → 每 poll 用新 `capture_frame()` 重拍並走既有 `_ocr_region/_tmpl_cache` 驗證 → 命中即 `advance`（`ctx.triggered=True`）→ 逾時進 `verify.on_fail` → `verification_cancelled`（`_stop_event/_pause` 中斷）不觸 `on_fail`。
 
 **限制 — `verify.on_fail=stop` 不支援**：若 `verify.on_fail` 為 `stop`（含 `{"action":"stop"}`），該 `verify` 在 `_normalize_verify()` 階段即被判定 `invalid`、移除並 `warning("verify config invalid, dropped")`，**Action 仍照舊執行，但失去 post-condition 保護**，下幀即回到原 `stop` 輪詢，使用者會誤以為 Verify 生效。原因：`stop` 意味「停留本 Rule」，下幀會再次執行同一 Action，造成 `click→verify timeout→click→...` 無限重送。請改用 `advance`/`notify`/`jump`/`key`/`skip`。
 
@@ -487,7 +487,6 @@ debug panel 建立規則         視窗相對          ÷ client_size → 比例
 | `send_hold_key(key, ms)` | 按住一段時間後放開 | `press` → `time.sleep(ms/1000)` → `release` |
 | `send_drag(x1,y1,x2,y2,button)` | 拖曳 | `press` at (x1,y1) → `position = (x2,y2)` → `release` |
 | `send_scroll(amount, direction)` | 滾輪 | `mouse.scroll(dx, dy)` |
-| `send_emergency_stop()` | 緊急停止（in-process noop） | 僅 log + return True，`MainLoop._stop_event` 為實際中斷來源 |
 
 ### 後台 Frida：注入假造輸入
 
@@ -510,15 +509,6 @@ debug panel 建立規則         視窗相對          ÷ client_size → 比例
 - `_NUMPAD_VK`：10 個九宮格鍵（Numpad0-9、NumpadAdd 等）
 - 單字元文字：`pynput.keyboard.KeyCode.from_char()`
 - Ctrl+Combo：`^` 前綴解析（如 `^c` → Ctrl+C）
-
-### ESTOP 流程（簡化）
-
-```
-MainLoop.emergency_stop()
-  → self._emergency_event.set()
-  → send_emergency_stop()
-     → log + return True（無外部行程可殺）
-```
 
 ## 資料持久化
 

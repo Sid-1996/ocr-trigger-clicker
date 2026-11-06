@@ -342,7 +342,6 @@ class MainLoop:
         self._foreground_only = True
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
-        self._emergency_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
         self._prev_frame: Optional[np.ndarray] = None
@@ -459,7 +458,6 @@ class MainLoop:
         self.on_window_lost: Optional[Callable[[], None]] = None
         # 自動恢復完成通知：GUI 需同步按鈕狀態並告知使用者「已恢復」
         self.on_window_recovered: Optional[Callable[[], None]] = None
-        self.on_emergency: Optional[Callable[[], None]] = None
         self.on_finished: Optional[Callable[[], None]] = None
         # 數字加總結果通知（區域螢幕座標 x, y, w, h, 總和, 個數）；GUI 負責顯示浮層
         self.on_sum: Optional[Callable[[int, int, int, int, int, int], None]] = None
@@ -2007,11 +2005,7 @@ class MainLoop:
             poll_ms = verify.get("poll_interval_ms", 300)
         delay_ms = verify.get("delay_before_ms", 0)
         if delay_ms > 0:
-            if (
-                self._stop_event.wait(timeout=delay_ms / 1000.0)
-                or self._emergency_event.is_set()
-                or self._pause_event.is_set()
-            ):
+            if self._stop_event.wait(timeout=delay_ms / 1000.0) or self._pause_event.is_set():
                 self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
         deadline = time.monotonic() + timeout_ms / 1000.0
@@ -2019,11 +2013,7 @@ class MainLoop:
         first_frame = True
         saw_frame = False
         while time.monotonic() < deadline:
-            if (
-                self._stop_event.is_set()
-                or self._emergency_event.is_set()
-                or self._pause_event.is_set()
-            ):
+            if self._stop_event.is_set() or self._pause_event.is_set():
                 self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
             # fresh capture, reuse pipeline
@@ -2043,19 +2033,13 @@ class MainLoop:
                     self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                     return "success"
             # wait poll interval, interruptible
-            if (
-                self._stop_event.wait(timeout=poll_ms / 1000.0)
-                or self._emergency_event.is_set()
-                or self._pause_event.is_set()
-            ):
+            if self._stop_event.wait(timeout=poll_ms / 1000.0) or self._pause_event.is_set():
                 self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
                 return "cancelled"
         self._verify_blocked_ms += (time.monotonic() - t_poll0) * 1000
         return "timeout" if saw_frame else "no_frame"
 
     def _get_verify_cancel_detail(self) -> str:
-        if self._emergency_event.is_set():
-            return T("exec_log.detail.emergency_stop")
         if self._pause_event.is_set():
             return T("exec_log.detail.paused")
         if self._stop_event.is_set():
@@ -2293,7 +2277,6 @@ class MainLoop:
                                 t0 = time.monotonic()
                                 if (
                                     self._stop_event.wait(timeout=retry_delay / 1000.0)
-                                    or self._emergency_event.is_set()
                                     or self._pause_event.is_set()
                                 ):
                                     self._frame_waited_ms += (time.monotonic() - t0) * 1000
@@ -2996,7 +2979,7 @@ class MainLoop:
             self.on_window_lost()
         self._pause_event.set()
         self._window_hwnd = None
-        while not self._stop_event.is_set() and not self._emergency_event.is_set():
+        while not self._stop_event.is_set():
             if not self._pause_event.is_set():
                 break
             if get_window_rect(title) is not None:
@@ -3068,8 +3051,6 @@ class MainLoop:
         iteration = 0
         try:
             while not self._stop_event.is_set():
-                if self._emergency_event.is_set():
-                    break
                 iteration += 1
                 loop_start = time.monotonic()
                 loop_cpu_start = time.process_time()
@@ -3227,7 +3208,7 @@ class MainLoop:
                     if self.on_error:
                         self.on_error(f"主循環異常: {e}")
 
-                if self._pause_event.is_set() or self._emergency_event.is_set():
+                if self._pause_event.is_set():
                     continue
 
                 self._stop_event.wait(self._interval)
@@ -3351,15 +3332,6 @@ class MainLoop:
     @property
     def perf_monitor(self) -> PerformanceMonitor:
         return self._perf
-
-    def emergency_stop(self):
-        log_main("⚠ 緊急停止")
-        self._emergency_event.set()
-        self._stop_event.set()
-        self._pause_event.set()
-        _input_mod.send_emergency_stop()
-        if self.on_emergency:
-            self.on_emergency()
 
     def _on_rate_limit_exceeded(self):
         self._pause_event.set()
@@ -3527,13 +3499,11 @@ if __name__ == "__main__":
     ml._logger.handler = ml._test_handler
     ml._stop_event = threading.Event()
     ml._pause_event = threading.Event()
-    ml._emergency_event = threading.Event()
     ml._perf = _perf.PerformanceMonitor()
     ml.on_error = None
     ml.on_warning = None
     ml.on_info = None
     ml.on_window_lost = None
-    ml.on_emergency = None
     ml.on_sum = None
     ml.on_sum_hide = None
     ml._config_store = type(

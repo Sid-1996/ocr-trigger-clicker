@@ -320,11 +320,6 @@ def send_hold_key(key: str, duration_ms: int = 0, cancel=None) -> bool:
     return True
 
 
-def send_emergency_stop() -> bool:
-    _log.warning("緊急停止請求 (pynput 無外部行程，僅記錄)")
-    return True
-
-
 def shutdown() -> None:
     pass
 
@@ -367,9 +362,6 @@ if __name__ == "__main__":
 
     assert send_click(0, -9999, "left") is False
     print("  [OK] send_click rejects out-of-bounds")
-
-    assert send_emergency_stop() is True
-    print("  [OK] send_emergency_stop noop")
 
     # Ledger 與可取消等待（不觸碰真實輸入設備）
     released = []

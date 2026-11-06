@@ -84,7 +84,6 @@ def make_main_loop():
     ml._logger = logging.getLogger("main_loop_test")
     ml._stop_event = threading.Event()
     ml._pause_event = threading.Event()
-    ml._emergency_event = threading.Event()
     ml._perf = _perf.PerformanceMonitor(max_cps=5)
     ml._config_store = type(
         "FakeConfigStore", (), {"get": lambda self, key="interaction_mode": "pynput"}
@@ -122,7 +121,6 @@ def make_main_loop():
     ml.on_sum_hide = None
     ml.on_window_lost = None
     ml.on_window_recovered = None
-    ml.on_emergency = None
     # Preflight cache 狀態：走正式 MainLoop 的同一個初始化入口，避免欄位漂移
     ml._init_preflight_state()
     ml._send_click = lambda *a, **k: True

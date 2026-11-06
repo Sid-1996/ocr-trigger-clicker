@@ -4843,7 +4843,6 @@ class WorkerSignals(QObject):
     resource_warning_signal = pyqtSignal(str)
     info_signal = pyqtSignal(str)
     window_lost_signal = pyqtSignal()
-    emergency_signal = pyqtSignal()
     bg_fail_signal = pyqtSignal()
     black_fail_signal = pyqtSignal()
     window_recovered_signal = pyqtSignal()
@@ -4894,7 +4893,6 @@ class InitWorker(QThread):
             loop.on_resource_warning = lambda msg: self._signals.resource_warning_signal.emit(msg)
             loop.on_info = lambda msg: self._signals.info_signal.emit(msg)
             loop.on_window_lost = lambda: self._signals.window_lost_signal.emit()
-            loop.on_emergency = lambda: self._signals.emergency_signal.emit()
             loop.on_finished = lambda: self._signals.finished.emit(True, "")
             loop.on_sum = lambda x, y, w, h, total, count: self._signals.sum_signal.emit(
                 x, y, w, h, total, count
@@ -5844,7 +5842,6 @@ class MainWindow(QMainWindow):
 
         self._step_list.steps_changed.connect(self._on_steps_changed)
         self._signals.window_lost_signal.connect(self._on_window_lost_from_thread)
-        self._signals.emergency_signal.connect(self._emergency_stop)
         self._signals.test_done_signal.connect(self._show_test_result)
         self._signals.sum_signal.connect(self._on_sum_result)
         self._signals.sum_hide_signal.connect(self._sum_overlay.fade_out)
@@ -8533,8 +8530,7 @@ class MainWindow(QMainWindow):
         self._step_list.setEnabled(editing)
 
         # 主循環執行期間停用 OCR Debug 的輸入測試按鈕。
-        # enabled 的語意在所有呼叫點都是「循環未執行」（_start/_stop/emergency/
-        # 任務載入皆同），因此 not enabled 即「循環執行中」。
+        # enabled 的語意在所有呼叫點都是「循環未執行」（_start/_stop/任務載入皆同），因此 not enabled 即「循環執行中」。
         # 測試鈕會直接操作後台輸入（frida 模式），與執行中的主循環共用同一組
         # 後端狀態 → 兩邊同時送輸入會互相干擾。
         # 面板尚未建立或已關閉時安全略過（不直接操作面板內部 widget）。
@@ -8572,17 +8568,7 @@ class MainWindow(QMainWindow):
             self._btn_toggle.setText(T("main.stop"))
         self._notif_stack.push(T("main.window_recovered"))
 
-    # === Emergency & OCR Health ===
-    def _emergency_stop(self):
-        self._status_timer.stop()
-        if self._loop is None:
-            return
-        self._loop.emergency_stop()
-        self._loop = None
-        self._btn_toggle.setText(T("main.start"))
-        self._update_edit_enabled(True)
-        self._status_bar.showMessage(T("status.emergency_stop"))
-        self._update_rule_status()
+    # === OCR Health ===
 
     # === Sponsor ===
     def _open_sponsor(self):
