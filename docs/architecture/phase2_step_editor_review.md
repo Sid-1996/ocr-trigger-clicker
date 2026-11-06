@@ -106,7 +106,9 @@ if t == "wait":
     return _WaitStepForm(self, step, idx)
 if t == "jump":
     return _JumpStepForm(
-        self, step, idx,
+        self,
+        step,
+        idx,
         self._rules_provider,
         self._groups_provider,
         self._rule_id,
@@ -162,7 +164,7 @@ for r in self._rules:
 idx_r = self._combo.findData(current_id)
 if idx_r >= 0:
     self._combo.setCurrentIndex(idx_r)
-elif current_id:                                    # ← 只有非空才進來
+elif current_id:  # ← 只有非空才進來
     self._combo.addItem(T("step_form.unknown_rule", id=current_id), current_id)
     self._combo.setCurrentIndex(self._combo.count() - 1)
 ```

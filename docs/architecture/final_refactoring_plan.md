@@ -100,11 +100,12 @@
 ```python
 # core/config_store.py（新增）
 class ConfigStore:
-    DEFAULTS = { ... }                       # 由 gui/rule_config_controller.py:20-42 原樣搬入，20 個 key
-    def __init__(self): ...                  # 快取 / baseline 狀態，與現行 44-50 同構
+    DEFAULTS = {...}  # 由 gui/rule_config_controller.py:20-42 原樣搬入，20 個 key
+
+    def __init__(self): ...  # 快取 / baseline 狀態，與現行 44-50 同構
     def reset_cache(self) -> None: ...
-    def load(self, path: str) -> dict: ...   # 由現行 load_config(win) 去掉 win 參數
-    def save(self, path: str, data: dict) -> bool: ...   # 由 save_config(win, data) 去掉 win 參數
+    def load(self, path: str) -> dict: ...  # 由現行 load_config(win) 去掉 win 參數
+    def save(self, path: str, data: dict) -> bool: ...  # 由 save_config(win, data) 去掉 win 參數
     def get(self, path: str, key: str, default=None): ...
     def set(self, path: str, key: str, value) -> bool: ...
     def get_load_error(self) -> RuleFileError | None: ...
@@ -118,12 +119,18 @@ class ConfigStore:
 ```python
 # gui/rule_config_controller.py（改寫後）
 class RuleConfigController(ConfigStore):
-    def load_config(self, win):        return super().load(str(win._config_path))
-    def save_config(self, win, data):  return super().save(str(win._config_path), data)
+    def load_config(self, win):
+        return super().load(str(win._config_path))
+
+    def save_config(self, win, data):
+        return super().save(str(win._config_path), data)
+
     def get_setting(self, win, key, default=None):
         return super().get(str(win._config_path), key, default)
+
     def set_setting(self, win, key, value):
         return super().set(str(win._config_path), key, value)
+
     def refresh_task_list(self, win):  # 原 199-229 不變（唯一需要 Qt 的部分）
         ...
 ```
@@ -169,7 +176,7 @@ class RuleConfigController(ConfigStore):
 for f in (here / "gui").rglob("*.py"):
     if "__pycache__" in str(f):
         continue
-    datas.append((str(f), "gui"))     # ← dest 一律是 "gui"，不含相對子目錄
+    datas.append((str(f), "gui"))  # ← dest 一律是 "gui"，不含相對子目錄
 ```
 
 `--add-data=<src>;gui` 會把 `gui/step_editor/__init__.py` 放到 **`gui/__init__.py`**。凍結後 `load_sibling("step_editor", "gui/step_editor/__init__.py")` 會因 `_loader.py:24-30` 的 `target.exists()` 為 False 而拋 `ImportError`。
@@ -345,7 +352,7 @@ def _click_verify_worker(self, r, sx, sy, frame_w, frame_h):
 ```python
 class _OcrSignals(QObject):
     ocr_done = pyqtSignal(list, float, int)
-    ocr_failed = pyqtSignal(str, int)      # ← 新增：(錯誤訊息, request_id)
+    ocr_failed = pyqtSignal(str, int)  # ← 新增：(錯誤訊息, request_id)
     ocr_status = pyqtSignal(str)
     click_verify_done = pyqtSignal(dict)
     key_verify_done = pyqtSignal(dict)
@@ -357,14 +364,14 @@ def _do_ocr(self, img: np.ndarray, request_id: int):
     try:
         self._signals.ocr_status.emit(T("ocr_debug.ocr_loading"))
         t0 = time.monotonic()
-        opts = self._ocr_options()          # 讀 class attr，非 widget 狀態 → 安全
+        opts = self._ocr_options()  # 讀 class attr，非 widget 狀態 → 安全
         results = recognize(img, **opts)
         elapsed = (time.monotonic() - t0) * 1000
         logging.debug("ocr_dbg: %.0fms %d blocks", elapsed, len(results))
         self._signals.ocr_done.emit(results, elapsed, request_id)
     except Exception as e:
         logging.exception("_do_ocr failed")
-        self._signals.ocr_failed.emit(str(e), request_id)   # ← 不再操作 widget
+        self._signals.ocr_failed.emit(str(e), request_id)  # ← 不再操作 widget
 ```
 - 刪除原 446-447 的兩行 widget 操作。
 - 刪除 `finally: self._ocr_busy = False`（449）—— 旗標改由 GUI 執行緒管理，且旗標本身是死碼（見下）。
@@ -376,7 +383,7 @@ def _do_ocr(self, img: np.ndarray, request_id: int):
 ```python
 def _on_ocr_failed(self, message: str, request_id: int):
     try:
-        if request_id != self._request_id:      # stale result rejection
+        if request_id != self._request_id:  # stale result rejection
             return
         self._capture_btn.setText(T("ocr_debug.capture"))
         self._capture_btn.setEnabled(True)
@@ -390,7 +397,7 @@ def _on_ocr_failed(self, message: str, request_id: int):
 **（5）`clear_results()` 使在途結果失效**
 ```python
 def clear_results(self):
-    self._request_id += 1        # ← 新增：使在途 OCR 結果失效
+    self._request_id += 1  # ← 新增：使在途 OCR 結果失效
     ...
 ```
 > 語意區分（使用者明確要求）：
@@ -449,22 +456,29 @@ def clear_results(self):
 ```python
 # core/coords.py（新增，純計算，無 Win32、無快取、無 self）
 
+
 def to_screen_coords(rect: dict, x: int, y: int) -> tuple[int, int]:
     """視窗相對 → 螢幕絕對。"""
     return (int(round(rect["x"] + x)), int(round(rect["y"] + y)))
 
-def client_center_offset(window_rect: dict,
-                         client_origin_screen: tuple[int, int],
-                         client_size: tuple[int, int]) -> tuple[int, int]:
+
+def client_center_offset(
+    window_rect: dict, client_origin_screen: tuple[int, int], client_size: tuple[int, int]
+) -> tuple[int, int]:
     """客戶區中心相對於整個視窗左上角。"""
-    return (client_origin_screen[0] - window_rect["x"] + client_size[0] // 2,
-            client_origin_screen[1] - window_rect["y"] + client_size[1] // 2)
+    return (
+        client_origin_screen[0] - window_rect["x"] + client_size[0] // 2,
+        client_origin_screen[1] - window_rect["y"] + client_size[1] // 2,
+    )
+
 
 def resolve_roi(roi: dict, rect: dict, client_box=None) -> dict:
     """client_box: 無參 callable → ((chrome_x, chrome_y), (client_w, client_h))；延遲求值。"""
 
-def resolve_point(px: float, py: float, rect: dict,
-                  roi_coord: str | None = None, client_box=None) -> tuple[int, int]:
+
+def resolve_point(
+    px: float, py: float, rect: dict, roi_coord: str | None = None, client_box=None
+) -> tuple[int, int]:
     """同上。"""
 ```
 
@@ -480,6 +494,7 @@ def _resolve_roi(self, roi: dict, rect: dict, chrome: tuple | None = None) -> di
     def client_box():
         cx, cy = chrome if chrome is not None else (self._chrome() or (0, 0))
         return (cx, cy), self._client_size(rect)
+
     return coords.resolve_roi(roi, rect, client_box)
 ```
 
