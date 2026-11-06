@@ -83,7 +83,7 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/rule_migration.py` | 舊格式遷移 + 步驟正規化 | `_migrate_v1_to_v2()`, `migrate_v2_to_v3()`, `_normalize_step_params()` |
 | `core/rule_serialization.py` | 規則/群組 JSON 序列化 | `load_rules()`, `save_rules()`, `load_groups()`, `save_groups()` |
 | `core/task_management.py` | 任務檔案 CRUD ＋ `collect_templates()` 掃描全部任務（含 live 規則）的內嵌圖片 | `list_tasks()`, `load_task()`, `save_task()`, `import_task()`, `export_task()`, `collect_templates()` |
-| `core/run_config.py` | 任務視窗/執行模式/擷取尺寸存取 | `get_task_window()`, `set_run_mode()`, `get_capture_size()`, `get_effective_capture_size()` |
+| `core/run_config.py` | 任務視窗/互動模式/擷取尺寸存取 | `get_task_window()`, `get_config_interaction_mode()`, `get_capture_size()`, `get_effective_capture_size()` |
 | `core/group_selection.py` | 啟動群組選擇（記憶上次勾選／skip 旗標） | `should_skip()`, `build_entry()` |
 | `core/file_utils.py` | 原子檔案寫入工具 | `_replace_file()` |
 | `core/_paths.py` | 路徑集中化（資料目錄／資源目錄解析） | `get_data_path()`, `get_resource_path()` |
