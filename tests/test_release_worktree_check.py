@@ -18,9 +18,12 @@ if "function Get-BlockingGitStatus" not in _func:
 
 
 def _run(lines):
-    script = _func + "\n@(" + ",".join(
-        "'" + line.replace("'", "''") + "'" for line in lines
-    ) + ") | ForEach-Object { Get-BlockingGitStatus -StatusLines @($_) } | ForEach-Object { $_ }"
+    script = (
+        _func
+        + "\n@("
+        + ",".join("'" + line.replace("'", "''") + "'" for line in lines)
+        + ") | ForEach-Object { Get-BlockingGitStatus -StatusLines @($_) } | ForEach-Object { $_ }"
+    )
     proc = subprocess.run(
         [
             "pwsh",

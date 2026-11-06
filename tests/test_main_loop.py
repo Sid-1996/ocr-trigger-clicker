@@ -2707,6 +2707,7 @@ def test_preflight_fingerprint_failure_does_not_cache_old_result(monkeypatch):
 
 # ── F-03／NEW-B：BLOCKED 使用者可見性、去重與背景隔離 ─────────────────────
 
+
 def _blocked_entries(ml):
     return [e for e in ml._execution_log if e.get("result") == "blocked"]
 
@@ -2895,6 +2896,7 @@ def test_blocked_fp_none_renotifies_on_problem_change(monkeypatch):
 
 # ── NEW-C：Parallel Once 全 BLOCKED 保持等待（不推進 queue、不假完成）───────
 
+
 def test_parallel_all_blocked_keeps_queue_waiting():
     ml = _ml_with_chrome()
     blocked = _blocked_rule("A", "Blocked")
@@ -2924,9 +2926,7 @@ def test_parallel_blocked_recovers_after_reload(monkeypatch):
 
     # 修復（換成可執行規則，id 相同）並 reload：queue 仍從原位繼續
     fixed = _acting_rule("A", "Blocked")
-    grp = RuleGroup(
-        id="g1", name="g1", rule_ids=["A"], order="parallel", enabled=True
-    )
+    grp = RuleGroup(id="g1", name="g1", rule_ids=["A"], order="parallel", enabled=True)
     monkeypatch.setattr(_ml_mod, "load_rules", lambda path: [fixed])
     monkeypatch.setattr(_ml_mod, "load_groups", lambda path: [grp])
     ml.reload_rules()
@@ -2953,6 +2953,7 @@ def test_parallel_partial_blocked_healthy_rule_still_runs():
 
 
 # ── F-07：Preflight gate 鑑別力（spy _run_step）─────────────────────────────
+
 
 def test_blocked_background_rule_never_executes_steps(monkeypatch):
     ml = _ml_with_chrome()

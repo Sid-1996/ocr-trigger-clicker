@@ -69,9 +69,7 @@ def test_dry_run_blocked_rule_shows_blocked_not_success(monkeypatch):
     )
 
     assert markers == []
-    reasons = "、".join(
-        _rc.T(f"exec_log.reason.{p}") for p in ["empty_detect_text"]
-    )
+    reasons = "、".join(_rc.T(f"exec_log.reason.{p}") for p in ["empty_detect_text"])
     expected = _rc.T("test.rule_blocked_header", name="R1", problems=reasons)
     assert expected in log
     assert dead_lines == {3}, f"BLOCKED 行應被標記為不可執行：{dead_lines}"
