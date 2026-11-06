@@ -1,6 +1,6 @@
 # 已知問題（KNOWN_ISSUES）
 
-> 最後更新：2026-11-04
+> 最後更新：2026-11-07（2026-11-07 僅補 P0 harness 狀態；其餘內容與 2026-11-04 一致）
 > 來源：E1-R 查核（F-1～F-12，舊編號）、E1-R2-V 查核（F-13～F-17，舊編號）、**C-2a-1 Closeout（2026-11-03）**、**E2／P2 階段查核（2026-11-04）**、**v0.4.9 發布前修正 R-1／R-3（2026-11-04）**
 
 ## E2／P2 階段查核（2026-11-04）
@@ -22,7 +22,7 @@
 | C-5 | P2 | ✅ 已修（2026-11-04） | 主循環執行期間 OCR Debug 的點擊／按鍵測試按鈕仍可操作 → 與主循環共用同一組後台輸入狀態。已於循環執行期間停用，停止後依面板原狀還原 |
 | **C-4** | P2 | ℹ️ 已知限制 | `_last_error` 跨執行緒歸屬：`_reset_error_state()` 在取鎖之前、`last_error()` 不取鎖 → 兩執行緒交錯時可能互相覆蓋或遺失錯誤。**本次以 C-5 限制重疊操作**（循環執行期間停用除錯測試鈕），未引入 per-operation error handle。影響僅限診斷文字 |
 | **C-6** | P3 | ℹ️ 已知限制 | `_notified_conditions` 只在「規則被評估到且偵測失敗」時重新武裝。群組輪替期間（每幀只評估一條規則）條件若在不為真的期間未被觀察到，鎖存會過期 → 條件再次成立時不通知。修正需改變通知觸發條件，屬產品決策 |
-| **C-7** | P3 | ⬜ 未完成（待真機） | Frida 輸入取消與 Release 尚未完成真機驗證（見下方「待真機驗證」） |
+| **C-7** | P3 | ⬜ 未完成（待真機） | Frida 輸入取消與 Release 尚未完成真機驗證（見下方「待真機驗證」）。2026-11-07 補充：P0 真實整合驗證 harness 已落地（`0a8afbb`，需 `OTC_RUN_INPUT_INTEGRATION=1`），但本次重跑 13 項 skip、未實際執行 |
 | **C-8** | P3 | ✅ 已修（2026-11-04） | 本文件與 CURRENT_STATUS／NEXT_STEPS／HANDOFF 的狀態落後於程式碼 → 已同步 |
 | C-9 | P3 | ℹ️ 保留（原本裁定） | 後台失敗回報僅在 frida 模式生效；pynput／hybrid 模式的失敗語意維持原樣 |
 | C-10 | P3 | ℹ️ 保留（原本裁定） | 死碼清理：`RuleRunOutcome` 死成員、`_preflight_last_fingerprint` 死欄位、annotation-only 綁定 |
@@ -86,7 +86,7 @@
 
 | 項目 | 說明 | 狀態 |
 |---|---|---|
-| Frida 輸入取消與 Release 語意 | E2-A2／E2-A2-F1 的取消閘與 UP 必定送出，目前只以假物件測試覆蓋（`tests/test_frida_cancel.py` 16 項）；真實 Frida 注入只驗握手／spoof／key／focus（`tests/test_frida_real.py` 5 項），不含取消與放開 | ⬜ 未驗證 |
+| Frida 輸入取消與 Release 語意 | E2-A2／E2-A2-F1 的取消閘與 UP 必定送出，目前只以假物件測試覆蓋（`tests/test_frida_cancel.py` 16 項）；真實 Frida 注入只驗握手／spoof／key／focus（`tests/test_frida_real.py` 5 項），不含取消與放開。P0 harness 已備（`tests/test_input_cancel_release_integration.py`，需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行），2026-11-07 本次重跑 skip、未實際執行 | ⬜ 未驗證 |
 | frida 拖曳是否真的拖得動 | F-13 修正後序列 `down → move → up`，真實遊戲是否需要更長按住時間未知 | ⬜ 未驗證 |
 | 拖曳間隔 | DOWN→MOVE、MOVE→UP 各間隔 0.05s，沿用原常數 | ⬜ 未驗證 |
 | hybrid 拖曳（前景路徑） | 本階段未跑真機 | ⬜ 未驗證 |

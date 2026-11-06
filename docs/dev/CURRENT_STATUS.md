@@ -1,7 +1,8 @@
 # 目前狀態（CURRENT_STATUS）
 
-> 最後更新：2026-11-04
+> 最後更新：2026-11-07
 > 對應階段：**E2／P2 階段收斂 ＋ v0.4.9 發布前修正**（Global Stop／輸入取消／後台失敗回報／通知去重／R-1／R-3／R-5）
+> 2026-11-07 補充：AppCompat 自癒、OCR Debug UX、輸入整合驗證 harness（P0，未執行）、hybrid 啟動最小化、數字加總閘門、死碼清理——詳見下方「2026-11-05～11-07 補充」
 
 ## 階段進度
 
@@ -26,12 +27,10 @@
 ## 工作區狀態
 
 - branch：`master`
-- 本次工作區起點：HEAD = `d1184e0` = `origin/master`（ahead/behind **0/0**）
-- 本次修正 commit：`45aefbd`（R-1／R-3 修正＋測試）、`0f77931`（R-5 修正＋測試），**尚未 push**
-- 遠端 `origin/master` = `d1184e0`（`docs: 更新 E2 階段進度與已知問題`）
-- **staged：空**；工作區產品修改乾淨（文件 commit 建立前）
-- **保留未納入 commit**：`.agents/`、`skills-lock.json`（工具檔，與產品無關）
-- 距上次發布（`v0.4.8`）累計 **26 顆** commit 未發布（含本次文件 commit）
+- HEAD = `d49ea3c` = `origin/master`（ahead/behind **0/0**，2026-11-07 `git fetch` 後核實）
+- **staged：空**；工作區乾淨（2026-11-07 盤點）
+- 距上次發布（`v0.4.8`）累計 **59 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`）
+- **v0.4.9 尚未發布**：無 tag、無 GitHub Release（`gh release view v0.4.9` → not found）；`_version.py`／`pyproject.toml` 仍為 `0.4.8`，最新正式版仍是 `v0.4.8`（2026-10-24）
 
 ## 測試統計（實測）
 
@@ -49,14 +48,23 @@
 | `tests/test_bg_click_error_reporting.py`（新增，R-1） | 12 passed ✅ |
 | `tests/test_debug_verify_abort_on_run.py`（新增，R-3） | 16 passed ✅ |
 | `tests/test_debug_gate_before_loop_start.py`（新增，R-5） | 11 passed ✅ |
-| **完整套件** | **1514 passed, 13 skipped**（2026-11-04 測試結果，非本次重跑） |
+| **完整套件** | **1589 passed, 13 skipped**（2026-11-07 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
+
+## 2026-11-05～11-07 補充（E2／P2 之後已落地）
+
+- **AppCompat 自癒**（`989fd10`、`a957e3b`、`7059ce4`）：清除「以系統管理員身分執行」RUNASADMIN 層級，解決 Velopack 安裝／更新失敗（os error -2147024156）；`core/13_appcompat.py` + `tests/test_appcompat.py`。
+- **OCR Debug UX**（`2375f42`～`535c80a`、`b0d11c1`）：Visual 畫面差異、文字差異分析、OCR 框開關、比較切換、診斷精簡；測試隔離使用者設定檔（`f4fe6ae`）。
+- **輸入整合驗證 harness（P0）**（`600c393`、`4db77f`、`0a8afbb`）：`devtools/input_target.py`（測試目標程序）＋`devtools/input_test_bench.py`（工作台）＋`tests/test_input_cancel_release_integration.py`（A/B/C 取消／Release 驗證，需 `OTC_RUN_INPUT_INTEGRATION=1`）。**僅新增測試 harness，未修改產品程式碼；2026-11-07 本次重跑中 13 項 skip，未實際執行，不得視為已驗證。**
+- **Hybrid 啟動最小化**（`10ea662`）：啟動循環前先最小化主視窗，避免前景保護擋住第一次循環。
+- **數字加總閘門**（`ed88873`）：加總步驟新增可選閘門（ADR-0007、`tests/test_number_sum.py`、`tests/test_sum_gate_form.py`）。
+- **死碼清理**（`8eac072`、`2fc9f67`、`d49ea3c`）：移除無法觸及的緊急停止路徑、全域執行模式 API、未使用函式。
 
 ## 品質關卡狀態
 
 | 關卡 | 狀態 | 備註 |
 |---|---|---|
 | `ruff check` | ✅ All checks passed | exit 0 |
-| 完整 pytest | ✅ 1514 passed, 13 skipped | 2026-11-04 測試結果，非本次重跑；含 i18n 三語測試 |
+| 完整 pytest | ✅ 1589 passed, 13 skipped | 2026-11-07 本次重跑，exit 0；含 i18n 三語測試；13 skipped 為真實整合測試（需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行） |
 | `git diff --check` | ✅ exit 0 | 僅既有 LF→CRLF warning |
 | core self-check（4 檔） | ✅ 全 exit=0 | `03_pynput_input`／`05_main_loop`／`16_bg_input`／`18_frida_bg` |
 | 座標校正 `--self-check` | ✅ passed | |

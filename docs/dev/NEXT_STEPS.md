@@ -1,6 +1,6 @@
 # 下一步（NEXT_STEPS）
 
-> 最後更新：2026-11-04
+> 最後更新：2026-11-07（HEAD `d49ea3c` = `origin/master`，距 v0.4.8 共 59 顆 commit 未發布；v0.4.9 尚未發布——無 tag、無 GitHub Release）
 
 ## 建議順序
 
@@ -16,10 +16,7 @@
 - 發布說明以 `docs/dev/CHANGELOG.md` 的 v0.4.9 草稿為基礎
 
 ### 1. 真機驗證（阻塞 frida 相關結案宣告）
-- **Frida 輸入取消與 Release 語意**（E2-A2／E2-A2-F1）：目前只以假物件測試覆蓋
-  （`tests/test_frida_cancel.py` 16 項）。真實 Frida 注入測試
-  （`tests/test_frida_real.py` 5 項）只驗握手／spoof／key／focus，不含取消與放開。
-  需在真實遊戲驗證：停止後不再送出 DOWN、UP 必定送出、放開失敗可被回報。
+- **Frida 輸入取消與 Release 語意**（E2-A2／E2-A2-F1）：真實整合驗證 harness 已備（P0：`600c393` 目標程序 ＋ `4db77f` 工作台 ＋ `0a8afbb` A/B/C 測試，需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行），但 2026-11-07 本次重跑中 13 項 skip，**尚未實際執行，不得宣稱已驗證**。需在真實遊戲驗證：停止後不再送出 DOWN、UP 必定送出、放開失敗可被回報。
 - **frida 模式拖曳**：序列 `down → move → up`，真實遊戲是否需要更長按住時間未知。
 - **hybrid 前景路徑拖曳**：未驗證。
 - 至少在一款支援 frida 後台的遊戲上驗證；不通過則回到 §拖曳 章節調整間隔／游標同步策略。
@@ -72,6 +69,11 @@
 - C-1／C-2／C-3／C-5 診斷與輸入回報缺陷 → **已完成**
 - R-1 Click PostMessage 失敗原因、R-3 在途驗證 worker 中止 → **已完成（`45aefbd`）**
 - R-5 MainLoop 啟動與 OCR Debug 閘門的競態窗口 → **已完成（`0f77931`）**
+- AppCompat 自癒（RUNASADMIN 層級清除）→ **已完成（`989fd10`、`a957e3b`）**
+- OCR Debug UX（Visual／文字差異、OCR 框開關）→ **已完成（`2375f42`～`535c80a`）**
+- Hybrid 啟動最小化 → **已完成（`10ea662`）**
+- 數字加總閘門（ADR-0007）→ **已完成（`ed88873`）**
+- 輸入整合驗證 harness（P0）→ **已落地但未執行**：僅測試 harness，未修改產品程式碼；執行結果仍待 §1
 
 ## 暫時不要做的事
 

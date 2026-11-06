@@ -1,6 +1,6 @@
 # 交接摘要（HANDOFF）
 
-> 最後更新：2026-11-04 ｜ 對應階段：**E2／P2 階段收斂 ＋ v0.4.9 發布前修正**
+> 最後更新：2026-11-07 ｜ 對應階段：**E2／P2 階段收斂 ＋ v0.4.9 發布前修正**（2026-11-07 補充：AppCompat 自癒、OCR Debug UX、P0 整合驗證 harness（未執行）、hybrid 啟動最小化、數字加總閘門、死碼清理——見 `CURRENT_STATUS.md`「2026-11-05～11-07 補充」）
 
 ## 一句話
 
@@ -91,10 +91,9 @@ C-1 → 2 項失敗、C-2 scroll → 2 項、C-2 drag → 3 項、C-2 回報 →
 
 ## 交接重點
 
-- **工作區已收斂**：E2／P2 階段的程式碼與測試在 `2f1aa9c`（31 檔，+5153／−112）；R-1／R-3 修正與新測試在 `45aefbd`（6 檔，+779／−100）；R-5 修正與新測試在 `0f77931`（3 檔，+331／−4）；文件為本次文件 commit。
-- **保留未納入 commit**：`.agents/`、`skills-lock.json`（工具檔，不刪除、不納入）。
-- branch `master`，HEAD `0f77931`，`origin/master` = `d1184e0`（前次已 push），本次領先 3 顆，**尚未 push**。
-- 距上次發布（`v0.4.8`）累計 26 顆 commit 未發布（含本次文件 commit）；下一步是 `release.ps1 -Version "0.4.9" -FeedTest`。
+- **工作區已收斂**：E2／P2 階段的程式碼與測試在 `2f1aa9c`（31 檔，+5153／−112）；R-1／R-3 修正與新測試在 `45aefbd`（6 檔，+779／−100）；R-5 修正與新測試在 `0f77931`（3 檔，+331／−4）。
+- branch `master`，HEAD `d49ea3c`，`origin/master` = `d49ea3c`（2026-11-07 `git fetch` 後核實，ahead/behind 0/0）；工作區乾淨。
+- 距上次發布（`v0.4.8`）累計 59 顆 commit 未發布；下一步是 `release.ps1 -Version "0.4.9" -FeedTest`。**v0.4.9 尚未發布**（無 tag、無 GitHub Release，2026-11-07 核實）。
 - 既有假 `_migration` **不清洗**（產品決策 keep）——使用者任務檔內既有標記保持原狀。
 - 並行（∥）群組「**全員**被擋下」＝等待語義，修好→儲存→自動恢復；全員停用（disabled）的並行群組 stall **另案**。
 - **真機 frida／hybrid 拖曳、frida 輸入取消與 Release 仍未驗證。**
