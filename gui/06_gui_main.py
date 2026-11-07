@@ -1030,6 +1030,16 @@ class _StepListWidget(QWidget):
     def _delete_step(self, idx: int):
         if not self.commit_pending():
             return
+        if (
+            QMessageBox.question(
+                self,
+                T("ui.delete_step"),
+                T("dialog.delete_step_confirm", idx=idx + 1),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
         self._steps.pop(idx)
         self._rebuild()
         self.steps_changed.emit()

@@ -588,8 +588,15 @@ def test_step_list_partial_end_blocks_rebuild_and_get_steps_keeps_list(step_list
     assert step_list._expanded_form is form
 
 
-def test_step_list_complete_end_still_moves_deletes_and_replaces(step_list):
+def test_step_list_complete_end_still_moves_deletes_and_replaces(step_list, monkeypatch):
     """完整終點不得被保護機制阻擋（正常流程回歸）。"""
+    from PyQt6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
     drag = _drag_step(end_x=0.4, end_y=0.6)
     wait = Step(type="wait", params={"ms": 100})
     assert step_list.set_steps([drag, wait]) is True
@@ -1971,3 +1978,43 @@ def test_drag_cancel_keeps_params_untouched(step_list, qapp):
         form.deleteLater()
         qapp.processEvents()
     assert step.params == before
+
+
+# ── 8：UX-C7 — 步驟刪除前確認 ───────────────────────────────────────────────
+
+
+def _two_steps():
+    return [
+        Step(type="wait", params={"ms": 500}),
+        Step(type="notify", params={"message": "hi"}),
+    ]
+
+
+def test_delete_step_cancel_keeps_steps(step_list, qapp, monkeypatch):
+    """取消刪除：步驟、順序完全不變。"""
+    from PyQt6.QtWidgets import QMessageBox
+
+    steps = _two_steps()
+    assert step_list.set_steps(steps) is True
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.No),
+    )
+    step_list._delete_step(0)
+    assert [s.type for s in step_list.get_steps()] == ["wait", "notify"]
+
+
+def test_delete_step_confirm_removes_step(step_list, qapp, monkeypatch):
+    """確認刪除：只移除指定的步驟，其餘順序不變。"""
+    from PyQt6.QtWidgets import QMessageBox
+
+    steps = _two_steps()
+    assert step_list.set_steps(steps) is True
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    step_list._delete_step(0)
+    assert [s.type for s in step_list.get_steps()] == ["notify"]

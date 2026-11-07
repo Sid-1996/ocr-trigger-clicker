@@ -29,6 +29,17 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QMimeData, QPointF, Qt  # noqa: E402
 from PyQt6.QtGui import QDropEvent  # noqa: E402
+from PyQt6.QtWidgets import QMessageBox  # noqa: E402
+
+
+def _yes_delete(monkeypatch):
+    """步驟刪除確認 → 一律回 Yes（保持既有測試的刪除語意）。"""
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+
 
 # ── 輔助 ────────────────────────────────────────────────────────────────────
 
@@ -370,8 +381,9 @@ def test_steps_changed_collapses_expanded_form_current_behavior(
 
 
 def test_delete_step_removes_target_and_keeps_order(
-    real_mainwindow, write_task, make_step, make_rule
+    real_mainwindow, write_task, make_step, make_rule, monkeypatch
 ):
+    _yes_delete(monkeypatch)
     win = real_mainwindow
     write_task(
         "t1",
@@ -406,8 +418,9 @@ def test_delete_selected_step_without_expanded_step_is_noop(
 
 
 def test_delete_selected_step_removes_expanded_step(
-    real_mainwindow, write_task, make_step, make_rule
+    real_mainwindow, write_task, make_step, make_rule, monkeypatch
 ):
+    _yes_delete(monkeypatch)
     win = real_mainwindow
     write_task(
         "t1",
@@ -500,9 +513,10 @@ def test_drop_event_with_invalid_target_is_ignored(
 
 
 def test_structure_change_emits_steps_changed_once(
-    real_mainwindow, write_task, make_step, make_rule
+    real_mainwindow, write_task, make_step, make_rule, monkeypatch
 ):
     """結構變更（刪除）只應 emit 一次 steps_changed。"""
+    _yes_delete(monkeypatch)
     win = real_mainwindow
     write_task(
         "t1",
