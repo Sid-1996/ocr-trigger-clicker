@@ -5681,15 +5681,27 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._task_new_btn)
         toolbar.addWidget(self._task_rename_btn)
         toolbar.addWidget(self._task_del_btn)
-        toolbar.addWidget(self._task_import_btn)
-        toolbar.addWidget(self._task_export_btn)
+        # UX 2B-10：匯入／匯出／分享收納至「任務管理」選單（低頻任務管理操作）；
+        # 原按鈕物件保留（文字/tooltip/handler/enabled 條件不變），選單項目經
+        # QAction 轉發到原按鈕的 click()，仍走同一條 handler 連接。
         self._task_share_btn = QPushButton("🌐 " + T("main.share_task"))
         self._task_share_btn.setToolTip(T("tooltip.task_share"))
-        _share_menu = QMenu(self._task_share_btn)
+        _share_menu = QMenu(self)
+        _share_menu.setTitle("🌐 " + T("main.share_task"))
         _share_menu.addAction(T("share.open_folder"), self._open_tasks_folder)
         _share_menu.addAction(T("share.go_website"), self._open_share_website)
-        self._task_share_btn.setMenu(_share_menu)
-        toolbar.addWidget(self._task_share_btn)
+        self._task_menu = QMenu(self)
+        self._task_import_action = self._task_menu.addAction(
+            self._task_import_btn.text(), self._task_import_btn.click
+        )
+        self._task_export_action = self._task_menu.addAction(
+            self._task_export_btn.text(), self._task_export_btn.click
+        )
+        self._task_menu.addSeparator()
+        self._task_menu.addMenu(_share_menu)
+        self._task_menu_btn = QPushButton(T("main.task_menu"))
+        self._task_menu_btn.setMenu(self._task_menu)
+        toolbar.addWidget(self._task_menu_btn)
 
         # -- Action section --
         self._btn_toggle = QPushButton(T("step_form.start_btn"))
@@ -5706,23 +5718,39 @@ class MainWindow(QMainWindow):
         self._sponsor_btn = QPushButton(T("main.sponsor"))
         self._sponsor_btn.setToolTip(T("tooltip.sponsor"))
         self._sponsor_btn.clicked.connect(self._open_sponsor)
-        toolbar.addWidget(self._sponsor_btn)
         self._settings_btn = QPushButton(T("main.settings"))
         self._settings_btn.setToolTip(T("tooltip.settings"))
         self._settings_btn.clicked.connect(self._open_settings)
-        toolbar.addWidget(self._settings_btn)
         self._about_btn = QPushButton(T("main.about"))
         self._about_btn.setToolTip(T("tooltip.about", version=__version__, author=__author__))
         self._about_btn.clicked.connect(self._show_about)
-        toolbar.addWidget(self._about_btn)
         self._guide_btn = QPushButton(T("main.guide"))
         self._guide_btn.setToolTip(T("tooltip.guide"))
         self._guide_btn.clicked.connect(self._open_guide)
-        toolbar.addWidget(self._guide_btn)
         self._update_btn = QPushButton(T("main.update"))
         self._update_btn.setToolTip(T("tooltip.update"))
         self._update_btn.clicked.connect(lambda: self._check_version(force=True))
-        toolbar.addWidget(self._update_btn)
+        # UX 2B-10：贊助／設定／關於／指南／更新收納至「更多」選單（低頻資訊操作）；
+        # 原按鈕物件保留，選單項目經 QAction 轉發到原按鈕的 click()。
+        self._more_menu = QMenu(self)
+        self._sponsor_action = self._more_menu.addAction(
+            self._sponsor_btn.text(), self._sponsor_btn.click
+        )
+        self._settings_action = self._more_menu.addAction(
+            self._settings_btn.text(), self._settings_btn.click
+        )
+        self._about_action = self._more_menu.addAction(
+            self._about_btn.text(), self._about_btn.click
+        )
+        self._guide_action = self._more_menu.addAction(
+            self._guide_btn.text(), self._guide_btn.click
+        )
+        self._update_action = self._more_menu.addAction(
+            self._update_btn.text(), self._update_btn.click
+        )
+        self._more_menu_btn = QPushButton(T("main.more_menu"))
+        self._more_menu_btn.setMenu(self._more_menu)
+        toolbar.addWidget(self._more_menu_btn)
         layout.addLayout(toolbar)
 
         # === Middle: stacked pages (rules / OCR debug) ===
@@ -8871,6 +8899,13 @@ class MainWindow(QMainWindow):
         self._task_del_btn.setEnabled(enabled)
         self._task_import_btn.setEnabled(enabled)
         self._task_export_btn.setEnabled(enabled)
+        # UX 2B-10：選單項目與原按鈕同步啟用狀態（fake 替身沒有 action 時跳過）
+        _import_action = getattr(self, "_task_import_action", None)
+        if _import_action is not None:
+            _import_action.setEnabled(enabled)
+        _export_action = getattr(self, "_task_export_action", None)
+        if _export_action is not None:
+            _export_action.setEnabled(enabled)
         self._edit_test_btn.setEnabled(editing)
         self._edit_name.setEnabled(editing)
         self._edit_enabled.setEnabled(editing)

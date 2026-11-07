@@ -73,6 +73,8 @@
   "template_helper.space": "Space",
   "main.window": "Window:",
   "main.task": "Task:",
+  "main.task_menu": "Tasks ▾",
+  "main.more_menu": "More ▾",
   "main.rule_list": "Rule List",
   "main.name": "Name:",
   "main.enabled": "Enabled:",

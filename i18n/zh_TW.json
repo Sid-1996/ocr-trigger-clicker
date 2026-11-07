@@ -73,6 +73,8 @@
   "template_helper.space": "空白",
   "main.window": "視窗:",
   "main.task": "任務:",
+  "main.task_menu": "任務管理 ▾",
+  "main.more_menu": "更多 ▾",
   "main.rule_list": "規則列表",
   "main.name": "名稱:",
   "main.enabled": "啟用:",

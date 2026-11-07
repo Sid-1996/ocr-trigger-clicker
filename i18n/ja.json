@@ -79,6 +79,8 @@
   "template_helper.space": "空白",
   "main.window": "ウィンドウ:",
   "main.task": "タスク:",
+  "main.task_menu": "タスク管理 ▾",
+  "main.more_menu": "その他 ▾",
   "main.rule_list": "ルール一覧",
   "main.name": "名前:",
   "main.enabled": "有効:",
