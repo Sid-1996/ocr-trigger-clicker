@@ -68,6 +68,7 @@ class ExecutionLogWidget(QWidget):
         "wait": "exec_log.result.wait",
         "completed": "exec_log.result.completed",
         "triggered": "exec_log.result.triggered",
+        "blocked": "exec_log.result.blocked",
     }
 
     def _populate(self, entries: list[dict]):

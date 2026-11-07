@@ -86,3 +86,44 @@ def test_populate_reuses_existing_rows_when_unchanged():
     assert widget._table.rowCount() == 1
     assert widget._table.item(0, 1).text() == "B"
     widget.deleteLater()
+
+
+def test_populate_blocked_result_is_translated():
+    """Preflight BLOCKED 以 result="blocked" 寫入日誌（05_main_loop._record_preflight_block）；
+    必須顯示翻譯而非英文原文 "blocked"。"""
+    widget = ExecutionLogWidget()
+    widget._populate(
+        [
+            {
+                "ts": "12:00",
+                "rule_name": "Blocked rule",
+                "step_idx": -1,
+                "step_type": "preflight",
+                "result": "blocked",
+                "detail": "偵測關鍵字為空白",
+            }
+        ]
+    )
+    assert widget._table.rowCount() == 1
+    assert widget._table.item(0, 3).text() == T("exec_log.result.blocked")
+    assert widget._table.item(0, 3).text() != "blocked"
+    widget.deleteLater()
+
+
+def test_populate_unknown_result_falls_back_to_raw():
+    """未知 result 維持既有 fallback：顯示原始字串，不吞掉。"""
+    widget = ExecutionLogWidget()
+    widget._populate(
+        [
+            {
+                "ts": "12:00",
+                "rule_name": "A",
+                "step_idx": 0,
+                "step_type": "click",
+                "result": "some_future_result",
+                "detail": "",
+            }
+        ]
+    )
+    assert widget._table.item(0, 3).text() == "some_future_result"
+    widget.deleteLater()
