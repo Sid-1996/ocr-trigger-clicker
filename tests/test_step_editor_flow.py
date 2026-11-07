@@ -532,6 +532,41 @@ def test_structure_change_emits_steps_changed_once(
     assert len(emitted) == 1
 
 
+# ── UX 2B-02：全部啟用／停用按鈕文案 ─────────────────────────────────────
+
+
+def test_toggle_all_groups_text_and_state(real_mainwindow, write_task, make_rule, rule_engine):
+    """按鈕文字反映實際操作結果（全部啟用/全部停用），且不啟動 MainLoop。"""
+    from i18n import T
+
+    win = real_mainwindow
+    write_task("t1", [make_rule("r0", "規則零", [])])
+    _load_task(win, "t1")
+
+    def set_groups(enableds):
+        win._groups = [
+            rule_engine.RuleGroup(id=f"g{i}", name=f"群組{i}", enabled=e, rule_ids=[])
+            for i, e in enumerate(enableds)
+        ]
+        win._refresh_rule_list()
+
+    # 全部停用 → 按鈕顯示「全部啟用」
+    set_groups([False, False])
+    assert win._toggle_all_btn.text() == T("main.toggle_all_on")
+    win._toggle_all_groups()
+    assert [g.enabled for g in win._groups] == [True, True]
+    assert win._toggle_all_btn.text() == T("main.toggle_all_off")
+
+    # 混合狀態 → 按鈕顯示「全部停用」，點擊後全部停用（既有語意不變）
+    set_groups([True, False])
+    assert win._toggle_all_btn.text() == T("main.toggle_all_off")
+    win._toggle_all_groups()
+    assert [g.enabled for g in win._groups] == [False, False]
+
+    # 不得意外啟動 MainLoop
+    assert win._loop is None or not win._loop.is_running
+
+
 def test_add_step_appends_and_persists(
     real_mainwindow, write_task, make_step, make_rule, call_recorder
 ):
