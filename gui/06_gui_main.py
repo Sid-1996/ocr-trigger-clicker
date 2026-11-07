@@ -272,6 +272,41 @@ def _default_notify_preview(
 
 # ── Step list helpers ──
 
+# UX 2B-03：自動儲存狀態顯示（僅「已儲存」代表實際 persistence 成功）
+_SAVE_STATE_TEXTS = {
+    "saved": "status.saved",
+    "dirty": "status.unsaved",
+    "saving": "status.saving",
+    "failed": "status.save_failed",
+}
+_SAVE_STATE_COLORS = {
+    "saved": "#4caf50",
+    "dirty": "#b7791f",
+    "saving": "#666666",
+    "failed": "#c0392b",
+}
+
+
+def _apply_save_state(win, state: str):
+    """UX 2B-03：更新儲存狀態指示（文字與顏色）。
+
+    「已儲存」只在實際 persistence 寫入成功後才會出現；
+    模組層函式（而非方法）以相容測試用的 fake 視窗（SimpleNamespace，
+    經 unbound 呼叫 MainWindow 方法）。
+    """
+    win._save_state = state
+    label = getattr(win, "_saved_label", None)
+    if label is None:
+        return
+    label.setText(T(_SAVE_STATE_TEXTS[state]))
+    label.setStyleSheet(f"color: {_SAVE_STATE_COLORS[state]}; font-weight: bold;")
+
+
+def _refresh_save_label(win):
+    """依目前儲存狀態重繪指示（切換規則/任務時不得誤顯示為已儲存）。"""
+    _apply_save_state(win, getattr(win, "_save_state", "saved"))
+
+
 _STEP_TYPE_ICONS = {
     "detect": "🔍",
     "match_image": "🖼",
@@ -5358,6 +5393,10 @@ class MainWindow(QMainWindow):
             self._collapsed_groups: set[str] = set()
             self._suppress_collapse = False
             self._is_starting = False
+            # UX 2B-03：自動儲存狀態 + 世代計數（寫入期間再次修改時，
+            # 舊一輪寫入成功不得清除新一輪的 dirty 狀態）。
+            self._save_state = "saved"
+            self._save_gen = 0
             # hybrid 啟動前會最小化主視窗（見 _minimize_for_loop_start）；
             # 啟動失敗時需依此旗標把視窗還原，避免使用者找不到工具。
             self._minimized_for_loop = False
@@ -6054,6 +6093,8 @@ class MainWindow(QMainWindow):
             self._task_load_error = None
             self._task_load_failed_notified = False
             self._refresh_rule_list()
+            self._save_gen = 0
+            _apply_save_state(self, "saved")
             return
         self._current_task = name
         self._task_load_failed = False
@@ -6107,6 +6148,9 @@ class MainWindow(QMainWindow):
         config["last_task"] = name
         self._save_config(config)
         self._refresh_rule_list()
+        # UX 2B-03：新任務載入完成：無待儲存變更（前一任務的未存資料已於上方 flush）。
+        self._save_gen = 0
+        _apply_save_state(self, "saved")
         self._update_edit_enabled(not (self._loop and self._loop.is_running))
         if hasattr(self, "_debug_panel") and self._debug_panel is not None:
             self._debug_panel.clear_results()
@@ -7019,6 +7063,7 @@ class MainWindow(QMainWindow):
             return
         self._edit_stack.setCurrentIndex(1)
         self._saved_label.setVisible(True)
+        _refresh_save_label(self)
         self._edit_test_btn.setVisible(True)
         self._edit_test_btn.setEnabled(True)
         self._debug_panel.set_has_active_rule(True)
@@ -7683,7 +7728,15 @@ class MainWindow(QMainWindow):
         self._schedule_save()
         self._refresh_rule_list()
 
+    def _set_save_state(self, state: str):
+        _apply_save_state(self, state)
+
+    def _refresh_save_label(self):
+        _refresh_save_label(self)
+
     def _schedule_save(self):
+        self._save_gen = getattr(self, "_save_gen", 0) + 1
+        _apply_save_state(self, "dirty")
         self._save_timer.start()
 
     def _ensure_steps_committed(self) -> bool:
@@ -7742,24 +7795,36 @@ class MainWindow(QMainWindow):
         # 寫入磁碟前先提交目前展開的 Step 表單：
         # 使用者可能尚未讓輸入框失去焦點（未觸發 editingFinished），
         # 最新值只在 widget 裡，不提交就會把舊值寫回磁碟。
+        # 提交失敗（例如 Drag 半套終點）尚未嘗試 persistence：維持 dirty，不誤報。
         if not self._commit_open_step_form():
             return False
+        # UX 2B-03：只有實際寫入成功才顯示「已儲存」；寫入期間再次修改時
+        # （_save_gen 已變），舊一輪成功不得清除新一輪的 dirty 狀態。
+        gen = getattr(self, "_save_gen", 0)
+        _apply_save_state(self, "saving")
         task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
         logging.debug(
             "[_do_debounced_save] rules=%d groups=%d", len(self._rules), len(self._groups)
         )
-        if self._loop:
-            with self._loop._rules_lock:
+        try:
+            if self._loop:
+                with self._loop._rules_lock:
+                    ok = save_task_with_groups(self._rules, self._groups, task_path)
+                    if ok:
+                        self._loop._load_rules()
+            else:
                 ok = save_task_with_groups(self._rules, self._groups, task_path)
-                if ok:
-                    self._loop._load_rules()
-        else:
-            ok = save_task_with_groups(self._rules, self._groups, task_path)
-        if not ok:
-            msg = T("notif.task_save_failed", path=task_path)
-            _main_loop_mod.log_main(msg)
-            self._notif_stack.push(T("notif.task_save_failed_short"))
-        return ok
+        except Exception:
+            _apply_save_state(self, "failed")
+            raise
+        if ok:
+            _apply_save_state(self, "saved" if getattr(self, "_save_gen", 0) == gen else "dirty")
+            return True
+        _apply_save_state(self, "failed")
+        msg = T("notif.task_save_failed", path=task_path)
+        _main_loop_mod.log_main(msg)
+        self._notif_stack.push(T("notif.task_save_failed_short"))
+        return False
 
     def _flush_save(self) -> bool:
         if not self._current_task:
