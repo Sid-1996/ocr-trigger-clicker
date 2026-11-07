@@ -52,6 +52,23 @@ def test_language_keys_match():
     assert not any(missing.values()), f"Inconsistent language keys: {missing}"
 
 
+def test_guide_text_has_no_obsolete_ui_names():
+    """UX 2B-01：指南不得指向不存在的 UI（「儲存規則」/右上角「？」按鈕）。"""
+    langs = _load_langs()
+    zh = langs["zh_TW"]
+    guide_keys = [
+        k for k in zh if k.startswith("guide.") or k in ("ui.start_guide", "step_form.detect_hint")
+    ]
+    assert guide_keys
+    for key in guide_keys:
+        text = zh[key]
+        assert "儲存規則" not in text, f"過時文案仍在 {key}: {text!r}"
+        assert "右上角" not in text, f"過時方位仍在 {key}: {text!r}"
+    assert "新增規則" in zh["guide.step2"]
+    assert "測試" in zh["guide.step4"]
+    assert "自動儲存" in zh["step_form.detect_hint"]
+
+
 def test_langid_to_code():
     from i18n import _langid_to_code
 
