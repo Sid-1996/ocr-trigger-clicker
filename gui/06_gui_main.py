@@ -2877,11 +2877,11 @@ class _VerifyWidget(QWidget):
         form.addRow(_sep2)
         # on_fail for verify (no stop) — canonical order minus stop
         self._on_fail = _NoWheelCombo()
-        self._on_fail.addItem(T("step_form.of_skip_rule", default="跳過此規則"), "advance")
-        self._on_fail.addItem(T("step_form.of_jump_step", default="跳至步驟"), "skip")
-        self._on_fail.addItem(T("step_form.of_jump_rule", default="跳轉規則"), "jump")
+        self._on_fail.addItem(T("step_form.of_skip_rule", default="換下一條規則"), "advance")
+        self._on_fail.addItem(T("step_form.of_jump_step", default="跳到指定步驟"), "skip")
+        self._on_fail.addItem(T("step_form.of_jump_rule", default="跳到指定規則"), "jump")
         self._on_fail.addItem(T("step_form.of_key_continue", default="按鍵後繼續"), "key")
-        self._on_fail.addItem(T("step_form.of_notify_stop", default="通知並停止"), "notify")
+        self._on_fail.addItem(T("step_form.of_notify_stop", default="通知並停止群組"), "notify")
         raw_vf = v.get("on_fail") if isinstance(v, dict) else None
         # C3: default advance (skip rule, gentle) instead of notify (stops groups)
         vf_act = raw_vf.get("action", "advance") if isinstance(raw_vf, dict) else "advance"
