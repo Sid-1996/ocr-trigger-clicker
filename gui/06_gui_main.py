@@ -977,6 +977,11 @@ class _StepListWidget(QWidget):
         return row
 
     def _expand_advanced(self, form):
+        # UX-C1：Detect / MatchImage 的 on_fail 預設收合（使用者主動展開），
+        # 不在打開表單時強制攤開；其他類型維持既有展開行為。
+        step = getattr(form, "_step", None)
+        if step is not None and getattr(step, "type", None) in ("detect", "match_image"):
+            return
         if hasattr(form, "_on_fail_expanded"):
             form._on_fail_expanded = True
             form._on_fail_container.setVisible(True)
@@ -2010,8 +2015,9 @@ class _DetectStepForm(QWidget):
         self._roi_btn.setToolTip(T("tooltip.roi"))
         if roi_cb:
             self._roi_btn.clicked.connect(self._pick_roi)
-        adv_form.addRow(T("step_form.detect_region"), self._roi_label)
-        adv_form.addRow("", self._roi_btn)
+        # UX-C1：偵測區域是基本設定（影響速度與準確度），放在基本區而非進階區。
+        form.addRow(T("step_form.detect_region"), self._roi_label)
+        form.addRow("", self._roi_btn)
 
         self._match_mode = _NoWheelCombo()
         self._match_mode.addItem(T("combo.contains"), "contains")

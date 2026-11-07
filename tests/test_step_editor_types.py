@@ -2018,3 +2018,51 @@ def test_delete_step_confirm_removes_step(step_list, qapp, monkeypatch):
     )
     step_list._delete_step(0)
     assert [s.type for s in step_list.get_steps()] == ["notify"]
+
+
+# ── 9：UX-C1 — Detect/MatchImage 基本設定與 on_fail 預設收合 ───────────────
+
+
+@pytest.mark.parametrize(
+    "step_type,params",
+    [
+        ("detect", {"text": "x"}),
+        ("match_image", {"template": "t.png"}),
+    ],
+)
+def test_detect_and_match_image_on_fail_collapsed_on_open(step_list, qapp, step_type, params):
+    """打開 Detect/MatchImage 表單時 on_fail 不得被強制展開。"""
+    step_list.set_steps([Step(type=step_type, params=params)])
+    step_list._toggle_expand(0)
+    form = step_list._expanded_form
+    assert form is not None
+    assert form._on_fail_expanded is False
+    assert form._on_fail_container.isVisibleTo(form) is False
+
+
+def test_compare_on_fail_still_expanded_on_open(step_list, qapp):
+    """其他類型（Compare）的展開行為維持不變：打開即展開進階區。"""
+    step_list.set_steps(
+        [Step(type="compare", params={"value": 1.0, "pattern": r"\d+", "operator": ">="})]
+    )
+    step_list._toggle_expand(0)
+    form = step_list._expanded_form
+    assert form is not None
+    assert form._on_fail_expanded is True
+
+
+def test_detect_roi_in_basic_form_layout(step_list, qapp):
+    """Detect 的偵測區域必須在基本區（主表單 layout），不在進階容器內。"""
+    step_list.set_steps([Step(type="detect", params={"text": "x"})])
+    form = step_list._build_form(0, step_list._steps[0])
+    try:
+        layout = form.layout()
+        assert layout.getWidgetPosition(form._roi_label)[0] >= 0
+        assert layout.getWidgetPosition(form._roi_btn)[0] >= 0
+        assert layout.getWidgetPosition(form._advanced_container)[0] >= 0
+        # 進階容器只能包含比對方式等欄位，不得包含 ROI
+        adv_layout = form._advanced_container.layout()
+        assert adv_layout.getWidgetPosition(form._roi_label)[0] == -1
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
