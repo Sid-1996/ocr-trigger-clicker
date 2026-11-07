@@ -532,6 +532,46 @@ def test_structure_change_emits_steps_changed_once(
     assert len(emitted) == 1
 
 
+# ── UX 2B-05：新增 Step 後自動展開 ─────────────────────────────────────
+
+
+def test_add_step_auto_expands_new_step(real_mainwindow, write_task, make_rule, make_step):
+    """新增後自動展開剛新增的步驟；連續新增展開最新的一條。"""
+    win = real_mainwindow
+    write_task("t1", [make_rule("r0", "規則零", [make_step("wait", ms=1)])])
+    _load_task(win, "t1")
+
+    win._add_step("detect")
+    lst = win._step_list
+    assert lst._expanded_idx == 1
+    assert lst._expanded_form is not None
+    assert lst._steps[lst._expanded_idx].type == "detect"
+
+    win._add_step("wait")
+    assert lst._expanded_idx == 2
+    assert lst._expanded_form is not None
+    assert lst._steps[lst._expanded_idx].type == "wait"
+    assert [s.type for s in lst.get_steps()] == ["wait", "detect", "wait"]
+
+
+def test_add_step_preserves_previously_expanded_edits(
+    real_mainwindow, write_task, make_rule, make_step
+):
+    """新增前已展開步驟的編輯不得遺失（commit 後再展開新步驟）。"""
+    win = real_mainwindow
+    write_task("t1", [make_rule("r0", "規則零", [make_step("wait", ms=1)])])
+    _load_task(win, "t1")
+    lst = win._step_list
+    lst._toggle_expand(0)
+    form = lst._expanded_form
+    form._ms.setValue(999)
+
+    win._add_step("notify")
+    assert lst._steps[0].params["ms"] == 999
+    assert lst._expanded_idx == 1
+    assert lst._steps[lst._expanded_idx].type == "notify"
+
+
 # ── UX 2B-02：全部啟用／停用按鈕文案 ─────────────────────────────────────
 
 

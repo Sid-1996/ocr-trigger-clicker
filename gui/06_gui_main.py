@@ -7455,6 +7455,9 @@ class MainWindow(QMainWindow):
         self._step_list.set_steps(rule.steps)
         self._save_current_rule()
         self._refresh_rule_list()
+        # UX 2B-05：新增後自動展開剛新增的步驟（必須在 _refresh_rule_list 之後，
+        # 否則 _show_rule_detail 的 set_steps 重建會吃掉展開狀態）。
+        self._step_list._toggle_expand(len(rule.steps) - 1)
 
     def _on_steps_changed(self):
         self._save_current_rule()
