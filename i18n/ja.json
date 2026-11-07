@@ -328,6 +328,8 @@
   "rule_summary.empty": "[空]",
   "ui.back_to_rules": "← ルール一覧へ戻る",
   "ui.add_first_rule": "← 「追加」をクリックして最初のルールを作成",
+  "ui.rule_search_placeholder": "ルール名を検索…",
+  "ui.rule_search_no_results": "「{query}」に一致するルールがありません",
   "ui.new_group": "新規グループ",
   "ui.new_rule": "新規ルール",
   "ui.uncategorized": "未分類",

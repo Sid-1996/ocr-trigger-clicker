@@ -322,6 +322,8 @@
   "rule_summary.empty": "[Empty]",
   "ui.back_to_rules": "← Back to Rules",
   "ui.add_first_rule": "← Click \"Add\" to create your first rule",
+  "ui.rule_search_placeholder": "Search rule names…",
+  "ui.rule_search_no_results": "No rules match \"{query}\"",
   "ui.new_group": "New Group",
   "ui.new_rule": "New Rule",
   "ui.uncategorized": "Uncategorized",

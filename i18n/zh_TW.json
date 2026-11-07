@@ -322,6 +322,8 @@
   "rule_summary.empty": "[空白]",
   "ui.back_to_rules": "← 返回規則",
   "ui.add_first_rule": "← 點擊「新增」建立第一條規則",
+  "ui.rule_search_placeholder": "搜尋規則名稱…",
+  "ui.rule_search_no_results": "找不到符合「{query}」的規則",
   "ui.new_group": "新群組",
   "ui.new_rule": "新規則",
   "ui.uncategorized": "未歸類",

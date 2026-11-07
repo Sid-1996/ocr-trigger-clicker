@@ -5419,6 +5419,8 @@ class MainWindow(QMainWindow):
             self._rules: list[Rule] = []
             self._collapsed_groups: set[str] = set()
             self._suppress_collapse = False
+            # UX 2B-04：搜尋前群組展開快照（None 表示未在搜尋中）
+            self._search_saved_expanded: dict[str, bool] | None = None
             self._is_starting = False
             # UX 2B-03：自動儲存狀態 + 世代計數（寫入期間再次修改時，
             # 舊一輪寫入成功不得清除新一輪的 dirty 狀態）。
@@ -5682,6 +5684,12 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.addWidget(QLabel(T("main.rule_list")))
 
+        # UX 2B-04：規則樹搜尋（即時過濾，僅隱藏/顯示節點，不改底層資料）
+        self._rule_search_edit = QLineEdit()
+        self._rule_search_edit.setPlaceholderText(T("ui.rule_search_placeholder"))
+        self._rule_search_edit.setClearButtonEnabled(True)
+        left_layout.addWidget(self._rule_search_edit)
+
         self._rule_list = _RuleTreeWidget()
         self._rule_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._rule_list.setMinimumWidth(180)
@@ -5702,6 +5710,12 @@ class MainWindow(QMainWindow):
         self._rule_hint = QLabel(T("ui.add_first_rule"))
         self._rule_hint.setStyleSheet("color: #888; font-size: 11px;")
         left_layout.addWidget(self._rule_hint)
+
+        self._rule_search_empty = QLabel("")
+        self._rule_search_empty.setStyleSheet("color: #888; font-size: 11px;")
+        self._rule_search_empty.setWordWrap(True)
+        self._rule_search_empty.setVisible(False)
+        left_layout.addWidget(self._rule_search_empty)
 
         rule_btn_bar = QHBoxLayout()
         self._add_group_btn = QPushButton(T("main.add_group"))
@@ -5917,6 +5931,7 @@ class MainWindow(QMainWindow):
         self._add_group_btn.clicked.connect(self._add_group)
         self._add_rule_btn.clicked.connect(self._add_rule)
         self._del_rule_btn.clicked.connect(self._delete_rule)
+        self._rule_search_edit.textChanged.connect(self._on_rule_search_changed)
         self._rule_list.currentItemChanged.connect(self._on_rule_selected)
         self._rule_list.itemCollapsed.connect(self._on_rule_item_collapsed)
         self._rule_list.itemExpanded.connect(self._on_rule_item_expanded)
@@ -6112,6 +6127,17 @@ class MainWindow(QMainWindow):
                 self._restore_task_selection()
                 self._report_task_save_failed()
                 return
+        # UX 2B-04：切換任務不殘留上一個任務的搜尋文字／展開快照／錯誤選取。
+        # 用 getattr 守門：fake 測試替身（SimpleNamespace）沒有搜尋 widget 時跳過。
+        _search_edit = getattr(self, "_rule_search_edit", None)
+        if _search_edit is not None and _search_edit.text():
+            _search_edit.blockSignals(True)
+            try:
+                _search_edit.clear()
+            finally:
+                _search_edit.blockSignals(False)
+        self._search_saved_expanded = None
+        self._selected_rule_id = None
         if not name:
             logging.debug("[task changed] rules=0")
             self._rules = []
@@ -6730,6 +6756,92 @@ class MainWindow(QMainWindow):
             parts.append(T("group_settings.order_parallel"))
         return "、".join(parts) + "\n" + T("tooltip.group_item")
 
+    # === 規則樹搜尋（UX 2B-04）===
+    def _rule_search_query(self) -> str:
+        edit = getattr(self, "_rule_search_edit", None)
+        if edit is None:
+            return ""
+        return edit.text().strip().casefold()
+
+    def _on_rule_search_changed(self, _text: str):
+        self._apply_rule_search()
+
+    def _apply_rule_search(self):
+        """即時過濾：只 setHidden，不重建樹、不改 _rules/_groups、不觸發選取。
+
+        - 規則名部分字串（不分大小寫）命中，或群組名命中（群組命中時顯示其全部規則）
+        - 有可見子規則的群組保持階層；無命中子規則且群組未命中時隱藏群組
+        - 搜尋期間自動展開有命中的群組（不寫 _collapsed_groups），清除時恢復快照
+        - 選取中的規則被隱藏時 currentItem 與右側編輯器保持不變
+        """
+        query = self._rule_search_query()
+        searching = bool(query)
+        rule_list = getattr(self, "_rule_list", None)
+        if rule_list is None:
+            return
+        if searching and getattr(self, "_search_saved_expanded", None) is None:
+            snapshot: dict[str, bool] = {}
+            for i in range(rule_list.topLevelItemCount()):
+                item = rule_list.topLevelItem(i)
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data and data[0] in ("group", "bg_group"):
+                    snapshot[data[1]] = item.isExpanded()
+            self._search_saved_expanded = snapshot
+        rule_map = {r.id: r for r in self._rules}
+        group_map = {g.id: g for g in self._groups}
+        visible_count = 0
+        prev_suppress = self._suppress_collapse
+        self._suppress_collapse = True
+        try:
+            for i in range(rule_list.topLevelItemCount()):
+                top = rule_list.topLevelItem(i)
+                data = top.data(0, Qt.ItemDataRole.UserRole)
+                if not data or data[0] not in ("group", "bg_group"):
+                    continue
+                gid = data[1]
+                if data[0] == "bg_group":
+                    group_name = T("ui.background_monitor")
+                else:
+                    group_obj = group_map.get(gid)
+                    group_name = group_display_name(group_obj) if group_obj is not None else ""
+                group_match = searching and query in group_name.casefold()
+                any_visible = False
+                for j in range(top.childCount()):
+                    child = top.child(j)
+                    cdata = child.data(0, Qt.ItemDataRole.UserRole)
+                    rid = cdata[1] if cdata and len(cdata) > 1 else None
+                    rule_obj = rule_map.get(rid)
+                    rule_name = rule_obj.name if rule_obj is not None else child.text(0)
+                    visible = (not searching) or group_match or query in rule_name.casefold()
+                    child.setHidden(not visible)
+                    if visible:
+                        any_visible = True
+                        visible_count += 1
+                top.setHidden(searching and not (group_match or any_visible))
+                if searching:
+                    if group_match or any_visible:
+                        top.setExpanded(True)
+                else:
+                    snapshot = getattr(self, "_search_saved_expanded", None)
+                    if snapshot is not None and gid in snapshot:
+                        top.setExpanded(snapshot[gid])
+        finally:
+            self._suppress_collapse = prev_suppress
+        if not searching:
+            self._search_saved_expanded = None
+        empty_label = getattr(self, "_rule_search_empty", None)
+        if empty_label is not None:
+            show_empty = searching and visible_count == 0 and len(self._rules) > 0
+            if show_empty:
+                empty_label.setText(T("ui.rule_search_no_results", query=query))
+            empty_label.setVisible(show_empty)
+        # 搜尋期間停用拖曳排序，避免隱藏節點讓 reorder 判斷錯位
+        rule_list.setDragDropMode(
+            QAbstractItemView.DragDropMode.NoDragDrop
+            if searching
+            else QAbstractItemView.DragDropMode.InternalMove
+        )
+
     def _refresh_rule_list(self, _expand_gid: str | None = None):
         parent = self._rule_list.parentWidget()
         if parent:
@@ -6834,10 +6946,51 @@ class MainWindow(QMainWindow):
         self._rule_list.blockSignals(False)
         self._rule_hint.setVisible(len(self._rules) == 0)
 
+        # UX 2B-04：依目前搜尋文字隱藏/顯示節點（新增/刪除/改名後結果同步最新資料）
+        self._apply_rule_search()
+        _search_query = self._rule_search_query()
+
         self._suppress_collapse = True
         try:
             if selected_item:
-                self._rule_list.setCurrentItem(selected_item)
+                _parent_hidden = (
+                    selected_item.parent() is not None and selected_item.parent().isHidden()
+                )
+                if selected_item.isHidden() or _parent_hidden:
+                    # 選取規則被搜尋隱藏：不改選、不清編輯器；僅以阻擋訊號方式
+                    # 恢復 currentItem，並直接同步編輯器到該規則（隱藏項目不保證
+                    # setCurrentItem 會發出 currentItemChanged）。
+                    self._rule_list.blockSignals(True)
+                    try:
+                        self._rule_list.setCurrentItem(selected_item)
+                    finally:
+                        self._rule_list.blockSignals(False)
+                    _sel_rule = next(
+                        (r for r in self._rules if r.id == self._selected_rule_id), None
+                    )
+                    if _sel_rule is not None:
+                        self._show_rule_detail(_sel_rule)
+                else:
+                    self._rule_list.setCurrentItem(selected_item)
+            elif _search_query:
+                # 搜尋中無已選項目：只自動選取第一個「可見」規則，不選隱藏節點；
+                # 無可見結果時不得誤選 hidden 規則或無謂清空編輯器。
+                _first_visible = None
+                for _i in range(self._rule_list.topLevelItemCount()):
+                    _top = self._rule_list.topLevelItem(_i)
+                    if _top.isHidden():
+                        continue
+                    for _j in range(_top.childCount()):
+                        if not _top.child(_j).isHidden():
+                            _first_visible = _top.child(_j)
+                            break
+                    if _first_visible is not None:
+                        break
+                if _first_visible is not None:
+                    self._rule_list.setCurrentItem(_first_visible)
+                elif self._get_current_rule() is None:
+                    self._selected_rule_id = None
+                    self._show_rule_detail(None)
             elif self._rule_list.topLevelItemCount() > 0:
                 first_item = self._rule_list.topLevelItem(0)
                 if first_item.childCount() > 0:
@@ -6850,17 +7003,20 @@ class MainWindow(QMainWindow):
         finally:
             self._suppress_collapse = False
 
-        self._rule_list.blockSignals(True)
-        try:
-            for i in range(self._rule_list.topLevelItemCount()):
-                item = self._rule_list.topLevelItem(i)
-                data = item.data(0, Qt.ItemDataRole.UserRole)
-                if data and data[0] in ("group", "bg_group"):
-                    gid = data[1]
-                    if gid != _expand_gid:
-                        item.setExpanded(gid not in self._collapsed_groups)
-        finally:
-            self._rule_list.blockSignals(False)
+        # 搜尋中不以 _collapsed_groups 重設展開（_apply_rule_search 已展開命中群組，
+        # 且不得把搜尋自動展開寫回 _collapsed_groups）
+        if not _search_query:
+            self._rule_list.blockSignals(True)
+            try:
+                for i in range(self._rule_list.topLevelItemCount()):
+                    item = self._rule_list.topLevelItem(i)
+                    data = item.data(0, Qt.ItemDataRole.UserRole)
+                    if data and data[0] in ("group", "bg_group"):
+                        gid = data[1]
+                        if gid != _expand_gid:
+                            item.setExpanded(gid not in self._collapsed_groups)
+            finally:
+                self._rule_list.blockSignals(False)
 
         has_enabled = any(g.enabled for g in self._groups if g.id != "__uncategorized__")
         self._toggle_all_btn.setText(
@@ -6946,6 +7102,10 @@ class MainWindow(QMainWindow):
         if data and data[0] == "group":
             self._collapsed_groups.add(data[1])
             self._persist_collapsed()
+            # 搜尋期間使用者手動收合：同步快照，清除搜尋時不被舊快照覆寫
+            _snap = getattr(self, "_search_saved_expanded", None)
+            if _snap is not None:
+                _snap[data[1]] = False
 
     def _on_rule_item_expanded(self, item):
         if self._suppress_collapse:
@@ -6954,6 +7114,9 @@ class MainWindow(QMainWindow):
         if data and data[0] == "group":
             self._collapsed_groups.discard(data[1])
             self._persist_collapsed()
+            _snap = getattr(self, "_search_saved_expanded", None)
+            if _snap is not None:
+                _snap[data[1]] = True
 
     def _persist_collapsed(self):
         if not self._current_task or self._task_load_failed:
