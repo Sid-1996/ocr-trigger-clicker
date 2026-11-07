@@ -1520,7 +1520,7 @@ def test_combo_unknown_value_survives_collapse_and_reexpand(
 #
 # 原本這 6 個案例是 xfail(strict=True)：GUI 在未編輯的情況下就把既有任務的
 # 數值截斷成 widget 的夾制值。修復方式：
-#   - fuzzy_threshold → QDoubleSpinBox 0.00–1.00（3 位小數），不再做百分比往返
+#   - fuzzy_threshold → 百分比顯示（0–100%、1 位小數 ↔ 內部 0–1/3 位小數無損換算）
 #   - compare.value    → 15 位小數，保留 ±999999 範圍
 #   - 整數欄位         → 未編輯時保存原始值（_RawValue），使用者主動改過才寫新值
 # 下列斷言維持「值必須完全等於原值」，不放寬。
@@ -1592,13 +1592,14 @@ def test_out_of_range_value_survives_no_edit_save(
 
 @pytest.mark.parametrize(
     "value",
-    [0.0, 0.01, 0.29, 0.57, 0.58, 0.855, 0.9, 1.0],
+    [0.0, 0.01, 0.29, 0.57, 0.58, 0.833, 0.855, 0.9, 1.0],
     ids=[
         "zero",
         "one_percent",
         "29_percent",
         "57_percent",
         "58_percent",
+        "83_3_percent",
         "85_5_percent",
         "90_percent",
         "one",
@@ -1731,13 +1732,14 @@ def test_editing_other_field_does_not_rewrite_numeric(
 
 
 @pytest.mark.parametrize(
-    "step_type,params,field,new_value",
+    "step_type,params,field,widget_value,expected",
     [
-        ("wait", {"ms": 120000}, "ms", 500),
-        ("click", {"target": "cursor", "random_offset": 150}, "random_offset", 5),
-        ("scroll", {"direction": "WheelUp", "amount": 100}, "amount", 3),
-        ("compare", {"pattern": r"\d+", "operator": ">=", "value": 1.23456}, "value", 9.5),
-        ("detect", {"text": "戰鬥", "fuzzy_threshold": 0.855}, "fuzzy_threshold", 0.9),
+        ("wait", {"ms": 120000}, "ms", 500, 500),
+        ("click", {"target": "cursor", "random_offset": 150}, "random_offset", 5, 5),
+        ("scroll", {"direction": "WheelUp", "amount": 100}, "amount", 3, 3),
+        ("compare", {"pattern": r"\d+", "operator": ">=", "value": 1.23456}, "value", 9.5, 9.5),
+        # UX-C3：百分比欄位以百分比為單位調整（90.0% ↔ 內部 0.9）
+        ("detect", {"text": "戰鬥", "fuzzy_threshold": 0.855}, "fuzzy_threshold", 90, 0.9),
     ],
     ids=["wait", "click", "scroll", "compare", "detect"],
 )
@@ -1750,7 +1752,8 @@ def test_user_edit_replaces_preserved_value(
     step_type,
     params,
     field,
-    new_value,
+    widget_value,
+    expected,
 ):
     """使用者主動改過數值欄位 → 保存新值（不是保留原值）。"""
     win = real_mainwindow
@@ -1766,11 +1769,11 @@ def test_user_edit_replaces_preserved_value(
         "value": lambda: form._value,
         "fuzzy_threshold": lambda: form._fuzzy_th,
     }[field]()
-    widget.setValue(new_value)
+    widget.setValue(widget_value)
     assert win._flush_save()
     disk = _disk_step_params(isolated_data_dir, "t1")
-    assert disk[field] == new_value, (
-        f"{step_type}.{field} 應保存新值 {new_value!r}，實際 {disk[field]!r}"
+    assert disk[field] == expected, (
+        f"{step_type}.{field} 應保存新值 {expected!r}，實際 {disk[field]!r}"
     )
 
 
@@ -1792,9 +1795,12 @@ def test_gui_numeric_ranges_not_widened(qt_app):
     assert cmp_form._value.maximum() == 999999.0
 
     det_form = gui._DetectStepForm(None, Step("detect", {"text": "x"}), 0, None)
+    # UX-C3：百分比顯示範圍 0–100%、1 位小數、步進 5%（對應內部 0.0–1.0/0.05）
     assert det_form._fuzzy_th.minimum() == 0.0
-    assert det_form._fuzzy_th.maximum() == 1.0
-    assert det_form._fuzzy_th.decimals() == 3
+    assert det_form._fuzzy_th.maximum() == 100.0
+    assert det_form._fuzzy_th.decimals() == 1
+    assert det_form._fuzzy_th.singleStep() == 5.0
+    assert det_form._fuzzy_th.suffix() == "%"
 
     wait = gui._WaitStepForm(None, Step("wait", {"ms": 500}), 0)
     assert wait._ms.minimum() == 0
@@ -2063,6 +2069,66 @@ def test_detect_roi_in_basic_form_layout(step_list, qapp):
         # 進階容器只能包含比對方式等欄位，不得包含 ROI
         adv_layout = form._advanced_container.layout()
         assert adv_layout.getWidgetPosition(form._roi_label)[0] == -1
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+# ── 10：UX-C3 — 相似度百分比顯示 ────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "raw,shown_pct",
+    [
+        (0.0, 0.0),
+        (0.8, 80.0),
+        (0.833, 83.3),
+        (0.855, 85.5),
+        (1.0, 100.0),
+    ],
+)
+def test_fuzzy_percent_display_value(step_list, qapp, raw, shown_pct):
+    """開啟表單時百分比顯示值 = round(內部 float × 100, 1)。"""
+    step = Step(type="detect", params={"text": "x", "fuzzy_threshold": raw})
+    form = step_list._build_form(0, step)
+    try:
+        assert form._fuzzy_th.value() == shown_pct
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+@pytest.mark.parametrize(
+    "pct,expected",
+    [
+        (85.0, 0.85),
+        (83.5, 0.835),  # 非 5% 倍數：1 位小數精度仍無損
+        (0.0, 0.0),
+        (100.0, 1.0),
+    ],
+)
+def test_fuzzy_percent_edit_writes_float(step_list, qapp, pct, expected):
+    """使用者調整百分比後，存檔寫回 float（round 到 3 位小數）。"""
+    step = Step(type="detect", params={"text": "x", "fuzzy_threshold": 0.8})
+    form = step_list._build_form(0, step)
+    try:
+        form._fuzzy_th.setValue(pct)
+        assert form._fuzzy_th_raw.dirty is True
+        form.save()
+        assert step.params["fuzzy_threshold"] == expected
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_fuzzy_percent_no_edit_preserves_raw(step_list, qapp):
+    """開啟後不修改直接儲存：原始值逐位保留（不經百分比換算）。"""
+    step = Step(type="detect", params={"text": "x", "fuzzy_threshold": 0.833})
+    form = step_list._build_form(0, step)
+    try:
+        assert form._fuzzy_th_raw.dirty is False
+        form.save()
+        assert step.params["fuzzy_threshold"] == 0.833
     finally:
         form.deleteLater()
         qapp.processEvents()

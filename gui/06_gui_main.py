@@ -2038,16 +2038,26 @@ class _DetectStepForm(QWidget):
         adv_form.addRow(T("step_form.compare_mode"), self._match_mode)
 
         self._fuzzy_th = _NoWheelDoubleSpin()
-        self._fuzzy_th.setRange(0.0, 1.0)
-        self._fuzzy_th.setDecimals(3)
-        self._fuzzy_th.setSingleStep(0.05)
-        # 直接用浮點門檻（Core 的 [0,1] 語義），不再做 int(×100)/÷100 往返：
-        # 整數百分比會讓 0.29/0.57/0.58 因 IEEE754 誤差掉位，0.855 也被截斷。
+        self._fuzzy_th.setRange(0.0, 100.0)
+        self._fuzzy_th.setDecimals(1)
+        self._fuzzy_th.setSingleStep(5.0)
+        self._fuzzy_th.setSuffix("%")
+        # UX-C3：百分比顯示。內部儲存仍為 float 0–1（存檔格式不變）；
+        # 1 位小數百分比與 3 位小數 float 一一對應（0.833 ↔ 83.3%）。
+        # 未編輯時由 _RawValue 保存原始值，開啟後直接儲存不改變數值。
         _raw_fuzzy_th = p.get("fuzzy_threshold", 0.8)
-        self._fuzzy_th_raw = _bind_raw_value(
-            self._fuzzy_th, _raw_fuzzy_th, _num_to_finite_float(_raw_fuzzy_th, 0.8)
-        )
+        _shown_pct = round(_num_to_finite_float(_raw_fuzzy_th, 0.8) * 100, 1)
+        self._fuzzy_th.setValue(_shown_pct)
+        self._fuzzy_th_raw = _RawValue(self._fuzzy_th, _raw_fuzzy_th)
         self._fuzzy_th.setToolTip(T("settings.default_fuzzy_threshold.tooltip"))
+        if (
+            _num_is_finite(_raw_fuzzy_th)
+            and abs(self._fuzzy_th.value() / 100 - float(_raw_fuzzy_th)) > 1e-9
+        ):
+            # 原始值無法以 0.1% 精度表示（超過 3 位小數）→ 提示未編輯時保留原值
+            note = T("step_form.value_kept", value=_raw_fuzzy_th)
+            old_tip = self._fuzzy_th.toolTip()
+            self._fuzzy_th.setToolTip(f"{old_tip}\n{note}" if old_tip else note)
         self._fuzzy_th.setVisible(self._match_mode.currentData() == "fuzzy")
         adv_form.addRow(T("step_form.accuracy"), self._fuzzy_th)
 
@@ -2286,7 +2296,12 @@ class _DetectStepForm(QWidget):
     def save(self):
         self._step.params["text"] = self._text.text().strip()
         self._step.params["match_mode"] = self._match_mode.currentData()
-        self._step.params["fuzzy_threshold"] = self._fuzzy_th_raw.value()
+        # UX-C3：使用者改過百分比才換算（round 到 3 位小數，與舊 float 精度一致）；
+        # 未編輯保存原始值（_RawValue.value() 回傳原始 float），開啟後儲存不改變數值。
+        _th = self._fuzzy_th_raw.value()
+        self._step.params["fuzzy_threshold"] = (
+            round(_th / 100, 3) if self._fuzzy_th_raw.dirty else _th
+        )
         self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
@@ -5103,11 +5118,15 @@ class SettingsDialog(QDialog):
         aform.addRow(T("settings.record_detect_after_delay"), self._record_detect_after_delay)
 
         self._fuzzy_th = QDoubleSpinBox()
-        self._fuzzy_th.setRange(0.5, 0.95)
-        self._fuzzy_th.setSingleStep(0.05)
-        # 小數位與 Step 表單對齊（3 位），避免同一語意存在兩套精度定義
-        self._fuzzy_th.setDecimals(3)
-        self._fuzzy_th.setValue(self._ctrl.get_setting(win, "default_fuzzy_threshold"))
+        self._fuzzy_th.setRange(50.0, 95.0)
+        self._fuzzy_th.setSingleStep(5.0)
+        # UX-C3：百分比顯示；1 位小數與 Step 表單對齊。範圍維持 50–95%
+        # （與步驟表單 0–100% 不同，此為「預設值」的合理區間，語意不變）。
+        self._fuzzy_th.setDecimals(1)
+        self._fuzzy_th.setSuffix("%")
+        self._fuzzy_th.setValue(
+            round(self._ctrl.get_setting(win, "default_fuzzy_threshold") * 100, 1)
+        )
         self._fuzzy_th.setToolTip(T("settings.default_fuzzy_threshold.tooltip"))
         aform.addRow(T("settings.default_fuzzy_threshold"), self._fuzzy_th)
 
@@ -5190,7 +5209,7 @@ class SettingsDialog(QDialog):
                 "default_detect_after_delay_ms": self._default_detect_after_delay.value(),
                 "record_after_delay_ms": self._record_after_delay.value(),
                 "record_detect_after_delay_ms": self._record_detect_after_delay.value(),
-                "default_fuzzy_threshold": self._fuzzy_th.value(),
+                "default_fuzzy_threshold": round(self._fuzzy_th.value() / 100, 3),
                 "default_template_threshold": self._template_th.value(),
                 "default_color_tolerance": self._color_tol.value(),
                 "language": new_lang,

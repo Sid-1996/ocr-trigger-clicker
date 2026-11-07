@@ -207,7 +207,7 @@ def _settings_dialog(
         _default_detect_after_delay=_Value(350),
         _record_after_delay=_Value(700),
         _record_detect_after_delay=_Value(800),
-        _fuzzy_th=_Value(0.7),
+        _fuzzy_th=_Value(70),  # 百分比顯示（UX-C3）：70% ↔ 內部 0.7
         _template_th=_Value(0.9),
         _color_tol=_Value(12),
         _language=_Value(new_lang),
@@ -951,6 +951,8 @@ def test_settings_success_saves_all_and_accepts(monkeypatch):
     assert configured[0]["max_cps"] == 7
     assert configured[0]["scan_interval_ms"] == 250
     assert configured[0]["default_mouse_button"] == "right"
+    # UX-C3：設定頁百分比 70% 寫回內部 float 0.7（存檔格式不變）
+    assert configured[0]["default_fuzzy_threshold"] == 0.7
 
 
 def test_settings_rollback_failure_keeps_new_config_and_blocks_retry(tmp_path, monkeypatch, caplog):
