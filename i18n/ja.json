@@ -616,6 +616,8 @@
   "step_form.edit_btn": "編集",
   "step_form.del_btn": "削除",
   "step_form.of_skip_suffix": " 秒",
+  "step_form.toggle_image_adv_collapsed": "▶ 進階設定",
+  "step_form.toggle_image_adv_expanded": "▼ 進階設定",
   "step_form.toggle_image_collapsed": "▶ 詳細: 画像が見つからないとき…",
   "step_form.toggle_image_expanded": "▼ 詳細: 画像が見つからないとき…",
   "step_form.toggle_detect_collapsed": "▶ 詳細: テキストが見つからないとき…",

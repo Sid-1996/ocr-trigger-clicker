@@ -610,6 +610,8 @@
   "step_form.edit_btn": "Edit",
   "step_form.del_btn": "Del",
   "step_form.of_skip_suffix": " sec",
+  "step_form.toggle_image_adv_collapsed": "▶ Advanced settings",
+  "step_form.toggle_image_adv_expanded": "▼ Advanced settings",
   "step_form.toggle_image_collapsed": "▶ Advanced: When image not found…",
   "step_form.toggle_image_expanded": "▼ Advanced: When image not found…",
   "step_form.toggle_detect_collapsed": "▶ Advanced: When text not found…",

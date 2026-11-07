@@ -610,6 +610,8 @@
   "step_form.edit_btn": "編",
   "step_form.del_btn": "刪",
   "step_form.of_skip_suffix": " 秒",
+  "step_form.toggle_image_adv_collapsed": "▶ 進階設定",
+  "step_form.toggle_image_adv_expanded": "▼ 進階設定",
   "step_form.toggle_image_collapsed": "▶ 進階：找不到圖片時…",
   "step_form.toggle_image_expanded": "▼ 進階：找不到圖片時…",
   "step_form.toggle_detect_collapsed": "▶ 進階：找不到文字時…",

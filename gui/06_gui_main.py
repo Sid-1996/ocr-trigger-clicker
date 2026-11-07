@@ -1354,7 +1354,7 @@ class _MatchImageStepForm(QWidget):
         rr_layout.addWidget(self._roi_btn)
         form.addRow(T("step_form.search_region"), roi_row)
 
-        # Threshold
+        # Threshold（基本：主要調整旋鈕，留在基本區）
         self._threshold = _NoWheelDoubleSpin()
         self._threshold.setRange(0.01, 1.0)
         self._threshold.setDecimals(2)
@@ -1362,17 +1362,35 @@ class _MatchImageStepForm(QWidget):
         self._threshold.setValue(p.get("threshold", 0.8))
         form.addRow(T("step_form.threshold"), self._threshold)
 
+        # UX 2B-07：進階設定（顏色比對/延遲等 refinements）預設收合，
+        # 減少基本區資訊密度；on_fail 另有獨立開關（維持原狀）。
+        self._adv_expanded = False
+        self._adv_toggle_btn = QPushButton(T("step_form.toggle_image_adv_collapsed"))
+        self._adv_toggle_btn.setFlat(True)
+        self._adv_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._adv_toggle_btn.setStyleSheet(
+            "QPushButton { text-align: left; border: none; color: #888; }"
+        )
+        self._adv_toggle_btn.clicked.connect(self._toggle_advanced)
+        form.addRow(self._adv_toggle_btn)
+
+        self._adv_container = QWidget()
+        self._adv_container.setVisible(False)
+        adv_form = QFormLayout(self._adv_container)
+        adv_form.setContentsMargins(0, 0, 0, 0)
+        form.addRow(self._adv_container)
+
         self._match_color = QCheckBox(T("step_form.match_color"))
         self._match_color.setChecked(p.get("match_color", False))
         self._match_color.setToolTip(T("tooltip.match_color"))
-        form.addRow("", self._match_color)
+        adv_form.addRow("", self._match_color)
 
         self._color_tolerance = _NoWheelSpin()
         self._color_tolerance.setRange(0, 255)
         self._color_tolerance.setValue(p.get("color_tolerance", 100))
         self._color_tolerance.setSuffix(T("step_form.color_suffix_short"))
         self._color_tolerance.setToolTip(T("tooltip.color_tolerance"))
-        form.addRow("", self._color_tolerance)
+        adv_form.addRow("", self._color_tolerance)
 
         self._color_mask = p.get("color_mask")
         self._color_mask_btn = QPushButton(T("step_form.color_mask_edit"))
@@ -1385,7 +1403,7 @@ class _MatchImageStepForm(QWidget):
         cm_layout.setContentsMargins(0, 0, 0, 0)
         cm_layout.addWidget(self._color_mask_btn)
         cm_layout.addWidget(self._color_mask_status, 1)
-        form.addRow(T("step_form.color_mask"), color_mask_row)
+        adv_form.addRow(T("step_form.color_mask"), color_mask_row)
 
         def _on_match_color_toggled(checked):
             self._color_tolerance.setEnabled(checked)
@@ -1405,7 +1423,7 @@ class _MatchImageStepForm(QWidget):
             self._after_delay, _raw_after_delay, _num_to_int(_raw_after_delay, 0)
         )
         self._after_delay.setToolTip(T("tooltip.detect_after_delay"))
-        form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
+        adv_form.addRow(T("step_form.detect_after_delay_label"), self._after_delay)
         # Verify 已收斂至動作四類（ADR-0005），圖片比對不再提供驗證入口
 
         # ── on_fail collapsible section ──
@@ -1937,6 +1955,15 @@ class _MatchImageStepForm(QWidget):
                 self._roi_label.setText(T("summary.whole_window") if z else _fmt_roi(result))
                 self.save()
                 self._list.steps_changed.emit()
+
+    def _toggle_advanced(self):
+        self._adv_expanded = not self._adv_expanded
+        self._adv_container.setVisible(self._adv_expanded)
+        self._adv_toggle_btn.setText(
+            T("step_form.toggle_image_adv_expanded")
+            if self._adv_expanded
+            else T("step_form.toggle_image_adv_collapsed")
+        )
 
     def _toggle_on_fail(self):
         self._on_fail_expanded = not self._on_fail_expanded

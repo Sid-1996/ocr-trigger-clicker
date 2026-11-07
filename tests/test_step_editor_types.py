@@ -2132,3 +2132,45 @@ def test_fuzzy_percent_no_edit_preserves_raw(step_list, qapp):
     finally:
         form.deleteLater()
         qapp.processEvents()
+
+
+# ── 11：UX 2B-07 — MatchImage 基本／進階設定 ───────────────────────────────
+
+
+def test_match_image_advanced_collapsed_by_default_and_values_preserved(step_list, qapp):
+    """進階區預設收合；展開後載入值正確；儲存往返資料契約不變。"""
+    params = {
+        "template": "t.png",
+        "template_data": "",
+        "threshold": 0.75,
+        "match_color": True,
+        "color_tolerance": 42,
+        "after_delay_ms": 250,
+        "on_fail": "stop",
+    }
+    step = Step(type="match_image", params=dict(params))
+    before = dict(step.params)
+    form = step_list._build_form(0, step)
+    try:
+        # 基本區：門檻在主表單；進階欄位在 adv 容器且預設收合
+        assert form.layout().getWidgetPosition(form._threshold)[0] >= 0
+        adv_layout = form._adv_container.layout()
+        assert adv_layout.getWidgetPosition(form._match_color)[0] >= 0
+        assert adv_layout.getWidgetPosition(form._color_tolerance)[0] >= 0
+        assert adv_layout.getWidgetPosition(form._after_delay)[0] >= 0
+        assert form._adv_container.isVisibleTo(form) is False
+        # 載入值正確
+        assert form._threshold.value() == 0.75
+        assert form._match_color.isChecked() is True
+        assert form._color_tolerance.value() == 42
+        assert form._after_delay.value() == 250
+        # 展開後可見
+        form._toggle_advanced()
+        assert form._adv_container.isVisibleTo(form) is True
+        # 儲存往返：參數不變
+        form.save()
+        for k, v in before.items():
+            assert step.params[k] == v, f"參數 {k} 改變: {v!r} → {step.params[k]!r}"
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
