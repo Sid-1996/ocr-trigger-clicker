@@ -620,6 +620,8 @@
   "step_form.of_skip_suffix": " 秒",
   "step_form.toggle_image_adv_collapsed": "▶ 詳細設定",
   "step_form.toggle_image_adv_expanded": "▼ 詳細設定",
+  "step_form.toggle_click_adv_collapsed": "▶ 詳細設定",
+  "step_form.toggle_click_adv_expanded": "▼ 詳細設定",
   "step_form.toggle_image_collapsed": "▶ 詳細: 画像が見つからないとき…",
   "step_form.toggle_image_expanded": "▼ 詳細: 画像が見つからないとき…",
   "step_form.toggle_detect_collapsed": "▶ 詳細: テキストが見つからないとき…",
@@ -1028,6 +1030,8 @@
   "verify.on_fail_retry_hint": "{n} 回再試行後もタイムアウトした場合に実行（既定 1 回、再押下を含む）",
   "verify.advanced": "詳細設定 ▶",
   "verify.advanced_expanded": "詳細設定 ▼",
+  "verify.settings_collapsed": "▶ 検証設定",
+  "verify.settings_expanded": "▼ 検証設定",
   "verify.match_mode": "照合方式",
   "verify.fuzzy_threshold": "類似度"
 }

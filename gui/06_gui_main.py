@@ -2706,12 +2706,30 @@ class _VerifyWidget(QWidget):
         self._enable.setToolTip(
             T("verify.enable.tooltip", default="點擊後等待畫面切到預期狀態才算成功，否則走逾時處理")
         )
-        outer.addWidget(self._enable)
+        # UX 2B-08：驗證設定區塊預設收合（即使已有 verify 設定值）；
+        # 欄位照常建立並載入，收合只影響呈現。勾選啟用時自動展開。
+        self._verify_expanded = False
+        _verify_header = QWidget()
+        _verify_header_layout = QHBoxLayout(_verify_header)
+        _verify_header_layout.setContentsMargins(0, 0, 0, 0)
+        _verify_header_layout.setSpacing(4)
+        _verify_header_layout.addWidget(self._enable)
+        self._verify_toggle_btn = QPushButton(T("verify.settings_collapsed", default="▶ 驗證設定"))
+        self._verify_toggle_btn.setFlat(True)
+        self._verify_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._verify_toggle_btn.setStyleSheet(
+            "QPushButton { text-align: left; border: none; color: #888; }"
+        )
+        self._verify_toggle_btn.clicked.connect(self._toggle_verify)
+        _verify_header_layout.addWidget(self._verify_toggle_btn)
+        _verify_header_layout.addStretch()
+        outer.addWidget(_verify_header)
         self._container = QWidget()
-        self._container.setVisible(self._enable.isChecked())
-        self._enable.toggled.connect(self._container.setVisible)
+        self._container.setVisible(False)
+        self._enable.toggled.connect(self._on_enable_toggled)
         self._enable.toggled.connect(self._on_verify_toggled)
         outer.addWidget(self._container)
+        self._update_verify_visible()
         form = QFormLayout(self._container)
         self._vf_form = form
         form.setContentsMargins(0, 6, 0, 0)
@@ -3431,6 +3449,24 @@ class _VerifyWidget(QWidget):
             self._pick_text_btn.setEnabled(True)
             self._pick_text_btn.setText(orig_text)
 
+    def _toggle_verify(self):
+        self._verify_expanded = not self._verify_expanded
+        self._update_verify_visible()
+
+    def _update_verify_visible(self):
+        self._container.setVisible(self._enable.isChecked() and self._verify_expanded)
+        self._verify_toggle_btn.setText(
+            T("verify.settings_expanded", default="▼ 驗證設定")
+            if self._verify_expanded
+            else T("verify.settings_collapsed", default="▶ 驗證設定")
+        )
+        self._verify_toggle_btn.setEnabled(self._enable.isChecked())
+
+    def _on_enable_toggled(self, checked: bool):
+        if checked:
+            self._verify_expanded = True
+        self._update_verify_visible()
+
     def _on_verify_toggled(self, checked: bool):
         # keep form open — do NOT emit steps_changed (would trigger _refresh_rule_list -> _show_rule_detail -> _rebuild collapse)
         if checked:
@@ -3584,7 +3620,20 @@ class _ClickStepForm(QWidget):
         self._coord_row.setVisible(p.get("target", "") == "custom")
         form.addRow(T("step_form.click_coord"), self._coord_row)
 
+        # UX 2B-08：進階設定預設收合（與 MatchImage 2B-07 同模式）；
+        # 欄位照常建立並載入既有值，收合只影響呈現。
+        self._adv_expanded = False
+        self._adv_toggle_btn = QPushButton(T("step_form.toggle_click_adv_collapsed"))
+        self._adv_toggle_btn.setFlat(True)
+        self._adv_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._adv_toggle_btn.setStyleSheet(
+            "QPushButton { text-align: left; border: none; color: #888; }"
+        )
+        self._adv_toggle_btn.clicked.connect(self._toggle_advanced)
+        form.addRow(self._adv_toggle_btn)
+
         self._adv_container = QWidget()
+        self._adv_container.setVisible(False)
         adv_form = QFormLayout(self._adv_container)
         adv_form.setContentsMargins(0, 0, 0, 0)
 
@@ -3641,6 +3690,15 @@ class _ClickStepForm(QWidget):
     def _on_target_changed(self, idx):
         t = self._target.currentData()
         self._coord_row.setVisible(t == "custom")
+
+    def _toggle_advanced(self):
+        self._adv_expanded = not self._adv_expanded
+        self._adv_container.setVisible(self._adv_expanded)
+        self._adv_toggle_btn.setText(
+            T("step_form.toggle_click_adv_expanded")
+            if self._adv_expanded
+            else T("step_form.toggle_click_adv_collapsed")
+        )
 
     def _pick_coord(self):
         if self._pick_cb:
