@@ -2137,6 +2137,32 @@ def test_fuzzy_percent_no_edit_preserves_raw(step_list, qapp):
 # ── 11：UX 2B-07 — MatchImage 基本／進階設定 ───────────────────────────────
 
 
+def test_match_image_color_mask_roundtrip_with_advanced_collapsed(step_list, qapp):
+    """color_mask（core/rule_migration._sanitize_color_mask 的正規形狀）：
+    進階區收合時正確載入，展開後 save() 逐字還原，不遺失不改寫。"""
+    mask = {"colors": [[255, 0, 0], [0, 128, 255]], "tolerance": 30, "mode": "keep"}
+    params = {
+        "template": "t.png",
+        "template_data": "",
+        "threshold": 0.75,
+        "match_color": True,
+        "color_tolerance": 30,
+        "color_mask": mask,
+    }
+    step = Step(type="match_image", params=dict(params))
+    form = step_list._build_form(0, step)
+    try:
+        assert form._color_mask == mask
+        assert form._adv_container.isVisibleTo(form) is False  # 收合時已載入
+        form._toggle_advanced()
+        assert form._adv_container.isVisibleTo(form) is True
+        form.save()
+        assert step.params["color_mask"] == mask
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
 def test_match_image_advanced_collapsed_by_default_and_values_preserved(step_list, qapp):
     """進階區預設收合；展開後載入值正確；儲存往返資料契約不變。"""
     params = {

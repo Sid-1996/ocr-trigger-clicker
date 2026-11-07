@@ -142,30 +142,56 @@ def test_switching_rule_keeps_dirty_state(real_mainwindow, write_task, make_rule
 
 
 def test_modification_during_write_not_cleared_by_old_write(
-    real_mainwindow, write_task, make_rule, make_step, monkeypatch
+    real_mainwindow, write_task, make_rule, make_step, isolated_data_dir, monkeypatch
 ):
-    """寫入期間再次修改：舊一輪成功不得清除新一輪 dirty。"""
+    """寫入期間真正改資料：舊一輪成功不得清除新一輪 dirty，且第二輪磁碟正確。"""
     win = real_mainwindow
     _setup(win, write_task, make_rule, make_step)
     _modify_name(win, "第一輪")
 
     real_save = _gui.save_task_with_groups
-    calls = []
 
-    def _save_and_modify(rules, groups, path):
-        # 寫入期間使用者又改了一次（_schedule_save → gen+1, dirty）
+    def _save_then_modify(rules, groups, path):
+        # 第一輪執行真正的 persistence 寫入
+        ok = real_save(rules, groups, path)
+        # 寫入完成、回傳之前：真正修改目前規則資料並重新排程
+        win._rules[0].name = "第二輪"
         win._schedule_save()
-        win._save_timer.stop()
-        calls.append(1)
-        return real_save(rules, groups, path)
+        win._save_timer.stop()  # 第二輪由測試顯式驅動，避免 timer 搶跑
+        return ok
 
-    monkeypatch.setattr(_gui, "save_task_with_groups", _save_and_modify)
+    monkeypatch.setattr(_gui, "save_task_with_groups", _save_then_modify)
     assert win._do_debounced_save() is True
-    assert calls == [1]
+    # 第一輪返回後仍是 dirty，且磁碟只有第一輪的值
     assert win._save_state == "dirty"
     assert win._saved_label.text() == T("status.unsaved")
+    names1 = {r["name"] for r in _disk_task(isolated_data_dir)["rules"]}
+    assert "第一輪" in names1
+    assert "第二輪" not in names1
 
-    # 第二輪寫入完成後才可顯示已儲存
+    # 第二輪真正儲存：磁碟包含第二輪修改，之後才顯示已儲存
     monkeypatch.setattr(_gui, "save_task_with_groups", real_save)
     assert win._do_debounced_save() is True
     assert win._save_state == "saved"
+    names2 = {r["name"] for r in _disk_task(isolated_data_dir)["rules"]}
+    assert "第二輪" in names2
+    assert "第一輪" not in names2
+
+
+def test_debounce_timer_fires_automatically(
+    real_mainwindow, write_task, make_rule, make_step, isolated_data_dir, qt_app
+):
+    """正常 _schedule_save 後 timer 真正觸發儲存（不手動 stop、不手動呼叫）。"""
+    from PyQt6.QtTest import QTest
+
+    win = real_mainwindow
+    _setup(win, write_task, make_rule, make_step)
+    win._edit_name.setText("自動名稱")
+    win._on_name_changed()
+    assert win._save_state == "dirty"
+    assert win._save_timer.isActive() is True
+
+    # 等待 Qt timer（500ms）自動觸發：QTest.qWait 驅動事件迴圈，不用 sleep
+    QTest.qWait(700)
+    assert win._save_state == "saved"
+    assert "自動名稱" in {r["name"] for r in _disk_task(isolated_data_dir)["rules"]}
