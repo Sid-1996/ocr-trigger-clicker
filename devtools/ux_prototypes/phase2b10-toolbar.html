@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>OCR Trigger Clicker — UX Phase 2B-10 工具列分組原型</title>
+<style>
+  body { font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; background: #f4f4f4; color: #222; margin: 24px; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-top: 28px; }
+  .note { color: #666; font-size: 13px; max-width: 900px; }
+  .frame { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin: 12px 0; }
+  .frame .caption { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; background: #fafafa; border: 1px solid #ddd; padding: 6px 8px; flex-wrap: nowrap; overflow: hidden; }
+  .toolbar.narrow { width: 560px; }
+  .toolbar select { height: 28px; }
+  .win { min-width: 250px; }
+  .task { min-width: 160px; }
+  .sep { width: 1px; align-self: stretch; background: #bbb; margin: 2px 2px; }
+  button { height: 28px; padding: 0 10px; background: #efefef; border: 1px solid #bbb; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  button:hover { background: #e4e4e4; }
+  button.icon { width: 28px; padding: 0; }
+  button.primary { min-width: 80px; font-weight: bold; }
+  .spacer { flex: 1; }
+  .menu-wrap { position: relative; }
+  .menu { position: absolute; top: 32px; left: 0; background: #fff; border: 1px solid #aaa; border-radius: 4px; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,.18); display: none; z-index: 10; }
+  .menu.open { display: block; }
+  .menu .item { padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  .menu .item:hover { background: #e8f0fe; }
+  .menu .item.danger { color: #c0392b; }
+  .menu .sub { position: relative; }
+  .menu .submenu { position: absolute; left: 100%; top: 0; background: #fff; border: 1px solid #aaa; border-radius: 4px; min-width: 170px; display: none; }
+  .menu .sub:hover .submenu { display: block; }
+  .menu .sep2 { height: 1px; background: #ddd; margin: 4px 0; }
+  .legend { font-size: 13px; line-height: 1.8; }
+  .legend b { display: inline-block; min-width: 110px; }
+</style>
+</head>
+<body>
+<h1>UX Phase 2B-10：工具列常用／次要按鈕分組 — 視覺原型</h1>
+<p class="note">此頁僅為設計參考（純 HTML/CSS/JS），不是實際 GUI 驗證。分組原則：視窗／任務選擇直接可見；啟動／OCR Debug／錄製不收納；任務管理（匯入／匯出／分享）收納至「任務管理」選單；贊助／設定／關於／指南／更新收納至「更多」選單。刪除任務維持工具列上的 🗑 圖示按鈕，風險操作不藏進選單。</p>
+
+<h2>分組說明</h2>
+<div class="legend">
+  <div><b>直接可見</b> 視窗選擇、任務選擇、新增（＋）、重新命名（✏️）、刪除（🗑）、啟動／停止、OCR Debug、錄製</div>
+  <div><b>任務管理 ▾</b> 📥 匯入任務、📤 匯出任務、🌐 分享任務（開啟資料夾／前往官網）</div>
+  <div><b>更多 ▾</b> 贊助、設定、關於、使用指南、更新</div>
+</div>
+
+<h2>一般寬度（900px）</h2>
+<div class="frame">
+  <div class="caption">建議排列（點擊「任務管理 ▾」與「更多 ▾」可展開示範選單）</div>
+  <div class="toolbar">
+    <label>視窗</label><select class="win"><option>遊戲視窗（未選擇）</option></select>
+    <div class="sep"></div>
+    <label>任務:</label><select class="task"><option>我的任務</option></select>
+    <button class="icon" title="新增任務">＋</button>
+    <button class="icon" title="重新命名任務">✏️</button>
+    <button class="icon" title="刪除任務">🗑</button>
+    <span class="menu-wrap">
+      <button data-menu="m1">任務管理 ▾</button>
+      <span class="menu" id="m1">
+        <div class="item">📥 匯入任務</div>
+        <div class="item">📤 匯出任務</div>
+        <div class="sep2"></div>
+        <div class="item sub">🌐 分享任務 ▸
+          <span class="submenu"><div class="item">開啟任務資料夾</div><div class="item">前往分享網站</div></span>
+        </div>
+      </span>
+    </span>
+    <button class="primary">啟動[F8]</button>
+    <button>OCR Debug</button>
+    <button>錄製</button>
+    <div class="spacer"></div>
+    <span class="menu-wrap">
+      <button data-menu="m2">更多 ▾</button>
+      <span class="menu" id="m2" style="left:auto;right:0">
+        <div class="item">贊助</div>
+        <div class="item">設定</div>
+        <div class="item">關於</div>
+        <div class="item">使用指南</div>
+        <div class="item">更新</div>
+      </span>
+    </span>
+  </div>
+</div>
+
+<h2>較窄視窗（560px）</h2>
+<div class="frame">
+  <div class="caption">窄寬度下：主要操作（啟動／OCR Debug／錄製）仍直接可見；收納後右側只剩「更多 ▾」，視窗與任務選擇維持最小寬度不被裁切</div>
+  <div class="toolbar narrow">
+    <label>視窗</label><select class="win"><option>遊戲視窗（未選擇）</option></select>
+    <div class="sep"></div>
+    <label>任務:</label><select class="task"><option>我的任務</option></select>
+    <button class="icon" title="新增任務">＋</button>
+    <button class="icon" title="重新命名任務">✏️</button>
+    <button class="icon" title="刪除任務">🗑</button>
+    <span class="menu-wrap">
+      <button data-menu="m3">任務管理 ▾</button>
+      <span class="menu" id="m3">
+        <div class="item">📥 匯入任務</div>
+        <div class="item">📤 匯出任務</div>
+        <div class="sep2"></div>
+        <div class="item sub">🌐 分享任務 ▸
+          <span class="submenu"><div class="item">開啟任務資料夾</div><div class="item">前往分享網站</div></span>
+        </div>
+      </span>
+    </span>
+    <button class="primary">啟動[F8]</button>
+    <button>OCR Debug</button>
+    <button>錄製</button>
+    <div class="spacer"></div>
+    <span class="menu-wrap">
+      <button data-menu="m4">更多 ▾</button>
+      <span class="menu" id="m4" style="left:auto;right:0">
+        <div class="item">贊助</div>
+        <div class="item">設定</div>
+        <div class="item">關於</div>
+        <div class="item">使用指南</div>
+        <div class="item">更新</div>
+      </span>
+    </span>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll("[data-menu]").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var m = document.getElementById(btn.getAttribute("data-menu"));
+      var wasOpen = m.classList.contains("open");
+      document.querySelectorAll(".menu.open").forEach(function (x) { x.classList.remove("open"); });
+      if (!wasOpen) m.classList.add("open");
+    });
+  });
+  document.addEventListener("click", function () {
+    document.querySelectorAll(".menu.open").forEach(function (x) { x.classList.remove("open"); });
+  });
+</script>
+</body>
+</html>

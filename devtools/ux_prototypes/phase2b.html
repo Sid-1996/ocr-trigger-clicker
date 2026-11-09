@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>OCR Trigger Clicker — UX Phase 2B 整體操作體驗對照原型</title>
+<style>
+  :root { --bg:#ececec; --panel:#f7f7f7; --border:#c9c9c9; --text:#222; --muted:#666;
+          --accent:#2f7d4f; --danger:#c0392b; --blue:#2b6cb0; --sel:#dbe9f7; --warn-bg:#fff3cd; --err-bg:#fdecea; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI","Microsoft JhengHei",sans-serif; background:var(--bg); color:var(--text); font-size:13px; }
+  header { background:#2d3436; color:#fff; padding:14px 20px; }
+  header h1 { margin:0 0 4px; font-size:17px; }
+  header p { margin:2px 0; color:#b2bec3; font-size:12px; }
+  .wrap { max-width:1500px; margin:0 auto; padding:14px; }
+  .frames { display:flex; gap:16px; align-items:flex-start; }
+  .frame-col { flex:1; min-width:0; }
+  .frame-tag { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .frame-tag h2 { font-size:15px; margin:0; }
+  .tag-before { background:#f6e0b5; color:#7a5b13; padding:2px 10px; border-radius:9px; font-size:11px; }
+  .tag-after { background:#cdeeda; color:#1e5c38; padding:2px 10px; border-radius:9px; font-size:11px; }
+  .app { background:#fff; border:1px solid #999; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,.18); }
+  .toolbar { display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid var(--border); flex-wrap:wrap; background:var(--panel); }
+  .toolbar .sep { width:1px; align-self:stretch; background:var(--border); margin:0 4px; }
+  .toolbar label { color:var(--muted); }
+  .toolbar select, .toolbar input[type=text] { padding:3px 6px; border:1px solid var(--border); border-radius:3px; font-size:12px; }
+  .toolbar select.win { width:170px; }
+  .toolbar select.task { width:110px; }
+  button { padding:4px 10px; border:1px solid #bbb; background:#f7f7f7; border-radius:4px; cursor:pointer; font-size:12px; }
+  button:hover { background:#e8e8e8; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:bold; }
+  button.icon { width:26px; padding:4px 0; }
+  .body-row { display:flex; min-height:330px; }
+  .left { width:220px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; }
+  .left .cap { padding:5px 8px; color:var(--muted); font-size:12px; border-bottom:1px solid #eee; }
+  .tree { flex:1; overflow:auto; padding:2px 0; }
+  .grp { padding:4px 8px; font-weight:bold; background:#f0f0f0; cursor:pointer; }
+  .rule { padding:4px 8px 4px 22px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rule:hover { background:#f2f2f2; }
+  .rule.sel { background:var(--sel); }
+  .rule .tags { color:var(--muted); font-size:11px; margin-left:4px; }
+  .rule.running { color:#0a7d33; }
+  .rule.failed { color:#d32f2f; }
+  .rule.pointer { color:#0288d1; font-weight:bold; }
+  .left .btnbar { display:flex; gap:4px; padding:6px; border-top:1px solid #eee; flex-wrap:wrap; }
+  .hint { color:#888; font-size:11px; padding:3px 8px; }
+  .searchbox { padding:5px 8px; border-bottom:1px solid #eee; display:none; }
+  .searchbox input { width:100%; padding:3px 6px; border:1px solid var(--border); border-radius:3px; }
+  .right { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .guide { padding:26px 30px; text-align:center; color:#666; font-size:13px; line-height:2; }
+  .guide .w { color:#333; }
+  .edithead { padding:8px 10px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .edithead input[type=text] { padding:3px 6px; border:1px solid var(--border); border-radius:3px; }
+  .edithead .chk { display:flex; align-items:center; gap:3px; }
+  .saved { color:#4caf50; font-weight:bold; font-size:12px; }
+  .dirty { color:#b7791f; font-weight:bold; font-size:12px; }
+  .steps { flex:1; overflow:auto; padding:6px; }
+  .step-row { display:flex; align-items:center; gap:6px; border:1px solid #ddd; border-radius:3px; padding:4px 8px; margin-bottom:4px; background:#fff; }
+  .step-row .num { font-weight:bold; width:18px; }
+  .step-row .sum { flex:1; color:#555; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .step-row .ops button { padding:2px 6px; margin-left:2px; }
+  .step-form { border:1px solid #bbb; border-left:4px solid #4A90D9; border-radius:3px; margin:0 0 8px 24px; padding:8px 10px; background:#fcfcfc; }
+  .f-row { display:flex; align-items:center; gap:8px; padding:3px 0; }
+  .f-row label { width:110px; color:var(--muted); flex:none; }
+  .f-row input[type=text], .f-row select { padding:3px 6px; border:1px solid var(--border); border-radius:3px; font-size:12px; }
+  .collapse-head { cursor:pointer; color:#888; font-size:12px; padding:4px 0; }
+  .adv { border-top:1px dashed #ddd; margin-top:4px; padding-top:4px; }
+  .addbar { padding:6px; border-top:1px solid #eee; display:flex; gap:6px; align-items:center; }
+  .banner-err { background:var(--err-bg); border:1px solid #f0b4ae; color:#7a1f16; padding:7px 10px; margin:6px; border-radius:3px; font-size:12px; display:none; }
+  .banner-warn { background:var(--warn-bg); border:1px solid #e6d199; color:#6b5410; padding:7px 10px; margin:6px; border-radius:3px; font-size:12px; display:none; }
+  .banner-err button, .banner-warn button { margin-left:8px; }
+  .statusbar { display:flex; align-items:center; gap:14px; padding:4px 10px; border-top:1px solid var(--border); background:var(--panel); font-size:12px; color:#555; }
+  .statusbar .sp { flex:1; }
+  .statusbar .mono { color:#888; font-size:11px; }
+  .exec-toggle { width:100%; text-align:left; border:none; background:none; color:#666; font-size:11px; padding:3px 10px; cursor:pointer; }
+  .exec-log { display:none; border-top:1px solid #eee; max-height:120px; overflow:auto; }
+  .exec-log table { width:100%; border-collapse:collapse; font-size:11px; }
+  .exec-log td, .exec-log th { padding:2px 6px; border-bottom:1px solid #f0f0f0; text-align:left; }
+  .dlg-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); align-items:center; justify-content:center; z-index:60; }
+  .dlg { background:#fff; border-radius:5px; padding:16px 18px; width:360px; box-shadow:0 8px 26px rgba(0,0,0,.3); }
+  .dlg h4 { margin:0 0 8px; font-size:14px; }
+  .dlg .acts { text-align:right; margin-top:12px; }
+  .dlg .acts button { margin-left:8px; }
+  .notes { background:#fff; border:1px solid var(--border); border-radius:5px; padding:14px 18px; margin-top:14px; }
+  .notes h2 { margin-top:0; font-size:15px; }
+  .notes li { margin-bottom:4px; }
+  @media (max-width:1100px) { .frames { flex-direction:column; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>OCR Trigger Clicker — UX Phase 2B 整體操作體驗對照原型</h1>
+  <p>左＝目前正式 GUI（HEAD <span style="font-family:Consolas,monospace">9ee63c0</span>，含 Phase 2A 五項）實際結構重現；右＝建議版本。所有文案逐字取自現行 i18n，結構對應 <span style="font-family:Consolas,monospace">gui/06_gui_main.py</span>。</p>
+  <p>風格說明：本 repo 實際技術棧為 PyQt6 原生 widgets（pyproject 僅列 PyQt6，無 qfluentwidgets），原型依實際產品外觀（淺灰面板、標準表單）製作，非另行設計的新語言。</p>
+</header>
+<div class="wrap">
+  <div class="frames">
+    <div class="frame-col">
+      <div class="frame-tag"><h2>目前版本</h2><span class="tag-before">現行 UI（重現）</span></div>
+      <div class="app" id="app-cur"></div>
+    </div>
+    <div class="frame-col">
+      <div class="frame-tag"><h2>建議版本</h2><span class="tag-after">改善提案</span></div>
+      <div class="app" id="app-new"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>操作說明</h2>
+    <ol>
+      <li>點左側/右側規則列可切換規則；點步驟列可展開/收合表單；「新增步驟」會加入步驟（目前版：新增後不自動展開；建議版：自動展開）。</li>
+      <li>「刪除」會出現確認對話框（兩版皆有，Phase 2A 已實作）。</li>
+      <li>點「啟動 [F8]」模擬執行：規則列變色、執行日誌出現；「規則三」示範 BLOCKED 錯誤（目前版：僅日誌列；建議版：橫幅 + 「定位規則」）。</li>
+      <li>建議版多出：規則搜尋框、儲存狀態（未儲存→已儲存）、工具列分組、更新後的指南頁。點指南頁可對照文案差異。</li>
+      <li>切換瀏覽器視窗寬度 &lt;1100px 時兩欄改上下排列。</li>
+    </ol>
+    <h2>與正式產品的差異（誠實揭露）</h2>
+    <ul>
+      <li>本原型為 DOM 手寫重現，非截圖；像素不求完全一致，但欄位、按鈕、文案、操作順序對應正式程式碼。</li>
+      <li>執行模擬為假資料（定時產生日誌列），不連接 Rule Engine。</li>
+    </ul>
+  </div>
+</div>
+
+<div class="dlg-backdrop" id="dlg-backdrop">
+  <div class="dlg">
+    <h4 id="dlg-title">刪除步驟</h4>
+    <p id="dlg-text"></p>
+    <div class="acts"><button id="dlg-cancel">取消</button><button id="dlg-ok" style="background:#c0392b;color:#fff;border-color:#c0392b">刪除</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var DATA = [
+    { id: "r1", name: "主線任務", group: "群組一", enabled: true, steps: [
+      { type: "🔍 偵測", sum: "「開始遊戲」 整窗", form: "detect" },
+      { type: "🖱 點擊", sum: "點擊辨識到的文字中心", form: "click" },
+      { type: "⏱ 等待", sum: "等待 500ms", form: "wait" } ] },
+    { id: "r2", name: "領取獎勵", group: "群組一", enabled: true, steps: [
+      { type: "🖼 圖片比對", sum: "「領取」 整窗 門檻 80%", form: "match" },
+      { type: "⌨ 按鍵", sum: "按下 Enter", form: "key" } ] },
+    { id: "r3", name: "壞掉的規則", group: "群組二", enabled: true, steps: [
+      { type: "🔍 偵測", sum: "「」（未設定文字）", form: "detect" },
+      { type: "🖱 點擊", sum: "點擊辨識到的文字中心", form: "click" } ] }
+  ];
+  var GROUPS = ["群組一", "群組二"];
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function buildApp(container, improved) {
+    var state = { selRule: "r1", openStep: -1, running: false, dirty: false, logOpen: false };
+    container.innerHTML = "";
+
+    // ── 工具列（對應 _setup_ui :5519-5600）──
+    var tb = el("div", "toolbar");
+    tb.appendChild(el("label", null, "視窗"));
+    var winSel = el("select", "win");
+    ["（請選擇目標視窗）", "遊戲視窗 A", "遊戲視窗 B"].forEach(function (t) { winSel.appendChild(el("option", null, t)); });
+    tb.appendChild(winSel);
+    tb.appendChild(el("span", "sep"));
+    tb.appendChild(el("label", null, "任務"));
+    var taskSel = el("select", "task");
+    ["我的任務"].forEach(function (t) { taskSel.appendChild(el("option", null, t)); });
+    tb.appendChild(taskSel);
+    if (!improved) {
+      ["＋", "✏️", "🗑"].forEach(function (t) { var b = el("button", "icon", t); tb.appendChild(b); });
+      tb.appendChild(el("button", null, "匯入任務"));
+      tb.appendChild(el("button", null, "匯出任務"));
+      tb.appendChild(el("button", null, "🌐 分享任務"));
+    } else {
+      tb.appendChild(el("button", "icon", "＋"));
+      tb.appendChild(el("button", "icon", "✏️"));
+      tb.appendChild(el("button", "icon", "🗑"));
+    }
+    tb.appendChild(el("span", "sep"));
+    var btnRun = el("button", "primary", "啟動[F8]");
+    btnRun.addEventListener("click", function () { toggleRun(state, improved, btnRun, body); });
+    tb.appendChild(btnRun);
+    tb.appendChild(el("button", null, "OCR 診斷"));
+    tb.appendChild(el("button", null, "錄製"));
+    tb.appendChild(el("span", "sp", "")).style.flex = "1";
+    if (!improved) {
+      tb.appendChild(el("button", null, "贊助"));
+      tb.appendChild(el("button", null, "設定"));
+      tb.appendChild(el("button", null, "關於"));
+      tb.appendChild(el("button", null, "教學"));
+      tb.appendChild(el("button", null, "更新"));
+    } else {
+      tb.appendChild(el("button", null, "設定"));
+      tb.appendChild(el("button", null, "⋯ 更多（贊助/更新/教學/關於）"));
+    }
+
+    var body = el("div", "body-row");
+
+    // ── 左：規則樹（對應 :5619-5654）──
+    var left = el("div", "left");
+    left.appendChild(el("div", "cap", "規則清單"));
+    var searchbox = el("div", "searchbox");
+    if (improved) {
+      searchbox.style.display = "block";
+      var sInput = el("input", null);
+      sInput.placeholder = "搜尋規則…";
+      sInput.type = "text";
+      sInput.addEventListener("input", function () { renderTree(tree, state, improved, sInput.value); });
+      searchbox.appendChild(sInput);
+    }
+    left.appendChild(searchbox);
+    var tree = el("div", "tree");
+    left.appendChild(tree);
+
+    var btnbar = el("div", "btnbar");
+    ["新增群組", "新增規則", "刪除"].forEach(function (t) { btnbar.appendChild(el("button", null, t)); });
+    if (!improved) btnbar.appendChild(el("button", null, "一鍵啟動"));
+    else btnbar.appendChild(el("button", null, "全部啟用/停用"));
+    left.appendChild(btnbar);
+
+    if (!improved) left.appendChild(el("div", "hint", "（規則右鍵選單：複製 / 移到群組 / 群組設定）"));
+
+    // ── 右：編輯區（對應 :5658-5781）──
+    var right = el("div", "right");
+    var banner = el("div", improved ? "banner-err" : "banner-warn",
+      "⚠「壞掉的規則」設定錯誤，已略過（偵測關鍵字為空白）");
+    banner.id = "banner-" + (improved ? "new" : "cur");
+    if (improved) {
+      var loc = el("button", null, "定位規則");
+      loc.addEventListener("click", function () { selectRule(tree, right, state, improved, "r3"); });
+      banner.appendChild(loc);
+    }
+    right.appendChild(banner);
+
+    var guide = el("div", "guide");
+    right.appendChild(guide);
+
+    var head = el("div", "edithead");
+    head.style.display = "none";
+    head.appendChild(el("label", null, "名稱"));
+    var nameInput = el("input", null);
+    nameInput.type = "text";
+    nameInput.addEventListener("input", function () {
+      state.dirty = true;
+      renderSaved(savedEl, improved, true);
+      setTimeout(function () { state.dirty = false; renderSaved(savedEl, improved, false); }, 1200);
+    });
+    head.appendChild(nameInput);
+    ["啟用", "📡 常駐監控", "🔇 日誌靜音"].forEach(function (t) {
+      var c = el("label", "chk"); var cb = el("input"); cb.type = "checkbox"; c.appendChild(cb); c.appendChild(document.createTextNode(t)); head.appendChild(c);
+    });
+    var savedEl = el("span", "saved", improved ? "✓ 已儲存" : "✓ 已儲存");
+    head.appendChild(savedEl);
+    right.appendChild(head);
+
+    var stepsBox = el("div", "steps");
+    stepsBox.style.display = "none";
+    right.appendChild(stepsBox);
+
+    var addbar = el("div", "addbar");
+    addbar.style.display = "none";
+    var addSel = el("select", null);
+    ["🔍 偵測", "🖼 圖片比對", "🔢 數字比較", "🧮 數字加總", "🖱 點擊", "⌨ 按鍵", "↗ 拖曳", "↕ 滾輪", "⏱ 等待", "↩ 跳轉規則", "💬 提示訊息"].forEach(function (t) { addSel.appendChild(el("option", null, t)); });
+    addbar.appendChild(addSel);
+    var addBtn = el("button", null, "新增步驟");
+    addBtn.addEventListener("click", function () {
+      var rule = DATA.find(function (r) { return r.id === state.selRule; });
+      var t = addSel.value;
+      rule.steps.push({ type: t, sum: "（新步驟）", form: t.indexOf("偵測") >= 0 ? "detect" : (t.indexOf("圖片") >= 0 ? "match" : "generic") });
+      renderSteps(stepsBox, state, improved);
+      if (improved) { state.openStep = rule.steps.length - 1; renderSteps(stepsBox, state, improved); }
+    });
+    addbar.appendChild(addBtn);
+    addbar.appendChild(el("button", null, "測試"));
+    right.appendChild(addbar);
+
+    // ── 執行日誌 ──
+    var logToggle = el("button", "exec-toggle", "▶ 執行日誌");
+    var logBox = el("div", "exec-log");
+    logToggle.addEventListener("click", function () {
+      state.logOpen = !state.logOpen;
+      logBox.style.display = state.logOpen ? "block" : "none";
+      logToggle.textContent = state.logOpen ? "▼ 執行日誌" : "▶ 執行日誌";
+    });
+    right.appendChild(logToggle);
+    right.appendChild(logBox);
+
+    // ── 狀態列（對應 :5816-5832）──
+    var sb = el("div", "statusbar");
+    var sbMsg = el("span", null, "就緒");
+    sb.appendChild(sbMsg);
+    sb.appendChild(el("span", "sp"));
+    sb.appendChild(el("span", "mono", improved ? "幀 12ms" : "12 ms / 幀"));
+    sb.appendChild(el("span", "mono", improved ? "輸入就緒" : "🟢 Input"));
+
+    container.appendChild(tb);
+    container.appendChild(body);
+    body.appendChild(left);
+    body.appendChild(right);
+    container.appendChild(sb);
+
+    function renderSaved(node, imp, dirty) {
+      if (imp) { node.textContent = dirty ? "● 未儲存…" : "✓ 已儲存"; node.className = dirty ? "dirty" : "saved"; }
+      else { node.textContent = "✓ 已儲存"; node.className = "saved"; }
+    }
+
+    function renderTree(treeEl, st, imp, filter) {
+      treeEl.innerHTML = "";
+      GROUPS.forEach(function (g) {
+        var grp = el("div", "grp", g);
+        treeEl.appendChild(grp);
+        DATA.filter(function (r) { return r.group === g; })
+          .filter(function (r) { return !filter || r.name.indexOf(filter) >= 0; })
+          .forEach(function (r) {
+            var cls = "rule" + (r.id === st.selRule ? " sel" : "");
+            if (st.running) {
+              if (r.id === "r3") cls += " failed";
+              else if (r.id === "r1") cls += " running";
+              if (r.id === "r1") cls += " pointer";
+            }
+            var row = el("div", cls);
+            row.appendChild(document.createTextNode((r.enabled ? "[✓] " : "[✗] ") + r.name));
+            var tags = el("span", "tags", " [" + r.steps.length + "步]" + (r.id === "r3" ? " [失敗]" : ""));
+            row.appendChild(tags);
+            row.addEventListener("click", function () { selectRule(treeEl, right, st, imp, r.id); });
+            treeEl.appendChild(row);
+          });
+      });
+    }
+
+    function selectRule(treeEl, rightEl, st, imp, id) {
+      st.selRule = id;
+      var rule = DATA.find(function (r) { return r.id === id; });
+      renderTree(treeEl, st, imp, "");
+      nameInput.value = rule.name;
+      head.style.display = "flex";
+      guide.style.display = "none";
+      stepsBox.style.display = "block";
+      addbar.style.display = "flex";
+      st.openStep = -1;
+      renderSteps(stepsBox, st, imp);
+      var b = rightEl.querySelector(improved ? "#banner-new" : "#banner-cur");
+      if (b) b.style.display = "none";
+    }
+
+    function renderSteps(box, st, imp) {
+      box.innerHTML = "";
+      var rule = DATA.find(function (r) { return r.id === st.selRule; });
+      rule.steps.forEach(function (s, i) {
+        var row = el("div", "step-row");
+        row.appendChild(el("span", "num", String(i + 1)));
+        row.appendChild(el("span", null, s.type));
+        row.appendChild(el("span", "sum", s.sum));
+        var ops = el("span", "ops");
+        var up = el("button", null, "↑"); var dn = el("button", null, "↓");
+        var ed = el("button", null, "✏");
+        var del = el("button", null, "🗑");
+        up.addEventListener("click", function () { if (i > 0) { var t = rule.steps[i - 1]; rule.steps[i - 1] = rule.steps[i]; rule.steps[i] = t; renderSteps(box, st, imp); } });
+        dn.addEventListener("click", function () { if (i < rule.steps.length - 1) { var t = rule.steps[i + 1]; rule.steps[i + 1] = rule.steps[i]; rule.steps[i] = t; renderSteps(box, st, imp); } });
+        ed.addEventListener("click", function () { st.openStep = st.openStep === i ? -1 : i; renderSteps(box, st, imp); });
+        del.addEventListener("click", function () { askDelete(i, function () { rule.steps.splice(i, 1); st.openStep = -1; renderSteps(box, st, imp); }); });
+        ops.appendChild(up); ops.appendChild(dn); ops.appendChild(ed); ops.appendChild(del);
+        row.appendChild(ops);
+        box.appendChild(row);
+        if (st.openStep === i) box.appendChild(buildForm(s, imp));
+      });
+    }
+
+    function buildForm(s, imp) {
+      var f = el("div", "step-form");
+      if (s.form === "detect") {
+        f.appendChild(row("目標文字", textInput("開始遊戲")));
+        f.appendChild(row("偵測區域", imp ? btn("框選區域（基本）") : spanText("整窗（進階區）")));
+        var advHead = el("div", "collapse-head", "進階設定 ▶（比對方式/相似度/找不到時）");
+        var adv = el("div", "adv");
+        adv.style.display = "none";
+        adv.appendChild(row("比對方式", sel(["近似比對", "完全符合", "包含", "正則表達式"])));
+        adv.appendChild(row("相似度", imp ? textInput("85.0%") : textInput("0.850")));
+        adv.appendChild(row("找不到時", sel(["停止本規則（下次掃描重試）", "換下一條規則", "跳到指定步驟", "跳到指定規則", "按鍵後繼續", "通知並停止群組"])));
+        advHead.addEventListener("click", function () {
+          var open = adv.style.display === "none";
+          adv.style.display = open ? "block" : "none";
+          advHead.textContent = "進階設定 " + (open ? "▼" : "▶") + "（比對方式/相似度/找不到時）";
+        });
+        f.appendChild(advHead); f.appendChild(adv);
+      } else if (s.form === "match") {
+        f.appendChild(row("範本圖片", spanText("領取.png")));
+        f.appendChild(row("搜尋區域", btn("框選區域")));
+        f.appendChild(row("門檻", textInput("80%")));
+        f.appendChild(row("顏色比對", spanText("未啟用")));
+      } else {
+        f.appendChild(row("設定", spanText("（此步驟無需額外基本設定）")));
+      }
+      return f;
+    }
+
+    function row(label, control) {
+      var r = el("div", "f-row");
+      r.appendChild(el("label", null, label));
+      r.appendChild(control);
+      return r;
+    }
+    function textInput(v) { var i = el("input", null); i.type = "text"; i.value = v; i.style.width = "120px"; return i; }
+    function sel(items) { var s = el("select", null); items.forEach(function (t) { s.appendChild(el("option", null, t)); }); return s; }
+    function btn(t) { return el("button", null, t); }
+    function spanText(t) { var s = el("span", "hint", t); return s; }
+
+    function toggleRun(st, imp, btn, bodyEl) {
+      st.running = !st.running;
+      btn.textContent = st.running ? "停止[F8]" : "啟動[F8]";
+      renderTree(tree, st, imp, "");
+      var b = right.querySelector(imp ? "#banner-new" : "#banner-cur");
+      if (b) b.style.display = st.running ? "block" : "none";
+      sbMsg.textContent = st.running ? "執行中…" : "已停止";
+      if (st.running) {
+        logBox.innerHTML = "";
+        var tbl = el("table");
+        [["12:00:01", "主線任務", "步驟 1 偵測", "✓ 通過", "開始遊戲"],
+         ["12:00:01", "壞掉的規則", "預檢", imp ? "⊘ 略過" : "blocked", "偵測關鍵字為空白"]].forEach(function (r) {
+          var tr = el("tr");
+          r.forEach(function (c) { tr.appendChild(el("td", null, c)); });
+          tbl.appendChild(tr);
+        });
+        logBox.appendChild(tbl);
+        if (!state.logOpen) logToggle.click();
+      }
+    }
+
+    // ── 指南頁（對應 :5661-5681，文案逐字）──
+    function renderGuide() {
+      guide.innerHTML = "";
+      if (!improved) {
+        guide.appendChild(el("div", null, "使用步驟")).style.fontWeight = "bold";
+        ["① 選擇目標視窗", "② 點擊「新增」建立規則", "③ 設定觸發文字與點擊參數", "④ 點擊「儲存規則」", "⑤ 點擊「啟動」開始自動偵測", "框選偵測區域可限制 OCR 範圍", "▸ 進階技巧：步驟依序執行。每個步驟可設定「找不到時」的動作，"].forEach(function (t) {
+          guide.appendChild(el("div", null, t));
+        });
+        guide.appendChild(el("div", "hint", "（原文如此：「儲存規則」按鈕實際上不存在，本產品為自動儲存）"));
+      } else {
+        var ul = el("div");
+        ul.style.textAlign = "left"; ul.style.maxWidth = "420px"; ul.style.margin = "0 auto";
+        ul.appendChild(el("div", null, "開始之前：")).style.fontWeight = "bold";
+        ["1. 選擇目標視窗（上方第一個下拉選單）", "2. 點「新增規則」建立第一條規則", "3. 在步驟裡填入要找的文字，並「框選區域」", "4. 點「測試」先試一次（不需按儲存）", "5. 點「啟動 [F8]」開始自動偵測", "設定會自動儲存（右上角顯示儲存狀態），不需要按儲存按鈕"].forEach(function (t) {
+          ul.appendChild(el("div", null, "☐ " + t));
+        });
+        guide.appendChild(ul);
+      }
+    }
+    renderGuide();
+
+    // 未選規則時顯示指南；預設選中第一條規則以利展示編輯區
+    renderTree(tree, state, improved, "");
+    return { state: state, tree: tree, right: right, selectRule: selectRule };
+  }
+
+  // ── 刪除確認（兩版共用，對應 Phase 2A 實作）──
+  var pendingConfirm = null;
+  function askDelete(idx, onYes) {
+    document.getElementById("dlg-text").textContent = "確定刪除第 " + (idx + 1) + " 個步驟？";
+    document.getElementById("dlg-backdrop").style.display = "flex";
+    pendingConfirm = onYes;
+  }
+  document.getElementById("dlg-cancel").addEventListener("click", function () {
+    document.getElementById("dlg-backdrop").style.display = "none";
+    pendingConfirm = null;
+  });
+  document.getElementById("dlg-ok").addEventListener("click", function () {
+    document.getElementById("dlg-backdrop").style.display = "none";
+    if (pendingConfirm) pendingConfirm();
+    pendingConfirm = null;
+  });
+
+  var cur = buildApp(document.getElementById("app-cur"), false);
+  var nw = buildApp(document.getElementById("app-new"), true);
+  cur.selectRule(cur.tree, cur.right, cur.state, false, "r1");
+  nw.selectRule(nw.tree, nw.right, nw.state, true, "r1");
+})();
+</script>
+</body>
+</html>

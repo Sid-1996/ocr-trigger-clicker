@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>OCR Trigger Clicker — UX Phase 1 視覺原型</title>
+<style>
+  :root { --bg:#f0f0f0; --panel:#ffffff; --border:#d4d4d4; --text:#222; --muted:#666;
+          --accent:#2f7d4f; --warn:#c0392b; --amber:#b7791f; --blue:#2b6cb0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI","Microsoft JhengHei",sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+  header { background:#2d3436; color:#fff; padding:14px 20px; }
+  header h1 { margin:0 0 4px; font-size:18px; }
+  header p { margin:0; color:#b2bec3; font-size:12px; }
+  nav { background:#fff; border-bottom:1px solid var(--border); padding:8px 20px; position:sticky; top:0; z-index:10; }
+  nav a { margin-right:16px; color:var(--blue); text-decoration:none; }
+  nav a:hover { text-decoration:underline; }
+  main { max-width:980px; margin:0 auto; padding:16px; }
+  section { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:18px 20px; margin-bottom:20px; }
+  section h2 { margin-top:0; font-size:16px; border-bottom:2px solid var(--accent); padding-bottom:6px; }
+  section h3 { font-size:14px; margin:16px 0 8px; }
+  .old { background:#fff7e6; border:1px solid #e8d5a8; border-radius:4px; padding:10px 12px; margin:10px 0; }
+  .new { background:#eef7f1; border:1px solid #b6dcc4; border-radius:4px; padding:10px 12px; margin:10px 0; }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:8px; margin-right:6px; }
+  .tag-before { background:#f6e0b5; color:#7a5b13; }
+  .tag-after { background:#cdeeda; color:#1e5c38; }
+  .form-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
+  .form-row label { width:130px; color:var(--muted); flex:none; }
+  .form-row input[type=text], .form-row select { padding:4px 8px; border:1px solid var(--border); border-radius:3px; font-size:13px; }
+  .form-row input[type=text] { width:240px; }
+  button { padding:5px 14px; border:1px solid #bbb; background:#f7f7f7; border-radius:4px; cursor:pointer; font-size:13px; }
+  button:hover { background:#ececec; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.danger { background:var(--warn); color:#fff; border-color:var(--warn); }
+  .collapse-head { display:flex; justify-content:space-between; align-items:center; background:#f7f7f7;
+                  border:1px solid var(--border); border-radius:4px; padding:6px 10px; margin:12px 0 6px; cursor:pointer; }
+  .collapse-body { border:1px solid var(--border); border-top:none; border-radius:0 0 4px 4px; padding:8px 12px; }
+  .hidden { display:none; }
+  .hint { color:var(--muted); font-size:12px; }
+  .warn-text { color:var(--warn); font-size:12px; }
+  .mono { font-family:Consolas,monospace; background:#f4f4f4; padding:1px 5px; border-radius:3px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { border:1px solid var(--border); padding:6px 8px; text-align:left; vertical-align:top; }
+  th { background:#f7f7f7; }
+  .step-list { border:1px solid var(--border); border-radius:4px; }
+  .step-item { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid #eee; }
+  .step-item:last-child { border-bottom:none; }
+  .step-item .num { font-weight:bold; width:22px; }
+  .step-item .sum { flex:1; color:var(--muted); }
+  .toast { position:fixed; right:16px; bottom:16px; background:rgba(45,52,54,.95); color:#fff;
+           padding:10px 14px; border-radius:6px; display:none; align-items:center; gap:12px; z-index:50; }
+  .toast button { background:#fff; }
+  .dialog-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:40; }
+  .dialog { background:#fff; border-radius:6px; padding:18px 20px; width:380px; box-shadow:0 8px 30px rgba(0,0,0,.3); }
+  .dialog h4 { margin:0 0 10px; }
+  .dialog .actions { text-align:right; margin-top:14px; }
+  .dialog .actions button { margin-left:8px; }
+  .result { margin-top:10px; font-size:13px; }
+  .slider-row { display:flex; align-items:center; gap:12px; }
+  .slider-row input[type=range] { width:320px; }
+  .big-num { font-size:22px; font-weight:bold; color:var(--accent); min-width:80px; }
+  .rec { border-left:4px solid var(--accent); padding:6px 12px; background:#f4faf6; margin:10px 0; }
+  details { margin:8px 0; }
+  summary { cursor:pointer; color:var(--blue); font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OCR Trigger Clicker — UX Phase 1 視覺原型</h1>
+  <p>獨立原型（原生 HTML/CSS/JS，無外部資源）；不連接正式 PyQt GUI。對照 HEAD <span class="mono">7acda36</span> 盤點結果製作。</p>
+</header>
+<nav>
+  <a href="#proto-a">A. 表單基本/進階（UX-C1）</a>
+  <a href="#proto-b">B. 相似度百分比（UX-C3）</a>
+  <a href="#proto-c">C. 刪除防護（UX-C7）</a>
+  <a href="#proto-d">D. on_fail 文案（UX-C2）</a>
+  <a href="#howto">操作說明</a>
+</nav>
+<main>
+
+<!-- ============ 原型 A ============ -->
+<section id="proto-a">
+  <h2>原型 A：Detect / MatchImage 表單 — ROI 移至基本區（UX-C1）</h2>
+  <p class="hint">現況證據：<span class="mono">gui/06_gui_main.py _DetectStepForm</span> 基本區只有「目標文字」一行，ROI 按鈕在 advanced container 內；
+  且 <span class="mono">_StepListWidget._expand_advanced</span> 打開表單即強制展開 on_fail，進階永遠攤開。</p>
+
+  <div class="old">
+    <span class="tag tag-before">改善前</span>
+    <div class="form-row"><label>目標文字</label><input type="text" placeholder="輸入要找的文字"></div>
+    <div class="collapse-head" style="cursor:default"><span>進階設定 ▼（打開表單即自動攤開，擠佔畫面）</span></div>
+    <div class="collapse-body">
+      <div class="form-row"><label>偵測區域</label><span class="hint">（整窗）</span><button>框選區域</button></div>
+      <div class="form-row"><label>比對方式</label><select><option>近似比對</option><option>完全符合</option><option>包含</option><option>正則表達式</option></select></div>
+      <div class="form-row"><label>相似度</label><input type="text" value="0.850" style="width:80px"><span class="hint">0.000–1.000 小數</span></div>
+      <div class="form-row"><label>找不到文字時</label><select><option>跳過本次（預設）</option></select></div>
+    </div>
+    <p class="hint">問題：新手最需要「框選區域」藏在第二次捲動之後；on_fail 每次都攤開。</p>
+  </div>
+
+  <div class="new">
+    <span class="tag tag-after">改善後（可操作）</span>
+    <div class="form-row">
+      <label>步驟類型</label>
+      <select id="a-type">
+        <option value="detect">🔍 文字偵測（Detect）</option>
+        <option value="match_image">🖼 圖示比對（Match Image）</option>
+      </select>
+    </div>
+    <div class="form-row" id="a-text-row"><label>目標文字</label><input type="text" id="a-text" placeholder="輸入要找的文字"></div>
+    <div class="form-row" id="a-img-row" style="display:none"><label>範本圖片</label><span class="hint">未選取</span><button>截圖選取</button><button>選擇現有</button></div>
+
+    <h3>基本設定</h3>
+    <div class="form-row">
+      <label id="a-roi-label">偵測區域</label>
+      <span id="a-roi-status" class="hint">尚未設定（整窗掃描）</span>
+      <button id="a-roi-btn">框選區域</button>
+    </div>
+    <p id="a-roi-warn" class="warn-text">⚠ 未框選區域時會掃描整個視窗，大尺寸畫面會慢且容易誤判（引擎已有同樣警告，<span class="mono">_handle_detect</span>）</p>
+
+    <div class="collapse-head" id="a-adv-head"><span>進階設定 <span id="a-adv-arrow">▶</span></span><span class="hint">預設收合</span></div>
+    <div class="collapse-body hidden" id="a-adv-body">
+      <div class="form-row"><label>比對方式</label><select><option>近似比對</option><option>完全符合</option><option>包含</option><option>正則表達式</option></select></div>
+      <div class="form-row"><label>相似度</label><span class="hint">見原型 B（百分比）</span></div>
+      <div class="form-row"><label>動作後延遲</label><input type="text" value="0" style="width:80px"><span class="hint">ms</span></div>
+    </div>
+
+    <div class="collapse-head" id="a-of-head"><span>找不到文字/圖片時 <span id="a-of-arrow">▶</span></span><span class="hint">預設收合，使用者主動展開</span></div>
+    <div class="collapse-body hidden" id="a-of-body">
+      <div class="form-row"><label>失敗處理</label><select><option>停止本規則（下次掃描重試）</option><option>換下一條規則</option><option>跳到指定步驟</option><option>跳到指定規則</option><option>按鍵後繼續</option><option>通知並停止群組</option></select></div>
+      <div class="form-row"><label>持續失敗多久才處理</label><input type="text" value="0" style="width:80px"><span class="hint">秒（0＝立即）</span></div>
+    </div>
+  </div>
+
+  <h3>設計選擇理由</h3>
+  <ul>
+    <li>ROI 必須在基本區：它同時影響速度與準確度，是新手最該先做的決定；引擎已在未設定時每 30 次警告一次，UI 應在設定當下就提示（本原型以 inline 警告示範）。</li>
+    <li>進階/on_fail 預設收合、使用者主動展開：複用 codebase 既有模式（Compare 的 advanced、Sum 閘門、群組 repeat 欄位），不引入新機制；同時移除「打開即強制展開 on_fail」的行為（<span class="mono">_expand_advanced</span>）。</li>
+    <li>MatchImage 與 Detect 共用同一基本/進階骨架，僅第一欄不同（文字 vs 範本圖），減少學習成本。</li>
+  </ul>
+</section>
+
+<!-- ============ 原型 B ============ -->
+<section id="proto-b">
+  <h2>原型 B：模糊相似度百分比（UX-C3）</h2>
+  <p class="hint">程式碼確認的現況限制（HEAD 7acda36）：步驟表單 spinbox 範圍 <span class="mono">0.0–1.0</span>、小數 3 位、步進 0.05
+  （<span class="mono">06_gui_main.py _DetectStepForm._fuzzy_th</span>）；設定頁範圍 <span class="mono">0.5–0.95</span>
+  （<span class="mono">SettingsDialog._fuzzy_th</span>）；核心正規化夾至 0–1、預設 0.8（<span class="mono">rule_migration._normalize_step_params</span>）。
+  <strong>本原型不改變任何實際範圍或預設值</strong>，僅改變顯示方式。</p>
+
+  <div class="old">
+    <span class="tag tag-before">改善前</span>
+    <div class="form-row"><label>相似度</label><input type="text" id="b-old" value="0.850" style="width:90px" readonly><span class="hint">0.000–1.000：0.85 算高還是低？一般使用者無法判斷</span></div>
+  </div>
+
+  <div class="new">
+    <span class="tag tag-after">改善後（可操作）</span>
+    <div class="slider-row">
+      <label>相似度</label>
+      <input type="range" id="b-slider" min="0" max="100" step="1" value="85">
+      <span class="big-num" id="b-pct">85%</span>
+      <input type="number" id="b-num" min="0" max="100" step="1" value="85" style="width:70px">
+    </div>
+    <div class="form-row"><label>內部儲存值</label><span class="mono" id="b-internal">0.850</span><span class="hint">（百分比 ÷ 100，存檔格式不變；使用者不需看到此值）</span></div>
+    <div class="form-row"><label>白話說明</label><span id="b-hint" class="hint">85%：要求辨識文字與目標相當接近，適合一般情況。</span></div>
+    <div class="form-row"><label>常用例子</label>
+      <button data-b="100">100% 完全符合</button><button data-b="85">85% 一般</button><button data-b="70">70% 較寬鬆</button><button data-b="50">50% 很寬鬆</button>
+    </div>
+  </div>
+
+  <h3>轉換關係（正式實作時）</h3>
+  <table>
+    <tr><th>位置</th><th>內部 float（存檔）</th><th>UI 顯示</th><th>範圍/步進</th></tr>
+    <tr><td>Detect 步驟表單</td><td class="mono">0.0–1.0，預設 0.8</td><td>0–100%</td><td>維持 0–100，步進 1%（≡ 0.01）或沿用 5%（≡ 0.05）</td></tr>
+    <tr><td>設定頁預設值</td><td class="mono">0.5–0.95</td><td>50–95%</td><td>維持 50–95</td></tr>
+    <tr><td>核心正規化</td><td class="mono">夾至 0–1</td><td>—（不變）</td><td>不變</td></tr>
+  </table>
+  <p class="hint">注意：步驟表單允許 0–100%（含設定頁範圍外的值），與現行 0.0–1.0 一致；百分比僅為顯示層轉換（<span class="mono">pct = round(float*100)</span>，存檔時反向換算），JSON schema 不變。</p>
+</section>
+
+<!-- ============ 原型 C ============ -->
+<section id="proto-c">
+  <h2>原型 C：步驟刪除防護（UX-C7）</h2>
+  <p class="hint">現況：<span class="mono">_StepListWidget._delete_step</span> 直接 <span class="mono">pop</span>，無確認、無撤銷；
+  與刪除規則/群組的確認等級不一致。</p>
+
+  <div class="step-list" id="c-list"></div>
+  <p><button id="c-reset">重設步驟清單</button><span class="hint">（模擬：3 個步驟）</span></p>
+  <div class="result" id="c-result"></div>
+
+  <h3>方案 A：刪除前確認（本原型推薦）</h3>
+  <p>點任一步驟的「刪除」→ 出現確認對話框 →「取消」不刪、「刪除」才刪。</p>
+  <h3>方案 B：刪除後復原（Toast Undo）</h3>
+  <p>點「刪除」→ 立即刪除並在右下角顯示 Toast「已刪除步驟 2」附「復原」按鈕（5 秒內可還原）。</p>
+
+  <div class="rec">
+    <strong>推薦：方案 A（確認對話框）。</strong>
+    <ul>
+      <li>操作成本：刪除步驟是低頻、刻意操作，多一次點擊可接受；誤刪保護 100%（未確認不會刪）。</li>
+      <li>與既有慣例一致：刪除規則（<span class="mono">06_gui_main.py _delete_rule</span>）、刪除群組均已有確認對話框，使用者心智模型統一。</li>
+      <li>方案 B 風險：正式 GUI 的 Toast 僅顯示 2 秒（<span class="mono">NotificationStack</span>），使用者很可能錯過復原視窗；且刪除已觸發自動存檔（<span class="mono">steps_changed</span>），復原需再次寫檔，語意更複雜。B 需先改善 Toast 才能成立，屬第二批。</li>
+      <li>實作範圍 A：僅 <span class="mono">_delete_step</span> 加 QMessageBox.question，約 10 行；B 需在 StepList 保留刪除快照 + Toast 復原通道，中等複雜度。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 原型 D ============ -->
+<section id="proto-d">
+  <h2>原型 D：on_fail 文案 — 六種失敗處理（UX-C2）</h2>
+  <p class="hint">語意來源：<span class="mono">core/05_main_loop.py MainLoop._handle_on_fail</span>（:1495–1612）與呼叫點
+  （detect :1086/:1092、match_image :1180、compare :1211–1239、sum 閘門）。下表「行為」欄逐字反映程式碼，非推測。
+  現行標籤來源：<span class="mono">i18n/*/step_form.of_*</span>（三語已核對）。</p>
+
+  <table>
+    <tr><th>內部值</th><th>現行標籤（繁中）</th><th>建議新標籤（繁中）</th><th>English</th><th>日本語</th><th>實際行為（程式碼證據）</th></tr>
+    <tr>
+      <td class="mono">stop</td><td>跳過本次（預設）</td><td><strong>停止本規則（下次掃描重試）</strong></td>
+      <td>Stop this rule (retry next scan)</td><td>このルールを停止（次回再試行）</td>
+      <td>回 <span class="mono">StepResult("stop")</span>：本規則本幀結束，後續步驟不執行；<strong>不是全域停止</strong>，下個掃描週期從頭重試（<span class="mono">_stopped_outcome</span> :2103–2110 明示區分）。可搭配 <span class="mono">fail_duration_sec</span> 容忍期（:1508–1521）。</td>
+    </tr>
+    <tr>
+      <td class="mono">advance</td><td>跳過此規則（換下一條）</td><td><strong>換下一條規則</strong></td>
+      <td>Move to next rule</td><td>次のルールへ進む</td>
+      <td>設 <span class="mono">ctx.force_advance=True</span> 並回 stop（:1608–1610）；排程器據此推進到下一條規則（:2836）。</td>
+    </tr>
+    <tr>
+      <td class="mono">skip</td><td>跳至步驟</td><td><strong>跳到指定步驟</strong></td>
+      <td>Jump to step</td><td>指定ステップへジャンプ</td>
+      <td>回 <span class="mono">jump_step</span> 到 <span class="mono">skip_to</span>（:1547–1553）；必須向前跳，否則視為無效停止（:2419–2429）；越界＝規則結尾（:2399–2410）。GUI 下拉僅提供後續步驟。</td>
+    </tr>
+    <tr>
+      <td class="mono">jump</td><td>跳轉至規則</td><td><strong>跳到指定規則</strong></td>
+      <td>Jump to rule</td><td>指定ルールへジャンプ</td>
+      <td>把同群組指標移到目標規則並回 stop（:1555–1565）；目標不在當前群組時不跳轉（僅回 stop）。</td>
+    </tr>
+    <tr>
+      <td class="mono">key</td><td>按下按鍵後繼續</td><td><strong>按鍵後繼續</strong></td>
+      <td>Press key and continue</td><td>キーを押して続行</td>
+      <td>送出指定按鍵後回 <span class="mono">continue</span>，<strong>後續步驟照常執行</strong>（:1533–1545）；<span class="mono">on_fail_fired</span> 使動作後延遲/驗證不執行（:2180–2196）。key 為空時只 continue 不送鍵。</td>
+    </tr>
+    <tr>
+      <td class="mono">notify</td><td>通知並停止群組</td><td><strong>通知並停止指定群組</strong></td>
+      <td>Notify and stop groups</td><td>通知して指定グループを停止</td>
+      <td>通知後停止 <span class="mono">stop_groups</span>（未選＝當前群組，:1567–1598）；若無可用群組且無背景規則則觸發全域停止（:1599–1603）。</td>
+    </tr>
+  </table>
+  <p class="hint">待確認：無。六種語意均已在 <span class="mono">_handle_on_fail</span> 完整確認；現行 tooltip（<span class="mono">of_*_tip</span>）其實已正確描述行為，問題僅在短標籤易混淆（「跳過本次」vs「跳過此規則」）。建議僅改標籤、保留 tooltip，並同步三語。</p>
+</section>
+
+<!-- ============ 操作說明 ============ -->
+<section id="howto">
+  <h2>操作說明</h2>
+  <ol>
+    <li><strong>原型 A</strong>：切換「步驟類型」看 Detect/MatchImage 第一欄變化；點「框選區域」模擬已設定（警告消失、狀態改「已設定」）；點「進階設定」與「找不到文字/圖片時」展開/收合，觀察預設收合。</li>
+    <li><strong>原型 B</strong>：拖曳滑桿或改數字，右側百分比與「內部儲存值」即時同步；點常用例子按鈕快速切換。</li>
+    <li><strong>原型 C</strong>：點任一步驟「刪除」→ 方案 A 確認對話框（取消/刪除）；「重設步驟清單」還原。方案 B：文件下方說明操作流程（Toast 復原需正式 GUI 的通知通道，本原型以對話框方案為主，B 的成本/風險見推薦欄）。</li>
+    <li><strong>原型 D</strong>：對照表，逐列即為正式實作的文案提案；行為欄附程式碼行號可稽核。</li>
+  </ol>
+  <p class="hint">本檔為 Phase 1 視覺原型與實作依據，不連接正式產品；正式實作時以各原型「設計選擇理由」為準。</p>
+</section>
+</main>
+
+<!-- Toast（方案 B 示範用，實際推薦 A） -->
+<div class="toast" id="c-toast"><span id="c-toast-msg"></span><button id="c-undo">復原</button></div>
+
+<!-- 確認對話框（方案 A） -->
+<div class="dialog-backdrop" id="c-backdrop">
+  <div class="dialog">
+    <h4>刪除步驟？</h4>
+    <p id="c-dialog-text"></p>
+    <div class="actions"><button id="c-cancel">取消</button><button class="danger" id="c-confirm">刪除</button></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ---------- 原型 A ----------
+  var typeSel = document.getElementById('a-type');
+  var roiSet = false;
+  function renderA() {
+    var isImg = typeSel.value === 'match_image';
+    document.getElementById('a-text-row').style.display = isImg ? 'none' : 'flex';
+    document.getElementById('a-img-row').style.display = isImg ? 'flex' : 'none';
+    document.getElementById('a-roi-label').textContent = isImg ? '搜尋區域' : '偵測區域';
+    document.getElementById('a-roi-status').textContent = roiSet ? '已設定（客戶區比例）' : '尚未設定（整窗掃描）';
+    document.getElementById('a-roi-warn').style.display = roiSet ? 'none' : 'block';
+    document.getElementById('a-roi-btn').textContent = roiSet ? '重新框選' : '框選區域';
+  }
+  typeSel.addEventListener('change', renderA);
+  document.getElementById('a-roi-btn').addEventListener('click', function () { roiSet = !roiSet; renderA(); });
+  function bindCollapse(headId, bodyId, arrowId) {
+    var head = document.getElementById(headId), body = document.getElementById(bodyId), arrow = document.getElementById(arrowId);
+    head.addEventListener('click', function () {
+      var open = body.classList.toggle('hidden') === false;
+      arrow.textContent = open ? '▼' : '▶';
+    });
+  }
+  bindCollapse('a-adv-head', 'a-adv-body', 'a-adv-arrow');
+  bindCollapse('a-of-head', 'a-of-body', 'a-of-arrow');
+  renderA();
+
+  // ---------- 原型 B ----------
+  var slider = document.getElementById('b-slider'), num = document.getElementById('b-num');
+  var pct = document.getElementById('b-pct'), internal = document.getElementById('b-internal');
+  var old = document.getElementById('b-old'), hint = document.getElementById('b-hint');
+  function hintFor(p) {
+    if (p >= 95) return '接近完全比對：文字必須幾乎一模一樣才算找到。';
+    if (p >= 80) return p + '%：要求辨識文字與目標相當接近，適合一般情況。';
+    if (p >= 65) return p + '%：允許較多差異，適合字體或辨識不穩定的畫面。';
+    if (p >= 50) return p + '%：很寬鬆，容易誤判，請只在必要時使用。';
+    return p + '%：比設定頁下限（50%）還低，步驟表單允許但不建議。';
+  }
+  function renderB() {
+    var p = Math.max(0, Math.min(100, parseInt(num.value, 10) || 0));
+    slider.value = p; num.value = p;
+    pct.textContent = p + '%';
+    internal.textContent = (p / 100).toFixed(3);
+    old.value = (p / 100).toFixed(3);
+    hint.textContent = hintFor(p);
+  }
+  slider.addEventListener('input', function () { num.value = slider.value; renderB(); });
+  num.addEventListener('input', renderB);
+  document.querySelectorAll('[data-b]').forEach(function (b) {
+    b.addEventListener('click', function () { num.value = b.getAttribute('data-b'); renderB(); });
+  });
+  renderB();
+
+  // ---------- 原型 C ----------
+  var steps = [], pendingDelete = -1, lastDeleted = null, toastTimer = null;
+  var listEl = document.getElementById('c-list'), resultEl = document.getElementById('c-result');
+  function resetSteps() {
+    steps = [
+      { type: '🔍 文字偵測', sum: '「開始遊戲」 偵測區域 已設定' },
+      { type: '🖱 點擊', sum: '點擊辨識到的文字中心' },
+      { type: '⏱ 等待', sum: '等待 500ms' }
+    ];
+    lastDeleted = null;
+    renderC();
+    resultEl.textContent = '';
+  }
+  function renderC() {
+    listEl.innerHTML = '';
+    steps.forEach(function (s, i) {
+      var row = document.createElement('div');
+      row.className = 'step-item';
+      row.innerHTML = '<span class="num">' + (i + 1) + '</span><span>' + s.type + '</span><span class="sum">' + s.sum + '</span>';
+      var del = document.createElement('button');
+      del.textContent = '刪除';
+      del.addEventListener('click', function () { askDelete(i); });
+      row.appendChild(del);
+      listEl.appendChild(row);
+    });
+    if (!steps.length) listEl.innerHTML = '<div class="step-item hint">（無步驟）</div>';
+  }
+  // 方案 A：確認對話框
+  var backdrop = document.getElementById('c-backdrop');
+  function askDelete(i) {
+    pendingDelete = i;
+    document.getElementById('c-dialog-text').textContent =
+      '確定要刪除步驟 ' + (i + 1) + '（' + steps[i].type + '）？此操作無法復原。';
+    backdrop.style.display = 'flex';
+  }
+  document.getElementById('c-cancel').addEventListener('click', function () {
+    backdrop.style.display = 'none';
+    resultEl.textContent = '已取消，步驟保留。';
+  });
+  document.getElementById('c-confirm').addEventListener('click', function () {
+    backdrop.style.display = 'none';
+    var removed = steps.splice(pendingDelete, 1)[0];
+    renderC();
+    resultEl.innerHTML = '已刪除「' + removed.type + '」（方案 A：確認後刪除）。<span class="hint">方案 B 對照：若為 Toast 復原，刪除後會同時顯示「已刪除，可復原」。</span>';
+  });
+  // 方案 B 示範：長按/示範按鈕 — 以鍵盤 Delete 觸發 Toast 復原（說明用）
+  // （主流程推薦 A，故 B 僅以說明呈現，不佔主互動。）
+  document.getElementById('c-reset').addEventListener('click', resetSteps);
+  resetSteps();
+
+  // Toast 復原（保留供方案 B 比較展示；由按鍵觸發避免誤操作）
+  var toast = document.getElementById('c-toast');
+  document.getElementById('c-undo').addEventListener('click', function () {
+    if (lastDeleted) { steps.splice(lastDeleted.idx, 0, lastDeleted.step); lastDeleted = null; renderC(); }
+    toast.style.display = 'none';
+    resultEl.textContent = '已復原步驟。';
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Delete' && steps.length) {
+      lastDeleted = { idx: steps.length - 1, step: steps.pop() };
+      renderC();
+      document.getElementById('c-toast-msg').textContent = '已刪除步驟 ' + (lastDeleted.idx + 1) + '（方案 B 示範）';
+      toast.style.display = 'flex';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toast.style.display = 'none'; }, 5000);
+    }
+  });
+})();
+</script>
+</body>
+</html>
