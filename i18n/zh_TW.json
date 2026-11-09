@@ -969,6 +969,7 @@
   "dialog.debug_bg_fail_switch_fg": "切換到前景模式",
   "dialog.debug_switched_fg": "已切換為前景模式，之後的測試與執行都會使用前景。",
   "combo.interaction_hybrid": "混合模式（後台偵測＋前景操作）",
+  "status.mode_switch.records_task": "切換後會記錄到目前任務",
   "step_form.pick_existing_image": "選擇現有圖片",
   "step_form.pick_existing_image.tooltip": "重用其他圖片比對步驟已截取的圖片（含目前任務尚未存檔者）",
   "picker.title": "選擇現有圖片",

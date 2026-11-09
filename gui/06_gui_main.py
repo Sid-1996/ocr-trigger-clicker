@@ -59,6 +59,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QTextBrowser,
     QTextEdit,
+    QToolButton,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -5067,6 +5068,33 @@ def _pixels_to_ratio_expanded(
     }
 
 
+def _commit_config_and_task_mode(
+    win, *, old_config, config, new_mode, task_path="", old_task_mode=None
+) -> tuple[bool, str]:
+    """寫入全域 config 並同步目前任務的 interaction_mode；任務寫入失敗時回滾全域。
+
+    設定視窗（SettingsDialog._on_accept）與狀態列模式按鈕共用此 helper；
+    只負責資料寫入，錯誤訊息／對話框呈現由呼叫端決定。回傳 (ok, stage)：
+    - (True, "ok")：全域與任務皆寫入成功
+    - (False, "config")：全域寫入失敗，未動任務
+    - (False, "task")：任務寫入失敗，已回滾全域
+    - (False, "rollback")：任務寫入失敗且回滾也失敗（需呼叫端強提示）
+    """
+    if not win._save_config(config):
+        return False, "config"
+    if task_path and new_mode != old_task_mode:
+        if not set_task_interaction_mode(task_path, new_mode):
+            logging.error(f"settings task mode write failed: {task_path} (mode={new_mode})")
+            if not win._save_config(old_config):
+                logging.error(
+                    "settings rollback failed after task mode write failure: "
+                    f"config={getattr(win, '_config_path', '')} task={task_path}"
+                )
+                return False, "rollback"
+            return False, "task"
+    return True, "ok"
+
+
 class SettingsDialog(QDialog):
     def __init__(self, win, parent=None):
         super().__init__(parent)
@@ -5336,7 +5364,40 @@ class SettingsDialog(QDialog):
             }
         )
         config_path = str(getattr(self._win, "_config_path", ""))
-        if not self._win._save_config(config):
+        ok, stage = _commit_config_and_task_mode(
+            self._win,
+            old_config=old_config,
+            config=config,
+            new_mode=new_mode,
+            task_path=task_path,
+            old_task_mode=old_task_mode,
+        )
+        if not ok:
+            if stage != "config":
+                if stage == "rollback":
+                    self._block_save()
+                    message = T(
+                        "notif.settings_rollback_failed",
+                        config_path=config_path,
+                        task_path=task_path,
+                    )
+                    conflict_ctrl = getattr(self._win, "_rule_config_ctrl", self._ctrl)
+                    get_conflict = getattr(conflict_ctrl, "get_save_conflict", None)
+                    conflict = get_conflict() if get_conflict is not None else None
+                    if conflict is not None:
+                        message += "\n\n" + T(
+                            "dialog.config_external_change_msg",
+                            path=getattr(conflict, "path", config_path),
+                            error=getattr(conflict, "reason", str(conflict)),
+                        )
+                    QMessageBox.critical(self, T("dialog.warning"), message)
+                    return
+                QMessageBox.critical(
+                    self,
+                    T("dialog.warning"),
+                    f"{T('dialog.cannot_write')}\n{task_path}",
+                )
+                return
             error_ctrl = getattr(self._win, "_rule_config_ctrl", self._ctrl)
             get_save_conflict = getattr(error_ctrl, "get_save_conflict", None)
             save_conflict = get_save_conflict() if get_save_conflict is not None else None
@@ -5366,37 +5427,6 @@ class SettingsDialog(QDialog):
                     T("notif.settings_save_failed", path=config_path),
                 )
             return
-        if task_path and new_mode != old_task_mode:
-            if not set_task_interaction_mode(task_path, new_mode):
-                logging.error(f"settings task mode write failed: {task_path} (mode={new_mode})")
-                if not self._win._save_config(old_config):
-                    self._block_save()
-                    logging.error(
-                        "settings rollback failed after task mode write failure: "
-                        f"config={config_path} task={task_path}"
-                    )
-                    message = T(
-                        "notif.settings_rollback_failed",
-                        config_path=config_path,
-                        task_path=task_path,
-                    )
-                    conflict_ctrl = getattr(self._win, "_rule_config_ctrl", self._ctrl)
-                    get_conflict = getattr(conflict_ctrl, "get_save_conflict", None)
-                    conflict = get_conflict() if get_conflict is not None else None
-                    if conflict is not None:
-                        message += "\n\n" + T(
-                            "dialog.config_external_change_msg",
-                            path=getattr(conflict, "path", config_path),
-                            error=getattr(conflict, "reason", str(conflict)),
-                        )
-                    QMessageBox.critical(self, T("dialog.warning"), message)
-                    return
-                QMessageBox.critical(
-                    self,
-                    T("dialog.warning"),
-                    f"{T('dialog.cannot_write')}\n{task_path}",
-                )
-                return
         if bool(old_power_save) != self._power_save.isChecked():
             # 節電模式變更：即時重置 OCR 引擎，下一個任務依新設定進入引擎（延遲載入）
             from _loader import load_sibling
@@ -5991,10 +6021,28 @@ class MainWindow(QMainWindow):
             "color: #27AE60; font-size: 11px; padding-right: 8px;"
         )
         self._status_bar.addPermanentWidget(self._input_status_label)
-        self._interaction_mode_label = QLabel("")
+        # 狀態列互動方法按鈕：點擊 InstantPopup 選單切換，文字/勾選由
+        # _update_interaction_mode_label() 同步；permanent widget 不受 showMessage 影響。
+        self._interaction_mode_label = QToolButton()
         self._interaction_mode_label.setStyleSheet(
             "color: #888; font-size: 11px; padding-right: 8px;"
         )
+        self._interaction_mode_label.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._interaction_mode_label.setToolTip(
+            T("settings.interaction_mode.tooltip") + "\n" + T("status.mode_switch.records_task")
+        )
+        _mode_menu = QMenu(self)
+        self._interaction_mode_actions: dict[str, object] = {}
+        for _key, _mode in (
+            ("combo.interaction_fg", "pynput"),
+            ("combo.interaction_bg_frida", "frida"),
+            ("combo.interaction_hybrid", "hybrid"),
+        ):
+            _act = _mode_menu.addAction(T(_key))
+            _act.setCheckable(True)
+            _act.triggered.connect(lambda _checked=False, m=_mode: self._on_status_mode_selected(m))
+            self._interaction_mode_actions[_mode] = _act
+        self._interaction_mode_label.setMenu(_mode_menu)
         self._status_bar.addPermanentWidget(self._interaction_mode_label)
         self._perf_timer = QTimer()
         self._perf_timer.timeout.connect(self._update_perf_display)
@@ -6159,15 +6207,107 @@ class MainWindow(QMainWindow):
         self._perf_label.setText(text)
 
     def _update_interaction_mode_label(self):
-        """Update the interaction mode label in the status bar."""
+        """Update the interaction mode button text + menu check in the status bar."""
         mode = self._rule_config_ctrl.get_setting(self, "interaction_mode")
         mode_map = {
             "pynput": f"🟢 {T('combo.interaction_fg')}",
             "frida": f"🟣 {T('combo.interaction_bg_frida')}",
             "hybrid": f"🟠 {T('combo.interaction_hybrid')}",
         }
-        text = mode_map.get(mode, f"🟢 {T('combo.interaction_fg')}")
-        self._interaction_mode_label.setText(text)
+        effective = mode if mode in mode_map else "pynput"
+        self._interaction_mode_label.setText(mode_map[effective])
+        for m, act in getattr(self, "_interaction_mode_actions", {}).items():
+            act.blockSignals(True)
+            try:
+                act.setChecked(m == effective)
+            finally:
+                act.blockSignals(False)
+
+    def _on_status_mode_selected(self, mode: str) -> None:
+        """狀態列按鈕切換互動方法：與設定視窗共用雙寫/回滾 helper。
+
+        成功後與 _open_settings() 相同地 reset GUI 與 MainLoop 兩份快取，
+        執行中 MainLoop 下一幀/下一動作即採用新模式（不重建 loop/backend）。
+        失敗時不更新按鈕顯示，避免 UI 與實際設定不一致。
+        """
+        if mode not in ("pynput", "frida", "hybrid"):
+            return
+        if mode == self._rule_config_ctrl.get_setting(self, "interaction_mode", "pynput"):
+            return
+        task_path = ""
+        old_task_mode = None
+        if getattr(self, "_current_task", ""):
+            task_path = str(_rule_mod.get_tasks_dir() / f"{self._current_task}.json")
+            old_task_mode = get_task_interaction_mode(task_path)
+        old_config = dict(self._load_config())
+        config = dict(old_config)
+        config["interaction_mode"] = mode
+        ok, stage = _commit_config_and_task_mode(
+            self,
+            old_config=old_config,
+            config=config,
+            new_mode=mode,
+            task_path=task_path,
+            old_task_mode=old_task_mode,
+        )
+        if not ok:
+            self._report_status_mode_failed(stage, task_path)
+            return
+        self._rule_config_ctrl.reset_cache()
+        if self._loop:
+            self._loop._config_store.reset_cache()
+        self._update_interaction_mode_label()
+
+    def _report_status_mode_failed(self, stage: str, task_path: str) -> None:
+        """狀態列切換失敗的提示：訊息與設定視窗一致（無對話框可 block）。"""
+        config_path = str(getattr(self, "_config_path", ""))
+        if stage == "rollback":
+            message = T(
+                "notif.settings_rollback_failed",
+                config_path=config_path,
+                task_path=task_path,
+            )
+            get_conflict = getattr(self._rule_config_ctrl, "get_save_conflict", None)
+            conflict = get_conflict() if get_conflict is not None else None
+            if conflict is not None:
+                message += "\n\n" + T(
+                    "dialog.config_external_change_msg",
+                    path=getattr(conflict, "path", config_path),
+                    error=getattr(conflict, "reason", str(conflict)),
+                )
+            QMessageBox.critical(self, T("dialog.warning"), message)
+            return
+        if stage == "task":
+            QMessageBox.critical(
+                self,
+                T("dialog.warning"),
+                f"{T('dialog.cannot_write')}\n{task_path}",
+            )
+            return
+        error_ctrl = self._rule_config_ctrl
+        get_save_conflict = getattr(error_ctrl, "get_save_conflict", None)
+        save_conflict = get_save_conflict() if get_save_conflict is not None else None
+        if save_conflict is not None:
+            path = getattr(save_conflict, "path", config_path)
+            reason = getattr(save_conflict, "reason", str(save_conflict))
+            message = T("dialog.config_external_change_msg", path=path, error=reason)
+            message += "\n\n" + T("notif.settings_reopen_required")
+            QMessageBox.critical(self, T("dialog.config_external_change"), message)
+            return
+        get_load_error = getattr(error_ctrl, "get_load_error", None)
+        load_error = get_load_error() if get_load_error is not None else None
+        if load_error is not None:
+            path = getattr(load_error, "path", config_path)
+            reason = getattr(load_error, "reason", str(load_error))
+            message = T("dialog.config_load_failed_msg", path=path, error=reason)
+            message += "\n\n" + T("notif.settings_reopen_required")
+            QMessageBox.critical(self, T("dialog.config_load_failed"), message)
+            return
+        QMessageBox.critical(
+            self,
+            T("dialog.warning"),
+            T("notif.settings_save_failed", path=config_path),
+        )
 
     def _is_bg_mode(self) -> bool:
         """Check if background mode is active."""

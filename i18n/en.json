@@ -969,6 +969,7 @@
   "dialog.debug_bg_fail_switch_fg": "Switch to foreground mode",
   "dialog.debug_switched_fg": "Switched to foreground mode. Subsequent tests and runs will use foreground.",
   "combo.interaction_hybrid": "Hybrid (background detect + foreground input)",
+  "status.mode_switch.records_task": "Switching records this choice to the current task",
   "step_form.pick_existing_image": "Choose Existing Image",
   "step_form.pick_existing_image.tooltip": "Reuse an image captured by another image match step (including unsaved ones in the current task)",
   "picker.title": "Choose Existing Image",
