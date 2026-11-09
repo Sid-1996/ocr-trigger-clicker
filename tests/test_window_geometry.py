@@ -181,7 +181,8 @@ def test_maximized_saved_and_restored(real_mainwindow, qt_app, isolated_data_dir
     saved = _read_config(win)["window_geometry"]
     assert saved["maximized"] is True
     assert (saved["width"], saved["height"]) == (1300, 800)
-    assert (saved["x"], saved["y"]) == (200, 200)
+    # normalGeometry() 含 frame 座標（offscreen 與 geometry 差 2px），故容差 ±4
+    assert abs(saved["x"] - 200) <= 4 and abs(saved["y"] - 200) <= 4
 
     # 同上：1300 寬的舊矩形中心在 offscreen 800x800 外會回退預設，
     # 故改以可容納的幾何驗證最大化還原。
@@ -266,6 +267,104 @@ def test_tray_menu_quit_saves_geometry(real_mainwindow, monkeypatch):
         "height": 690,
         "maximized": False,
     }
+
+
+# ── 最大化還原迴歸（c70ded2 缺陷：最大化時保存未用 normalGeometry）────
+# offscreen 說明：最大化矩形為 796x796；標題列「還原」以 showNormal() 模擬，
+# 真正的 Windows WM 還原行為仍需真機驗證（見交付報告）。
+
+
+def test_default_size_maximized_save_keeps_normal_size(real_mainwindow, qt_app):
+    win = real_mainwindow
+    # 首次執行：隱藏預設 900x650 → 直接最大化 → 關閉
+    win.showMaximized()
+    qt_app.processEvents()
+    assert win.isMaximized()
+    maximized_rect = (win.width(), win.height())
+    win._save_window_geometry()
+    saved = _read_config(win)["window_geometry"]
+    assert saved["maximized"] is True
+    # 保存的是還原後的一般尺寸（normalGeometry），不是最大化矩形
+    assert (saved["width"], saved["height"]) == (
+        win.normalGeometry().width(),
+        win.normalGeometry().height(),
+    )
+    assert (saved["width"], saved["height"]) != maximized_rect
+    assert saved["height"] == 650  # 預設高度保留
+
+
+def test_maximized_restart_then_unmaximize_restores_custom_size(
+    real_mainwindow, qt_app, isolated_data_dir
+):
+    win = real_mainwindow
+    _write_config(
+        win,
+        {"window_geometry": {"x": 50, "y": 60, "width": 700, "height": 500, "maximized": True}},
+    )
+    win2 = _build_second(qt_app, isolated_data_dir)
+    try:
+        assert win2.isMaximized()
+        win2.showNormal()  # 模擬標題列「還原」按鈕
+        qt_app.processEvents()
+        assert not win2.isMaximized()
+        assert (win2.width(), win2.height()) == (700, 500)
+        assert (win2.x(), win2.y()) == (50, 60)
+    finally:
+        _teardown(win2, qt_app)
+
+
+def test_maximized_restart_roundtrip_keeps_normal_size(real_mainwindow, qt_app, isolated_data_dir):
+    win = real_mainwindow
+    _write_config(
+        win,
+        {"window_geometry": {"x": 50, "y": 60, "width": 700, "height": 500, "maximized": True}},
+    )
+    win2 = _build_second(qt_app, isolated_data_dir)
+    try:
+        win2.showNormal()
+        qt_app.processEvents()
+        win2._save_window_geometry()  # 還原後再次關閉
+        assert _read_config(win2)["window_geometry"] == {
+            "x": 50,
+            "y": 60,
+            "width": 700,
+            "height": 500,
+            "maximized": False,
+        }
+    finally:
+        _teardown(win2, qt_app)
+    win3 = _build_second(qt_app, isolated_data_dir)
+    try:
+        assert not win3.isMaximized()
+        assert (win3.width(), win3.height()) == (700, 500)
+    finally:
+        _teardown(win3, qt_app)
+
+
+def test_resize_after_unmaximize_then_remaximize_saves_new_size(
+    real_mainwindow, qt_app, isolated_data_dir
+):
+    win = real_mainwindow
+    _write_config(
+        win,
+        {"window_geometry": {"x": 50, "y": 60, "width": 700, "height": 500, "maximized": True}},
+    )
+    win2 = _build_second(qt_app, isolated_data_dir)
+    try:
+        win2.showNormal()
+        qt_app.processEvents()
+        win2.move(80, 90)
+        win2.resize(1200, 520)
+        qt_app.processEvents()
+        win2.showMaximized()
+        qt_app.processEvents()
+        win2._save_window_geometry()
+        saved = _read_config(win2)["window_geometry"]
+        assert saved["maximized"] is True
+        assert (saved["width"], saved["height"]) == (1200, 520)
+        assert abs(saved["x"] - 80) <= 4 and abs(saved["y"] - 90) <= 4
+    finally:
+        _teardown(win2, qt_app)
 
 
 def test_double_save_is_idempotent(real_mainwindow):

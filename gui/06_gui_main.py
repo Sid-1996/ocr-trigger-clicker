@@ -5640,7 +5640,10 @@ class MainWindow(QMainWindow):
         """保存全域 window_geometry；失敗靜默降級（不得阻止退出/關窗）。
 
         最小化時保留舊資料（hybrid 啟動的最小化不可污染正常幾何）；
-        最大化時不以最大化後尺寸覆蓋先前的一般視窗尺寸。
+        最大化時以 Qt 的 normalGeometry() 保存「還原後」的一般視窗尺寸 ——
+        geometry() 此時是最大化後的螢幕矩形，不可當一般尺寸存。
+        normalGeometry() 無效（例如剛以最大化還原、尚未還原過）時才回退
+        舊磁碟值；舊值亦無效才用目前 geometry()。
         """
         try:
             if self.isMinimized():
@@ -5648,16 +5651,25 @@ class MainWindow(QMainWindow):
             config = self._load_config()
             maximized = self.isMaximized()
             if maximized:
-                old = config.get("window_geometry")
-                if _valid_window_geometry(old):
-                    rect = {k: old[k] for k in ("x", "y", "width", "height")}
-                else:
+                normal = self.normalGeometry()
+                if normal.isValid() and normal.width() > 0 and normal.height() > 0:
                     rect = {
-                        "x": self.x(),
-                        "y": self.y(),
-                        "width": self.width(),
-                        "height": self.height(),
+                        "x": normal.x(),
+                        "y": normal.y(),
+                        "width": normal.width(),
+                        "height": normal.height(),
                     }
+                else:
+                    old = config.get("window_geometry")
+                    if _valid_window_geometry(old):
+                        rect = {k: old[k] for k in ("x", "y", "width", "height")}
+                    else:
+                        rect = {
+                            "x": self.x(),
+                            "y": self.y(),
+                            "width": self.width(),
+                            "height": self.height(),
+                        }
             else:
                 rect = {
                     "x": self.x(),
