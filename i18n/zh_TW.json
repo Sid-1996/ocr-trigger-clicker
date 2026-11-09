@@ -1035,5 +1035,16 @@
   "verify.fuzzy_threshold": "相似度",
   "verify.empty_text": "驗證文字為空——草稿已保留，填入文字後才會生效",
   "verify.empty_template": "驗證圖片未設定——草稿已保留，截取或選擇圖片後才會生效",
-  "verify.loop_long_hint": "此規則在循環群組用長驗證（約 {secs} 秒），驗證期間同群組其他規則會被卡住；若轉場沒這麼慢，建議改用中／短。"
+  "verify.loop_long_hint": "此規則在循環群組用長驗證（約 {secs} 秒），驗證期間同群組其他規則會被卡住；若轉場沒這麼慢，建議改用中／短。",
+  "exec_log.locate_hint": "點擊可定位到這條規則的編輯位置",
+  "dialog.locate_problem": "定位到問題規則",
+  "locate.pending_after_stop": "執行中先記錄：停止後將定位到「{name}」",
+  "locate.old_log_no_id": "這條日誌是舊版本記錄，無法定位到規則（新日誌會自動帶定位資訊）",
+  "locate.commit_blocked": "目前有未完成的步驟設定，無法先定位；請先完成或取消該步驟的編輯",
+  "locate.task_not_found": "找不到任務「{name}」，無法定位",
+  "locate.task_switch_failed": "無法切換到任務「{name}」（可能未儲存的變更無法寫入），已保留目前任務",
+  "locate.rule_not_found": "找不到規則「{name}」（可能已刪除），無法定位",
+  "locate.located_rule": "已定位到規則「{name}」",
+  "locate.located_step": "已定位到規則「{name}」的第 {n} 步",
+  "locate.step_gone": "已定位到規則「{name}」，但該步驟已不存在（可能被刪除或重排）"
 }

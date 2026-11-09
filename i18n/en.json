@@ -1035,5 +1035,16 @@
   "verify.fuzzy_threshold": "Similarity",
   "verify.empty_text": "Verify text is empty — draft kept, fill in text to take effect.",
   "verify.empty_template": "Verify image not set — draft kept, capture or pick an image to take effect.",
-  "verify.loop_long_hint": "This rule uses a long verify (~{secs}s) inside a loop group — other rules in the group will wait while verifying. Switch to Medium/Short if the transition isn't that slow."
+  "verify.loop_long_hint": "This rule uses a long verify (~{secs}s) inside a loop group — other rules in the group will wait while verifying. Switch to Medium/Short if the transition isn't that slow.",
+  "exec_log.locate_hint": "Click to jump to this rule in the editor",
+  "dialog.locate_problem": "Go to problem rule",
+  "locate.pending_after_stop": "Recorded while running: will jump to \"{name}\" after stopping",
+  "locate.old_log_no_id": "This log entry is from an old version and cannot be located (new entries carry location info)",
+  "locate.commit_blocked": "An unfinished step edit blocks locating; finish or cancel that edit first",
+  "locate.task_not_found": "Task \"{name}\" not found; cannot locate",
+  "locate.task_switch_failed": "Could not switch to task \"{name}\" (unsaved changes could not be written); staying on the current task",
+  "locate.rule_not_found": "Rule \"{name}\" not found (it may have been deleted); cannot locate",
+  "locate.located_rule": "Jumped to rule \"{name}\"",
+  "locate.located_step": "Jumped to step {n} of rule \"{name}\"",
+  "locate.step_gone": "Jumped to rule \"{name}\", but that step no longer exists (deleted or reordered)"
 }

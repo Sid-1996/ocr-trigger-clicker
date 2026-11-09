@@ -583,19 +583,23 @@ class MainLoop:
         step_type: str,
         result: str,
         detail: str = "",
+        rule_id: str = "",
     ):
         if result in ("ok", "triggered", "completed") and rule_name in self._quiet_names:
             return
+        # 去重鍵以 rule_id 優先：同名不同規則不得互相抑制日誌；
+        # 未傳 rule_id 的舊呼叫維持以名稱為鍵（向下相容）。
+        _key_id = rule_id or rule_name
         if result == "completed":
             now = time.monotonic()
             last = self._last_completed_log.get(rule_name, 0.0)
             if now - last < 1.0:
                 return
             self._last_completed_log[rule_name] = now
-            key = f"{rule_name}:{step_idx}"
+            key = f"{_key_id}:{step_idx}"
             self._last_exec_log.pop(key, None)
         else:
-            key = f"{rule_name}:{step_idx}"
+            key = f"{_key_id}:{step_idx}"
         # 首幀抑制：循環剛啟動時每條規則都尚未命中，全部回 stop，會洗版。
         # 只在第一幀丟棄 stop 的印出與面板紀錄，但保留 dedup 狀態，讓第二幀起的
         # 相同 stop 被既有 dedup 機制正常抑制；ok/triggered/completed 仍記錄。
@@ -610,6 +614,11 @@ class MainLoop:
             {
                 "ts": time.strftime("%H:%M:%S") + f".{int((time.time() % 1) * 1000):03d}",
                 "rule_name": rule_name,
+                # 定位識別（唯執行期日誌，不進任務 JSON）：
+                # rule_id 區分同名規則；task 為任務檔名 stem（跨任務定位用）；
+                # step 僅靠 step_idx 位置識別（Step 無 id），改名/刪步驟後以範圍檢查兜底。
+                "rule_id": rule_id,
+                "task": Path(self._rules_path).stem if self._rules_path else "",
                 "step_idx": step_idx,
                 "step_type": step_type,
                 "result": result,
@@ -2140,7 +2149,7 @@ class MainLoop:
             if step.type == "wait":
                 ms = step.params.get("ms", 500)
                 if not background:
-                    self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms")
+                    self._log_exec(rule.name, i, "wait", "wait", f"{ms}ms", rule_id=rule.id)
             result = self._run_step(step, ctx, rule)
             if result.action == "wait":
                 # 加總閘門等待中：直接結束本次規則，不清候選值、不觸發 on_fail、
@@ -2172,6 +2181,7 @@ class MainLoop:
                         step.type,
                         "stop",
                         detail or T("exec_log.detail.interrupted"),
+                        rule_id=rule.id,
                     )
                 return self._stopped_outcome(rule, ctx)
             if self._is_detect_step(step) and result.action == "continue":
@@ -2265,6 +2275,7 @@ class MainLoop:
                                     step.type,
                                     "stop",
                                     cancel_detail,
+                                    rule_id=rule.id,
                                 )
                             return self._stopped_outcome(rule, ctx)
                         # timeout
@@ -2290,6 +2301,7 @@ class MainLoop:
                                             step.type,
                                             "stop",
                                             retry_cancel,
+                                            rule_id=rule.id,
                                         )
                                     return self._stopped_outcome(rule, ctx)
                                 self._frame_waited_ms += (time.monotonic() - t0) * 1000
@@ -2306,6 +2318,7 @@ class MainLoop:
                                         step.type,
                                         "stop",
                                         retry_cancel,
+                                        rule_id=rule.id,
                                     )
                                 return self._stopped_outcome(rule, ctx)
                             # 重跑動作再驗（解決「點沒點到」）
@@ -2333,6 +2346,7 @@ class MainLoop:
                                 step.type,
                                 "stop",
                                 late_cancel,
+                                rule_id=rule.id,
                             )
                         return self._stopped_outcome(rule, ctx)
                     else:  # timeout after retries exhausted
@@ -2356,6 +2370,7 @@ class MainLoop:
                                     step.type,
                                     "stop",
                                     T("exec_log.detail.verification_timeout"),
+                                    rule_id=rule.id,
                                 )
                             return self._stopped_outcome(rule, ctx)
                         tmp_params = {"on_fail": v_on_fail}
@@ -2379,7 +2394,7 @@ class MainLoop:
                         result = res
             if step.type == "wait" and result.action == "continue":
                 if not background:
-                    self._log_exec(rule.name, i, "wait", "ok")
+                    self._log_exec(rule.name, i, "wait", "ok", rule_id=rule.id)
                 self._rule_completed.discard(rule.id)
             elif result.action == "stop":
                 if not background:
@@ -2389,7 +2404,7 @@ class MainLoop:
                     if rule.id in self._rule_completed and self._is_detect_step(step):
                         self._rule_completed.discard(rule.id)
                     else:
-                        self._log_exec(rule.name, i, step.type, "stop", detail)
+                        self._log_exec(rule.name, i, step.type, "stop", detail, rule_id=rule.id)
                 self._clear_sum(rule.id)
                 return self._stopped_outcome(rule, ctx)
             elif result.action == "jump_step":
@@ -2406,6 +2421,7 @@ class MainLoop:
                             step.type,
                             "jump",
                             T("exec_log.detail.skip_to_end"),
+                            rule_id=rule.id,
                         )
                     return self._stopped_outcome(rule, ctx)
                 if not background:
@@ -2415,6 +2431,7 @@ class MainLoop:
                         step.type,
                         "jump",
                         T("exec_log.detail.jump_to", n=idx + 1),
+                        rule_id=rule.id,
                     )
                 # 跳轉必須向前（GUI 也只允許向前 skip），否則可能跳轉成環卡死主執行緒
                 if idx <= i:
@@ -2425,6 +2442,7 @@ class MainLoop:
                             step.type,
                             "stop",
                             T("exec_log.detail.jump_invalid"),
+                            rule_id=rule.id,
                         )
                     return self._stopped_outcome(rule, ctx)
                 i = idx
@@ -2435,9 +2453,9 @@ class MainLoop:
                 # 檔案日誌仍由 _log_sum_result 另行記錄（且僅穩定時記錄）。
                 if not background and (step.type != "sum" or ctx.sum_stable):
                     if ctx.on_fail_fired:
-                        self._log_exec(rule.name, i, step.type, "stop", detail)
+                        self._log_exec(rule.name, i, step.type, "stop", detail, rule_id=rule.id)
                     else:
-                        self._log_exec(rule.name, i, step.type, "ok", detail)
+                        self._log_exec(rule.name, i, step.type, "ok", detail, rule_id=rule.id)
                 self._rule_completed.discard(rule.id)
             i += 1
         return self._stopped_outcome(rule, ctx)
@@ -2721,7 +2739,7 @@ class MainLoop:
         labels = [T(f"exec_log.reason.{p}") for p in (result.problems or ["invalid_rule"])]
         problems_text = "、".join(labels)
         # 完整問題放 execution log（背景與前景皆寫）
-        self._log_exec(rule.name, -1, "preflight", "blocked", problems_text)
+        self._log_exec(rule.name, -1, "preflight", "blocked", problems_text, rule_id=rule.id)
         self._log(f"preflight blocked rule={rule.name} problems=[{problems_text}]")
         if background:
             return
@@ -2779,7 +2797,7 @@ class MainLoop:
                 if outcome is RuleRunOutcome.STOPPED:
                     return
                 if bg_ctx.triggered:
-                    self._log_exec(rule.name, 0, "background", "triggered")
+                    self._log_exec(rule.name, 0, "background", "triggered", rule_id=rule.id)
 
         # ── Loop+parallel groups: run every frame, independent of queue ──
         self._phase_sums["background"] += (time.monotonic() - phase_started) * 1000
@@ -2836,7 +2854,7 @@ class MainLoop:
         if (ctx.triggered or ctx.force_advance) and not ctx.jumped and not ctx.group_removed:
             if ctx.triggered:
                 self._rule_completed.add(rule.id)
-                self._log_exec(rule.name, -1, "completed", "completed")
+                self._log_exec(rule.name, -1, "completed", "completed", rule_id=rule.id)
             self._last_active_rule_id = rule.id
             self._advance_rule_in_group()
 
@@ -2916,7 +2934,7 @@ class MainLoop:
             if r_ctx.triggered:
                 self._last_active_rule_id = r.id
                 self._rule_completed.add(r.id)
-                self._log_exec(r.name, -1, "completed", "completed")
+                self._log_exec(r.name, -1, "completed", "completed", rule_id=r.id)
                 triggered = True
         if triggered and group.mode == "once":
             self._advance_group_queue()

@@ -1,3 +1,4 @@
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -15,6 +16,11 @@ from i18n import T
 
 
 class ExecutionLogWidget(QWidget):
+    # 定位請求：(任務名, 規則 id, 步驟 idx, 規則名)。
+    # 舊日誌無 rule_id 時 rule_id 為 ""，由主視窗顯示無法定位的訊息。
+    # step_idx < 0 或 step_type 為 completed/preflight/background 時僅定位規則。
+    locate_requested = pyqtSignal(str, str, int, str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -58,6 +64,7 @@ class ExecutionLogWidget(QWidget):
         self._table.setStyleSheet(
             "QTableWidget { font-size: 11px; }QTableWidget::item { padding: 2px 4px; }"
         )
+        self._table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self._table)
         self._rendered: list[dict] = []
 
@@ -116,6 +123,26 @@ class ExecutionLogWidget(QWidget):
             ]
             for col, text in enumerate(items):
                 item = QTableWidgetItem(text)
+                if col == 1:
+                    # 規則欄存定位識別（同名規則以 id 區分；舊日誌無 id 存空字串）。
+                    # 完成／預檢／常駐類日誌無對應步驟，step_idx 記 -1 → 僅定位規則，
+                    # 不假裝能定位到步驟。
+                    _locate_step = (
+                        step_idx
+                        if step_type not in ("completed", "preflight", "background")
+                        else -1
+                    )
+                    item.setData(
+                        Qt.ItemDataRole.UserRole,
+                        (
+                            e.get("task", ""),
+                            e.get("rule_id", ""),
+                            _locate_step,
+                            e.get("rule_name", ""),
+                        ),
+                    )
+                    if e.get("rule_id"):
+                        item.setToolTip(T("exec_log.locate_hint"))
                 if result == "ok":
                     item.setForeground(QColor(0, 160, 0))
                 elif result in ("completed", "triggered"):
@@ -133,6 +160,23 @@ class ExecutionLogWidget(QWidget):
             sb = self._table.verticalScrollBar()
             if sb is not None and sb.value() >= sb.maximum() - 20:
                 self._table.scrollToBottom()
+
+    def _on_cell_clicked(self, row: int, _col: int):
+        """點擊日誌列 → 請求主視窗定位到對應規則／步驟。
+
+        不改變原有選取行為（選取仍由 QTableWidget 處理），只發射訊號。
+        無 rule_id 的舊日誌仍發射（rule_id=""），由主視窗顯示無法定位訊息。
+        """
+        if row < 0 or row >= self._table.rowCount():
+            return
+        item = self._table.item(row, 1)
+        if item is None:
+            return
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+        task, rule_id, step_idx, rule_name = data
+        self.locate_requested.emit(task, rule_id, step_idx, rule_name)
 
     def _clear(self):
         self._table.setRowCount(0)
@@ -194,6 +238,40 @@ if __name__ == "__main__":
     assert w._table.rowCount() == 2, w._table.rowCount()
     assert w._table.item(0, 0).text() == "1", w._table.item(0, 0).text()
     print("  [OK] 清除後可重新填入")
+
+    # 定位訊號：含 rule_id 的列可定位；舊日誌（無 rule_id）仍發射空 id
+    got = []
+    w.locate_requested.connect(lambda t, rid, si, rn: got.append((t, rid, si, rn)))
+
+    def loc_entry(ts, rule_id="", task="任務A", step_idx=1, step_type="detect"):
+        return {
+            "ts": ts,
+            "rule_name": "同名規則",
+            "rule_id": rule_id,
+            "task": task,
+            "step_idx": step_idx,
+            "step_type": step_type,
+            "result": "stop",
+            "detail": "",
+        }
+
+    w._clear()
+    w._populate(
+        [
+            loc_entry("10:00:00", rule_id="r-id-1", step_idx=2),
+            loc_entry("10:00:01", rule_id="r-id-2", step_idx=-1, step_type="completed"),
+            loc_entry("10:00:02"),  # 舊日誌：無 rule_id
+        ]
+    )
+    w._on_cell_clicked(0, 1)
+    assert got[-1] == ("任務A", "r-id-1", 2, "同名規則"), got
+    print("  [OK] 點擊有 id 的日誌列發射定位訊號（含步驟 idx）")
+    w._on_cell_clicked(1, 1)
+    assert got[-1] == ("任務A", "r-id-2", -1, "同名規則"), got
+    print("  [OK] 完成類日誌僅定位規則（step_idx=-1）")
+    w._on_cell_clicked(2, 1)
+    assert got[-1] == ("任務A", "", 1, "同名規則"), got
+    print("  [OK] 舊日誌點擊發射空 rule_id（由主視窗提示無法定位）")
 
     print("\n=== All ExecutionLogWidget checks passed ===")
     raise SystemExit(0)

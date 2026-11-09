@@ -1036,5 +1036,16 @@
   "verify.settings_collapsed": "▶ 検証設定",
   "verify.settings_expanded": "▼ 検証設定",
   "verify.match_mode": "照合方式",
-  "verify.fuzzy_threshold": "類似度"
+  "verify.fuzzy_threshold": "類似度",
+  "exec_log.locate_hint": "クリックでこのルールの編集箇所へ移動します",
+  "dialog.locate_problem": "問題のあるルールへ移動",
+  "locate.pending_after_stop": "実行中は記録のみ：停止後に「{name}」へ移動します",
+  "locate.old_log_no_id": "このログは古いバージョンの記録で、ルールを特定できません（新しいログには位置情報が付きます）",
+  "locate.commit_blocked": "未完了のステップ編集があるため移動できません。先にその編集を完了／キャンセルしてください",
+  "locate.task_not_found": "タスク「{name}」が見つかりません",
+  "locate.task_switch_failed": "タスク「{name}」へ切り替えできませんでした（未保存の変更を書き込めません）。現在のタスクに留まります",
+  "locate.rule_not_found": "ルール「{name}」が見つかりません（削除された可能性があります）",
+  "locate.located_rule": "ルール「{name}」へ移動しました",
+  "locate.located_step": "ルール「{name}」のステップ {n} へ移動しました",
+  "locate.step_gone": "ルール「{name}」へ移動しましたが、そのステップはもう存在しません（削除または並び替え済み）"
 }

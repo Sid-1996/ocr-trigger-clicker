@@ -4945,6 +4945,8 @@ LogViewer = _log_viewer_mod.LogViewer
 _execution_log_mod = load_sibling("execution_log_widget", "gui/execution_log_widget.py")
 ExecutionLogWidget = _execution_log_mod.ExecutionLogWidget
 
+_preflight_mod = load_sibling("rule_preflight", "core/rule_preflight.py")
+
 _rule_tree_mod = load_sibling("rule_tree_widget", "gui/rule_tree_widget.py")
 _RuleTreeWidget = _rule_tree_mod.RuleTreeWidget
 
@@ -5555,6 +5557,8 @@ class MainWindow(QMainWindow):
             self._signals = WorkerSignals()
             self._loop: Optional[MainLoop] = None
             self._selected_rule_id: Optional[str] = None
+            # UX3-01：執行中點擊日誌的 pending 定位目標 (task, rule_id, step_idx, rule_name)
+            self._pending_locate: tuple | None = None
             self._window_lost = False
             self._current_task: str = ""
             self._task_load_failed = False
@@ -6154,6 +6158,7 @@ class MainWindow(QMainWindow):
         self._exec_log_widget._on_clear = lambda: (
             self._loop.clear_execution_log() if getattr(self, "_loop", None) else None
         )
+        self._exec_log_widget.locate_requested.connect(self._on_exec_log_locate)
         self._exec_log_widget.setVisible(False)
         outer_layout.addWidget(self._exec_log_widget)
 
@@ -8422,12 +8427,23 @@ class MainWindow(QMainWindow):
         return True
 
     def _rule_hard_problems(self, rule) -> list[str]:
-        """真正執行前須攔截的問題（detect 空文字、自訂點擊 (0,0)）。"""
+        """真正執行前須攔截的問題：以 core preflight 為準（UX3-03：與執行期
+        BLOCKED 同一來源，不再自寫子集），外加 preflight 只警告的自訂點擊 (0,0)
+        硬擋（舊行為保留，避免放寬驗證）。"""
         problems = []
+        try:
+            pre = _preflight_mod.rule_preflight(rule)
+            for key in pre.problems:
+                problems.append(T(f"exec_log.reason.{key}"))
+        except Exception:
+            logging.exception("rule_preflight failed; falling back to legacy checks")
+            pre = None
+        if pre is None:
+            for i, s in enumerate(rule.steps):
+                if s.type == "detect" and not str(s.params.get("text", "")).strip():
+                    problems.append(T("notif.rule_validation_empty_text", idx=i + 1))
         for i, s in enumerate(rule.steps):
-            if s.type == "detect" and not s.params.get("text", "").strip():
-                problems.append(T("notif.rule_validation_empty_text", idx=i + 1))
-            elif s.type == "click" and s.params.get("target", "") == "custom":
+            if s.type == "click" and s.params.get("target", "") == "custom":
                 x, y = s.params.get("x", 0), s.params.get("y", 0)
                 if x == 0 and y == 0:
                     problems.append(T("notif.rule_validation_zero_click", idx=i + 1))
@@ -8873,20 +8889,32 @@ class MainWindow(QMainWindow):
                 self._status_bar.showMessage(T("dialog.uncat_skip_hint", count=uncat_count), 8000)
         allowed_ids = {rid for g in self._groups if g.id in group_ids for rid in g.rule_ids}
         rules_by_id = {r.id: r for r in self._rules}
-        # 防呆：檢查所選群組內的 detect 空文字 / 自訂點擊 (0,0)，執行前硬性攔截
+        # 防呆：檢查所選群組內的全部 preflight blocked 問題（UX3-03：與執行期
+        # BLOCKED 同一來源），執行前硬性攔截；對話框可一鍵定位到第一個問題規則
         hard_problems = []
+        first_problem_rule_id = ""
         for rid in allowed_ids:
             r = rules_by_id.get(rid)
             if not r or not r.enabled:
                 continue
             for msg in self._rule_hard_problems(r):
+                if not first_problem_rule_id:
+                    first_problem_rule_id = r.id
                 hard_problems.append(f"  • {r.name}：{msg}")
         if hard_problems:
-            QMessageBox.warning(
-                self,
+            box = QMessageBox(
+                QMessageBox.Icon.Warning,
                 T("dialog.warning"),
                 T("start.hard_problems_msg", items="\n".join(hard_problems)),
+                parent=self,
             )
+            locate_btn = box.addButton(
+                T("dialog.locate_problem"), QMessageBox.ButtonRole.ActionRole
+            )
+            box.addButton(T("ui.cancel"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            if box.clickedButton() is locate_btn and first_problem_rule_id:
+                self.locate_rule_target(self._current_task, first_problem_rule_id, None)
             return
         # 後台模式：啟動前先截一張測試幀，全黑 + 非系統管理員 → 彈窗（關鍵防線）
         if self._is_bg_mode():
@@ -9046,6 +9074,11 @@ class MainWindow(QMainWindow):
         self._update_edit_enabled(True)
         self._status_bar.showMessage(T("status.stopped"))
         self._update_rule_status()
+        # UX3-01：執行中點擊日誌記下的 pending 定位，停止後自動執行
+        pending = getattr(self, "_pending_locate", None)
+        if pending is not None:
+            self._pending_locate = None
+            self.locate_rule_target(*pending)
 
     def _on_loop_finished(self, success: bool, msg: str):
         if self._loop is not None:
@@ -9184,6 +9217,111 @@ class MainWindow(QMainWindow):
             import logging
 
             logging.getLogger("gui").debug("exec log populate failed: %s", e)
+
+    # === UX3-01/03 共用定位入口：從執行日誌或啟動檢核跳到規則／步驟 ===
+
+    def _on_exec_log_locate(self, task: str, rule_id: str, step_idx: int, rule_name: str):
+        """ExecutionLogWidget.locate_requested 的接收端。"""
+        self.locate_rule_target(task, rule_id, step_idx, rule_name)
+
+    def locate_rule_target(
+        self, task_name: str, rule_id: str, step_idx: int | None = None, rule_name: str = ""
+    ) -> bool:
+        """把使用者定位到指定任務／規則／步驟（UX3-01 日誌、UX3-03 啟動檢核共用）。
+
+        - 只以 rule_id 比對，絕不以規則名猜測（同名規則不會定位錯誤）。
+        - step_idx 為步驟位置（Step 無 id）；<0 或 None 表示只定位規則。
+        - 執行中不切換任務／編輯區：記 pending，停止後由 _stop_loop 自動執行。
+        - 切換前先提交展開中的 Step 表單；提交被拒（半套終點）時中止定位，
+          不丟棄使用者輸入。既有 dirty/save 流程（_on_task_changed /
+          _on_rule_selected 內建 flush）負責落盤，本函式不另行寫檔。
+        - 規則／步驟已刪除或任務不存在時顯示訊息，不靜默失敗。
+        回傳 True 表示成功定位。
+        """
+        if self._loop and self._loop.is_running:
+            self._pending_locate = (task_name, rule_id, step_idx, rule_name)
+            self._status_bar.showMessage(
+                T("locate.pending_after_stop", name=rule_name or rule_id), 8000
+            )
+            return False
+        if not rule_id:
+            self._status_bar.showMessage(T("locate.old_log_no_id"), 8000)
+            return False
+        if not self._ensure_steps_committed():
+            self._status_bar.showMessage(T("locate.commit_blocked"), 8000)
+            return False
+        # 跨任務：先確認任務存在，再走既有任務切換流程（含 flush-save）
+        if task_name and task_name != self._current_task:
+            combo = getattr(self, "_task_combo", None)
+            idx = combo.findText(task_name) if combo is not None else -1
+            if idx < 0:
+                self._status_bar.showMessage(T("locate.task_not_found", name=task_name), 8000)
+                return False
+            combo.setCurrentIndex(idx)
+            if getattr(self, "_task_load_failed", False) or self._current_task != task_name:
+                self._status_bar.showMessage(T("locate.task_switch_failed", name=task_name), 8000)
+                return False
+        rule = next((r for r in self._rules if r.id == rule_id), None)
+        if rule is None:
+            self._status_bar.showMessage(
+                T("locate.rule_not_found", name=rule_name or rule_id), 8000
+            )
+            return False
+        # 搜尋過濾會隱藏目標列：先清除搜尋，恢復完整樹
+        search_edit = getattr(self, "_rule_search_edit", None)
+        if search_edit is not None and search_edit.text():
+            search_edit.clear()
+        item = self._find_rule_tree_item(rule_id)
+        if item is None:
+            self._status_bar.showMessage(
+                T("locate.rule_not_found", name=rule_name or rule_id), 8000
+            )
+            return False
+        parent = item.parent()
+        if parent is not None:
+            parent.setExpanded(True)
+        # setCurrentItem 觸發既有 _on_rule_selected：存檔上一條規則並顯示編輯區
+        self._rule_list.setCurrentItem(item)
+        if self._selected_rule_id != rule_id:
+            # 選取被 _on_rule_selected 還原（展開表單拒絕提交）：不假裝成功
+            self._status_bar.showMessage(T("locate.commit_blocked"), 8000)
+            return False
+        if step_idx is not None and step_idx >= 0:
+            if step_idx < len(rule.steps):
+                step_list = self._step_list
+                if getattr(step_list, "_expanded_idx", None) != step_idx:
+                    step_list._toggle_expand(step_idx)
+                rows = getattr(step_list, "_rows", [])
+                if step_idx < len(rows):
+                    # 捲動到目標步驟列（找到祖先 QScrollArea；找不到就略過）
+                    _w = rows[step_idx]
+                    while _w is not None and not hasattr(_w, "ensureWidgetVisible"):
+                        _w = _w.parentWidget()
+                    if _w is not None:
+                        _w.ensureWidgetVisible(rows[step_idx])
+                self._status_bar.showMessage(
+                    T("locate.located_step", name=rule.name, n=step_idx + 1), 8000
+                )
+            else:
+                # 步驟被刪除／重排後位置已不存在：停在規則層級，不猜測指向別步
+                self._status_bar.showMessage(T("locate.step_gone", name=rule.name), 8000)
+        else:
+            self._status_bar.showMessage(T("locate.located_rule", name=rule.name), 8000)
+        return True
+
+    def _find_rule_tree_item(self, rule_id: str):
+        """在規則樹中以 rule_id 查找 QTreeWidgetItem（群組與常駐節點皆含）。"""
+        rule_list = getattr(self, "_rule_list", None)
+        if rule_list is None:
+            return None
+        for i in range(rule_list.topLevelItemCount()):
+            top = rule_list.topLevelItem(i)
+            for j in range(top.childCount()):
+                child = top.child(j)
+                cdata = child.data(0, Qt.ItemDataRole.UserRole)
+                if cdata and len(cdata) > 1 and cdata[0] == "rule" and cdata[1] == rule_id:
+                    return child
+        return None
 
     def _update_edit_enabled(self, enabled: bool):
         editing = enabled and not self._task_load_failed

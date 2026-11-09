@@ -342,7 +342,7 @@ def test_two_sum_steps_track_independently(monkeypatch):
 def test_sum_panel_log_in_all_modes():
     ml = make_main_loop()
     logged = []
-    ml._log_exec = lambda *args: logged.append(args)
+    ml._log_exec = lambda *args, **kwargs: logged.append((args, kwargs))
 
     def run_step(step, ctx, rule):
         ctx.sum_total = 35
@@ -357,13 +357,13 @@ def test_sum_panel_log_in_all_modes():
 
     ml._run_rule(rule, img, rect)
     assert len(logged) == 1
-    assert logged[0][2:4] == ("sum", "ok")
+    assert logged[0][0][2:4] == ("sum", "ok")
 
     ctx = _ctx()
     ctx.sum_foreground = True
     ml._run_rule(rule, img, rect, ctx)
     assert len(logged) == 2
-    assert logged[1][2:4] == ("sum", "ok")
+    assert logged[1][0][2:4] == ("sum", "ok")
 
 
 # ── 加總閘門（ADR-0007）───────────────────────────────────────────────────
