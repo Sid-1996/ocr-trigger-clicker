@@ -8,9 +8,15 @@
 
 ### 新功能
 
+- **規則樹可以搜尋**：在規則樹打關鍵字就能快速找到群組跟規則，規則多的時候不用再一路翻。
+- **工具列改成主要 + 更多選單**：常用的放前面，少用的收進「更多」，畫面清爽一點。
+- **相似度門檻用百分比顯示**：設定圖片比對的相似度改用 0~100% 表示，不用再猜 0.85 是什麼意思。
 - **拖曳可以直接拾取終點**：在步驟編輯器裡按「終點拾取」，在遊戲畫面上點一下就完成，不用再手動填位移量；舊資料的位移量設定會原樣保留。
+- **步驟刪除前會先確認**：刪步驟前會跳出確認，不會手滑就把步驟刪掉。
+- **新增步驟後自動展開**：加完步驟會自動幫你展開，不用再點開找。
+- **進階設定預設收起**：點擊步驟的進階設定跟驗證區塊預設收起，畫面只留常用的東西。
+- **「數字加總」可以先判斷再決定下一步**：加總步驟新增可選閘門，可依加總結果決定後續步驟是否執行。
 - **規則有問題時會說明原因**：像是設定不完整或參數不合法，會直接告訴你這條規則為什麼不會執行，而不是默默沒反應；平行執行的規則全部被擋下時會保持等待，修好並存檔後自動恢復。
-- **執行日誌新增診斷欄位**：可以從日誌看到每一條規則是被跳過還是正常完成。
 
 ### 問題修復
 
@@ -21,14 +27,60 @@
 - **後台點擊失敗也會說明原因**：點擊送不出去（按下滑鼠或放開訊息失敗）時，現在同樣會寫入日誌並提醒你原因，不再是「失敗了但不知道為什麼」。
 - **重新開始會再通知一次**：先前停止後重新啟動，同一個條件不會再跳通知，現在每次啟動都是新的觀察期。
 - **遊戲內拖曳終點不會被偷偷改寫**：儲存拖曳規則時不再動到舊資料裡的位移量設定。
+- **規則自動儲存狀態顯示正確**：自動儲存的狀態顯示會反映真實狀況，不會誤顯示已保存。
+- **群組啟用按鈕文案修正**：群組啟用／停用按鈕的文字改成看得懂的說法。
+- **任務資料不會再悄悄遺失**：儲存任務時遇到不支援的欄位不再默默丟掉，避免舊任務被存成殘缺版。
 
 ### 其他
 
+- **執行日誌新增診斷欄位**：可以從日誌看到每一條規則是被跳過還是正常完成。
 - **執行期間除錯面板的測試按鈕會暫停**：主循環執行時，OCR Debug 的點擊／按鍵測試會自動停用，避免和正在跑的規則搶同一個輸入；停止後會依原本狀態恢復。
 - **開始執行時，殘留的除錯測試會立刻中止**：先前主循環啟動前已經開始的點擊／按鍵測試仍會跑完，現在會馬上中止，不會再和正在跑的規則同時操作輸入。
 - **OCR 除錯可直接看到操作前後差異**：測試點擊或按鍵後，可以看到畫面變化程度與哪裡有差異，以及辨識到的文字新增、消失、變化或移動；看不清楚時可展開詳細資訊。
 - **OCR 除錯可切換顯示辨識框**：新增「顯示 OCR 框」開關，開啟後會在畫面上標示辨識到的文字位置；重開程式後會記住上次的開關狀態。
-- **數字加總可以先判斷再決定下一步**：加總步驟新增可選閘門，可依加總結果決定後續步驟是否執行。
+- **偵測跟圖片比對的設定重新排版**：常用設定放前面，進階設定收起，找設定比較快。
+- **失敗處理選項文案改善**：規則失敗後的處理選項改成白話說明。
+
+---
+
+**Please download OCRTriggerClicker-win-Setup.exe**; install once and updates become automatic.
+
+> **⚠️ Antivirus may flag this as a false positive**: v0.4.9 installers are currently flagged by some antivirus software (including Windows Defender) as a virus or potentially unwanted program. The installer has no code signature, so antivirus software mistakes it. The author is requesting a false-positive review from Microsoft; the warning should disappear once the review passes. If you don't want to deal with antivirus prompts, you can download the GitHub source code and run it yourself with the `uv run` command—no installer needed.
+
+### New Features
+
+- **Rule tree search**: type a keyword in the rule tree to quickly find groups and rules—no more scrolling through long lists.
+- **Toolbar split into primary + overflow menu**: common tools stay up front; less used ones tuck into "More" for a cleaner screen.
+- **Similarity threshold now shown as a percentage**: image-match similarity is displayed as 0–100% instead of a decimal like 0.85.
+- **Drag endpoint picking**: in the step editor, press "Pick endpoint" and click once on the game screen to set it—no more manual displacement numbers. Old displacement settings are preserved.
+- **Delete confirmation**: deleting a step now asks for confirmation first.
+- **Auto-expand after adding a step**: newly added steps expand automatically.
+- **Advanced settings collapsed by default**: click-step advanced and verify sections start collapsed; only common settings are shown.
+- **Number sum can gate later steps**: the number-sum step gains an optional gate, so you can decide whether following steps run based on the sum.
+- **Rules explain why they won't run**: incomplete or invalid settings now tell you exactly why a rule won't execute instead of silently doing nothing; when all parallel rules are blocked, execution waits and resumes automatically once you fix and save.
+
+### Bug Fixes
+
+- **Install/update no longer pops up error windows**: if the app was set to "Run as administrator", install or auto-update used to fail with "partially installed" and "Setup error" windows. The app now clears that setting on startup, so install and updates complete normally. (If it still fails the first time, open the app once to let it repair itself, then re-run the installer.)
+- **Stop is more reliable**: stopping no longer sends extra clicks or keys, and in-progress verification aborts immediately instead of sending input after stop.
+- **Keys always release**: even if the run stops midway or errors out, pressed keys always send their release event so they never stick in the game.
+- **Backend (Frida) failures explain themselves**: drag and scroll failures previously gave no hint at all; they now write to the log and show an on-screen reminder with the real reason.
+- **Backend click failures explain themselves**: when a click can't be sent, the reason is now logged and shown instead of failing silently.
+- **Restart notifies again**: after stopping and restarting, the same condition notifies again—each start is a fresh observation period.
+- **Drag endpoints are never silently rewritten**: saving a drag rule no longer touches the old displacement setting.
+- **Auto-save status is accurate**: the auto-save indicator now reflects the true save state.
+- **Group enable button wording fixed**: the group enable/disable button now uses plain wording.
+- **Task data is never silently lost**: saving a task no longer drops unsupported fields silently, preventing tasks from being saved as incomplete versions.
+
+### Other
+
+- **Execution log diagnostics**: the log now shows whether each rule was skipped or completed normally.
+- **Debug-panel test buttons pause while running**: during a run, OCR Debug click/key tests auto-disable so they don't fight the running rules; they restore afterward.
+- **Leftover debug tests abort on start**: debug clicks/keys started before the main loop now abort immediately instead of running concurrently.
+- **OCR Debug before/after diff**: after testing a click or key, you can see how much the screen changed, where it changed, and which text appeared, disappeared, changed, or moved—with expandable details.
+- **OCR Debug box overlay toggle**: a new "Show OCR boxes" switch marks recognized text on screen and remembers its state across restarts.
+- **Detect & MatchImage layouts reorganized**: common settings sit up front with advanced settings collapsed for faster lookup.
+- **on_fail option wording improved**: failure-handling options now use plain language.
 
 ---
 
