@@ -13,7 +13,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt6.QtCore import QMimeData, QObject, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QMimeData, QObject, QRect, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QDrag,
@@ -80,7 +80,59 @@ _GUIDE_URL = "https://sid-1996.github.io/ocr-trigger-clicker/"
 # showMinimized() 的前景切換由視窗管理員處理，給它一個上限避免卡住 GUI。
 _MINIMIZE_CONFIRM_TIMEOUT_SEC = 2.0
 
+# UX 2B-11：主視窗幾何記憶的合理邊界（Qt logical coordinates；Qt 已處理 DPI 換算）。
+_WINDOW_MIN_WIDTH = 320
+_WINDOW_MIN_HEIGHT = 240
+_WINDOW_MAX_DIMENSION = 16384
+
 from _version import __author__, __github__, __version__  # noqa: E402
+
+
+def _valid_window_geometry(geo) -> bool:
+    """window_geometry 是否為可還原的合法資料（純函式，可獨立測試）。"""
+    if not isinstance(geo, dict):
+        return False
+    if not all(k in geo for k in ("x", "y", "width", "height", "maximized")):
+        return False
+    if type(geo["maximized"]) is not bool:  # bool 是 int 子類別，必須精確比對
+        return False
+    for key in ("x", "y", "width", "height"):
+        value = geo[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        if value != value or value in (float("inf"), float("-inf")):  # NaN / Inf
+            return False
+    width, height = geo["width"], geo["height"]
+    if width <= 0 or height <= 0:
+        return False
+    if width > _WINDOW_MAX_DIMENSION or height > _WINDOW_MAX_DIMENSION:
+        return False
+    return True
+
+
+def _clamp_window_rect(rect: QRect, available: list[QRect]) -> QRect | None:
+    """將舊視窗矩形夾制到目前某個可用螢幕（純函式）。
+
+    中心點不在任何可用螢幕 → 回傳 None（呼叫端回退預設置中）。
+    中心點在某螢幕但溢出 → 縮小並夾制到該螢幕可用範圍。
+    """
+    if rect is None or not available:
+        return None
+    center = rect.center()
+    host = next((a for a in available if a.contains(center)), None)
+    if host is None:
+        return None
+    width = max(
+        min(_WINDOW_MIN_WIDTH, host.width()),
+        min(int(rect.width()), host.width()),
+    )
+    height = max(
+        min(_WINDOW_MIN_HEIGHT, host.height()),
+        min(int(rect.height()), host.height()),
+    )
+    x = min(max(int(rect.x()), host.x()), host.x() + host.width() - width)
+    y = min(max(int(rect.y()), host.y()), host.y() + host.height() - height)
+    return QRect(x, y, width, height)
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -5544,6 +5596,7 @@ class MainWindow(QMainWindow):
 
             _ocr_mod.set_ocr_health_callback(self._on_ocr_health)
 
+            self._restore_window_geometry()
             QTimer.singleShot(0, self._deferred_init)
         except Exception as e:
             QMessageBox.critical(
@@ -5581,6 +5634,64 @@ class MainWindow(QMainWindow):
 
     def _save_config(self, data: dict) -> bool:
         return self._rule_config_ctrl.save_config(self, data)
+
+    # ── UX 2B-11：主視窗幾何記憶 ──
+    def _save_window_geometry(self) -> None:
+        """保存全域 window_geometry；失敗靜默降級（不得阻止退出/關窗）。
+
+        最小化時保留舊資料（hybrid 啟動的最小化不可污染正常幾何）；
+        最大化時不以最大化後尺寸覆蓋先前的一般視窗尺寸。
+        """
+        try:
+            if self.isMinimized():
+                return
+            config = self._load_config()
+            maximized = self.isMaximized()
+            if maximized:
+                old = config.get("window_geometry")
+                if _valid_window_geometry(old):
+                    rect = {k: old[k] for k in ("x", "y", "width", "height")}
+                else:
+                    rect = {
+                        "x": self.x(),
+                        "y": self.y(),
+                        "width": self.width(),
+                        "height": self.height(),
+                    }
+            else:
+                rect = {
+                    "x": self.x(),
+                    "y": self.y(),
+                    "width": self.width(),
+                    "height": self.height(),
+                }
+            config["window_geometry"] = {**rect, "maximized": bool(maximized)}
+            self._save_config(config)
+        except Exception:
+            logging.debug("save window geometry failed", exc_info=True)
+
+    def _restore_window_geometry(self) -> None:
+        """還原全域 window_geometry（在第一次顯示前呼叫）。
+
+        無有效舊資料 → 維持 __init__ 的 900x650 + showEvent 置中。
+        成功還原 → 設 _centered_once，避免 showEvent 再次置中覆蓋。
+        """
+        try:
+            geo = self._load_config().get("window_geometry")
+            if not _valid_window_geometry(geo):
+                return
+            available = [s.availableGeometry() for s in QApplication.screens()]
+            rect = QRect(int(geo["x"]), int(geo["y"]), int(geo["width"]), int(geo["height"]))
+            clamped = _clamp_window_rect(rect, available)
+            if clamped is None:
+                return  # 中心點不在任何可用螢幕 → 預設置中
+            self._centered_once = True
+            self.move(clamped.x(), clamped.y())
+            self.resize(clamped.width(), clamped.height())
+            if geo["maximized"]:
+                self.showMaximized()
+        except Exception:
+            logging.debug("restore window geometry failed", exc_info=True)
 
     def _deferred_init(self):
         try:
@@ -9290,6 +9401,7 @@ class MainWindow(QMainWindow):
         self._update_interaction_mode_label()
 
     def closeEvent(self, event):
+        self._save_window_geometry()
         self._rule_config_ctrl.reset_cache()
         config = self._load_config()
         behavior = config.get("close_behavior", "tray")
@@ -9361,6 +9473,7 @@ class MainWindow(QMainWindow):
         )
 
     def _quit_app(self) -> bool:
+        self._save_window_geometry()
         if not self._task_load_failed and not self._flush_save():
             self._report_task_save_failed()
             return False

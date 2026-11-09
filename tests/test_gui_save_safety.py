@@ -669,6 +669,7 @@ def test_quit_aborts_when_flush_fails():
     fake = SimpleNamespace(
         _task_load_failed=False,
         _flush_save=lambda: False,
+        _save_window_geometry=lambda: None,
         _report_task_save_failed=lambda *args: reports.append(args),
     )
 
@@ -681,6 +682,7 @@ def test_quit_allows_load_failed_without_save(monkeypatch):
     fake = SimpleNamespace(
         _task_load_failed=True,
         _flush_save=lambda: (_ for _ in ()).throw(AssertionError("must skip save")),
+        _save_window_geometry=lambda: None,
         winId=lambda: 1,
         _recorder=None,
         _status_timer=SimpleNamespace(stop=lambda: None),
