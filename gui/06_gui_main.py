@@ -5559,6 +5559,8 @@ class MainWindow(QMainWindow):
             self._selected_rule_id: Optional[str] = None
             # UX3-01：執行中點擊日誌的 pending 定位目標 (task, rule_id, step_idx, rule_name)
             self._pending_locate: tuple | None = None
+            # B4：規則測試在途（on_test_rule → 結果達陣之間）；與正式執行狀態分離
+            self._is_testing = False
             self._window_lost = False
             self._current_task: str = ""
             self._task_load_failed = False
@@ -6127,6 +6129,11 @@ class MainWindow(QMainWindow):
         self._edit_test_btn = QPushButton(T("ui.test"))
         self._edit_test_btn.setEnabled(False)
         self._edit_test_btn.setVisible(False)
+        # B4：測試進行中的取消鈕（預設隱藏；只在 _set_test_running(True) 顯示）。
+        # 取消在 dry-run 步驟之間生效，不會打斷進行中的單一 OCR。
+        self._edit_test_cancel_btn = QPushButton(T("test.cancel_btn"))
+        self._edit_test_cancel_btn.setVisible(False)
+        self._edit_test_cancel_btn.setToolTip(T("test.cancel_tooltip"))
         self._open_log_btn = QPushButton(T("main.log"))
         self._open_log_btn.setToolTip(T("tooltip.open_log"))
         self._open_log_btn.setStyleSheet("color: #888888;")
@@ -6136,6 +6143,7 @@ class MainWindow(QMainWindow):
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.addWidget(self._saved_label)
         btn_layout.addWidget(self._edit_test_btn)
+        btn_layout.addWidget(self._edit_test_cancel_btn)
         btn_layout.addStretch()
         btn_layout.addWidget(self._open_log_btn)
         edit_layout.addWidget(btn_row)
@@ -6244,6 +6252,7 @@ class MainWindow(QMainWindow):
         self._rule_list.reordered.connect(self._on_rules_reordered)
         self._edit_name.editingFinished.connect(self._on_name_changed)
         self._edit_test_btn.clicked.connect(self._test_ctrl.on_test_rule)
+        self._edit_test_cancel_btn.clicked.connect(self._test_ctrl.cancel)
         self._edit_enabled.stateChanged.connect(self._on_enabled_changed)
         self._edit_background.stateChanged.connect(self._on_background_changed)
         self._edit_quiet.stateChanged.connect(self._on_quiet_changed)
@@ -7651,8 +7660,9 @@ class MainWindow(QMainWindow):
         self._saved_label.setVisible(True)
         _refresh_save_label(self)
         self._edit_test_btn.setVisible(True)
-        self._edit_test_btn.setEnabled(True)
-        self._debug_panel.set_has_active_rule(True)
+        # B4：測試進行中不得重新啟用測試鈕（切換規則會走這裡）
+        self._edit_test_btn.setEnabled(not self._is_testing)
+        self._debug_panel.set_has_active_rule(True, rule.name)
         self._edit_name.setEnabled(True)
         self._edit_enabled.setEnabled(True)
         self._edit_name.setText(rule.name)
@@ -8532,9 +8542,40 @@ class MainWindow(QMainWindow):
 
     # === Test rule (delegated to TestRunController) ===
 
-    def _show_test_result(self, result: dict):
-        self._edit_test_btn.setEnabled(True)
+    def _set_test_running(self, running: bool):
+        """B4：測試生命週期旗標。True＝dry-run 在途：停用測試鈕、顯示取消鈕。
+
+        只代表「模擬預覽在途」，與正式執行（_loop.is_running）完全分離。
+        """
+        self._is_testing = bool(running)
+        self._edit_test_cancel_btn.setVisible(running)
+
+    def _restore_test_btn(self):
+        """B4：測試結束（成功／失敗／例外／取消／截圖失敗）一律由此恢復 UI 狀態。"""
+        self._is_testing = False
+        self._edit_test_cancel_btn.setVisible(False)
+        self._edit_test_btn.setEnabled(self._loop is None or not self._loop.is_running)
         self._edit_test_btn.setText(T("ui.test"))
+
+    def _locate_from_test(self, ctx: dict, dialog) -> None:
+        """B1：從測試結果定位回問題規則（重用 Phase 3A locate_rule_target，
+        不另建定位機制）。定位失敗時由 locate_rule_target 顯示具體原因。"""
+        dialog.close()
+        self.locate_rule_target(
+            ctx.get("task", ""), ctx.get("rule_id", ""), None, ctx.get("rule_name", "")
+        )
+
+    def _show_test_result(self, result: dict):
+        ctx = result.get("locate") or {}
+        if "seq" in ctx and ctx["seq"] != self._test_ctrl._run_seq:
+            # B4：過期結果不得覆蓋新測試，也不得動到 UI 狀態
+            self._status_bar.showMessage(T("test.stale_result"), 6000)
+            return
+        self._restore_test_btn()
+        if result.get("cancelled"):
+            # B4：取消是明確狀態：只顯示訊息，不開結果視窗、不算失敗
+            self._status_bar.showMessage(T("test.cancelled_note"), 8000)
+            return
         if "error" in result:
             QMessageBox.warning(self, T("dialog.test_result"), result["error"])
             return
@@ -8581,6 +8622,17 @@ class MainWindow(QMainWindow):
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close_btn = btn_box.button(QDialogButtonBox.StandardButton.Close)
         close_btn.setText(T("dialog.close"))
+        if ctx.get("rule_id"):
+            # B1：以啟動時保存的 rule_id 定位；同名規則不會錯位
+            locate_btn = btn_box.addButton(
+                T("dialog.locate_problem"), QDialogButtonBox.ButtonRole.ActionRole
+            )
+            locate_btn.clicked.connect(lambda: self._locate_from_test(ctx, dialog))
+        else:
+            # B1：沒有有效 rule_id 時提示原因，絕不以規則名稱猜測定位
+            hint_lbl = QLabel(T("test.no_locate_info"))
+            hint_lbl.setStyleSheet("color: #caa900; font-size: 12px;")
+            layout.addWidget(hint_lbl)
         btn_box.rejected.connect(dialog.close)
         layout.addWidget(btn_box)
 
@@ -8607,6 +8659,8 @@ class MainWindow(QMainWindow):
         import uuid
 
         if not self._ensure_steps_committed():
+            # B2：中止建立並保留展開中的半填表單；明確告知原因，不靜默無反應
+            self._status_bar.showMessage(T("debug.commit_blocked"), 8000)
             return
         cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
@@ -8672,12 +8726,19 @@ class MainWindow(QMainWindow):
         )
 
     def _on_debug_step_requested(self, data: dict):
-        cfg = self._rule_config_ctrl.load_config(self)
         rule = self._get_current_rule()
         if rule is None:
+            # B2：沒有目標規則時不靜默吞掉——提供「改為建立新規則」的出走，或明確取消
+            if self._ask_debug_create_new_rule():
+                self._on_debug_rule_requested(data)
+            else:
+                self._status_bar.showMessage(T("debug.step_cancelled"), 8000)
             return
         if not self._ensure_steps_committed():
+            # B2：中止追加並保留展開中的半填表單（Drag 等未提交輸入不會遺失）
+            self._status_bar.showMessage(T("debug.commit_blocked"), 8000)
             return
+        cfg = self._rule_config_ctrl.load_config(self)
         rule.steps.append(
             Step(
                 type="detect",
@@ -8711,6 +8772,8 @@ class MainWindow(QMainWindow):
         import uuid
 
         if not self._ensure_steps_committed():
+            # B2：中止建立並保留展開中的半填表單；明確告知原因，不靜默無反應
+            self._status_bar.showMessage(T("debug.commit_blocked"), 8000)
             return
         cfg = self._rule_config_ctrl.load_config(self)
         rule = Rule(
@@ -8777,11 +8840,34 @@ class MainWindow(QMainWindow):
             T("notif.template_rule_added_from_debug", name=data.get("name", ""))
         )
 
+    def _ask_debug_create_new_rule(self) -> bool:
+        """B2：目前沒有選取規則；問使用者是否改為建立新規則。
+
+        回傳 True＝使用者選擇改走「建立新規則」；False＝取消，不異動任何規則。
+        """
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(T("dialog.notice"))
+        box.setText(T("debug.no_current_rule_ask"))
+        create_btn = box.addButton(T("debug.create_new_rule"), QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return box.clickedButton() is create_btn
+
     def _on_debug_template_step_requested(self, data: dict):
-        cfg = self._rule_config_ctrl.load_config(self)
         rule = self._get_current_rule()
         if rule is None:
+            # B2：沒有目標規則時不靜默吞掉——提供「改為建立新規則」的出走，或明確取消
+            if self._ask_debug_create_new_rule():
+                self._on_debug_template_requested(data)
+            else:
+                self._status_bar.showMessage(T("debug.step_cancelled"), 8000)
             return
+        if not self._ensure_steps_committed():
+            # B2：中止追加並保留展開中的半填表單；明確告知原因，不靜默無反應
+            self._status_bar.showMessage(T("debug.commit_blocked"), 8000)
+            return
+        cfg = self._rule_config_ctrl.load_config(self)
         rule.steps.append(
             Step(
                 type="match_image",
@@ -8847,6 +8933,10 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, T("dialog.task_load_failed"), self._task_load_failed_message()
             )
+            return
+        if getattr(self, "_is_testing", False):
+            # B4：規則測試進行中暫不開跑；測試（模擬預覽）與正式執行不得同時疊加
+            QMessageBox.warning(self, T("dialog.warning"), T("status.stop_test_first"))
             return
         self._window_lost = False
         self._bg_fail_dialog_shown = False
@@ -9349,7 +9439,8 @@ class MainWindow(QMainWindow):
         _export_action = getattr(self, "_task_export_action", None)
         if _export_action is not None:
             _export_action.setEnabled(enabled)
-        self._edit_test_btn.setEnabled(editing)
+        # B4：測試進行中不得透過任意 callers 重新啟用測試鈕
+        self._edit_test_btn.setEnabled(editing and not self._is_testing)
         self._edit_name.setEnabled(editing)
         self._edit_enabled.setEnabled(editing)
         self._edit_background.setEnabled(editing)

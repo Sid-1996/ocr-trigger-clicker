@@ -657,6 +657,11 @@ class OcrDebugPanel(QWidget):
         self._selected_detail.setMinimumHeight(110)
         self._style_card(self._selected_detail, dark=True)
         right_layout.addWidget(self._selected_detail)
+        # UX3-08：讓使用者看清「追加步驟會加到哪一條規則」；只做標示，
+        # 判定一律在主視窗的訊號處理端。
+        self._target_rule_lbl = QLabel(T("ocr_debug.target_rule_none"))
+        self._target_rule_lbl.setStyleSheet("color: #8ab4f8; font-weight: 600;")
+        right_layout.addWidget(self._target_rule_lbl)
         self._sync_selection_widgets()
 
         self._template_btn = QPushButton(T("ocr_debug.create_template_rule"))
@@ -1038,8 +1043,18 @@ class OcrDebugPanel(QWidget):
                     pass
                 return
 
-    def set_has_active_rule(self, active: bool):
+    def set_has_active_rule(self, active: bool, rule_name: str = ""):
+        """active＝目前編輯頁的規則存在；追加步驟時以該規則為目標。
+
+        rule_name 只作面板上的目標標示（UX3-08）：讓使用者看清「會加到哪一條」，
+        建立與否的最終判定一律在主視窗的訊號處理端，這裡不重複驗證。
+        """
         self._has_active_rule = active
+        self._target_rule_lbl.setText(
+            T("ocr_debug.target_rule", name=rule_name)
+            if active
+            else T("ocr_debug.target_rule_none")
+        )
         self._update_step_btn_state()
 
     def set_run_active(self, active: bool) -> None:
@@ -1233,7 +1248,7 @@ class OcrDebugPanel(QWidget):
         result = self._compute_roi()
         if result is None:
             return
-        roi, px_x, px_y, px_w, px_h = result
+        roi = result[0]
         r = self._ocr_results[self._selected_index]
 
         self.step_requested.emit(
@@ -1243,9 +1258,9 @@ class OcrDebugPanel(QWidget):
             }
         )
 
-        self._status_bar.showMessage(
-            T("ocr_debug.step_added", text=r.text, x=px_x, y=px_y, w=px_w, h=px_h)
-        )
+        # UX3-08：emit 後不得先宣告成功（主視窗可能因無規則／表單未提交而拒絕）；
+        # 只回報「已送出」，最終結果由主視窗狀態列顯示。
+        self._status_bar.showMessage(T("ocr_debug.step_sent", text=r.text), 5000)
 
     def _on_add_template_step(self):
         result = self._compute_roi()
@@ -1290,9 +1305,9 @@ class OcrDebugPanel(QWidget):
             {k: round(v, 3) if isinstance(v, (int, float)) else v for k, v in roi.items()},
         )
 
-        self._status_bar.showMessage(
-            T("ocr_debug.template_step_added", text=r.text, tw=t_w, th=t_h)
-        )
+        # UX3-08：emit 後不得先宣告成功（主視窗可能因無規則／表單未提交而拒絕）；
+        # 只回報「已送出」，最終結果由主視窗狀態列顯示。
+        self._status_bar.showMessage(T("ocr_debug.step_sent_template", text=r.text), 5000)
 
     def _click_verify_worker(
         self,

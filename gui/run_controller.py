@@ -79,11 +79,27 @@ class TestRunController:
         self._win = win
         self._of_summary = of_summary
         self._resolve_rule_name = resolve_rule_name
+        # B4：在途測試的序號（每次啟動遞增）；結果以 seq 判過期，不得覆蓋新結果
+        self._run_seq = 0
+        # B4：本輪測試的取消事件（步驟之間協作式檢查；無進行中測試時為 None）
+        self._cancel_event: threading.Event | None = None
+
+    def cancel(self):
+        """請求取消進行中的測試（在下一個步驟邊界生效，不打斷單一 OCR）。"""
+        if self._cancel_event is not None:
+            self._cancel_event.set()
 
     # ── public entry ──
 
     def on_test_rule(self):
         win = self._win
+        if getattr(win, "_is_testing", False):
+            # B4：同一時間只允許一個規則測試（測試鈕已停用；此為防呆底線）
+            QMessageBox.warning(win, T("test.title"), T("test.already_running"))
+            return
+        if win._loop is not None and win._loop.is_running:
+            QMessageBox.warning(win, T("test.title"), T("status.stop_first_test"))
+            return
         win._save_current_rule()
         rule = win._get_current_rule()
         if not rule:
@@ -97,7 +113,19 @@ class TestRunController:
         if not title:
             QMessageBox.warning(win, T("test.title"), T("test.select_window"))
             return
-        win._edit_test_btn.setEnabled(False)
+        # B1：測試上下文與序號在啟動時定案；結果顯示／定位一律以此為準，
+        #     不讀當下選取（使用者測試中切換規則也不會讓結果錯置到新規則）。
+        self._run_seq += 1
+        ctx = {
+            "task": win._current_task or "",
+            "rule_id": rule.id,
+            "rule_name": rule.name,
+            "seq": self._run_seq,
+        }
+        # B4：先掛上「測試中」狀態（旗標＋取消鈕＋停用測試鈕）再截圖，
+        #     避免 processEvents 期間既有選取流程把測試鈕重新啟用。
+        self._cancel_event = threading.Event()
+        win._set_test_running(True)
         win._edit_test_btn.setText(T("test.testing"))
         QApplication.processEvents()
 
@@ -138,8 +166,7 @@ class TestRunController:
 
         win._edit_stack.setCurrentIndex(1)
         if img is None:
-            win._edit_test_btn.setEnabled(True)
-            win._edit_test_btn.setText(T("ui.test"))
+            win._restore_test_btn()
             QMessageBox.warning(win, T("test.title"), T("test.capture_failed", title=title))
             return
         # 後台模式截圖全黑 + 非系統管理員 → 靜默警告插入日誌
@@ -147,31 +174,48 @@ class TestRunController:
             black_warn = T("bg_capture.black_admin_warn")
             warn = f"{warn}\n{black_warn}" if warn else black_warn
         logging.debug("rule_test: mode=%s %dx%d win=%s", mode, img.shape[1], img.shape[0], title)
-        t = threading.Thread(target=self._run_rule_test, args=(rule, img, warn), daemon=True)
+        cancel = self._cancel_event
+        t = threading.Thread(
+            target=self._run_rule_test,
+            args=(rule, img, warn),
+            kwargs={"ctx": ctx, "cancel": cancel},
+            daemon=True,
+        )
         t.start()
 
     # ── background thread ──
 
-    def _run_rule_test(self, rule, img, warn=""):
-        result = {}
+    def _run_rule_test(self, rule, img, warn="", ctx=None, cancel=None):
+        ctx = dict(ctx or {})
+        result: dict = {}
         try:
-            markers, log_lines, dead_lines = self._run_dry_run(rule, img)
-            if warn:
-                log_lines.insert(0, warn)
-                dead_lines = {d + 1 for d in dead_lines}
-            annotated = self._draw_test_annotations(img.copy(), markers)
-            result = {
-                "image": annotated,
-                "log": "\n".join(log_lines),
-                "log_dead": sorted(dead_lines),
-            }
+            markers, log_lines, dead_lines = self._run_dry_run(rule, img, cancel=cancel)
+            if cancel is not None and cancel.is_set():
+                # B4：取消是明確狀態，不得偽裝成一般失敗，也不丟半成品結果
+                result = {"cancelled": True}
+            else:
+                if warn:
+                    log_lines.insert(0, warn)
+                    dead_lines = {d + 1 for d in dead_lines}
+                annotated = self._draw_test_annotations(img.copy(), markers)
+                result = {
+                    "image": annotated,
+                    "log": "\n".join(log_lines),
+                    "log_dead": sorted(dead_lines),
+                }
         except Exception as e:
             result = {"error": T("test.exception", e=e)}
+        # B1：結果一律附帶啟動時保存的定位上下文（task/rule_id/rule_name/seq）。
+        # 顯示與「定位到問題規則」只依此，不讀當下選取。
+        if ctx:
+            result["locate"] = ctx
         self._win._signals.test_done_signal.emit(result)
 
     # ── dry-run core ──
 
-    def _run_dry_run(self, rule, img):
+    def _run_dry_run(self, rule, img, cancel=None):
+        """單幀 dry-run。cancel 有值時，於步驟之間協作式檢查取消
+        （進行中的單一 OCR 不打斷；break 後由呼叫端回報 cancelled 狀態）。"""
         win = self._win
         of_summary = self._of_summary
         resolve_rule_name = self._resolve_rule_name
@@ -252,6 +296,8 @@ class TestRunController:
             dead_steps.update(_dead_after(fail_idx, fate, len(rule.steps)))
 
         for idx, step in enumerate(rule.steps):
+            if cancel is not None and cancel.is_set():
+                break  # B4：取消只在步驟之間生效
             line_start = len(log)
             try:
                 if step.type == "detect":
