@@ -5535,6 +5535,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"OCR Trigger Clicker v{__version__}")
         self.resize(900, 650)
         self._centered_once = False
+        # UX 2B-11 追修：本會話最近一次正常狀態矩形 + normalGeometry 的
+        # frame 偏移（normalGeometry 為 frame 座標，與 geometry()/move()
+        # 基準差標題列高；未校正直接存會每輪最大化位移 +31px，見 _save）。
+        self._last_normal_rect: dict | None = None
+        self._normal_frame_offset = (0, 0)
 
         from core._paths import _bundle_root, get_data_path
 
@@ -5636,14 +5641,41 @@ class MainWindow(QMainWindow):
         return self._rule_config_ctrl.save_config(self, data)
 
     # ── UX 2B-11：主視窗幾何記憶 ──
+    def _observe_normal_rect(self) -> None:
+        """在正常狀態下記住一般視窗矩形與 normalGeometry 的 frame 偏移。
+
+        normalGeometry() 回傳 frame 座標；geometry()/move() 為另一基準
+        （Windows 差標題列高約 31px）。保存最大化狀態時須先扣除此偏移，
+        否則重啟還原的位置會逐輪下移。僅正常狀態下可觀測，隱藏/最大化
+        時呼叫無作用。
+        """
+        try:
+            if self.isMaximized() or self.isMinimized():
+                return
+            rect = {
+                "x": self.x(),
+                "y": self.y(),
+                "width": self.width(),
+                "height": self.height(),
+            }
+            self._last_normal_rect = rect
+            normal = self.normalGeometry()
+            if normal.isValid():
+                self._normal_frame_offset = (
+                    normal.x() - rect["x"],
+                    normal.y() - rect["y"],
+                )
+        except Exception:
+            logging.debug("observe normal rect failed", exc_info=True)
+
     def _save_window_geometry(self) -> None:
         """保存全域 window_geometry；失敗靜默降級（不得阻止退出/關窗）。
 
         最小化時保留舊資料（hybrid 啟動的最小化不可污染正常幾何）；
-        最大化時以 Qt 的 normalGeometry() 保存「還原後」的一般視窗尺寸 ——
-        geometry() 此時是最大化後的螢幕矩形，不可當一般尺寸存。
-        normalGeometry() 無效（例如剛以最大化還原、尚未還原過）時才回退
-        舊磁碟值；舊值亦無效才用目前 geometry()。
+        最大化時一般尺寸取 Qt 的 normalGeometry()（geometry() 此時是
+        最大化後矩形，不可當一般尺寸存），並扣除正常狀態下觀測到的
+        frame 偏移。normalGeometry() 無效（剛以最大化還原）時回退
+        本會話記住的正常矩形，再回退舊磁碟值、目前 geometry()。
         """
         try:
             if self.isMinimized():
@@ -5653,12 +5685,15 @@ class MainWindow(QMainWindow):
             if maximized:
                 normal = self.normalGeometry()
                 if normal.isValid() and normal.width() > 0 and normal.height() > 0:
+                    dx, dy = getattr(self, "_normal_frame_offset", (0, 0))
                     rect = {
-                        "x": normal.x(),
-                        "y": normal.y(),
+                        "x": normal.x() - dx,
+                        "y": normal.y() - dy,
                         "width": normal.width(),
                         "height": normal.height(),
                     }
+                elif getattr(self, "_last_normal_rect", None):
+                    rect = dict(self._last_normal_rect)
                 else:
                     old = config.get("window_geometry")
                     if _valid_window_geometry(old):
@@ -5677,6 +5712,7 @@ class MainWindow(QMainWindow):
                     "width": self.width(),
                     "height": self.height(),
                 }
+                self._last_normal_rect = dict(rect)
             config["window_geometry"] = {**rect, "maximized": bool(maximized)}
             self._save_config(config)
         except Exception:
@@ -5700,6 +5736,12 @@ class MainWindow(QMainWindow):
             self._centered_once = True
             self.move(clamped.x(), clamped.y())
             self.resize(clamped.width(), clamped.height())
+            self._last_normal_rect = {
+                "x": clamped.x(),
+                "y": clamped.y(),
+                "width": clamped.width(),
+                "height": clamped.height(),
+            }
             if geo["maximized"]:
                 self.showMaximized()
         except Exception:
@@ -9473,6 +9515,7 @@ class MainWindow(QMainWindow):
         if not self._centered_once:
             self._centered_once = True
             self._center_on_screen()
+        self._observe_normal_rect()
 
     def _center_on_screen(self):
         screen = QApplication.primaryScreen()
