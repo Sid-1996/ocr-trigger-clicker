@@ -3431,6 +3431,40 @@
       "background": false,
       "quiet": false,
       "notes": ""
+    },
+    {
+      "id": "rule_40edab8d",
+      "name": "女僕裝帶來的從容",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "女僕裝帶來的從容",
+            "roi": {
+              "x": 0.11125,
+              "y": 0.18888888888888888,
+              "w": 0.13875,
+              "h": 0.07444444444444444,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "2",
+            "hold_ms": 0,
+            "after_delay_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "quiet": false,
+      "notes": "【选项2】﻿﻿+12 力量 +8 体力 +15 耐力﻿\n﻿『虚空之召（莉迪亚专用）』潜力"
     }
   ],
   "groups": [
@@ -3507,7 +3541,8 @@
         "rule_fd1fa04b",
         "rule_74a72fd7",
         "rule_56856c03",
-        "rule_79bae8fc"
+        "rule_79bae8fc",
+        "rule_40edab8d"
       ],
       "order": "parallel"
     },
@@ -3580,8 +3615,8 @@
     }
   ],
   "_collapsed_groups": [
-    "group_b96d8712",
     "group_ab1510a9",
+    "group_aaf9e64a",
     "group_65292e04"
   ],
   "window_title": "StarSavior",

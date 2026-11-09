@@ -3501,21 +3501,20 @@
     }
   ],
   "_collapsed_groups": [
-    "group_40b2992f",
-    "group_261f6f66",
-    "__default__",
-    "group_8db83f5b",
-    "group_c7a80073",
-    "group_a1d5b815",
     "group_36068123",
-    "group_e8efb9ff",
     "group_fdab3a16",
     "group_266e1f8c",
     "group_f1d46de3",
-    "group_2f0c668c",
-    "group_39a1b80d",
     "group_53eec035",
-    "group_3c07d078"
+    "__default__",
+    "group_a1d5b815",
+    "group_e8efb9ff",
+    "group_39a1b80d",
+    "group_40b2992f",
+    "group_c7a80073",
+    "group_8db83f5b",
+    "group_2f0c668c",
+    "group_261f6f66"
   ],
   "capture_size": [
     1920,
