@@ -1,0 +1,18 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>UX3-03/04/05/07 啟動前檢核與測試</title>
+<style>body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px}.box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #444;text-align:left}.ok{color:#4caf50}.stop{color:#e53935}.warn{color:#ff9800}button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer}.note{color:#aaa;font-size:12px}.check{display:flex;gap:8px;align-items:center;padding:6px 0}</style></head><body>
+<h1>UX3-03 啟動前檢核（+ UX3-04 測試取消 / UX3-05 Sum gate / UX3-07 執行可視）</h1>
+<div class="box"><b>修改前</b><p class="note">啟動硬擋僅 2 項（空 detect 文字、custom click(0,0)，<code>06_gui_main.py:8424</code>）。sum 閘門、未知 type 等執行期 BLOCKED 才出現，前途僅 log+toast。群組對話框只顯示群組名（<code>group_selection_controller.py:63</code>）。狀態列無目前執行目標。</p></div>
+<div class="box"><b>修改後（提案）：按「開始」前的檢核清單</b>
+<table><tr><th>規則</th><th>問題</th><th>操作</th></tr>
+<tr><td>跑馬規則</td><td class="warn">偵測文字未填</td><td><button>跳到設定</button></td></tr>
+<tr><td>加總閘門</td><td class="warn">閘門 ROI 未設定（啟動後不會執行）</td><td><button>跳到設定</button></td></tr>
+<tr><td>舊拖曳</td><td class="stop">終點需修復</td><td><button>跳到修復</button></td></tr>
+<tr><td>正常規則</td><td class="ok">✓ 可執行</td><td>—</td></tr></table>
+<p class="note">統一呼叫純函式 <code>rule_preflight()</code>（<code>rule_preflight.py:89</code>），不新增驗證規則。注意 BLOCKED 等待語意（parallel）與啟動擋的區別。</p></div>
+<div class="box"><b>測試對話框（UX3-04/05）</b>
+<div class="check"><button>取消測試</button><span class="note">測試中可取消（dry-run 不送真輸入）。Sum 閘門測試顯示「目前加總 128，條件 ≥ 150 → 尚未符合，將等待」而非只顯示總和。</span></div></div>
+<div class="box"><b>執行可視（UX3-07）</b>
+<div class="check"><span>狀態列：<b>執行中｜群組「跑馬」｜規則「跑馬規則」｜步驟 2/5</b>（資料已在 <code>get_rules_status</code>）</span></div>
+<div class="check"><span>群組選擇：群組名 ＋「（3 條啟用規則）」</span></div>
+<p class="note">不新增 Pause 按鈕（沿用 F8 三態）；狀態列更新遵循效能紅線（增量、不重建）。</p></div>
+</body></html>

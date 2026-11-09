@@ -1,0 +1,12 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>UX3-02 Drag 修復（C-2a-2）</title>
+<style>body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px}.box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}.banner{background:#5a3a00;border:1px solid #ff9800;border-radius:6px;padding:12px;margin:10px 0}button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer}button:disabled{background:#555}.done{background:#1b4d2e;border-color:#4caf50}.note{color:#aaa;font-size:12px}code{background:#111;padding:2px 5px;border-radius:3px}</style></head><body>
+<h1>UX3-02 Drag Legacy Marker 修復（C-2a-2）</h1>
+<div class="box"><b>現況</b><p class="note">舊任務 Drag 終點是 PX offset（<code>dx/dy</code>），載入時標 <code>_migration{kind=drag_endpoint,status=needs_repair}</code>（<code>rule_migration.py:482</code>）。編輯器無任何提示；執行期才 <code>drag_end_invalid</code> terminal。GUI 對 <code>_migration/needs_repair/validate_drag_endpoint</code> 零命中。</p></div>
+<div class="box" id="form"><b>拖曳步驟表單（修改後）</b>
+<div class="banner" id="banner"><b>⚠ 這條拖曳規則的終點是舊格式，需要修復後才能執行。</b><br><span class="note">舊格式用像素距離（dx/dy），新格式用視窗比例。請重新拾取一次終點，確認後會清除舊標記。</span><br><br>
+<button onclick="pick()">拾取終點</button> <button id="clearBtn" disabled onclick="fix()">確認並清除舊標記</button></div>
+<p class="note">終點（客戶區比例）：<code id="end">未設定</code>　|　舊格式欄位 dx/dy（相容保留）：<code>dx=30 dy=20</code></p>
+<p class="note" id="stat">狀態：needs_repair（由 <code>validate_drag_endpoint()</code> 判定，GUI 不自行判斷）</p></div>
+<script>function pick(){document.getElementById('end').textContent='0.52, 0.61';document.getElementById('clearBtn').disabled=false;}function fix(){var b=document.getElementById('banner');b.className='banner done';b.innerHTML='<b>✓ 已修復</b>：終點已寫入比例座標，_migration 已清除並儲存。重新載入後自動重檢。';document.getElementById('stat').textContent='狀態：valid';}</script>
+<p class="note">紅線：不自動清洗假 marker（keep 決策）；清除必須經使用者確認；判定以 core <code>validate_drag_endpoint</code> 為唯一來源（GUI 現有 <code>_drag_end_state:494</code> 不可再寫第三套）。</p>
+</body></html>

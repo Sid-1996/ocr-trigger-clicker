@@ -1,0 +1,16 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>UX3-01 執行日誌定位（E2）</title>
+<style>body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px}h1{font-size:18px}.box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 8px;border-bottom:1px solid #444;text-align:left}th{color:#999}.ok{color:#4caf50}.stop{color:#e53935}.blocked{color:#ff9800}.hl{background:#3a4a5a}button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer}.note{color:#aaa;font-size:12px}code{background:#111;padding:2px 5px;border-radius:3px}</style></head><body>
+<h1>UX3-01 執行日誌定位規則／步驟（UX-E2）— 修改前後對照</h1>
+<div class="box"><b>修改前（現況 HEAD eda31c4）</b><p class="note">日誌列僅文字，無 rule_id、無點擊、無跳轉。執行中編輯面板停用，使用者只能手動在規則樹找同名規則。</p>
+<table><tr><th>時間</th><th>規則</th><th>步驟</th><th>結果</th><th>詳情</th></tr>
+<tr><td>10:02:31.120</td><td>跑馬規則</td><td>步驟 2 偵測</td><td class="stop">停止</td><td>detect_not_found</td></tr>
+<tr><td>10:02:33.004</td><td>跑馬規則</td><td>—</td><td class="blocked">BLOCKED</td><td>sum_gate_roi_unset</td></tr></table>
+<p class="note">同名規則無法區分：<code>_log_exec</code> 只存 <code>rule_name</code>（<code>05_main_loop.py:609</code>）；widget 無 <code>pyqtSignal</code>（<code>execution_log_widget.py</code> 全檔）。</p></div>
+<div class="box"><b>修改後（提案）</b><p class="note">點擊任一列 → 右側即時顯示定位目標；執行中點擊先記 pending，停止後自動定位（因編輯面板執行中停用 <code>06_gui_main.py:9010</code>）。</p>
+<table id="t"><tr><th>時間</th><th>規則</th><th>步驟</th><th>結果</th><th>詳情</th></tr>
+<tr data-r="r1" data-s="1"><td>10:02:31.120</td><td>跑馬規則</td><td>步驟 2 偵測</td><td class="stop">停止</td><td>detect_not_found</td></tr>
+<tr data-r="r2" data-s="0"><td>10:02:33.004</td><td>跑馬規則（二）</td><td>—</td><td class="blocked">BLOCKED</td><td>sum_gate_roi_unset</td></tr></table>
+<p id="loc" class="note">← 點一列試試</p></div>
+<script>document.querySelectorAll('#t tr[data-r]').forEach(tr=>tr.onclick=()=>{document.querySelectorAll('#t tr').forEach(x=>x.classList.remove('hl'));tr.classList.add('hl');document.getElementById('loc').textContent='定位目標：規則 '+tr.dataset.r+' / 步驟 '+(+tr.dataset.s+1)+'（停止後自動選中該規則並展開對應步驟表單）';});</script>
+<p class="note">實作要點：<code>_log_exec</code> 加 <code>rule_id</code>；規則/步驟欄存 <code>UserRole</code>；<code>cellClicked → locate_requested</code>；重用既有 <code>_on_rule_selected</code>。不進任務 JSON。</p>
+</body></html>
