@@ -280,6 +280,27 @@ def test_validation_needs_repair_not_confused_with_incomplete():
     assert _validate_drag_endpoint({"end_x": "bad", "end_y": 0.5})["status"] != "needs_repair"
 
 
+def test_validation_legacy_reason_matches_detector():
+    """validator 與 detector 的分類必須一致（GUI 以 validator 為唯一判定來源）。
+
+    「只缺一軸」是 incomplete，不是 invalid（欄位不存在 ≠ 值不合法）；
+    「有值但不合法」才是 invalid。兩邊不一致會讓 GUI 顯示錯誤的原因。
+    """
+    cases = [
+        ({"dx": 30}, "incomplete_legacy_offset"),
+        ({"dy": 20}, "incomplete_legacy_offset"),
+        ({"dx": 30, "dy": 20}, "legacy_px_offset"),
+        ({"dx": "bad", "dy": 20}, "invalid_legacy_offset"),
+        ({"dx": 30, "dy": None}, "invalid_legacy_offset"),
+        ({"dx": 30, "dy": 20, "end_x": 0.5, "end_y": 0.6}, "mixed_legacy_and_endpoint"),
+    ]
+    for params, reason in cases:
+        detected = _detect_drag_legacy_marker(dict(params))
+        detected_reason = detected["_migration"]["reason"] if detected else None
+        assert _validate_drag_endpoint(dict(params))["reason"] == reason
+        assert detected_reason == reason
+
+
 # ── PX 終點退役 ──
 
 

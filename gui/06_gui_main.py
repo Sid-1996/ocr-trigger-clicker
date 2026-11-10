@@ -3810,8 +3810,17 @@ class _DragStepForm(QWidget):
         self._dy_was_set = "dy" in p
         self._dx_dirty = False
         self._dy_dirty = False
+        # UX3-02：舊版 PX offset（dx/dy）與修復狀態一律取自 core
+        # （has_legacy_drag_offset / validate_drag_endpoint），GUI 不自寫第三套判定。
+        self._has_legacy_offset = _has_legacy_drag_offset(p)
+        self._repair = _validate_drag_endpoint(p)
         form = QFormLayout(self)
         form.setContentsMargins(12, 6, 12, 6)
+
+        # 修復 banner 只在 core 判定 needs_repair 時出現（其他步驟／其他規則不會出現）
+        self._repair_banner = self._build_repair_banner()
+        if self._repair_banner is not None:
+            form.insertRow(0, self._repair_banner)
 
         self._target = _NoWheelCombo()
         self._target.addItem(T("summary.click_target"), "text_center")
@@ -3873,23 +3882,37 @@ class _DragStepForm(QWidget):
         self._end_x_spin.valueChanged.connect(lambda v: self._set_end_value(0, float(v)))
         self._end_y_spin.valueChanged.connect(lambda v: self._set_end_value(1, float(v)))
 
+        # dx/dy 是「舊格式相容」欄位：執行期只認 end_x/end_y，舊值不被採用。
+        # 只有真的帶舊欄位的步驟才顯示，且唯讀——不可讓使用者改出不生效的 dx/dy。
+        # 新式 endpoint drag 完全不顯示這兩列，也不會因而被寫入 dx/dy。
         self._dx = _NoWheelSpin()
         self._dx.setRange(-9999, 9999)
         self._dx.setSuffix(" px")
         self._dx.blockSignals(True)
-        self._dx.setValue(p.get("dx", 0))
+        self._dx.setValue(_num_to_int(p.get("dx"), 0))
         self._dx.blockSignals(False)
         self._dx.valueChanged.connect(self._mark_dx_dirty)
-        form.addRow(T("format.horizontal_offset"), self._dx)
 
         self._dy = _NoWheelSpin()
         self._dy.setRange(-9999, 9999)
         self._dy.setSuffix(" px")
         self._dy.blockSignals(True)
-        self._dy.setValue(p.get("dy", 0))
+        self._dy.setValue(_num_to_int(p.get("dy"), 0))
         self._dy.blockSignals(False)
         self._dy.valueChanged.connect(self._mark_dy_dirty)
-        form.addRow(T("format.vertical_offset"), self._dy)
+
+        self._legacy_row_widgets = []
+        if self._has_legacy_offset:
+            self._dx.setEnabled(False)
+            self._dy.setEnabled(False)
+            legacy_tip = T("step_form.drag_legacy_offset_tip")
+            self._dx.setToolTip(legacy_tip)
+            self._dy.setToolTip(legacy_tip)
+            lbl_x = QLabel(T("format.horizontal_offset"))
+            lbl_y = QLabel(T("format.vertical_offset"))
+            form.addRow(lbl_x, self._dx)
+            form.addRow(lbl_y, self._dy)
+            self._legacy_row_widgets = [lbl_x, self._dx, lbl_y, self._dy]
 
         self._button = _NoWheelCombo()
         self._button.addItem(T("combo.left"), "left")
@@ -3974,6 +3997,7 @@ class _DragStepForm(QWidget):
                 self._set_end_spins(self._end_x, self._end_y, enabled=True)
                 self._update_end_label()
                 self.save()
+                self._refresh_repair()
                 self._list.steps_changed.emit()
 
     def _clear_end(self):
@@ -3984,6 +4008,7 @@ class _DragStepForm(QWidget):
         self._set_end_spins(None, None, enabled=True)
         self._update_end_label()
         self.save()
+        self._refresh_repair()
         self._list.steps_changed.emit()
 
     def _mark_dx_dirty(self, _value):
@@ -3992,6 +4017,98 @@ class _DragStepForm(QWidget):
     def _mark_dy_dirty(self, _value):
         self._dy_dirty = True
 
+    def _build_repair_banner(self):
+        """需要修復的舊版 Drag 才顯示 banner。
+
+        判定一律取自 core `validate_drag_endpoint`（status=needs_repair）：
+        其他步驟類型與其他規則不會出現這個 banner。
+        """
+        if self._repair.get("status") != "needs_repair":
+            return None
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(4)
+        self._repair_title = QLabel()
+        self._repair_title.setStyleSheet("color:#c0392b; font-weight:bold;")
+        self._repair_body = QLabel()
+        self._repair_body.setWordWrap(True)
+        self._repair_body.setStyleSheet("color:#444;")
+        lay.addWidget(self._repair_title)
+        lay.addWidget(self._repair_body)
+        btn_row = QWidget()
+        bl = QHBoxLayout(btn_row)
+        bl.setContentsMargins(0, 0, 0, 0)
+        self._repair_pick_btn = QPushButton(T("step_form.drag_legacy_pick"))
+        self._repair_pick_btn.setEnabled(bool(self._pick_cb))
+        self._repair_pick_btn.clicked.connect(self._on_repair_pick)
+        self._repair_clear_btn = QPushButton(T("step_form.drag_legacy_clear"))
+        self._repair_clear_btn.clicked.connect(self._on_repair_clear)
+        bl.addWidget(self._repair_pick_btn)
+        bl.addWidget(self._repair_clear_btn)
+        bl.addStretch(1)
+        lay.addWidget(btn_row)
+        box.setStyleSheet("background:#fdf4e6; border:1px solid #e0a458; border-radius:6px;")
+        self._refresh_repair()
+        return box
+
+    def _refresh_repair(self):
+        """依 core 判定更新 banner：是否仍需修復、能否移除舊的像素偏移設定。"""
+        status = _validate_drag_endpoint(self._step.params)
+        self._repair = status
+        needs = status.get("status") == "needs_repair"
+        banner = getattr(self, "_repair_banner", None)
+        if banner is not None:
+            banner.setVisible(needs)
+        if not needs:
+            return
+        has_end = _drag_end_state(self._end_x, self._end_y) == "ratio"
+        if has_end:
+            self._repair_title.setText(T("step_form.drag_legacy_title_picked"))
+            self._repair_body.setText(T("step_form.drag_legacy_body_picked"))
+        else:
+            self._repair_title.setText(T("step_form.drag_legacy_title"))
+            self._repair_body.setText(T("step_form.drag_legacy_body"))
+        self._repair_clear_btn.setEnabled(has_end)
+
+    def _on_repair_pick(self):
+        """修復第一步：沿用既有拾取流程指定新的終點座標（客戶區比例）。"""
+        if not self._pick_cb:
+            return
+        self._pick_end()
+
+    def _on_repair_clear(self):
+        """經使用者確認後才移除舊的 dx/dy 與 _migration marker。
+
+        不自動清洗既有 marker（產品決策 keep）；終點尚未有效時一律拒絕，
+        避免使用者無意間丟失原始資料。
+        """
+        if _drag_end_state(self._end_x, self._end_y) != "ratio":
+            self._repair_body.setText(T("step_form.drag_legacy_need_end"))
+            return
+        reply = QMessageBox.question(
+            self,
+            T("dialog.notice"),
+            T("step_form.drag_legacy_confirm_msg"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._step.params.pop("dx", None)
+        self._step.params.pop("dy", None)
+        self._step.params.pop("_migration", None)
+        self._has_legacy_offset = False
+        self._dx_was_set = False
+        self._dy_was_set = False
+        self._dx_dirty = False
+        self._dy_dirty = False
+        for w in self._legacy_row_widgets:
+            w.setVisible(False)
+        self.save()
+        self._refresh_repair()
+        self._list.steps_changed.emit()
+
     def _set_end_value(self, idx, val):
         if idx == 0:
             self._end_x = val
@@ -3999,6 +4116,7 @@ class _DragStepForm(QWidget):
             self._end_y = val
         self._update_end_label()
         self.save()
+        self._refresh_repair()
 
     def notify_blocked(self):
         """保存/收合被拒時，把焦點移到缺少的那一軸。"""
@@ -4014,13 +4132,16 @@ class _DragStepForm(QWidget):
             self._update_end_label()
             return False
         self._step.params["target"] = self._target.currentData()
-        if self._dx_was_set or self._dx_dirty:
+        # dx/dy 只在使用者實際改過時才寫回：未編輯時保留原值（含小數），
+        # 不可用 QSpinBox 的整數顯示值覆寫使用者資料。
+        if self._dx_dirty:
             self._step.params["dx"] = self._dx.value()
-        if self._dy_was_set or self._dy_dirty:
+        if self._dy_dirty:
             self._step.params["dy"] = self._dy.value()
         self._step.params["button"] = self._button.currentData()
         self._step.params["after_delay_ms"] = self._after_delay_raw.value()
         if state == "unset":
+            # 終點未設定 → 明確寫 None（既有資料契約；core 以 None 代表「未設定」）
             self._step.params["end_x"] = None
             self._step.params["end_y"] = None
             self._step.params.pop("end_roi_coord", None)
@@ -4946,6 +5067,11 @@ _execution_log_mod = load_sibling("execution_log_widget", "gui/execution_log_wid
 ExecutionLogWidget = _execution_log_mod.ExecutionLogWidget
 
 _preflight_mod = load_sibling("rule_preflight", "core/rule_preflight.py")
+
+# UX3-02（Drag 舊格式修復）：判定一律以 core 為唯一來源，GUI 不自寫 legacy 狀態機。
+_rule_migration_mod = load_sibling("rule_migration", "core/rule_migration.py")
+_validate_drag_endpoint = _rule_migration_mod.validate_drag_endpoint
+_has_legacy_drag_offset = _rule_migration_mod.has_legacy_drag_offset
 
 _rule_tree_mod = load_sibling("rule_tree_widget", "gui/rule_tree_widget.py")
 _RuleTreeWidget = _rule_tree_mod.RuleTreeWidget
@@ -6496,6 +6622,23 @@ class MainWindow(QMainWindow):
     def _refresh_task_list(self):
         self._rule_config_ctrl.refresh_task_list(self)
 
+    def _notify_drag_legacy_steps(self) -> int:
+        """任務載入後提示有幾條拖曳步驟需要修復終點（UX3-02）。
+
+        判定一律以 core `validate_drag_endpoint` 為準；回傳需要修復的步驟數。
+        """
+        count = 0
+        for rule in getattr(self, "_rules", []) or []:
+            for step in getattr(rule, "steps", []) or []:
+                if getattr(step, "type", "") != "drag":
+                    continue
+                params = getattr(step, "params", None)
+                if _validate_drag_endpoint(params).get("status") == "needs_repair":
+                    count += 1
+        if count:
+            self._notif_stack.push(T("notif.drag_legacy_steps", count=count))
+        return count
+
     def _task_load_failed_message(self) -> str:
         err = self._task_load_error
         if err is None:
@@ -6577,6 +6720,7 @@ class MainWindow(QMainWindow):
             return
         self._rules = rules
         _main_loop_mod.log_main(T("notif.task_loaded", name=name, count=len(self._rules)))
+        self._notify_drag_legacy_steps()
         self._groups = groups
         # safety net: remove from uncategorized any rule also in a normal group
         uncat = next((g for g in self._groups if g.id == "__uncategorized__"), None)

@@ -377,6 +377,8 @@ def test_task_switch_allowed_after_current_task_load_failure(monkeypatch):
         _load_config=lambda: {},
         _save_config=lambda data: None,
         _flush_save=lambda: (_ for _ in ()).throw(AssertionError("must skip save")),
+        # UX3-02：任務載入後提示需要修復的拖曳步驟（此測試只驗任務切換行為）
+        _notify_drag_legacy_steps=lambda: 0,
     )
 
     MainWindow._on_task_changed(fake, "good")

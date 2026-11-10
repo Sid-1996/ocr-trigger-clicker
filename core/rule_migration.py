@@ -190,6 +190,16 @@ def _detect_drag_legacy_marker(params: dict) -> dict | None:
     }
 
 
+def has_legacy_drag_offset(params: dict) -> bool:
+    """params 是否帶有舊版 PX offset 欄位（dx/dy）。
+
+    純欄位存在性檢查（不做值驗證、不判斷是否合法）：供 GUI 決定要不要顯示
+    「舊格式相容」欄位，避免 GUI 再寫一套 legacy 判定。
+    值的合法性一律交給 validate_drag_endpoint。
+    """
+    return isinstance(params, dict) and ("dx" in params or "dy" in params)
+
+
 def _validation_result(status: str, reason: str, message: str) -> dict:
     return {"status": status, "reason": reason, "message": message}
 
@@ -223,12 +233,21 @@ def validate_drag_endpoint(params: dict) -> dict:
     has_end_y = "end_y" in params and end_y is not None
 
     # 存在舊 PX 欄位 → needs_repair（與 valid/incomplete/invalid 並列，不等於它們）。
+    # 分類規則與 _detect_drag_legacy_marker 完全一致（rule 5/3/4/2）：
+    #   有值但不合法 → invalid；只缺一軸 → incomplete；兩者齊全且另有終點 → mixed。
+    # 「欄位不存在」不可與「值不合法」混為一談（否則 incomplete 分支永遠走不到）。
     if has_dx or has_dy:
         dx_valid = has_dx and _is_finite_number(params.get("dx"))
         dy_valid = has_dy and _is_finite_number(params.get("dy"))
-        if not dx_valid or not dy_valid:
+        if (has_dx and not dx_valid) or (has_dy and not dy_valid):
             return _validation_result(
                 "needs_repair", "invalid_legacy_offset", "舊版 PX offset 不合法。"
+            )
+        if has_dx != has_dy:
+            return _validation_result(
+                "needs_repair",
+                "incomplete_legacy_offset",
+                "舊版 PX offset 僅設定一軸。",
             )
         if has_end_x and has_end_y:
             return _validation_result(
@@ -236,13 +255,7 @@ def validate_drag_endpoint(params: dict) -> dict:
                 "mixed_legacy_and_endpoint",
                 "新舊終點格式混合。",
             )
-        if has_dx and has_dy:
-            return _validation_result("needs_repair", "legacy_px_offset", "使用舊版 PX offset。")
-        return _validation_result(
-            "needs_repair",
-            "incomplete_legacy_offset",
-            "舊版 PX offset 僅設定一軸。",
-        )
+        return _validation_result("needs_repair", "legacy_px_offset", "使用舊版 PX offset。")
 
     # 無舊 PX：依 end_x/end_y 判斷。
     if not has_end_x and not has_end_y:
