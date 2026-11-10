@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>UX Phase 3B 原型 — 測試閉環</title>
+<style>
+  body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px;max-width:1180px}
+  h1{font-size:20px} h2{font-size:16px;color:#7db3e8;margin-top:28px}
+  a{color:#7db3e8}
+  .box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}
+  .note{color:#aaa;font-size:12px}
+  .fake{color:#ffb74d;font-weight:bold}
+  button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;margin:2px}
+  button.secondary{background:#5a5a5a}
+  button.danger{background:#b71c1c}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .col{flex:1;min-width:280px}
+  .dialog{background:#2b2b2b;border:1px solid #666;border-radius:8px;padding:14px}
+  .dialog h3{margin:0 0 8px 0;font-size:14px}
+  .fake-img{background:linear-gradient(135deg,#3a4a3a,#2a2a3a);height:150px;border:1px solid #555;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#aaa;text-align:center;padding:8px}
+  .logline{padding:5px 8px;border-bottom:1px solid #3a3a3a;font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  .logline:hover{background:#3a3a3a}
+  .logline.dead{color:#888;text-decoration:line-through}
+  .logline .loc{font-size:12px;color:#7db3e8;white-space:nowrap}
+  .logline .loc:hover{text-decoration:underline}
+  .tree{font-size:13px}
+  .tree .g{color:#ffd54f;margin:6px 0 2px}
+  .tree .r{padding:3px 8px;border-radius:4px;cursor:pointer}
+  .tree .r:hover{background:#3a3a3a}
+  .tree .r.active{background:#4a7ebb;color:#fff}
+  .stepitem{padding:4px 8px;border:1px solid #444;border-radius:4px;margin:4px 0;font-size:13px}
+  .stepitem.hl{border-color:#e53935;background:#442222;box-shadow:0 0 0 2px #e53935}
+  .stepitem.hl2{border-color:#4caf50;background:#223322}
+  .statusbar{display:flex;gap:10px;align-items:center;background:#333;border-radius:4px;padding:8px 12px;font-size:13px;flex-wrap:wrap}
+  .statusbar .pill{background:#5a5a5a;border-radius:10px;padding:2px 10px}
+  .statusbar .pill.test{background:#ff9800;color:#222;font-weight:bold}
+  .statusbar .pill.run{background:#4caf50;color:#fff;font-weight:bold}
+  .statusbar .pill.pre{background:#e53935;color:#fff;font-weight:bold}
+  .statusbar .pill.done{background:#4a7ebb;color:#fff}
+  .statebtns{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+  .statebtns button.active{background:#ff9800;color:#222;font-weight:bold}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:6px 8px;border-bottom:1px solid #444;text-align:left;vertical-align:top}
+  .card{border:1px solid #555;border-radius:6px;padding:12px;margin:10px 0;background:#2b2b2b}
+  .card h4{margin:0 0 6px 0}
+  .detail{margin-top:8px;background:#222;border-radius:4px;padding:8px;font-size:12px}
+  .tag{font-size:11px;border-radius:8px;padding:1px 8px;color:#222}
+  .tag.loc{background:#81c784}.tag.retest{background:#90caf9}.tag.cfg{background:#ffcc80}.tag.env{background:#ef9a9a}.tag.diag{background:#ce93d8}
+  .hlflash{animation:flash 1s}
+  @keyframes flash{0%{box-shadow:0 0 0 3px #ffeb3b}100%{box-shadow:none}}
+  ul{margin:6px 0;padding-left:20px}
+  code{background:#222;padding:1px 4px;border-radius:3px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>OCR Trigger Clicker — UX Phase 3B 原型：測試閉環</h1>
+<p>對應報告：<code>docs/dev/UX_PHASE3B_AUDIT.md</code>（HEAD <code>cb9000d</code>）。<span class="fake">⚠ 本頁所有畫面皆為原型資料（假規則名、假座標、假日誌），不連正式邏輯。</span>
+本頁呈現三個操作情境：測試結果定位、狀態區分、失敗恢復引導。直接在瀏覽器開啟本檔操作。</p>
+
+<h2 id="sec-index">索引</h2>
+<div class="box">
+<ul>
+<li><a href="#sec-locate">§1 測試結果與問題定位整合</a>（UX3-04 定位 half + UX3-05 sum gate）</li>
+<li><a href="#sec-status">§2 測試／預檢／正式執行狀態區分</a></li>
+<li><a href="#sec-recovery">§3 測試失敗後的恢復引導</a>（E1–E6）</li>
+<li><a href="#sec-lines">§4 現況行號對照（提案落點）</a></li>
+</ul>
+<p class="note">視覺：深色 #1e1e1e / #2d2d2d / 按鈕 #4a7ebb，與既有 <code>devtools/ux_prototypes/phase3/*.html</code> 一致。</p>
+</div>
+
+<h2 id="sec-locate">§1 測試結果與問題定位整合（UX3-04 / UX3-05）</h2>
+<div class="row">
+  <div class="col">
+    <div class="dialog" id="testDialog">
+      <h3>測試結果（原型資料）— 規則「跑馬規則」共 4 步</h3>
+      <div class="fake-img">[ 原型截圖：遊戲畫面 + 標記 ①②③⑧ ]<br><span class="note">正式版：_draw_test_annotations(run_controller.py:840)</span></div>
+      <div style="margin-top:10px">
+        <div class="logline" data-step="0" data-loc="rule">［1］✓ 偵測「開始跑馬」命中（信心 0.95）<span class="loc">定位到第 1 步</span></div>
+        <div class="logline" data-step="1" data-loc="step">［2］✗ 未找到「確認」 模式 fuzzy 門檻 80% 最佳 62% &nbsp;→ 找不到時停止<span class="loc">定位到第 2 步 →</span></div>
+        <div class="logline dead"> [3] 本輪不會執行（步驟 2 未命中後續全死）<span class="loc">—</span></div>
+        <div class="logline" data-step="3" data-loc="step">［4］🔢 數字加總 128（3 個數字）<br><span class="note">閘門示範：會等待直到 ≥150；目前 128 未符合 → 正式執行將持續等待（不重試、不 advance）。此為條件示範，非實際等待。</span><span class="loc">定位到第 4 步</span></div>
+        <div class="logline" data-step="3" data-loc="blocked">⚠「{name}」因設定錯誤不會執行：{problems}<br><span class="note">（BLOCKED 預覽行：定位規則）</span><span class="loc">定位到規則</span></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="secondary" onclick="clickFirstMiss()">定位到第 2 步設定</button>
+        <button class="secondary" onclick="note('重新測試：全跑一次（正式版：按「測試」按鈕）')">重新測試</button>
+        <button class="secondary" onclick="note('取消測試：取消旗標 + 等收尾（dry-run 不送真輸入，安全）')">取消測試</button>
+        <button class="secondary" onclick="document.getElementById('stepList').scrollIntoView({behavior:'smooth'})">關閉</button>
+      </div>
+      <p class="note" id="locateMsg">提示：點 log 行尾「定位到第 N 步」會在右側假規則樹高亮對應步驟（模擬 locate_rule_target）。</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="box" style="margin-top:0">
+      <b>規則樹（原型資料，點擊可預覽定位效果）</b>
+      <div class="tree" id="ruleTree">
+        <div class="g">▸ 跑馬群組</div>
+        <div class="r" data-rule="r-a">跑馬規則 <span class="note">r-a</span></div>
+        <div class="r" data-rule="r-b">同名規則 <span class="note">r-b</span></div>
+        <div class="g">▸ 體力群組</div>
+        <div class="r" data-rule="r-c">體力規則</div>
+      </div>
+      <div id="stepList" style="margin-top:10px">
+        <b>步驟（選中規則時展開，定位後高亮）</b>
+        <div class="stepitem" id="step0">步驟 1 — 偵測 detect「開始跑馬」</div>
+        <div class="stepitem" id="step1">步驟 2 — 偵測 detect「確認」（門檻 80%）<span class="note">← miss 在此</span></div>
+        <div class="stepitem" id="step2">步驟 3 — 點擊 click（text_center）</div>
+        <div class="stepitem" id="step3">步驟 4 — 數字加總 sum（閘門 ≥150）</div>
+      </div>
+      <p class="note">定位只以 <code>rule_id</code> 比對，不以名猜測（<code>locate_rule_target:9227</code>）。兩個「同名規則」以 id 區分（<code>execution_log_widget.py:126-145</code>）。</p>
+    </div>
+  </div>
+</div>
+
+<h2 id="sec-status">§2 測試／預檢／正式執行狀態區分</h2>
+<div class="box">
+  <b>提案狀態列（可切換九態）</b>
+  <div class="statebtns" id="stateBtns"></div>
+  <div class="statusbar" id="statusbar"></div>
+  <div id="stateDetail" style="margin-top:10px;font-size:13px"></div>
+  <table style="margin-top:12px">
+    <tr><th>表面</th><th>測試中（模擬預覽，不送出操作）</th><th>啟動前預檢</th><th>正式執行中</th></tr>
+    <tr><td>測試鈕</td><td>測試中… + 停用</td><td>正常</td><td>停用</td></tr>
+    <tr><td>主按鈕</td><td>不變（仍「開始」）</td><td>正常</td><td>初始化停用 →「停止」/「繼續」</td></tr>
+    <tr><td>狀態列</td><td>「測試中（模擬預覽，不送出操作）…」</td><td>列出硬問題清單</td><td>偵測中…／已停止</td></tr>
+    <tr><td>Debug 測試鈕</td><td>不受影響</td><td>—</td><td>停用（run_active）</td></tr>
+  </table>
+  <p class="note">現況缺口：測試中僅靠按鈕改字，無 <code>_is_testing</code>；按開始可鑽空（<code>run_controller.py:85-151</code>）。提案：加 <code>_is_testing</code> 旗標，測試中擋正式、正式中擋測試（見報告 §8 B4）。</p>
+</div>
+
+<h2 id="sec-recovery">§3 測試失敗後的恢復引導</h2>
+<p class="note">每卡附：出現時機、可執行按鈕、資料來源。點「展開診斷」看附帶資訊。</p>
+<div id="cards"></div>
+
+<h2 id="sec-lines">§4 現況行號對照（提案落點）</h2>
+<div class="box">
+<p class="note">⚠ 本表行號為<b>設計提案時點（HEAD <code>cb9000d</code>）</b>的落點，僅作設計依據留檔；目前 HEAD 已是 <code>c26b722</code>，B1／B2／B4 已實作、B3（Sum gate 示範）與 B5 尚未實作，實際行號請以目前程式碼為準。詳見 <code>docs/dev/UX_PHASE3B_AUDIT.md</code> 開頭的基準說明。</p>
+<table>
+<tr><th>提案</th><th>落點</th><th>資料來源</th></tr>
+<tr><td>B1 測試結果定位</td><td><code>run_controller.py:155-170</code> 結果加 id；<code>06_gui_main.py:8535</code> dialog 加按鈕</td><td><code>rule.id</code> + <code>win._current_task</code> + log <code>[idx]</code></td></tr>
+<tr><td>B2 Debug 靜默修復</td><td><code>06_gui_main.py:8677-8678</code>、<code>8783-8784</code></td><td><code>_get_current_rule()</code> + 面板 <code>set_has_active_rule</code></td></tr>
+<tr><td>B3 Sum gate 示範</td><td><code>run_controller.py:615-647</code></td><td><code>params.gate/operator/value/wait</code>（引擎語意對照 <code>05_main_loop.py:1274</code>）</td></tr>
+<tr><td>B4 取消 + 狀態旗標</td><td><code>run_controller.py:85</code>、<code>06:8831/8845</code> 守衛</td><td>新增 <code>threading.Event</code>（F4 <code>09:503</code> 同模式）</td></tr>
+<tr><td>不動（重用）</td><td><code>06:9227 locate_rule_target</code></td><td>Phase 3A 已交付，直接呼叫</td></tr>
+</table>
+</div>
+
+<script>
+const states=[
+ {id:'testing',label:'測試中（模擬預覽，不送出操作）',pill:'test',text:'🧪 測試中（模擬預覽，不送出操作）… 正在辨識畫面（不執行點擊/按鍵）',bar:['開始','測試中…','模擬'],
+  detail:'<ul><li>測試鈕：停用並顯示「測試中…」（<code>run_controller.py:100</code>）</li><li>主按鈕不變（仍「開始」），但提案加 <code>_is_testing</code> 後按開始會被擋並提示「測試中…」</li><li>狀態列：新增「模擬預覽」字眼，與正式執行區分</li></ul>'},
+ {id:'preflight',label:'啟動前預檢未通過',pill:'pre',text:'⚠ 以下規則有未完成的步驟，請先修正（<code>start.hard_problems_msg</code>）',bar:['開始','測試','定位到問題規則'],
+  detail:'<ul><li>僅正式啟動有此態（<code>06:8905</code>）；測試 dialog 內 BLOCKED 行同樣可定位（本階段補）</li><li>文案共用 <code>exec_log.reason.*</code>；提案：將來加「定位到規則」按鈕統一</li></ul>'},
+ {id:'running',label:'正式執行中',pill:'run',text:'● 執行中｜群組「跑馬」｜規則「跑馬規則」｜步驟 2/4（<code>get_rules_status</code>）',bar:['停止','—','執行日誌開啟'],
+  detail:'<ul><li>主按鈕「停止」；執行日誌 500ms poll 可點定位（<code>execution_log_widget.py:164</code>）</li><li>點擊日誌：狀態列「執行中先記錄：停止後將定位到…」（<code>locate.pending_after_stop</code>）</li></ul>'},
+ {id:'paused',label:'正式執行中（暫停）',pill:'run',text:'⏸ 已暫停 — 按 F8 或主按鈕繼續',bar:['繼續','—','—'],
+  detail:'<ul><li>F8 三態（開始/停止/繼續，<code>06:8831</code>），不新增 Pause 按鈕</li></ul>'},
+ {id:'cancelled',label:'測試已取消',pill:'done',text:'✓ 測試已取消 — 可調整後重按「測試」',bar:['開始','測試','—'],
+  detail:'<ul><li>新功能（B4）：取消只停模擬，不送真輸入；按鈕恢復；後續測試結果過期丟棄</li></ul>'},
+ {id:'done',label:'測試完成',pill:'done',text:'✓ 測試完成 — 結果 dialog 已關閉；可點 log 行定位（本階段新增）',bar:['開始','測試','—'],
+  detail:'<ul><li>現況僅 Close（<code>06:8581</code>）；提案：miss 行可點「定位到步驟」</li></ul>'},
+ {id:'failed',label:'測試失敗（未命中/未通過）',pill:'pre',text:'⚠ 測試失敗 step 2 未命中 → 點「定位到第 2 步」修正',bar:['開始','重新測試','定位'],
+  detail:'<ul><li>對應 §3 的 E1/E2；資料：log <code>[idx]</code> + markers</li></ul>'},
+ {id:'error',label:'測試例外（無法歸因）',pill:'pre',text:'⚠ 無法完成測試：{exception}（選錯視窗？）— 檢查視窗後重試',bar:['開始','重試','—'],
+  detail:'<ul><li>對應 §3 的 E6：worker exception / 截圖失敗；提案攜帶 rule_id 至少定位到規則</li></ul>'},
+ {id:'idle',label:'閒置（待命）',pill:'',text:'主視窗就緒（main.ready）',bar:['開始','測試','—'],detail:'<ul><li>未選規則時測試鈕隱藏（<code>06:7647</code>）</li></ul>'}
+];
+const btns=document.getElementById('stateBtns');
+states.forEach((s,i)=>{
+ const b=document.createElement('button');
+ b.className='secondary'+(i===0?' active':'');
+ b.textContent=s.label;
+ b.onclick=()=>{
+   document.querySelectorAll('#stateBtns button').forEach(x=>x.classList.remove('active'));
+   b.classList.add('active');
+   document.getElementById('statusbar').innerHTML='<span class="pill '+s.pill+'">'+s.text+'</span><span class="note">主按鈕：'+s.bar[0]+'｜測試鈕：'+s.bar[1]+'｜其他：'+s.bar[2]+'</span>';
+   document.getElementById('stateDetail').innerHTML=s.detail;
+ };
+ b.dataset.state=s.id;
+ btns.appendChild(b);
+});
+btns.querySelector('button').click();
+
+const cardsData=[
+ {id:'E1',cls:'loc',tag:'可直接定位並修正',title:'E1 設定錯誤（空文字／未知 type／sum 閘門 ROI 未設）',
+  when:'測試前彈窗列 reason；或 dry-run 內 BLOCKED header（run_controller.py:233）',
+  btns:['定位到第 N 步','關閉'],
+  src:'_rule_hard_problems(06:8429) + rule_preflight(core:89) → locate_rule_target(06:9227)'},
+ {id:'E2',cls:'loc',tag:'可直接定位並修正',title:'E2 OCR 找不到目標（detect／template／compare miss）',
+  when:'log 含 mode／閾值／最佳%／Top5／on_fail hint（run_controller.py:334-367）',
+  btns:['定位到第 N 步','展開診斷'],
+  diag:'Top5 附近文字、門檻、on_fail 命運（_dry_fail_fate:40）。提示：調整文字／ROI／門檻後重測。',
+  src:'markers(840-943) + log [idx] → locate_rule_target'},
+ {id:'E3',cls:'env',tag:'需檢查環境／權限',title:'E3 後台輸入不可用（frida 注入失敗）',
+  when:'F4 診斷三行 Backend=FAILED + 一次性切前景對話框（06:9141）',
+  btns:['切換前景','保持後台','查看診斷詳細'],
+  diag:'F4 三層：Backend（注入）／Visual（像素）／TextDiff（文字）分開顯示，不可互相覆蓋（09:1989）。',
+  src:'BackendTestResult(09:163) + bg_inject_fail(09:478)'},
+ {id:'E4',cls:'loc',tag:'可定位（修復面為 UX3-02）',title:'E4 拖曳終點非法（drag_end_invalid）',
+  when:'dry-run end 解析 ValueError → terminal（run_controller.py:439-442）',
+  btns:['定位到拖曳步驟','展開診斷'],
+  diag:'檢查 end_x/end_y（客戶區比例）。修復 UI 為 UX3-02 範圍，本階段只定位。',
+  src:'resolve_drag_end（引擎）→ _fatal terminal（預覽）'},
+ {id:'E5',cls:'retest',tag:'可重新測試',title:'E5 使用者取消測試',
+  when:'新功能：測試中按「取消測試」（現況無，自主取消為 B4）',
+  btns:['取消測試'],
+  diag:'dry-run 不送真輸入，取消只停模擬（_test_cancel Event）。取消後狀態列「測試已取消」。',
+  src:'提案 _test_cancel（模式同 F4 09:503）'},
+ {id:'E6',cls:'diag',tag:'需診斷資訊',title:'E6 無法歸因（worker exception／截圖失敗）',
+  when:'test.exception（run_controller.py:168）或 capture_failed（:143）',
+  btns:['定位到規則','重試'],
+  diag:'錯誤含 exception 類型 + window_title。選錯視窗常見，檢查視窗選擇後重試。',
+  src:'worker emit {"error"} → _show_test_result(06:8538)'}
+];
+const cardsEl=document.getElementById('cards');
+cardsData.forEach(c=>{
+ const d=document.createElement('div');d.className='card';
+ d.innerHTML='<h4>'+c.title+'</h4><span class="tag '+c.cls+'">'+c.tag+'</span>'+
+  '<p style="font-size:13px;margin:8px 0">出現時機：'+c.when+'</p>'+
+  '<p style="font-size:12px;color:#aaa">資料來源：<code>'+c.src+'</code></p>'+
+  '<div class="detail" style="display:none"></div>'+
+  c.btns.map(b=>'<button class="secondary">'+b+'</button>').join('');
+ d.querySelectorAll('button').forEach((btn,bi)=>{
+   btn.onclick=()=>{
+     const det=d.querySelector('.detail');
+     const label=c.btns[bi];
+     if(label==='定位到第 N 步'||label==='定位到拖曳步驟'){ clickFirstMiss(); window.location.hash='sec-locate'; }
+     else if(label==='定位到規則'){ selectRule('r-a'); note('已定位到規則「跑馬規則」（原型：高亮規則樹）'); }
+     else if(label==='展開診斷'){ det.style.display='block'; det.textContent=c.diag||'（無額外診斷）'; }
+     else if(label==='重新測試'||label==='重試'){ note('重新測試：請按 §1 右上「重新測試」或主窗「測試」按鈕（原型演示）'); window.location.hash='sec-locate'; }
+     else if(label==='取消測試'){ note('取消測試：已取消（原型），狀態列應顯示「測試已取消」（見 §2）'); }
+     else if(label==='切換前景'){ note('已切換為前景（原型演示；正式：_switch_to_fg_only 06:9157）'); }
+     else if(label==='保持後台'){ note('保持後台（原型演示）'); }
+     else if(label==='查看診斷詳細'){ det.style.display='block'; det.textContent=c.diag; }
+     else if(label==='關閉'){ note('已關閉（原型演示）'); }
+   };
+ });
+ cardsEl.appendChild(d);
+});
+function note(t){var el=document.getElementById('locateMsg');if(el){el.textContent='提示：'+t;el.scrollIntoView({behavior:'smooth'});}}
+function selectRule(id){
+ document.querySelectorAll('#ruleTree .r').forEach(r=>r.classList.toggle('active',r.dataset.rule===id));
+ ['step0','step1','step2','step3'].forEach(s=>document.getElementById(s).classList.remove('hl','hl2'));
+}
+function clickFirstMiss(){
+ selectRule('r-a');
+ document.querySelectorAll('.logline').forEach(l=>l.classList.remove('hlflash'));
+ var miss=document.querySelector('.logline[data-step="1"]');
+ miss.classList.add('hlflash');
+ var st=document.getElementById('step1');
+ st.classList.add('hl');st.scrollIntoView({behavior:'smooth',block:'center'});
+ document.getElementById('locateMsg').textContent='提示：已定位到「跑馬規則」第 2 步（原型高亮；正式 locate_rule_target 同名以 id 區分）。';
+}
+document.querySelectorAll('.logline').forEach(l=>{
+ l.onclick=(e)=>{
+   var s=l.dataset.step;
+   if(s===undefined||s==='')return;
+   if(l.dataset.loc==='blocked'){selectRule('r-a');note('已定位到規則（BLOCKED 僅定位規則，正式 rule_id → locate_rule_target step_idx=None）');return;}
+   clickFirstMiss();
+   var el=document.getElementById('step'+s);
+   if(el){['step0','step1','step2','step3'].forEach(x=>document.getElementById(x).classList.remove('hl','hl2'));el.classList.add(s==='1'?'hl':'hl2');el.scrollIntoView({behavior:'smooth',block:'center'});}
+ };
+});
+document.querySelectorAll('#ruleTree .r').forEach(r=>{r.onclick=()=>selectRule(r.dataset.rule);});
+selectRule('r-a');
+</script>
+</body>
+</html>

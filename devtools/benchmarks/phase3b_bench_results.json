@@ -1,0 +1,145 @@
+{
+  "meta": {
+    "image": "C:\\Code play first\\ocr-trigger-clicker\\tests\\data\\test.png",
+    "image_size": [
+      1920,
+      1080
+    ],
+    "generated_at": "2026-11-10T19:10:20+08:00",
+    "titles": {
+      "part_a_real_ocr": "Part A - _run_dry_run() core execution time (real OCR, warm start)",
+      "part_a_mock_ocr": "Part A - _run_dry_run() core execution time (mock OCR, control-flow measurement)",
+      "part_b_gui_lifecycle": "Part B - GUI lifecycle timing (fake window; actual cancel window not measured)"
+    },
+    "part_b_note": "假視窗（fake win）流程計時，非真實 GUI：painted_to_hidden_avg / cancel_input_operable_avg 為 N/A（未量測）；signal_latency_avg 為同步 Python handler list 的執行時間，不代表正式 GUI 跨執行緒 Qt Signal/Slot 延遲；dry_avg / restore_avg 為假視窗測試流程耗時，不等於真實使用者取消窗口。",
+    "part_c_note": "can-cancel 欄位為「執行時間 vs 假設反應時間」的推估，非實際使用者測試，也非取消成功率統計；單次 OCR 執行期間無法靠步驟邊界檢查立即中斷；實際取消結果仍取決於步驟邊界與 GUI 事件派送。"
+  },
+  "part_a_real_ocr": [
+    {
+      "name": "0 steps (empty rule)",
+      "n": 60,
+      "min": 0.004,
+      "avg": 0.004,
+      "p50": 0.004,
+      "p95": 0.005,
+      "max": 0.019,
+      "count": 60
+    },
+    {
+      "name": "1 step detect (small ROI, hit, OCR ~7 ms)",
+      "n": 60,
+      "min": 4.379,
+      "avg": 6.096,
+      "p50": 4.937,
+      "p95": 7.034,
+      "max": 62.091,
+      "count": 60
+    },
+    {
+      "name": "1 step detect (full-image ROI, OCR ~1 s)",
+      "n": 10,
+      "min": 897.506,
+      "avg": 1092.723,
+      "p50": 1056.564,
+      "p95": 1389.985,
+      "max": 1525.915,
+      "count": 10
+    },
+    {
+      "name": "3 steps detect-small+click+key",
+      "n": 60,
+      "min": 4.478,
+      "avg": 7.598,
+      "p50": 5.865,
+      "p95": 10.296,
+      "max": 41.377,
+      "count": 60
+    },
+    {
+      "name": "5 steps detect-small+click+key+wait+scroll",
+      "n": 60,
+      "min": 4.562,
+      "avg": 6.749,
+      "p50": 6.458,
+      "p95": 9.765,
+      "max": 12.958,
+      "count": 60
+    },
+    {
+      "name": "10 steps (interleaved detect/click/key/wait/sum small ROI)",
+      "n": 60,
+      "min": 13.46,
+      "avg": 16.463,
+      "p50": 14.982,
+      "p95": 25.896,
+      "max": 33.157,
+      "count": 60
+    },
+    {
+      "name": "OCR heavy: 3x detect (medium ROI, ~60 ms each)",
+      "n": 15,
+      "min": 182.232,
+      "avg": 335.82,
+      "p50": 257.145,
+      "p95": 699.514,
+      "max": 1086.063,
+      "count": 15
+    }
+  ],
+  "part_a_mock_ocr": [
+    {
+      "name": "0 steps (empty rule)",
+      "n": 100,
+      "min": 0.004,
+      "avg": 0.004,
+      "p50": 0.004,
+      "p95": 0.004,
+      "max": 0.015,
+      "count": 100
+    },
+    {
+      "name": "1 step detect (mock empty result)",
+      "n": 100,
+      "min": 0.013,
+      "avg": 0.013,
+      "p50": 0.013,
+      "p95": 0.015,
+      "max": 0.029,
+      "count": 100
+    },
+    {
+      "name": "10 steps (mock OCR)",
+      "n": 100,
+      "min": 0.047,
+      "avg": 0.048,
+      "p50": 0.048,
+      "p95": 0.049,
+      "max": 0.073,
+      "count": 100
+    }
+  ],
+  "part_b_gui_lifecycle": [
+    {
+      "label": "fast rule (5 steps, small ROI detect, total ~tens of ms)",
+      "n": 30,
+      "show_call_avg": 0.013,
+      "painted_to_hidden_avg": "N/A",
+      "cancel_input_operable_avg": "N/A",
+      "signal_latency_avg": 0.003,
+      "gui_release_avg": 4.256,
+      "dry_avg": 6.345,
+      "restore_avg": 38.362
+    },
+    {
+      "label": "slower rule (3x medium ROI detect, total ~150-250 ms)",
+      "n": 30,
+      "show_call_avg": 0.016,
+      "painted_to_hidden_avg": "N/A",
+      "cancel_input_operable_avg": "N/A",
+      "signal_latency_avg": 0.003,
+      "gui_release_avg": 4.356,
+      "dry_avg": 258.413,
+      "restore_avg": 290.092
+    }
+  ]
+}
