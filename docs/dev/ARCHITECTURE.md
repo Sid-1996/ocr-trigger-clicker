@@ -281,6 +281,7 @@ on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動�
 
 - `_migrate_v1_to_v2()` 偵測 JSON 中無 `"steps"` 欄位時自動將舊格式轉換為新步驟結構，保障 v0.0.1 任務不遺失
 - Drag 舊 PX offset（`dx`/`dy`）：載入時於 `_normalize_step_params()` 自動標記 `_migration`（`kind=drag_endpoint`、`status=needs_repair`），保留原值、不自動轉換；`validate_drag_endpoint()` 可查狀態（valid／unset／incomplete／invalid／needs_repair）。既有檔案中的 marker 一律保留，不自動清洗
+- **GUI 消費端（UX3-02）**：`_DragStepForm` 只在 `validate_drag_endpoint()` 回 `needs_repair` 時顯示修復 banner（拾取終點 → 使用者確認 → 才移除 `dx/dy` 與 marker → 儲存 → reload 重檢）；`has_legacy_drag_offset()` 提供「是否帶舊欄位」的單一判定，GUI 不自寫 legacy 狀態機
 
 ## 主循環資料流 — 群組兩層指標模型
 

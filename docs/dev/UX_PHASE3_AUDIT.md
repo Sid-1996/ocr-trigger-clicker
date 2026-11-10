@@ -161,6 +161,8 @@
 | 成本 | M |
 | 建議 | **本階段處理** |
 
+> **狀態更新（2026-11-10，UX Phase 3C）**：**已實作**。修復入口已上線：`_DragStepForm` 以 core `validate_drag_endpoint()` 為唯一判定，僅在 `needs_repair` 時顯示修復 banner（拾取終點 → 使用者確認 → 才移除 `dx/dy` 與 marker → 儲存 → reload 重檢）；未修復前舊欄位唯讀且原值保留；任務載入時提示需修復的步驟數。既有假 marker 不自動清洗（keep 決策）。**真機 GUI 驗證尚未完成**（僅自動化測試）。
+
 ### UX3-03 — 啟動前檢核與執行期 preflight 落差【P1】
 
 | 欄位 | 內容 |

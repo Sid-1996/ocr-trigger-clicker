@@ -21,10 +21,10 @@
 - **hybrid 前景路徑拖曳**：未驗證。
 - 至少在一款支援 frida 後台的遊戲上驗證；不通過則回到 §拖曳 章節調整間隔／游標同步策略。
 
-### 2. C-2a-2：Drag Repair UI（新階段）
-目標：讓 `_migration`／`validate_drag_endpoint()` 有 GUI 消費端——拖曳規則缺終點時顯示「修復終點」入口（拾取終點 → 一鍵清除 `_migration` → 儲存 → 自動 reload 重檢）。
-前置已備齊：marker 貫穿 save/load/copy/deepcopy、`validate_drag_endpoint()` 純函式與測試、dry-run BLOCKED 顯示。
-注意：**不要**自動清洗既有假 marker（產品決策 keep）——修復流程應為「使用者確認後清除」。
+### 2. C-2a-2：Drag Repair UI（✅ 已完成 — UX Phase 3C）
+已完成：`gui/06_gui_main.py` 的 `_DragStepForm` 以 core `validate_drag_endpoint()` 為**唯一判定來源**，僅在 `needs_repair` 時顯示修復 banner（白話說明＋「重新拾取終點」＋「移除舊的像素偏移設定」）。流程：拾取終點（寫入 `end_x/end_y`／`end_roi_coord=client`）→ **使用者確認** → 才移除 `dx/dy` 與 `_migration` → 儲存 → reload 重檢為 `valid`。
+相容性：既有假 marker **不自動清洗**（產品決策 keep）；未修復前舊欄位唯讀、原值（含小數）原樣保留；正常新版 Drag 不顯示 banner、也不產生 `dx/dy`。
+核心同步修正：`validate_drag_endpoint()` 原把「只缺一軸」誤判為 `invalid_legacy_offset`（`incomplete` 分支為死碼），已與 `_detect_drag_legacy_marker()` 的規則對齊。
 
 ### 3. 後台失敗回報的剩餘項目
 

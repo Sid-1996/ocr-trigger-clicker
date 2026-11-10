@@ -21,7 +21,7 @@
 | **R-1** | Click PostMessage DOWN／UP 失敗原因 | ✅ **完成，已 commit**（`45aefbd`） |
 | **R-3** | 主循環啟動時在途 OCR Debug 驗證 worker | ✅ **完成，已 commit**（`45aefbd`） |
 | **R-5** | MainLoop 啟動與 OCR Debug 閘門的競態窗口 | ✅ **完成，已 commit**（`0f77931`） |
-| **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ⬜ 未開始 |
+| **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ✅ **完成，已 commit**（UX Phase 3C：修復 banner＋拾取終點＋使用者確認才清除 marker） |
 | **真機驗證** | Frida 輸入取消／Release、frida／hybrid 拖曳 | ⬜ 未完成 |
 
 ## 工作區狀態
