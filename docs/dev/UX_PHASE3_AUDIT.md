@@ -219,6 +219,8 @@
 | 成本 | M |
 | 建議 | **本階段處理（Drag 主路徑 + tooltip 先行）**；完整驗證統一可延後 |
 
+> **狀態更新（2026-11-10，UX3-06）**：**部分實作**。已完成：target 白名單的唯一事實來源（`core/rule_migration.py` 的 `STEP_TARGETS`）＋ preflight 事前擋下未知 target（`unknown_click_target`／`unknown_drag_target` → BLOCKED，執行期防禦性 stop 保留不動）；Dry Run 預覽不再靜默略過未知 target（改為 terminal 記錄，與引擎一致）；Drag 改用專屬文案（明確寫出「拖曳起點」）＋ combo tooltip 說明拖曳不支援游標目標；cursor 目標停用 `random_offset`（值保留，切回即恢復）；custom 未設座標時顯示提示（純顯示，不阻擋保存）。**未實作／明確排除**：Drag 終點單一主路徑收斂（dx/dy 已於 UX3-02 收進「舊格式相容」唯讀列）、全面統一各 Step 的驗證強度（依「尊重既有責任邊界」原則不把驗證全搬到同一層）。**真機 GUI 驗證尚未完成**（僅自動化測試鎖定）。
+
 ### UX3-07 — 執行中「在跑什麼」不夠明確【P2】
 
 | 欄位 | 內容 |

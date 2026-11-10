@@ -3673,6 +3673,12 @@ class _ClickStepForm(QWidget):
         self._coord_row.setVisible(p.get("target", "") == "custom")
         form.addRow(T("step_form.click_coord"), self._coord_row)
 
+        # P2-3：自訂座標尚未選取時提示（只改善可理解性，不改變保存行為）。
+        self._coord_hint = QLabel(T("step_form.click_coord_unset_hint"))
+        self._coord_hint.setStyleSheet("color:#c0392b; font-size:11px;")
+        form.addRow("", self._coord_hint)
+        self._update_coord_hint()
+
         # UX 2B-08：進階設定預設收合（與 MatchImage 2B-07 同模式）；
         # 欄位照常建立並載入既有值，收合只影響呈現。
         self._adv_expanded = False
@@ -3701,6 +3707,9 @@ class _ClickStepForm(QWidget):
         self._offset = _NoWheelSpin()
         self._offset.setRange(0, 100)
         self._offset.setSuffix(" px")
+        # P2-1：cursor 目標在引擎端強制把抖動歸零（core/05_main_loop.py _handle_click）
+        # → 該目標下停用控制項，避免使用者以為抖動有效。值仍保留，切回即恢復。
+        self._offset.setEnabled(self._target.currentData() != "cursor")
         # 超出 GUI 上限但 Core 合法的既有值（random_offset=150）：未編輯時保留原值
         _raw_offset = p.get("random_offset", 3)
         self._offset_raw = _bind_raw_value(self._offset, _raw_offset, _num_to_int(_raw_offset, 3))
@@ -3743,6 +3752,26 @@ class _ClickStepForm(QWidget):
     def _on_target_changed(self, idx):
         t = self._target.currentData()
         self._coord_row.setVisible(t == "custom")
+        # P2-1：cursor 目標不套用抖動 → 停用控制項（值保留，切回即恢復）。
+        offset = getattr(self, "_offset", None)
+        if offset is not None:
+            offset.setEnabled(t != "cursor")
+        self._update_coord_hint()
+
+    def _update_coord_hint(self):
+        """自訂座標仍是 (0,0)＝尚未選取時顯示提示。
+
+        純顯示：不阻擋保存、不改動資料（既有 (0,0) 仍照原樣保存，
+        啟動前檢核既有提示維持不變）。
+        """
+        hint = getattr(self, "_coord_hint", None)
+        if hint is None:
+            return
+        p = self._step.params
+        x = p.get("x", 0)
+        y = p.get("y", 0)
+        unset = not x and not y
+        hint.setVisible(self._target.currentData() == "custom" and unset)
 
     def _toggle_advanced(self):
         self._adv_expanded = not self._adv_expanded
@@ -3762,6 +3791,9 @@ class _ClickStepForm(QWidget):
                 self._step.params["roi_coord"] = "client"
                 self._coord_label.setText(_fmt_point(result[0], result[1]))
                 self._target.setCurrentIndex(self._target.findData("custom"))
+                # 目標本來就是 custom 時 setCurrentIndex 不會發出 currentIndexChanged
+                # → 明確更新提示（已選到座標就不再顯示「尚未選取」）。
+                self._update_coord_hint()
                 self.save()
                 self._list.steps_changed.emit()
 
@@ -3823,12 +3855,17 @@ class _DragStepForm(QWidget):
             form.insertRow(0, self._repair_banner)
 
         self._target = _NoWheelCombo()
-        self._target.addItem(T("summary.click_target"), "text_center")
-        self._target.addItem(T("step_form.text_coord"), "custom")
+        # UX3-06：拖曳有自己的文案（原本沿用 Click 的「點擊…」用詞，易被誤讀）。
+        self._target.addItem(T("step_form.drag_target_text_center"), "text_center")
+        self._target.addItem(T("step_form.drag_target_custom"), "custom")
         self._target.setItemData(
-            0, T("step_form.target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
+            0, T("step_form.drag_target_text_center_tip"), Qt.ItemDataRole.ToolTipRole
         )
-        self._target.setItemData(1, T("step_form.target_custom_tip"), Qt.ItemDataRole.ToolTipRole)
+        self._target.setItemData(
+            1, T("step_form.drag_target_custom_tip"), Qt.ItemDataRole.ToolTipRole
+        )
+        # 拖曳不支援 cursor 目標（引擎 _handle_drag 無此分支）→ 明確說明。
+        self._target.setToolTip(T("step_form.drag_target_cursor_note"))
         # 未知目標保留原值，不得靜默換成第一項（D-3）
         _select_combo_keep_unknown(self._target, p.get("target", "text_center"))
         self._target.currentIndexChanged.connect(self._on_target_changed)

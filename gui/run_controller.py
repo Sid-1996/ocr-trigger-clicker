@@ -438,6 +438,12 @@ class TestRunController:
                             s += " " + T("summary.format_after_delay", ms=ad)
                         log.append(s)
                         continue
+                    else:
+                        # 未知 target：引擎 _handle_click 直接 stop（unknown_click_target）。
+                        # 預覽不得靜默略過此步驟，否則會呈現「測試通過」的假象。
+                        log.append(T("exec_log.detail.unknown_click_target"))
+                        _fatal(idx, "terminal")
+                        continue
                     if cx is not None:
                         s = T(
                             "test.click_action",
@@ -476,6 +482,12 @@ class TestRunController:
                             log.append(T("test.drag_start_no_detect", idx=idx + 1))
                             _fatal(idx, "terminal")  # 引擎：drag 無 on_fail，直接 stop
                             continue
+                    else:
+                        # 未知 target：引擎 _handle_drag 直接 stop（unknown_drag_target）。
+                        # 預覽不得靜默略過此步驟，否則會呈現「測試通過」的假象。
+                        log.append(T("exec_log.detail.unknown_drag_target"))
+                        _fatal(idx, "terminal")
+                        continue
                     if sx is not None:
                         try:
                             # Drag 終點只接受明確 end_x/end_y；不再以 start + dx/dy 推算。

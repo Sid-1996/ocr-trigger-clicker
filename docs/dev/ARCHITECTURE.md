@@ -171,9 +171,54 @@ v0.0.2 起改為統一步驟系統（Step System），不再區分觸發規則�
 | `sum` | ROI 內整數快照加總；同一總和穩定 0.35s 後寫入檔案日誌。前景模式（且非背景規則）經 `on_sum` 顯示浮層，前置條件失效經 `on_sum_hide` 淡出；後台／混合模式與背景規則只寫日誌（無條件回 `continue`） | `roi`（必填；未設定則略過） |
 | `notify` | 右下角疊加通知提示（經 `on_warning` → GUI `NotificationStack` 顯示；回 `continue`，不設 `ctx.triggered`，不影響規則流程） | `message` |
 | `scroll` | 滑鼠滾輪（設 `ctx.triggered = True） | `direction`, `amount`, `delay_ms`, `after_delay_ms` |
-| `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`、`end_x`/`end_y`（client 比例，GUI 拾取）；舊資料含 `dx`/`dy` 時視為 legacy（載入時自動標記 `_migration`，不自動轉換）、`button`、`after_delay_ms` |
+| `drag` | 滑鼠拖曳（設 `ctx.triggered = True） | `target`（只有 `text_center`/`custom`，無 cursor，見下方白名單）、`end_x`/`end_y`（client 比例，GUI 拾取）；舊資料含 `dx`/`dy` 時視為 legacy（載入時自動標記 `_migration`，不自動轉換）、`button`、`after_delay_ms`；`hold_ms` 雖被 normalize 寫入但執行期不採用（見下方事實記錄） |
 
 **動作後延遲 `after_delay_ms`（毫秒，預設 0）**：動作步驟（click/key/drag/scroll）成功送出後，固定等待指定毫秒才執行下一步驟。實作於 `_run_rule`（core/05_main_loop.py 單一 choke point）——動作步驟回 `continue` 且 `ms>0` 時用 `_stop_event.wait(ms/1000)` 中斷式等待（暫停/停止立即中止、回 stop interrupted），尾隨步驟不執行。等價社群慣用「動作後 sleep」，可取代 `[動作, wait]` 成對步驟；0 = 不等待。語意與 scroll 的 `delay_ms` 不同（後者是滾輪格間延遲）。不影響 `fail_duration_sec` 容忍邏輯。
+
+### Click／Drag 的 target 白名單（唯一事實來源）
+
+`click` 與 `drag` 的 `target` 欄位合法值由 `core/rule_migration.py` 的 `STEP_TARGETS` 定義，是全專案**唯一事實來源**（GUI、preflight、執行期共用同一份，不各寫一套）：
+
+| step type | 合法 target | 說明 |
+|---|---|---|
+| `click` | `text_center` / `custom` / `cursor` | `cursor`＝直接點擊游標目前位置（**僅 Click 支援**） |
+| `drag` | `text_center` / `custom` | 引擎 `_handle_drag` 沒有 cursor 分支，拖曳一律不支援游標目標 |
+
+配套純函式 `is_known_step_target(step_type, target)` 判斷某值是否合法；沒有 target 概念的 step type（`detect`／`key`／`scroll`…）回 `True`，由呼叫端自行判斷；非字串或未列入者一律回 `False`（不放寬）。
+
+**未知 target 的處置（兩層，缺一不可）**：
+
+1. **Preflight 事前擋下**：`core/rule_preflight.py` 產生問題鍵 `unknown_click_target`／`unknown_drag_target` → `status=blocked` → 規則在執行前就不跑。GUI 的 `_rule_hard_problems` 直接消費 `pre.problems`，以 `exec_log.reason.unknown_click_target`／`unknown_drag_target` 顯示可讀訊息（不需額外 UI）。MainLoop 的 `_preflight_result` 同樣據此回 `RuleRunOutcome.BLOCKED`。
+2. **執行期防禦性 stop**：`core/05_main_loop.py` 的 `_handle_click`／`handle_drag` 仍保留未知 target → `StepResult("stop", detail=T("exec_log.detail.unknown_click_target"))`。**此防線不得因 preflight 已擋下就移除**（preflight 可能被略過，資料來源也不受 preflight 完全管制）。
+
+Dry Run（測試執行）同樣不得靜默略過未知 target：`gui/run_controller.py` 的 click／drag 分支會寫入 `exec_log.detail.unknown_click_target`／`unknown_drag_target` 並標記 terminal（後續步驟標為不會執行），與引擎行為一致。
+
+### 事實記錄：Drag 的 `hold_ms` 是死欄位
+
+`core/rule_migration.py` 的 `_normalize_step_params` 在 `step_type in ("click", "drag")` 分支會一併把 `hold_ms` 正規化寫入 params（預設 0），但：
+
+- 執行期 `core/05_main_loop.py` 的 `_handle_drag` **從不讀取** `hold_ms`（`hold_ms` 只在 `_handle_click` 與 `_handle_key` 被讀取）。
+- GUI 的 `_DragStepForm` **沒有** `hold_ms` 欄位，使用者無從設定。
+
+因此 Drag 的 `hold_ms` 目前是「有值但永遠不生效」的死欄位。既有任務 JSON 若含 `hold_ms`，載入後仍會被保留（normalize 會寫回），但執行期不採用。**本次僅記錄事實**，未改資料契約、未刪除該欄位、未改變執行行為；若日後要讓拖曳支援按住時長，須同時改 `_handle_drag` 與 GUI 表單。
+
+### 事實記錄：`validate_drag_endpoint` 與執行期對終點的判定差異
+
+兩處都解析 Drag 的 `end_x`／`end_y`，但判定嚴格程度不同：
+
+| 面向 | 判定 |
+|---|---|
+| `core/rule_migration.py` `validate_drag_endpoint()` | 要求 `end_x`／`end_y` **各自**落在 0~1（比例）；超出 → `status="invalid"`、`reason="out_of_range"`；`end_roi_coord` 只允許 `client` |
+| `core/05_main_loop.py` `resolve_drag_end()` → `_resolve_point()` | 只有 **px<=1 且 py<=1** 才走比例換算；否則整組當像素 → `int(px), int(py)` |
+
+實際差異（以像素終點 `end_x=960, end_y=540` 為例）：
+
+- **執行期可用**：走像素分支，終點落在 (960, 540)。
+- **validator 判 invalid**：`validate_drag_endpoint` 回 `status="invalid"`／`reason="out_of_range"`。validator 比執行期**嚴格**，不是執行期放行錯誤資料。
+- **GUI 顯示層不採 validator 的判定**：GUI 的 `_drag_end_state` 獨立以「兩軸都 <=1 才是比例」判定，pixel 終點顯示為 `step_form.end_pixel`（如「(960, 540)」）且終點輸入框改為唯讀、不夾值；修復 banner 只在 `status == "needs_repair"`（舊版 dx/dy）時出現，像素終點不會出現 banner。
+- **混合軸**（例如 `end_x=0.5, end_y=540`）：validator 判 `out_of_range`；執行期因不滿足「兩軸都 <=1」而整組當像素 → 落點為 `(0, 540)`。
+
+本次**未**為了統一而放寬 validator，也**未**改變執行期行為——差距原樣記錄在此。
 
 ### on_fail fail_duration_sec
 
@@ -372,6 +417,7 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 - 被擋規則**不會自動修復**；要恢復執行，請修正規則後儲存——任務會自動 reload 並重新預檢。
 - fp=None（規則內含非 canonical Step，例如測試替身物件）時，以問題分類做 fallback 去重；不會靜默、也不會每幀刷屏。
 - `isinstance(step, Step)` 嚴格驗證，不以 duck typing 或類別名稱代替。
+- Click／Drag 的未知 `target` 由 preflight 擋下（問題鍵 `unknown_click_target`／`unknown_drag_target`）→ 規則在開始前就不執行；執行期仍保留防禦性 stop（見上方「Click／Drag 的 target 白名單」）。
 
 ### ctx.triggered 推進機制
 

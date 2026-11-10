@@ -1,7 +1,8 @@
 # 目前狀態（CURRENT_STATUS）
 
-> 最後更新：2026-11-07
+> 最後更新：2026-11-10
 > 對應階段：**E2／P2 階段收斂 ＋ v0.4.9 發布前修正**（Global Stop／輸入取消／後台失敗回報／通知去重／R-1／R-3／R-5）
+> 2026-11-10 補充：UX3-06（Click／Drag 目標選項與驗證改善）——詳見下方「本次完成」的 UX3-06 章節
 > 2026-11-07 補充：AppCompat 自癒、OCR Debug UX、輸入整合驗證 harness（P0，未執行）、hybrid 啟動最小化、數字加總閘門、死碼清理——詳見下方「2026-11-05～11-07 補充」
 
 ## 階段進度
@@ -22,14 +23,15 @@
 | **R-3** | 主循環啟動時在途 OCR Debug 驗證 worker | ✅ **完成，已 commit**（`45aefbd`） |
 | **R-5** | MainLoop 啟動與 OCR Debug 閘門的競態窗口 | ✅ **完成，已 commit**（`0f77931`） |
 | **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ✅ **完成，已 commit**（UX Phase 3C：修復 banner＋拾取終點＋使用者確認才清除 marker） |
+| **UX3-06** | Click／Drag 目標選項與驗證改善（target 白名單＋preflight 事前擋下、dry-run 不再靜默略過、Drag 專屬文案、cursor 目標停用抖動、custom 未設座標提示） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；`hold_ms` 死欄位與 validator 差異僅記錄事實，未改契約） |
 | **真機驗證** | Frida 輸入取消／Release、frida／hybrid 拖曳 | ⬜ 未完成 |
 
 ## 工作區狀態
 
 - branch：`master`
-- HEAD = `d49ea3c` = `origin/master`（ahead/behind **0/0**，2026-11-07 `git fetch` 後核實）
-- **staged：空**；工作區乾淨（2026-11-07 盤點）
-- 距上次發布（`v0.4.8`）累計 **59 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`）
+- HEAD = `79cf2ab` = `origin/master`（ahead/behind **0/0**，2026-11-10 核實）；本次 UX3-06 變更完成後為 1 顆新 commit，**尚未 push**
+- **staged：空**；工作區乾淨（2026-11-10 盤點）
+- 距上次發布（`v0.4.8`）累計 **90 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`）
 - **v0.4.9 尚未發布**：無 tag、無 GitHub Release（`gh release view v0.4.9` → not found）；`_version.py`／`pyproject.toml` 仍為 `0.4.8`，最新正式版仍是 `v0.4.8`（2026-10-24）
 
 ## 測試統計（實測）
@@ -48,7 +50,8 @@
 | `tests/test_bg_click_error_reporting.py`（新增，R-1） | 12 passed ✅ |
 | `tests/test_debug_verify_abort_on_run.py`（新增，R-3） | 16 passed ✅ |
 | `tests/test_debug_gate_before_loop_start.py`（新增，R-5） | 11 passed ✅ |
-| **完整套件** | **1589 passed, 13 skipped**（2026-11-07 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
+| `tests/test_ux3_06_target_validation.py`（新增，UX3-06） | 27 passed ✅ |
+| **完整套件** | **1783 passed, 13 skipped**（2026-11-10 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
 
 ## 2026-11-05～11-07 補充（E2／P2 之後已落地）
 
@@ -64,7 +67,7 @@
 | 關卡 | 狀態 | 備註 |
 |---|---|---|
 | `ruff check` | ✅ All checks passed | exit 0 |
-| 完整 pytest | ✅ 1589 passed, 13 skipped | 2026-11-07 本次重跑，exit 0；含 i18n 三語測試；13 skipped 為真實整合測試（需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行） |
+| 完整 pytest | ✅ 1783 passed, 13 skipped | 2026-11-10 本次重跑，exit 0；含 i18n 三語測試；13 skipped 為真實整合測試（需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行） |
 | `git diff --check` | ✅ exit 0 | 僅既有 LF→CRLF warning |
 | core self-check（4 檔） | ✅ 全 exit=0 | `03_pynput_input`／`05_main_loop`／`16_bg_input`／`18_frida_bg` |
 | 座標校正 `--self-check` | ✅ passed | |
@@ -110,6 +113,26 @@
 - `gui/06_gui_main.py` `InitWorker.run()` 的 `loop.start()` 先於 `finished.emit` → GUI 收到 finished 才 `set_run_active(True)`，兩者之間存在窗口，該窗口內 key 驗證 worker 仍可能送出一次按鍵。
 - 修正：`_start_loop()` 在啟動 InitWorker **之前**先 `set_run_active(True)`（閘門先於 `loop.start()` 生效）；啟動失敗（`finished(False, …)` 或連執行緒都起不來）時恢復閘門。`set_run_active` 冪等，不會重複作廢同一批 worker。
 
+### UX3-06（Click／Drag 目標選項與驗證改善）
+
+**已實作（本次，commit 與本文同）**
+
+- **P1-1 未知 target 事前擋下**：`click` 合法 target＝`text_center`/`custom`/`cursor`、`drag` 合法 target＝`text_center`/`custom`；白名單定義在 `core/rule_migration.py` 的 `STEP_TARGETS`（唯一事實來源，GUI／preflight 共用）。未知 target 由 preflight 產生 `unknown_click_target`／`unknown_drag_target` 問題鍵 → `status=blocked` → 規則在開始前就不執行，GUI 以 `exec_log.reason.*` 顯示可讀訊息（三語齊全）。**執行期 MainLoop 的防禦性 stop 保留不動**。
+- **P1-2 dry-run 不再靜默略過**：`gui/run_controller.py` 的 click／drag 分支在未知 target 時寫入 `exec_log.detail.unknown_click_target`／`unknown_drag_target` 並標記 terminal（後續步驟標為不會執行），與引擎行為一致；preflight 啟用時則顯示 BLOCKED header，不假裝成功。
+- **P1-3 Drag 專屬文案**：Drag 表單不再沿用 Click 的「點擊辨識目標／點擊指定的比例座標位置」，改用 `step_form.drag_target_*` 系列（明確寫出「拖曳起點」），並在 combo tooltip 說明「拖曳不支援游標目標（只有點擊有）」。target 的實際資料值與執行語意不變。
+- **P2-1 cursor 目標停用抖動**：`target=cursor` 時 `random_offset` 控制項停用（引擎該分支本就把抖動強制歸零）；切回 `text_center`/`custom` 恢復可編輯。**原值保留**（`_RawValue` 未 dirty 時回傳原值，停用不改值、不歸零）。
+- **P2-3 custom 未設座標提示**：`target=custom` 且座標仍為 (0,0) 時顯示紅字提示；選到座標後自動隱藏。**純顯示**：不改變保存行為，既有 `custom_click_at_origin` 仍是 preflight 的「警告」而非阻擋問題。
+
+**僅記錄事實（未改契約／未改行為）**
+
+- **P2-4**：Drag 的 `hold_ms` 會被 normalize 寫入 params，但執行期 `_handle_drag` 從不讀取、GUI 也沒有此欄位 → 死欄位。詳見 ARCHITECTURE.md。
+- **P2-5**：`validate_drag_endpoint` 要求終點各自落在 0~1（像素終點判 `invalid`），執行期 `_resolve_point` 只有「兩軸都 <=1」才走比例、否則當像素 → validator 比執行期嚴格。詳見 ARCHITECTURE.md。
+
+**未完成（不得視為已驗證）**
+
+- **真機 GUI 驗證未完成**：本次只以自動化測試（27 項）鎖定行為，未在真實遊戲／真實 GUI 上逐項點擊確認。
+- **P2-2**（`custom_click_at_origin` warning 的消費端整合）與 **C2-2**（假 marker 清洗）本次明確排除，維持原狀。
+
 ## 明確延後（不在本次範圍）
 
 - C-4：`_last_error` 跨執行緒歸屬（已以 C-5 限制重疊操作，不引入 per-operation error handle）
@@ -121,5 +144,6 @@
 - R-6：被作廢的驗證 worker 結果會被忽略 → 使用者只看到按鈕恢復，沒有「已中止」提示
 - Drag Repair UI（needs_repair 修復流程、`validate_drag_endpoint` 消費端）→ C-2a-2
 - 已汙染任務檔假 marker 的清洗（產品決策 keep：不動）
+- UX3-06 明確排除項：P2-2（`custom_click_at_origin` warning 的消費端整合）、Click／Drag 表單大規模重構、全面統一驗證時機、新增 Drag cursor 支援；UX3-06 的真機 GUI 驗證亦未完成
 - 全員 disabled 並行群組的 stall（另案，C2-1）
 - F-08 fingerprint 效能重構、F-09 `_preflight_last_fingerprint` 死欄位、F-10 死 binding、`RuleRunOutcome` 死成員

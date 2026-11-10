@@ -1,7 +1,7 @@
 # 已知問題（KNOWN_ISSUES）
 
-> 最後更新：2026-11-07（2026-11-07 僅補 P0 harness 狀態；其餘內容與 2026-11-04 一致）
-> 來源：E1-R 查核（F-1～F-12，舊編號）、E1-R2-V 查核（F-13～F-17，舊編號）、**C-2a-1 Closeout（2026-11-03）**、**E2／P2 階段查核（2026-11-04）**、**v0.4.9 發布前修正 R-1／R-3（2026-11-04）**
+> 最後更新：2026-11-10（新增「UX3-06 查核（2026-11-10）」一節；其餘內容沿用 2026-11-07）
+> 來源：E1-R 查核（F-1～F-12，舊編號）、E1-R2-V 查核（F-13～F-17，舊編號）、**C-2a-1 Closeout（2026-11-03）**、**E2／P2 階段查核（2026-11-04）**、**v0.4.9 發布前修正 R-1／R-3（2026-11-04）**、**UX3-06 查核（2026-11-10）**
 
 ## E2／P2 階段查核（2026-11-04）
 
@@ -38,6 +38,22 @@
 | R-4 | P3 | Frida UP 失敗後該規則視為未 triggered → 群組指標不推進，下一幀會再試一次按鍵（與既有 click 失敗語意一致，受 CPS 上限約束） | `core/05_main_loop.py` `_handle_key` | 觀察；對「按鍵卡住」反而有助於放開 |
 | R-5 | P3 | ✅ **已修（2026-11-04，`0f77931`）**：主循環啟動到 GUI 通知面板之間有毫秒級窗口（`InitWorker.run()` 的 `loop.start()` 先於 `finished.emit`）→ 該窗口內 key 驗證 worker 仍可能送出一次按鍵 | `gui/06_gui_main.py` `_start_loop()`／`InitWorker.run()` | 已於啟動 InitWorker **之前**先 `set_run_active(True)`；啟動失敗（含執行緒起不來）時恢復。`set_run_active` 本身冪等，不會重複作廢 |
 | R-6 | P3 | 被作廢的驗證 worker 結果會因 request id 過期而被忽略 → 使用者只看到按鈕恢復，沒有「已中止」提示 | `gui/09_ocr_debug.py` `_abort_running_verifications()` | 產品決策是否要補提示；不影響輸入安全 |
+
+## UX3-06 查核（2026-11-10）
+
+Click／Drag 目標選項與驗證時機的查核與修正。實作細節見 `docs/dev/ARCHITECTURE.md` 與 `docs/dev/CURRENT_STATUS.md`。
+
+| ID | 嚴重度 | 狀態 | 問題 |
+|---|---|---|---|
+| **UX3-06-P1-1** | P1 | ✅ 已修（2026-11-10） | 未知 `target` 只在執行期 stop → 使用者要等規則真的跑起來才知道設定錯了。已改為 preflight 事前擋下（問題鍵 `unknown_click_target`／`unknown_drag_target` → `status=blocked`），白名單集中在 `core/rule_migration.py` 的 `STEP_TARGETS`（唯一事實來源）；**執行期防禦性 stop 保留不動** |
+| **UX3-06-P1-2** | P1 | ✅ 已修（2026-11-10） | Dry Run 預覽遇到未知 target 靜默略過該步驟 → 預覽呈現「測試通過」的假象。已改為寫入明確錯誤訊息並標記 terminal（後續步驟標為不會執行），與引擎行為一致 |
+| **UX3-06-P1-3** | P2 | ✅ 已修（2026-11-10） | Drag 沿用 Click 的「點擊辨識目標／點擊指定的比例座標位置」文案，且未說明拖曳不支援游標目標 → 易被誤讀。已改用 Drag 專屬文案（明確寫出「拖曳起點」）＋ combo tooltip 說明拖曳無 cursor 目標；target 的實際資料值與執行語意不變 |
+| **UX3-06-P2-1** | P2 | ✅ 已修（2026-11-10） | `target=cursor` 時 GUI 仍可調整 `random_offset`，但引擎該分支強制把抖動歸零 → 使用者以為抖動有效。已停用該控制項（**值保留**，切回 `text_center`/`custom` 恢復可編輯） |
+| **UX3-06-P2-3** | P2 | ✅ 已修（2026-11-10） | `target=custom` 且座標仍是 (0,0) 時 GUI 完全沒有提示 → 使用者以為已設定。已加未設定提示（**純顯示，不阻擋保存**；既有 `custom_click_at_origin` 仍只是 preflight 的警告而非阻擋問題） |
+| **UX3-06-P2-4** | P3 | ℹ️ 已知限制（本次僅記錄事實） | Drag 的 `hold_ms` 會被 normalize 寫入 params，但執行期 `_handle_drag` 從不讀取、GUI 也沒有此欄位 → 死欄位。**未改資料契約、未刪欄位、未改行為**，差距記錄於 ARCHITECTURE.md |
+| **UX3-06-P2-5** | P3 | ℹ️ 已知限制（本次僅記錄事實） | `validate_drag_endpoint` 要求終點各自落在 0~1（像素終點判 `invalid`／`out_of_range`），執行期 `_resolve_point` 只有「兩軸都 <=1」才走比例、否則當像素 → validator 比執行期嚴格。**未放寬 validator、未改執行行為**，差距記錄於 ARCHITECTURE.md |
+| **UX3-06-GUI** | — | ⬜ 未完成（待真機） | 本次僅以自動化測試（`tests/test_ux3_06_target_validation.py`，27 項）鎖定行為，**未在真實 GUI／遊戲上逐項點擊確認** |
+| **UX3-06-P2-2** | P2 | ⬜ 開放（本次明確排除） | `custom_click_at_origin` 只有 preflight warning，沒有 GUI 消費端 → 使用者看不到「(0,0) 可能不是你要的位置」以外的說明。本次明確排除，維持原狀 |
 
 ## C-2a-1 Closeout 查核（2026-11-03）
 

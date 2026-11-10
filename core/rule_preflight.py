@@ -30,6 +30,9 @@ _models = load_sibling("rule_models", "core/rule_models.py")
 Rule = _models.Rule
 Step = _models.Step
 
+# target 白名單在 core 的資料契約層（rule_migration 只依賴標準函式庫，無循環依賴）。
+_migration = load_sibling("rule_migration", "core/rule_migration.py")
+
 
 @dataclass
 class PreflightResult:
@@ -180,6 +183,15 @@ def rule_preflight(rule: Rule) -> PreflightResult:
             and params.get("target", "text_center") == "text_center"
         ):
             problems.append("gate_sum_click_no_target")
+
+        # ── 3c. Click／Drag 目標值合法性 ──────────────────────────────
+        # 白名單來自 core/rule_migration（唯一事實來源），本模組不另寫一份。
+        # 未知 target 在執行期只會 stop（unknown_click_target／unknown_drag_target），
+        # 事前擋下可讓使用者在開始前就看到要改哪個欄位。
+        if step_type in ("click", "drag"):
+            target = params.get("target", "text_center")
+            if not _migration.is_known_step_target(step_type, target):
+                problems.append(f"unknown_{step_type}_target")
 
         # ── 4. Custom Click (0,0) 警告 ────────────────────────────────
         if (

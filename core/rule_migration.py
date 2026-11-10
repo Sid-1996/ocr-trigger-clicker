@@ -52,6 +52,27 @@ _STEP_DEFAULTS = {
     "sum": {"roi": {"x": 0, "y": 0, "w": 0, "h": 0}},
 }
 
+# 各 step type 支援的 target 值（唯一事實來源）。
+# GUI、preflight 與執行期共用，避免各層自寫一套白名單而彼此不一致。
+# 放在本模組的理由：它只依賴標準函式庫（無循環依賴風險），且本身就是
+# step 欄位契約（_STEP_DEFAULTS 與 _normalize_step_params）的所在地。
+STEP_TARGETS = {
+    "click": ("text_center", "custom", "cursor"),
+    "drag": ("text_center", "custom"),
+}
+
+
+def is_known_step_target(step_type: str, target: object) -> bool:
+    """target 是否為該 step type 支援的值。
+
+    未知 target 一律回 False（不猜測、不放寬）。沒有 target 概念的 step type
+    （detect／key／scroll…）不在白名單內 → 回 True，由呼叫端自行判斷。
+    """
+    allowed = STEP_TARGETS.get(step_type)
+    if allowed is None:
+        return True
+    return isinstance(target, str) and target in allowed
+
 
 def _as_int(value, default: int = 0) -> int:
     try:
