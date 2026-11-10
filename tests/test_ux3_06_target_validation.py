@@ -551,3 +551,160 @@ def test_legacy_drag_repair_banner_still_appears(step_list):
     )
     form2 = step_list._build_form(0, modern)
     assert form2._repair_banner is None
+
+
+# ── GUI 驗收：真實 Qt Widget／真實 MainWindow ─────────────────────────────
+#
+# 下列測試一律操作真實 Qt Widget（不是 mock、不是 helper）：
+#   * step_list     → 真實 _StepListWidget → 真實 _ClickStepForm／_DragStepForm
+#   * real_mainwindow → 真實 MainWindow → 真實步驟編輯器 → 真實表單 →
+#                      真實存檔（產品自己的 save_task_with_groups）→ 真實重載
+
+
+def test_click_form_target_options_and_tooltips(step_list):
+    """Click 表單的三個選項與 tooltip 必須齊全且互異（Drag 專屬說明不得外洩）。"""
+    from PyQt6.QtCore import Qt
+
+    step = Step(type="click", params={"target": "text_center"})
+    form = step_list._build_form(0, step)
+    assert form is not None
+
+    datas = [form._target.itemData(i) for i in range(form._target.count())]
+    assert datas == ["text_center", "custom", "cursor"], datas
+
+    assert form._target.itemText(0) == T("summary.click_target")
+    assert form._target.itemText(1) == T("step_form.text_coord")
+    assert form._target.itemText(2) == T("step_form.click_target_cursor")
+
+    tips = [
+        form._target.itemData(i, Qt.ItemDataRole.ToolTipRole) for i in range(form._target.count())
+    ]
+    assert tips == [
+        T("step_form.target_text_center_tip"),
+        T("step_form.target_custom_tip"),
+        T("step_form.target_cursor_tip"),
+    ], tips
+    # 每個選項都要有自己的說明
+    assert len(set(tips)) == 3, tips
+    # Drag 專屬的「拖曳不支援游標目標」不得出現在 Click 表單
+    assert T("step_form.drag_target_cursor_note") not in form._target.toolTip()
+
+
+def test_real_window_cursor_target_survives_save_and_reload(
+    real_mainwindow, write_task, make_step, make_rule
+):
+    """真實視窗：切到 cursor 目標 → 抖動停用 → 存檔 → 重載，設定不得遺失。"""
+    win = real_mainwindow
+    write_task(
+        "t_cursor",
+        [
+            make_rule(
+                "r0",
+                "規則零",
+                [make_step("click", target="text_center", x=0.2, y=0.3, random_offset=7)],
+            )
+        ],
+    )
+    win._on_task_changed("t_cursor")
+    win._step_list._toggle_expand(0)
+    form = win._step_list._expanded_form
+    assert type(form).__name__ == "_ClickStepForm"
+
+    # 走真實 combo 的 currentIndexChanged
+    form._target.setCurrentIndex(form._target.findData("cursor"))
+    assert form._offset.isEnabled() is False
+    assert form._offset.value() == 7
+
+    win._save_current_rule()
+    assert win._flush_save() is True
+
+    # 重載：真的從磁碟讀回來
+    win._on_task_changed("t_cursor")
+    win._step_list._toggle_expand(0)
+    reloaded = win._step_list._expanded_form
+    assert type(reloaded).__name__ == "_ClickStepForm"
+    assert reloaded._target.currentData() == "cursor"
+    assert reloaded._offset.isEnabled() is False, "重載後 cursor 目標仍應停用抖動"
+    assert reloaded._offset.value() == 7
+    assert reloaded._step.params["random_offset"] == 7
+    # 重載後的規則仍須通過 preflight（cursor 是合法 target）
+    assert rule_preflight(win._get_current_rule()).status == "passed"
+
+
+def test_real_window_picked_coords_survive_save_and_reload(
+    real_mainwindow, write_task, make_step, make_rule
+):
+    """真實視窗：拾取座標（提示消失）→ 存檔 → 重載，座標不得遺失、提示不得復原。"""
+    win = real_mainwindow
+    write_task(
+        "t_coords",
+        [make_rule("r0", "規則零", [make_step("click", target="custom", x=0, y=0)])],
+    )
+    win._on_task_changed("t_coords")
+    # 假 picker 必須在建表單之前就緒：表單在建構當下就抓住了 callback
+    win._step_list.set_click_pick_callback(lambda: (0.42, 0.55))
+    win._step_list._toggle_expand(0)
+    form = win._step_list._expanded_form
+    assert form._coord_hint.isVisibleTo(form) is True, "尚未選取座標時應顯示提示"
+
+    form._pick_coord()
+    assert form._step.params["x"] == 0.42 and form._step.params["y"] == 0.55
+    assert form._step.params["roi_coord"] == "client"
+    assert form._coord_hint.isVisibleTo(form) is False, "選取座標後提示應消失"
+
+    win._save_current_rule()
+    assert win._flush_save() is True
+
+    win._on_task_changed("t_coords")
+    win._step_list.set_click_pick_callback(lambda: (0.42, 0.55))
+    win._step_list._toggle_expand(0)
+    reloaded = win._step_list._expanded_form
+    assert reloaded._step.params["x"] == 0.42
+    assert reloaded._step.params["y"] == 0.55
+    assert reloaded._step.params["roi_coord"] == "client"
+    assert reloaded._coord_hint.isVisibleTo(reloaded) is False, "重載後座標仍在，提示不得復原"
+
+
+def test_real_window_step_form_hint_is_visible_and_not_clipped(
+    real_mainwindow, write_task, make_step, make_rule, qt_app
+):
+    """真實版面：座標提示必須可見且未被裁切；拖曳選項文字不得被 elide。"""
+    win = real_mainwindow
+    write_task(
+        "t_layout",
+        [
+            make_rule(
+                "r0",
+                "規則零",
+                [
+                    make_step("click", target="custom", x=0, y=0),
+                    make_step(
+                        "drag",
+                        target="custom",
+                        x=0.2,
+                        y=0.3,
+                        end_x=0.5,
+                        end_y=0.5,
+                        end_roi_coord="client",
+                    ),
+                ],
+            )
+        ],
+    )
+    win._on_task_changed("t_layout")
+    win.show()
+    qt_app.processEvents()
+
+    win._step_list._toggle_expand(0)
+    click_form = win._step_list._expanded_form
+    hint = click_form._coord_hint
+    assert hint.isVisibleTo(click_form) is True
+    assert hint.width() >= hint.sizeHint().width(), "座標提示文字被裁切"
+    assert hint.height() >= hint.sizeHint().height(), "座標提示文字被裁切"
+
+    win._step_list._toggle_expand(1)
+    drag_form = win._step_list._expanded_form
+    combo = drag_form._target
+    fm = combo.fontMetrics()
+    widest = max(fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+    assert combo.width() >= widest, "拖曳目標選項文字被 elide"
