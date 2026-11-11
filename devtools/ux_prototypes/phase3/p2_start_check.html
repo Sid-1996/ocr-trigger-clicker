@@ -11,8 +11,15 @@
 <p class="note">統一呼叫純函式 <code>rule_preflight()</code>（<code>rule_preflight.py:89</code>），不新增驗證規則。注意 BLOCKED 等待語意（parallel）與啟動擋的區別。</p></div>
 <div class="box"><b>測試對話框（UX3-04/05）</b>
 <div class="check"><button>取消測試</button><span class="note">測試中可取消（dry-run 不送真輸入）。Sum 閘門測試顯示「目前加總 128，條件 ≥ 150 → 尚未符合，將等待」而非只顯示總和。</span></div></div>
-<div class="box"><b>執行可視（UX3-07）</b>
-<div class="check"><span>狀態列：<b>執行中｜群組「跑馬」｜規則「跑馬規則」｜步驟 2/5</b>（資料已在 <code>get_rules_status</code>）</span></div>
-<div class="check"><span>群組選擇：群組名 ＋「（3 條啟用規則）」</span></div>
-<p class="note">不新增 Pause 按鈕（沿用 F8 三態）；狀態列更新遵循效能紅線（增量、不重建）。</p></div>
+<div class="box"><b>執行可視（UX3-07）— 最終設計</b>
+<p class="note">核心觀念：狀態列顯示的是「<b>本幀實際評估到的規則</b>」，不是「最後觸發的規則」。
+等待條件的規則不會觸發，只看樹上的藍色標示會以為程式沒在跑——這才是使用者真正看不懂的地方。</p>
+<table>
+<tr><th>位置</th><th>顯示內容</th><th>資料來源</th></tr>
+<tr><td>狀態列（執行中）</td><td><b>執行中｜群組「跑馬」｜規則「跑馬規則」｜步驟 2/5</b></td><td><code>MainLoop.get_execution_target()</code>（新增）</td></tr>
+<tr><td>狀態列（已停止）</td><td>（清空）</td><td>停止時自動清空</td></tr>
+<tr><td>群組選擇對話框</td><td>跑馬<b>（3 條啟用規則）</b></td><td>群組內 <code>enabled</code> 的規則數</td></tr>
+</table>
+<p class="note">滑鼠停在狀態列上可看說明：顯示目前正在評估的規則，條件尚未成立時不會動作但仍在檢查。<br>
+不新增 Pause 按鈕（沿用 F8／主按鈕三態語意）；狀態列更新沿用既有 1 秒 tick，只在文字變化時 setText（效能紅線：不重建、不新增高頻 timer）。</p></div>
 </body></html>

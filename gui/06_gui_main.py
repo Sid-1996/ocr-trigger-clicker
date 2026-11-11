@@ -6353,6 +6353,14 @@ class MainWindow(QMainWindow):
         # === Status bar ===
         self._status_bar = QStatusBar()
         self._status_bar.showMessage(T("main.ready"))
+        # UX3-07：執行目標（群組／規則／步驟）——讓使用者一眼看出「現在在跑什麼」。
+        # permanent widget 不受 showMessage 影響；內容由 _update_exec_target_label 更新。
+        self._exec_target_label = QLabel("")
+        self._exec_target_label.setStyleSheet(
+            "color: #4fc3f7; font-size: 11px; padding-right: 8px;"
+        )
+        self._exec_target_label.setToolTip(T("status.exec_target.tooltip"))
+        self._status_bar.addPermanentWidget(self._exec_target_label)
         self._perf_label = QLabel(T("fps.idle"))
         self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._perf_label.setToolTip(T("fps.tooltip"))
@@ -6547,6 +6555,38 @@ class MainWindow(QMainWindow):
         else:
             self._perf_label.setStyleSheet("color: #888; font-size: 11px; padding-right: 8px;")
         self._perf_label.setText(text)
+
+    def _update_exec_target_label(self) -> None:
+        """UX3-07：狀態列顯示「現在在跑什麼」（群組／規則／步驟）。
+
+        由既有的 1 秒 _status_timer 觸發（不新增高頻 timer）；只在文字變化時
+        setText，符合效能紅線（每 tick 工作量與新增資料成正比）。
+
+        顯示的是「本幀實際評估到的規則」，不是「最後觸發的規則」——條件尚未
+        成立的規則不會觸發，但程式仍在評估它，只看樹上的藍色標示會失真。
+        """
+        target = None
+        loop = self._loop
+        if loop is not None and getattr(loop, "is_running", False):
+            getter = getattr(loop, "get_execution_target", None)
+            if getter is not None:
+                target = getter()
+        text = ""
+        if target:
+            text = T(
+                "status.exec_target",
+                group=target.get("group_name") or "",
+                rule=target.get("rule_name") or "",
+            )
+            total = target.get("step_total") or 0
+            if total > 0:
+                text += T(
+                    "status.exec_target.step",
+                    step=(target.get("step_idx") or 0) + 1,
+                    total=total,
+                )
+        if self._exec_target_label.text() != text:
+            self._exec_target_label.setText(text)
 
     def _update_interaction_mode_label(self):
         """Update the interaction mode button text + menu check in the status bar."""
@@ -7613,6 +7653,8 @@ class MainWindow(QMainWindow):
             parent.setUpdatesEnabled(True)
 
     def _update_rule_status(self):
+        # UX3-07：同步狀態列的執行目標（停止時自動清空）。
+        self._update_exec_target_label()
         if not self._loop or not self._loop.is_running:
             if self._loop is not None:
                 self._stop_loop()

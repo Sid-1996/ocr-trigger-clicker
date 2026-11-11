@@ -60,8 +60,11 @@ class GroupSelectionController:
         grid.setSpacing(6)
         checks = []
         per_col = (len(enabled) + 1) // 2
+        # UX3-07：顯示每個群組的啟用規則數，讓啟動前就知道勾選會跑多少規則。
+        live_rule_ids = {r.id for r in win._rules if r.enabled}
         for i, g in enumerate(enabled):
-            cb = QCheckBox(group_display_name(g))
+            count = sum(1 for rid in (g.rule_ids or []) if rid in live_rule_ids)
+            cb = QCheckBox(f"{group_display_name(g)}{T('dialog.group_rule_count', count=count)}")
             cb.setChecked(True)  # 每次開啟預設全部啟用群組打勾
             cb.setProperty("gid", g.id)
             checks.append(cb)

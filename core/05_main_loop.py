@@ -435,6 +435,10 @@ class MainLoop:
         # 測試 fixture（tests/conftest.py）也走同一入口，避免兩邊欄位漂移。
         self._init_preflight_state()
         self._last_active_rule_id: str | None = None
+        # UX3-07：本幀實際評估到的規則與步驟（rule_id, step_idx）。
+        # 與 _last_active_rule_id（最後觸發的規則）不同：等待條件的規則不會觸發，
+        # 只看 pointer 會誤以為「沒在跑」。整個 tuple 單次賦值，讀取不會看到半套狀態。
+        self._current_target: tuple[str, int] | None = None
         self._execution_log: deque = deque(maxlen=100)
         self._quiet_names: set[str] = set()
         self._last_exec_log: dict[str, tuple] = {}
@@ -2139,11 +2143,17 @@ class MainLoop:
         outcome = self._preflight_result(rule, background)
         if outcome is RuleRunOutcome.BLOCKED:
             return outcome
+        if not background:
+            # UX3-07：記錄本幀實際評估到的規則（供狀態列顯示「在跑什麼」）。
+            # 背景規則不佔用前景執行目標顯示位。
+            self._current_target = (rule.id, 0)
         i = 0
         while i < len(rule.steps):
             if self._stop_event.is_set():
                 return self._stopped_outcome(rule, ctx)
             ctx.step_idx = i
+            if not background:
+                self._current_target = (rule.id, i)
             step = rule.steps[i]
             ctx.on_fail_fired = False  # 每步重設，避免上一步 on_fail=key 的旗標污染本步判斷
             if step.type == "wait":
@@ -3253,6 +3263,8 @@ class MainLoop:
         # 舊的「已通知」記錄不得抑制本次啟動後的首次命中
         # （GUI 每次啟動都是新的 MainLoop 實例，此處讓同一實例重啟的行為一致）。
         self._notified_conditions.clear()
+        # UX3-07：每次啟動都是新的觀察期，上一輪的执行目標不得留到新一輪。
+        self._current_target = None
         self._reset_black_state()
         self._frame_count = 0
         for k in self._phase_sums:
@@ -3401,6 +3413,34 @@ class MainLoop:
                 }
                 for r in self._rules
             ]
+
+    def get_execution_target(self) -> dict | None:
+        """目前實際評估中的規則（UX3-07：狀態列「在跑什麼」）。
+
+        與 _last_active_rule_id 不同：那是「最後觸發」的規則，而等待條件的
+        規則不會觸發，只看 pointer 會以為程式沒在跑。這裡回的是本幀真正被
+        評估到的規則與步驟序號，才能回答「為什麼沒反應」。
+
+        沒有正在評估的規則時回 None（停止後、啟動前皆為 None）。
+        """
+        target = self._current_target
+        if target is None:
+            return None
+        rule_id, step_idx = target
+        with self._rules_lock:
+            rule = self._rule_map.get(rule_id)
+            groups = list(self._groups)
+        if rule is None:
+            return None
+        group = next((g for g in groups if rule_id in (g.rule_ids or [])), None)
+        return {
+            "rule_id": rule_id,
+            "rule_name": rule.name,
+            "group_id": group.id if group else None,
+            "group_name": group_display_name(group) if group else "",
+            "step_idx": step_idx,
+            "step_total": len(rule.steps),
+        }
 
 
 if __name__ == "__main__":

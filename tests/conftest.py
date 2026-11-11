@@ -63,6 +63,8 @@ def make_main_loop():
     ml._group_queue_idx = 0
     ml._rule_in_group_ptr = 0
     ml._rule_map = {}
+    # UX3-07：MainLoop.__init__ 的執行目標欄位（get_execution_target 會讀）。
+    ml._current_target = None
     ml._group_rounds_completed = {}
     ml._fail_since = {}
     ml._rules_lock = threading.RLock()

@@ -447,6 +447,14 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 - `jump` 步驟在背景規則中不生效（`on_fail` 的 `jump` 動作不受此限）
 - 不計入任何群組輪次，不耗費群組重複次數
 
+### 執行目標（`get_execution_target()`）
+
+- `MainLoop.get_execution_target()` 回報「**本幀實際評估到的規則**」：rule_id／rule_name／group_id／group_name／step_idx／step_total；尚未評估任何規則時回 `None`。
+- 與 `_last_active_rule_id`（**最後觸發**的規則）刻意區分：等待條件的規則不會觸發，只看 pointer 會誤以為程式沒在跑。狀態列的「執行中｜群組｜規則｜步驟 n/m」用的是前者。
+- 寫入點：`_run_rule()` 的步驟迴圈（`ctx.step_idx = i` 處），**背景規則不寫入**（不佔用前景顯示位）。
+- 生命週期：`start()` 重置為 `None`；規則被刪除／重新載入後 `get_execution_target()` 回 `None`（不回報幽靈資料）。
+- GUI 端由 `gui/06_gui_main.py` 的 `_update_exec_target_label()` 消費，沿用既有 1 秒 `_status_timer` tick，只在文字變化時 `setText`（效能紅線：不重建、不新增高頻 timer）。
+
 ### on_fail notify 流程
 
 `on_fail` 的 `notify` 動作會：
@@ -888,6 +896,7 @@ uv run python -m pytest                # 含覆蓋報告
 | `test_rule_config_controller.py` | 設定持久化及寫入失敗 |
 | `test_run_config.py` | 任務視窗／執行設定與快取 |
 | `test_group_display_name.py` | 群組顯示名稱 |
+| `test_ux3_07_execution_visibility.py` | 執行目標 accessor（None／規則＋群組＋步驟／背景不佔位／啟動重置）、狀態列顯示與停止清空、群組對話框啟用規則數、三語文案鍵與佔位符一致性 |
 | `test_ocr_precluster.py` | OCR ROI 預合併 |
 | `test_template_crop.py` | 圖片裁剪 |
 | `test_frida_bg.py` / `test_frida_real.py` | Frida 後台輸入單元／整合檢查（環境需求以測試內 skip 條件為準） |

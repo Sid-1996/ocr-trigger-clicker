@@ -1,7 +1,8 @@
 # 目前狀態（CURRENT_STATUS）
 
-> 最後更新：2026-11-10
+> 最後更新：2026-11-12
 > 對應階段：**E2／P2 階段收斂 ＋ v0.4.9 發布前修正**（Global Stop／輸入取消／後台失敗回報／通知去重／R-1／R-3／R-5）
+> 2026-11-12 補充：UX3-07（執行中「在跑什麼」可視化）——詳見下方「本次完成」的 UX3-07 章節
 > 2026-11-10 補充：UX3-06（Click／Drag 目標選項與驗證改善）——詳見下方「本次完成」的 UX3-06 章節
 > 2026-11-07 補充：AppCompat 自癒、OCR Debug UX、輸入整合驗證 harness（P0，未執行）、hybrid 啟動最小化、數字加總閘門、死碼清理——詳見下方「2026-11-05～11-07 補充」
 
@@ -24,13 +25,14 @@
 | **R-5** | MainLoop 啟動與 OCR Debug 閘門的競態窗口 | ✅ **完成，已 commit**（`0f77931`） |
 | **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ✅ **完成，已 commit**（UX Phase 3C：修復 banner＋拾取終點＋使用者確認才清除 marker） |
 | **UX3-06** | Click／Drag 目標選項與驗證改善（target 白名單＋preflight 事前擋下、dry-run 不再靜默略過、Drag 專屬文案、cursor 目標停用抖動、custom 未設座標提示） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；`hold_ms` 死欄位與 validator 差異僅記錄事實，未改契約） |
+| **UX3-07** | 執行中「在跑什麼」可視化（狀態列顯示「群組／規則／步驟」、群組選擇對話框顯示啟用規則數） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；主按鈕圖示 enhancement 明確排除） |
 | **真機驗證** | Frida 輸入取消／Release、frida／hybrid 拖曳 | ⬜ 未完成 |
 
 ## 工作區狀態
 
 - branch：`master`
-- HEAD = `79cf2ab` = `origin/master`（ahead/behind **0/0**，2026-11-10 核實）；本次 UX3-06 變更完成後為 1 顆新 commit，**尚未 push**
-- **staged：空**；工作區乾淨（2026-11-10 盤點）
+- HEAD = `7345ee8` = `origin/master`（ahead/behind **0/0**，2026-11-12 核實）；本次 UX3-07 變更完成後為 1 顆新 commit，**尚未 push**
+- **staged：空**；工作區乾淨（2026-11-12 盤點）
 - 距上次發布（`v0.4.8`）累計 **90 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`）
 - **v0.4.9 尚未發布**：無 tag、無 GitHub Release（`gh release view v0.4.9` → not found）；`_version.py`／`pyproject.toml` 仍為 `0.4.8`，最新正式版仍是 `v0.4.8`（2026-10-24）
 
@@ -51,7 +53,8 @@
 | `tests/test_debug_verify_abort_on_run.py`（新增，R-3） | 16 passed ✅ |
 | `tests/test_debug_gate_before_loop_start.py`（新增，R-5） | 11 passed ✅ |
 | `tests/test_ux3_06_target_validation.py`（新增，UX3-06） | 27 passed ✅ |
-| **完整套件** | **1783 passed, 13 skipped**（2026-11-10 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
+| `tests/test_ux3_07_execution_visibility.py`（新增，UX3-07） | 13 passed ✅ |
+| **完整套件** | **1800 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
 
 ## 2026-11-05～11-07 補充（E2／P2 之後已落地）
 
@@ -133,6 +136,24 @@
 - **真機 GUI 驗證未完成**：本次只以自動化測試（27 項）鎖定行為，未在真實遊戲／真實 GUI 上逐項點擊確認。
 - **P2-2**（`custom_click_at_origin` warning 的消費端整合）與 **C2-2**（假 marker 清洗）本次明確排除，維持原狀。
 
+### UX3-07（執行中「在跑什麼」可視化）
+
+**已實作（本次，commit 與本文同）**
+
+- **引擎執行目標**：`core/05_main_loop.py` 新增 `get_execution_target()`（O(1) 讀取），回報「本幀實際評估到的規則 + 步驟序號 + 群組」。**刻意與 `_last_active_rule_id`（最後觸發的規則）區分**：等待條件的規則不會觸發，只看 pointer 會誤以為程式沒在跑。背景規則不佔用此顯示位；`start()` 重置；規則已不存在時回 None。
+- **狀態列**：`gui/06_gui_main.py` 狀態列新增 permanent widget `_exec_target_label`，顯示「執行中｜群組「X」｜規則「Y」｜步驟 n/m」。沿用既有 1 秒 `_status_timer` tick（由 `_update_rule_status()` 頂部呼叫），只在文字變化時 setText（效能紅線：增量、不重建、不新增高頻 timer）；停止後自動清空。滑鼠停留有白話說明。
+- **群組選擇對話框**：`gui/group_selection_controller.py` 每個群組附加「（N 條啟用規則）」，啟動前就知道勾選會跑多少規則。
+- **文案**：三語各 +4 鍵（`status.exec_target`／`status.exec_target.step`／`status.exec_target.tooltip`／`dialog.group_rule_count`）。
+
+**未實作／明確排除**
+
+- 主按鈕暫停態的圖示區分：開始／停止／繼續三態**文字**已可辨識，圖示屬低價值 enhancement。
+- 新增 Pause 按鈕：沿用 F8／主按鈕三態語意（與原始稽核建議一致）。
+
+**未完成（不得視為已驗證）**
+
+- **真機 GUI 驗證未完成**：本次只以自動化測試（13 項，含 4 項突變測試）鎖定行為，未在真實遊戲／真實 GUI 上逐項確認狀態列文字與對話框排版。
+
 ## 明確延後（不在本次範圍）
 
 - C-4：`_last_error` 跨執行緒歸屬（已以 C-5 限制重疊操作，不引入 per-operation error handle）
@@ -145,5 +166,6 @@
 - Drag Repair UI（needs_repair 修復流程、`validate_drag_endpoint` 消費端）→ C-2a-2
 - 已汙染任務檔假 marker 的清洗（產品決策 keep：不動）
 - UX3-06 明確排除項：P2-2（`custom_click_at_origin` warning 的消費端整合）、Click／Drag 表單大規模重構、全面統一驗證時機、新增 Drag cursor 支援；UX3-06 的真機 GUI 驗證亦未完成
+- UX3-07 明確排除項：主按鈕暫停態圖示區分、新增 Pause 按鈕；UX3-07 的真機 GUI 驗證亦未完成
 - 全員 disabled 並行群組的 stall（另案，C2-1）
 - F-08 fingerprint 效能重構、F-09 `_preflight_last_fingerprint` 死欄位、F-10 死 binding、`RuleRunOutcome` 死成員
