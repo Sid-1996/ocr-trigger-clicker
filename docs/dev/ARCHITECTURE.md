@@ -452,7 +452,8 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 - `MainLoop.get_execution_target()` 回報「**本幀實際評估到的規則**」：rule_id／rule_name／group_id／group_name／step_idx／step_total；尚未評估任何規則時回 `None`。
 - 與 `_last_active_rule_id`（**最後觸發**的規則）刻意區分：等待條件的規則不會觸發，只看 pointer 會誤以為程式沒在跑。狀態列的「執行中｜群組｜規則｜步驟 n/m」用的是前者。
 - 寫入點：`_run_rule()` 的步驟迴圈（`ctx.step_idx = i` 處），**背景規則不寫入**（不佔用前景顯示位）。
-- 生命週期：`start()` 重置為 `None`；規則被刪除／重新載入後 `get_execution_target()` 回 `None`（不回報幽靈資料）。
+- 生命週期：`start()` 重置為 `None`；`stop()` 之後清除；`_load_rules()` 在「規則集真的被替換」時清除（載入失敗、規則被保留時**不清除**）；規則已不存在時 `get_execution_target()` 回 `None`（不回報幽靈資料）。
+- 並行群組：`_run_parallel_group()` 對群組內**每條**規則都呼叫 `_run_rule()` → 都會寫入 `_current_target` → **狀態列顯示最後評估到的那條**。前景循序群組在並行群組之後執行，因此有前景群組時前景目標不被覆蓋。UX3-07-F1 明確不擴充成多條顯示、不加保護／還原邏輯、不改群組執行順序（以測試鎖定現行行為）。
 - GUI 端由 `gui/06_gui_main.py` 的 `_update_exec_target_label()` 消費，沿用既有 1 秒 `_status_timer` tick，只在文字變化時 `setText`（效能紅線：不重建、不新增高頻 timer）。
 
 ### on_fail notify 流程

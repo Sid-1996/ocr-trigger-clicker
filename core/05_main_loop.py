@@ -688,6 +688,11 @@ class MainLoop:
                 self._tmpl_cache.clear()
                 self._fail_since.clear()
                 self._last_active_rule_id = None
+                # UX3-07-F1：規則集被替換後，舊的執行目標可能指向已不存在的規則，
+                # 或指向步驟數已改變的規則（會顯示不可能的 step_idx，例如「步驟 5/2」）。
+                # 清除後由下一幀的 _run_rule 重新設定。純顯示狀態，不影響排程與輸入。
+                # 只在「規則真的被替換」時清除：載入失敗路徑保留原規則，舊目標仍有效。
+                self._current_target = None
                 self._update_has_detect()
         if error_msg:
             log_main(error_msg)
@@ -3290,6 +3295,10 @@ class MainLoop:
             worker.close()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=0.5)
+        # UX3-07-F1：停止後不得殘留舊的執行目標（不靠 GUI 把 _loop 設 None 來掩蓋）。
+        # 放在 join 之後：_run_rule 的迴圈每次寫入前都會先檢查 _stop_event，
+        # 停止旗標一設定就不再寫入，因此 join 後清除即為最終狀態。
+        self._current_target = None
         self._perf.stop()
         _bg_input.detach()
 

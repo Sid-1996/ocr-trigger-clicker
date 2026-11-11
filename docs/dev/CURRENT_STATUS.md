@@ -53,8 +53,8 @@
 | `tests/test_debug_verify_abort_on_run.py`（新增，R-3） | 16 passed ✅ |
 | `tests/test_debug_gate_before_loop_start.py`（新增，R-5） | 11 passed ✅ |
 | `tests/test_ux3_06_target_validation.py`（新增，UX3-06） | 27 passed ✅ |
-| `tests/test_ux3_07_execution_visibility.py`（新增，UX3-07） | 13 passed ✅ |
-| **完整套件** | **1800 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
+| `tests/test_ux3_07_execution_visibility.py`（新增，UX3-07／UX3-07-F1） | 22 passed ✅ |
+| **完整套件** | **1809 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
 
 ## 2026-11-05～11-07 補充（E2／P2 之後已落地）
 
@@ -149,6 +149,15 @@
 
 - 主按鈕暫停態的圖示區分：開始／停止／繼續三態**文字**已可辨識，圖示屬低價值 enhancement。
 - 新增 Pause 按鈕：沿用 F8／主按鈕三態語意（與原始稽核建議一致）。
+- 並行群組的多條規則同時顯示：維持現行「顯示最後評估到的那條」，已於 tooltip（三語）與 ARCHITECTURE.md 說明。
+
+### UX3-07-F1（語意回歸測試與生命週期修整）
+
+**已實作（本次，commit 與本文同）**
+
+- **端到端語意回歸**：新增 9 項走真實 `_process_rules → _run_rule → _handle_detect` 控制流程的測試，涵蓋「條件未成立（指標不推進、零輸入送出）」「觸發後目標切換」「多條規則依序等待」「零步驟規則」「並行群組現行語意」「preflight BLOCKED 規則不進入執行目標」；另補 `stop()`／規則重載的生命週期測試。以 **7 項突變測試**確認斷言有效。
+- **生命週期修整**：`stop()` 之後清除 `_current_target`；`_load_rules()` 在「規則集真的被替換」時清除（載入失敗、規則被保留時**不清除**）。`_current_target` 仍是純顯示狀態，**不影響排程、觸發條件、on_fail 或 Stop 語意**。
+- **文件**：ARCHITECTURE.md 補上生命週期與並行群組語意；UX_PHASE3_AUDIT.md／KNOWN_ISSUES.md 追加 UX3-07-F1 狀態。
 
 **未完成（不得視為已驗證）**
 

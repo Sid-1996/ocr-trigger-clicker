@@ -110,7 +110,7 @@
   "status.stopped": "Stopped",
   "status.exec_target": "Running | Group: {group} | Rule: {rule}",
   "status.exec_target.step": " | Step {step}/{total}",
-  "status.exec_target.tooltip": "Shows the rule being evaluated right now. It won't act until its condition is met, but the check keeps running — you can see it here.",
+  "status.exec_target.tooltip": "Shows the rule being evaluated right now. It won't act until its condition is met, but the check keeps running — you can see it here.\nWhen a parallel group evaluates several rules at once, this shows the last one evaluated.",
   "status.checking_update": "Checking for updates...",
   "status.latest_version": "Already up to date",
   "status.window_not_found": "⚠ No windows found, please launch the target program first",

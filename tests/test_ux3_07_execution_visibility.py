@@ -38,6 +38,8 @@ group_display_name = _models.group_display_name
 
 _ml_mod = load_sibling("main_loop", "core/05_main_loop.py")
 _gui = load_sibling("gui_main", "gui/06_gui_main.py")
+_ocr = load_sibling("ocr_engine", "core/02_ocr_engine.py")
+_ser_mod = load_sibling("rule_serialization", "core/rule_serialization.py")
 T = _gui.T
 
 
@@ -74,6 +76,44 @@ def _wait_rule(rule_id="r-ux307", name="跑馬規則", steps=3):
 
 def _ctx():
     return _ml_mod.StepContext(img=_img(), rect=_rect())
+
+
+def _detect(text):
+    return Step(type="detect", params={"text": text})
+
+
+def _click():
+    return Step(type="click", params={"target": "text_center"})
+
+
+def _process_loop(rules, groups, group_ids=None):
+    """建立可直接跑 _process_rules 的 MainLoop，並攔截所有輸入送出。
+
+    這是「端到端語意」測試的入口：走真實的 _process_rules → _run_rule →
+    _handle_detect 控制流程，而不是直接呼叫 _run_rule 或手動設定 _current_target。
+    """
+    ml = _main_loop()
+    ml._rules = list(rules)
+    ml._rule_map = {r.id: r for r in ml._rules}
+    ml._groups = list(groups)
+    ml._active_group_ids = list(group_ids if group_ids is not None else [groups[0].id])
+    ml._group_queue_idx = 0
+    ml._rule_in_group_ptr = 0
+    ml._last_active_rule_id = None
+    ml._current_target = None
+    sent: list[tuple] = []
+    ml._send_click = lambda *a, **k: sent.append(("click", *a)) or True
+    ml._send_key = lambda *a, **k: sent.append(("key", *a)) or True
+    return ml, sent
+
+
+def _ocr_returns(texts):
+    """模擬 OCR 結果：回傳含指定文字的 OcrResult（空清單＝找不到任何文字）。"""
+
+    def _region(img, roi):
+        return [_ocr.OcrResult(text=t, x=100, y=200, w=40, h=20, confidence=0.99) for t in texts]
+
+    return _region
 
 
 # ── 1：尚未評估任何規則 → None ───────────────────────────────────────────
@@ -317,3 +357,255 @@ def test_exec_target_text_formats_without_key_error():
     )
     assert "跑馬" in text and "跑馬規則" in text and "2/3" in text
     assert T("dialog.group_rule_count", count=3).strip()
+
+
+# ── 8：端到端語意回歸（真實 _process_rules 控制流程）──────────────────────
+#
+# 下列測試一律走真實的 _process_rules → _run_rule → _handle_detect 路徑。
+# 不直接手動設定 _current_target 製造預期狀態：那樣只能證明 accessor 的組字，
+# 證明不了「條件未成立時，執行目標仍指向正在等待條件的那條規則」。
+
+
+def test_waiting_rule_stays_as_execution_target():
+    """條件未成立 → 指標不推進、從未觸發，但執行目標必須持續指向等待中的規則。"""
+    rule = Rule(
+        id="r-wait",
+        name="等待規則",
+        enabled=True,
+        steps=[_detect("NEVER_MATCH"), _click()],
+    )
+    group = RuleGroup(
+        id="g1",
+        name="群組一",
+        enabled=True,
+        mode="once",
+        order="sequential",
+        rule_ids=[rule.id],
+    )
+    ml, sent = _process_loop([rule], [group])
+    ml._ocr_region = _ocr_returns([])  # OCR 找不到文字 → 條件不成立
+
+    for _ in range(3):
+        ml._process_rules(_img(), _rect())
+
+    assert ml._rule_in_group_ptr == 0, "條件未成立時指標不得推進"
+    assert ml._last_active_rule_id is None, "未觸發的規則不得寫入 pointer"
+    target = ml.get_execution_target()
+    assert target is not None, "等待中的規則必須是執行目標"
+    assert target["rule_id"] == rule.id
+    assert target["rule_name"] == "等待規則"
+    assert target["group_name"] == "群組一"
+    assert target["step_idx"] == 0, "條件未成立時停在第一個步驟"
+    assert target["step_total"] == 2
+    assert sent == [], "條件未成立不得送出任何輸入"
+
+
+def test_execution_target_advances_after_rule_triggers():
+    """第一條規則條件成立並觸發後，執行目標必須切到第二條，不得殘留舊目標。"""
+    first = Rule(id="r-1", name="規則一", enabled=True, steps=[_detect("MATCH"), _click()])
+    second = Rule(id="r-2", name="規則二", enabled=True, steps=[_detect("ALSO_NEVER"), _click()])
+    group = RuleGroup(
+        id="g1",
+        name="群組一",
+        enabled=True,
+        mode="once",
+        order="sequential",
+        rule_ids=[first.id, second.id],
+    )
+    ml, sent = _process_loop([first, second], [group])
+    ml._ocr_region = _ocr_returns(["MATCH"])  # 只有第一條的條件成立
+
+    ml._process_rules(_img(), _rect())
+    assert ml._rule_in_group_ptr == 1, "觸發後指標必須推進到第二條"
+    assert ml._last_active_rule_id == first.id
+    assert len(sent) == 1, "只應送出第一條規則的點擊"
+
+    ml._process_rules(_img(), _rect())
+    target = ml.get_execution_target()
+    assert target["rule_id"] == second.id, "目標必須切換到第二條規則"
+    assert target["rule_name"] == "規則二"
+
+
+def test_multiple_rules_waiting_target_updates_in_order():
+    """多條規則依序等待時，執行目標必須跟著當前被評估的那條走。"""
+    first = Rule(id="r-1", name="規則一", enabled=True, steps=[_detect("MATCH"), _click()])
+    # 第二條用「ALSO_NEVER」：與第一條的 OCR 文字「MATCH」相似度不足，不會被
+    # 模糊匹配誤判為命中（否則第二條也會觸發，群組直接完成、指標歸零）。
+    second = Rule(id="r-2", name="規則二", enabled=True, steps=[_detect("ALSO_NEVER"), _click()])
+    group = RuleGroup(
+        id="g1",
+        name="群組一",
+        enabled=True,
+        mode="once",
+        order="sequential",
+        rule_ids=[first.id, second.id],
+    )
+    ml, sent = _process_loop([first, second], [group])
+
+    # ① 兩條都還沒成立 → 目標是第一條
+    ml._ocr_region = _ocr_returns([])
+    ml._process_rules(_img(), _rect())
+    assert ml.get_execution_target()["rule_id"] == first.id
+    assert ml._rule_in_group_ptr == 0
+
+    # ② 第一條條件成立並觸發 → 指標推進
+    ml._ocr_region = _ocr_returns(["MATCH"])
+    ml._process_rules(_img(), _rect())
+    assert ml._rule_in_group_ptr == 1
+    assert ml._last_active_rule_id == first.id
+
+    # ③ 第二條仍在等條件 → 目標必須是第二條，不得停在第一條
+    ml._ocr_region = _ocr_returns(["MATCH"])
+    ml._process_rules(_img(), _rect())
+    target = ml.get_execution_target()
+    assert target["rule_id"] == second.id, "目標不得錯誤停留在第一條"
+    assert target["rule_name"] == "規則二"
+    assert ml._rule_in_group_ptr == 1, "第二條條件未成立，指標不得推進"
+
+
+def test_parallel_group_target_is_last_evaluated():
+    """並行群組：多條規則同時被評估，現行語意＝顯示最後評估到的那條。
+
+    本測試鎖定「現行行為」——UX3-07-F1 明確不擴充成多條顯示、不加保護／還原
+    邏輯。目的是讓未來的語意變更必須被看見，而不是默默改掉。
+    """
+    p1 = Rule(id="r-p1", name="平行一", enabled=True, steps=[_detect("NO1")])
+    p2 = Rule(id="r-p2", name="平行二", enabled=True, steps=[_detect("NO2")])
+    p3 = Rule(id="r-p3", name="平行三", enabled=True, steps=[_detect("NO3")])
+    group = RuleGroup(
+        id="gp",
+        name="平行群組",
+        enabled=True,
+        mode="loop",
+        order="parallel",
+        rule_ids=[p1.id, p2.id, p3.id],
+    )
+    ml, sent = _process_loop([p1, p2, p3], [group])
+    ml._ocr_region = _ocr_returns([])
+
+    ml._process_rules(_img(), _rect())
+
+    target = ml.get_execution_target()
+    assert target["rule_id"] == p3.id, "並行群組現行語意＝最後評估到的規則"
+    assert sent == []
+
+
+def test_blocked_rule_does_not_become_execution_target():
+    """preflight BLOCKED 的規則不會進入執行目標（它本來就被略過、不執行）。"""
+    bad = Rule(
+        id="r-bad",
+        name="壞規則",
+        enabled=True,
+        steps=[Step(type="click", params={"target": "bogus"})],
+    )
+    good = Rule(id="r-good", name="好規則", enabled=True, steps=[_detect("NO")])
+    group = RuleGroup(
+        id="g1",
+        name="群組一",
+        enabled=True,
+        mode="once",
+        order="sequential",
+        rule_ids=[bad.id, good.id],
+    )
+    ml, sent = _process_loop([bad, good], [group])
+    ml._ocr_region = _ocr_returns([])
+
+    ml._process_rules(_img(), _rect())
+    assert ml._rule_in_group_ptr == 1, "BLOCKED 規則應被略過"
+    assert ml.get_execution_target() is None, "BLOCKED 規則不得進入執行目標"
+
+    ml._process_rules(_img(), _rect())
+    target = ml.get_execution_target()
+    assert target["rule_id"] == good.id
+    assert sent == []
+
+
+def test_zero_step_rule_still_becomes_execution_target():
+    """零步驟規則：步驟迴圈不會執行，仍必須成為執行目標（不得殘留前一條規則）。
+
+    這是「迴圈前寫入 _current_target」的唯一有效情境：步驟數為 0 時迴圈一次都
+    不跑，若只在迴圈內寫入，目標會停在上一條規則上。
+    """
+    empty = Rule(id="r-empty", name="空規則", enabled=True, steps=[])
+    group = RuleGroup(
+        id="g1",
+        name="群組一",
+        enabled=True,
+        mode="once",
+        order="sequential",
+        rule_ids=[empty.id],
+    )
+    ml, sent = _process_loop([empty], [group])
+
+    ml._process_rules(_img(), _rect())
+
+    target = ml.get_execution_target()
+    assert target["rule_id"] == empty.id, "零步驟規則仍是當前被評估的規則"
+    assert target["step_total"] == 0
+
+
+# ── 9：_current_target 生命週期（stop / 規則重載）─────────────────────────
+
+
+def test_execution_target_cleared_after_stop():
+    """停止後 accessor 必須回 None（不得靠 GUI 把 _loop 設 None 來掩蓋舊值）。"""
+    ml = _main_loop()
+    ml._current_target = ("r-ux307", 1)
+    ml._thread = None
+    ml._started_at = 0.0
+
+    ml.stop()
+
+    assert ml._current_target is None, "停止後不得殘留舊執行目標"
+    assert ml.get_execution_target() is None
+
+
+def test_execution_target_cleared_after_rule_reload(tmp_path):
+    """規則重載後不得殘留舊目標（舊規則可能已不存在或步驟數已改變）。"""
+    rule = Rule(id="r-1", name="規則一", enabled=True, steps=[_detect("NO"), _click()])
+    group = RuleGroup(
+        id="g1",
+        name="群組一",
+        enabled=True,
+        mode="once",
+        order="sequential",
+        rule_ids=[rule.id],
+    )
+    path = tmp_path / "task.json"
+    assert _ser_mod.save_task_with_groups([rule], [group], str(path)) is True
+
+    ml = _main_loop()
+    ml._rules_path = str(path)
+    ml._rules = [rule]
+    ml._rule_map = {rule.id: rule}
+    ml._groups = [group]
+    ml._current_target = (rule.id, 1)
+
+    ml._load_rules()
+
+    assert ml._current_target is None, "規則重載後不得殘留舊執行目標"
+    assert ml.get_execution_target() is None
+    # 重載後規則仍可正常被評估（生命週期修整不得影響排程）
+    assert ml._rule_map[rule.id].name == "規則一"
+
+
+def test_execution_target_kept_when_rule_reload_fails(tmp_path, monkeypatch):
+    """載入失敗時規則被保留 → 舊目標仍然有效，不得誤清。"""
+    monkeypatch.setattr(_ml_mod, "log_main", lambda *a, **k: None)
+    bad = tmp_path / "broken.json"
+    bad.write_text('{"rules": "not-a-list"}', encoding="utf-8")
+
+    rule = Rule(id="r-ux307", name="仍在執行的規則", enabled=True, steps=[_detect("NO")])
+    ml = _main_loop()
+    ml._rules_path = str(bad)
+    ml._rules = [rule]
+    ml._rule_map = {rule.id: rule}
+    ml._current_target = (rule.id, 1)
+
+    ml._load_rules()
+
+    assert ml._rules == [rule], "載入失敗時規則必須被保留"
+    assert ml._current_target == (rule.id, 1), "載入失敗時規則未變，舊目標仍有效"
+    target = ml.get_execution_target()
+    assert target is not None, "規則仍在，執行目標不得被誤清"
+    assert target["rule_id"] == rule.id

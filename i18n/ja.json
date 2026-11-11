@@ -116,7 +116,7 @@
   "status.stopped": "停止中",
   "status.exec_target": "実行中｜グループ「{group}」｜ルール「{rule}」",
   "status.exec_target.step": "｜ステップ {step}/{total}",
-  "status.exec_target.tooltip": "現在評価中のルールを表示します。条件が成立するまでは動作しませんが、チェックは続いており、ここで確認できます。",
+  "status.exec_target.tooltip": "現在評価中のルールを表示します。条件が成立するまでは動作しませんが、チェックは続いており、ここで確認できます。\n並列グループが複数のルールを同時に評価している場合は、最後に評価したルールを表示します。",
   "status.checking_update": "更新を確認中...",
   "status.latest_version": "最新版です",
   "status.window_not_found": "⚠ ウィンドウが見つかりません。対象プログラムを先に起動してください",
