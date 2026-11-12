@@ -195,6 +195,27 @@ class _NoWheelDoubleSpin(QDoubleSpinBox):
         e.ignore()
 
 
+class _TrimDoubleSpin(_NoWheelDoubleSpin):
+    """顯示層去掉無意義的尾隨零（55.000… → 55、55.500… → 55.5）。
+
+    只覆寫 Qt 的顯示轉換，不呼叫 setText（不會動到編輯中的游標），也不改
+    decimals／value，故內部精度與資料庫存值完全不變。用 locale 格式化，
+    避免小數分隔符非「.」的地區把顯示文字解讀成別的值。
+    """
+
+    def textFromValue(self, value):  # Qt override
+        loc = self.locale()
+        # QDoubleSpinBox 內部已把值四捨五入到 decimals 位；repr() 給出最短可逆
+        # 表示（不會像 %.15f 把 55.1234 印成 55.123399999999997）。
+        text = repr(round(float(value), self.decimals()))
+        if text.endswith(".0"):
+            text = text[:-2]
+        if text in ("-0", "0"):
+            return "0"
+        sep = loc.decimalPoint()
+        return text.replace(".", sep) if sep != "." else text
+
+
 def _num_to_int(raw, default):
     """轉成 QSpinBox 可接受的 int；無法轉換時回 default。"""
     try:
@@ -492,6 +513,19 @@ def _fmt_point(px, py) -> str:
         return f"({px},{py})"
 
 
+def _fmt_number(value) -> str:
+    """顯示用數字：去掉無意義尾隨零（55.0 → 55、55.5 → 55.5），保留有效位數。
+
+    repr() 是 Python 最短可逆表示，不會像 %.10f 那樣補零或截掉精度；
+    僅用於顯示，不影響儲存值與比較結果。
+    """
+    try:
+        text = repr(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return str(value)
+    return text[:-2] if text.endswith(".0") else text
+
+
 def _drag_end_state(x, y) -> str:
     """Drag 終點資料狀態：unset / incomplete / invalid / ratio / pixel。"""
     if x is None and y is None:
@@ -591,7 +625,7 @@ def _step_summary(step, rules_provider=None) -> str:
         roi = p.get("roi", {})
         zero_roi = all(roi.get(k, 0) == 0 for k in ("x", "y", "w", "h"))
         # 無效值（None）顯示為「無效」，不可顯示成 0.0（會誤導成可用的門檻）
-        val_text = T("summary.value_invalid") if val is None else val
+        val_text = T("summary.value_invalid") if val is None else _fmt_number(val)
         parts = [f"{op} {val_text}"]
         parts.append(T("summary.whole_window") if zero_roi else _fmt_roi(roi))
         of = _of_summary(p.get("on_fail", "stop"), rules_provider)
@@ -4317,6 +4351,34 @@ class _ScrollStepForm(QWidget):
             pass
 
 
+# 數字比對的「數字格式」選項：(data, 白話標籤 key, 正規表達式, 說明 key)。
+# 「一般數字」的字串必須與 core 預設 pattern 完全相同（core/05_main_loop.py 的
+# params.get("pattern", r"-?\d+\.?\d*")），否則舊規則載入後會被看成自訂格式，
+# 且選單一按就改寫既有比對語意。None 代表自訂：使用者自己輸入。
+COMPARE_NUMBER_FORMATS = (
+    ("auto", "step_form.number_format_auto", r"-?\d+\.?\d*", "step_form.number_format_hint_auto"),
+    ("int", "step_form.number_format_int", r"-?\d+", "step_form.number_format_hint_int"),
+    (
+        "decimal",
+        "step_form.number_format_decimal",
+        r"-?\d+\.\d+",
+        "step_form.number_format_hint_decimal",
+    ),
+    ("custom", "step_form.number_format_custom", None, "step_form.number_format_hint_custom"),
+)
+COMPARE_DEFAULT_PATTERN = r"-?\d+\.?\d*"
+_COMPARE_FORMAT_REGEX = {data: regex for data, _label, regex, _hint in COMPARE_NUMBER_FORMATS}
+_COMPARE_FORMAT_HINTS = {data: hint for data, _label, _re, hint in COMPARE_NUMBER_FORMATS}
+
+
+def _compare_format_for_pattern(pattern) -> str:
+    """由既有 pattern 回推選單選項；只有字串完全相同才算預設格式。"""
+    for data, _label, regex, _hint in COMPARE_NUMBER_FORMATS:
+        if regex is not None and pattern == regex:
+            return data
+    return "custom"
+
+
 class _CompareStepForm(QWidget):
     def __init__(
         self,
@@ -4374,7 +4436,7 @@ class _CompareStepForm(QWidget):
         form.addRow(T("step_form.compare_mode"), self._operator)
 
         # Value
-        self._value = _NoWheelDoubleSpin()
+        self._value = _TrimDoubleSpin()
         self._value.setRange(-999999.0, 999999.0)
         # 15 位小數：Core 的比較是精確浮點比較，3 位會讓 1.23456 被四捨五入成
         # 1.235，使 "==" 運算子的判定結果改變（原本成立變成不成立）。
@@ -4397,6 +4459,18 @@ class _CompareStepForm(QWidget):
         _vr.addStretch(1)
         form.addRow(T("step_form.value"), _value_row)
 
+        # 數字格式（白話選項；自訂正規表達式收在進階區）
+        self._number_format = _NoWheelCombo()
+        for data, label_key, _regex, _hint_key in COMPARE_NUMBER_FORMATS:
+            self._number_format.addItem(T(label_key), data)
+        self._number_format.setToolTip(T("tooltip.number_format"))
+        form.addRow(T("step_form.number_format"), self._number_format)
+
+        self._fmt_hint = QLabel()
+        self._fmt_hint.setWordWrap(True)
+        self._fmt_hint.setStyleSheet("color: #888; font-size: 11px;")
+        form.addRow(self._fmt_hint)
+
         # ── Advanced collapsible section ──
         self._toggle_btn = QPushButton(T("step_form.toggle_compare_collapsed"))
         self._toggle_btn.setFlat(True)
@@ -4414,10 +4488,22 @@ class _CompareStepForm(QWidget):
         self._of_form = adv
 
         self._pattern = QLineEdit()
-        self._pattern.setText(p.get("pattern", r"-?\d+\.?\d*"))
+        _raw_pattern = p.get("pattern", COMPARE_DEFAULT_PATTERN)
+        # 舊規則的自訂正規表達式必須原樣保留（含空白）；非字串等異常值才回退預設。
+        self._pattern.setText(
+            _raw_pattern if isinstance(_raw_pattern, str) else COMPARE_DEFAULT_PATTERN
+        )
         self._pattern.editingFinished.connect(self._validate_pattern)
+        self._pattern.textEdited.connect(self._on_pattern_edited)
         self._pattern.setToolTip(T("step_form.regex_pattern_tooltip"))
-        adv.addRow(T("step_form.number_format"), self._pattern)
+        self._custom_edited = False
+        self._custom_draft = ""
+        self._pattern_error = QLabel(T("step_form.regex_invalid_hint"))
+        self._pattern_error.setWordWrap(True)
+        self._pattern_error.setStyleSheet("color: #E74C3C; font-size: 11px;")
+        self._pattern_error.setVisible(False)
+        adv.addRow(T("step_form.custom_regex"), self._pattern)
+        adv.addRow("", self._pattern_error)
 
         # on_fail section (same as detect/match_image)
         self._of_action = _NoWheelCombo()
@@ -4540,6 +4626,44 @@ class _CompareStepForm(QWidget):
 
         self._on_of_action_changed()
         self._on_fail_container = self._adv_container
+        # 由既有 pattern 回推選單選項；先設好再連線，初始化不會覆寫舊規則的值。
+        _fmt_data = _compare_format_for_pattern(self._pattern.text())
+        _fmt_idx = self._number_format.findData(_fmt_data)
+        self._number_format.setCurrentIndex(_fmt_idx if _fmt_idx >= 0 else 0)
+        self._number_format.currentIndexChanged.connect(self._on_number_format_changed)
+        self._apply_number_format(expand=False)
+        self._validate_pattern()
+
+    def _on_pattern_edited(self, text):
+        """手動編輯自訂格式 → 記住草稿，切換選項再切回來不會遺失。"""
+        self._custom_edited = True
+        self._custom_draft = text
+        self._validate_pattern()
+
+    def _on_number_format_changed(self, _idx=None):
+        self._apply_number_format(expand=True)
+
+    def _apply_number_format(self, *, expand: bool):
+        data = self._number_format.currentData()
+        preset = _COMPARE_FORMAT_REGEX.get(data)
+        if preset is None:
+            # 切回自訂：有手動編輯過的內容就還原，否則沿用目前欄位（上一個格式）
+            if self._custom_edited and self._pattern.text() != self._custom_draft:
+                self._pattern.setText(self._custom_draft)
+        elif self._pattern.text() != preset:
+            # 選常用格式＝明確把該格式的規則寫進欄位（可見、可再切回自訂微調）
+            self._pattern.setText(preset)
+        is_custom = preset is None
+        _set_form_row_visible(self._of_form, self._pattern, is_custom)
+        if is_custom:
+            self._validate_pattern()
+            if expand and not self._adv_container.isVisible():
+                self._toggle_advanced()
+        else:
+            self._pattern.setStyleSheet("")
+            self._pattern.setToolTip(T("step_form.regex_pattern_tooltip"))
+            self._pattern_error.setVisible(False)
+        self._fmt_hint.setText(T(_COMPARE_FORMAT_HINTS[data]))
 
     def _populate_skip_combo(self, current_skip_to: int):
         self._of_skip_combo.clear()
@@ -4563,7 +4687,8 @@ class _CompareStepForm(QWidget):
             self._step.params["roi"]["roi_coord"] = self._roi["roi_coord"]
         self._step.params["operator"] = self._operator.currentData()
         self._step.params["value"] = self._value_raw.value()
-        self._step.params["pattern"] = self._pattern.text().strip()
+        # 原樣寫回（含空白）：舊規則的自訂正規表達式不得因開表單／存檔被改寫。
+        self._step.params["pattern"] = self._pattern.text()
         action = self._of_action.currentData()
         fail_duration = self._of_fail_duration.value()
         if action == "stop":
@@ -4627,15 +4752,19 @@ class _CompareStepForm(QWidget):
         )
 
     def _validate_pattern(self):
+        """自訂格式即時驗證：紅框＋白話錯誤；不擋存檔、不改寫使用者輸入。"""
         import re as _re
 
         try:
             _re.compile(self._pattern.text())
-            self._pattern.setStyleSheet("")
-            self._pattern.setToolTip("")
+            valid = True
         except _re.error:
-            self._pattern.setStyleSheet("border: 1px solid #E74C3C;")
-            self._pattern.setToolTip(T("tooltip.invalid_regex"))
+            valid = False
+        self._pattern.setStyleSheet("" if valid else "border: 1px solid #E74C3C;")
+        self._pattern.setToolTip(
+            T("step_form.regex_pattern_tooltip") if valid else T("tooltip.invalid_regex")
+        )
+        self._pattern_error.setVisible(not valid and self._number_format.currentData() == "custom")
 
     def _on_of_action_changed(self, idx=None):
         action = self._of_action.currentData()

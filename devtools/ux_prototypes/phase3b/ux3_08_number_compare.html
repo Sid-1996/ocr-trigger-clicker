@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>UX3-08 原型 — 數字比對易用性</title>
+<style>
+  body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px;max-width:1120px}
+  h1{font-size:20px} h2{font-size:16px;color:#7db3e8;margin-top:28px} h3{font-size:14px;margin:0 0 8px}
+  a{color:#7db3e8}
+  .box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}
+  .note{color:#aaa;font-size:12px}
+  .fake{color:#ffb74d;font-weight:bold}
+  button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer;margin:2px}
+  button.secondary{background:#5a5a5a}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .col{flex:1;min-width:320px}
+  .panel{background:#2b2b2b;border:1px solid #666;border-radius:8px;padding:14px}
+  .panel.bad{border-color:#7a3b3b}
+  .panel.good{border-color:#3b7a4a}
+  .form{display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;font-size:13px}
+  .form label{color:#bbb}
+  input[type=text],input[type=number],select{background:#1f1f1f;color:#eee;border:1px solid #555;border-radius:4px;padding:5px 8px;font-size:13px;width:100%;box-sizing:border-box;font-family:inherit}
+  input.bad{border-color:#e53935;background:#3a2020}
+  .hint{font-size:12px;color:#9ecb9e;margin-top:2px}
+  .err{font-size:12px;color:#ef9a9a;margin-top:2px}
+  .adv{background:#262626;border:1px dashed #555;border-radius:6px;padding:10px;margin-top:10px}
+  .adv.hide{display:none}
+  .pill{display:inline-block;font-size:11px;border-radius:8px;padding:1px 8px;color:#222;background:#90caf9}
+  .pill.bad{background:#ef9a9a}.pill.good{background:#81c784}
+  code{background:#222;padding:1px 4px;border-radius:3px;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td,th{padding:6px 8px;border-bottom:1px solid #444;text-align:left;vertical-align:top}
+  .yes{color:#81c784}.no{color:#ef9a9a}
+  .steps{counter-reset:s;font-size:13px;line-height:1.8}
+  .steps div{counter-increment:s}
+  .steps div:before{content:counter(s)".";color:#7db3e8;font-weight:bold;margin-right:6px}
+  ul{margin:6px 0;padding-left:20px}
+</style>
+</head>
+<body>
+<h1>OCR Trigger Clicker — UX3-08 原型：數字比對易用性</h1>
+<p>對應實作：<code>gui/06_gui_main.py</code> 的 <code>_CompareStepForm</code> / <code>_TrimDoubleSpin</code>、
+<code>core/05_main_loop.py:1206</code> <code>_handle_compare</code>。
+<span class="fake">⚠ 本頁是原型（假 OCR 文字、假數值），可直接在瀏覽器操作，不連正式邏輯。</span></p>
+
+<div class="box">
+  <b>索引</b>
+  <ul>
+    <li><a href="#a">§1 數值顯示：55.0000000000 → 55</a></li>
+    <li><a href="#b">§2 數字格式：正規表示式 → 白話選單</a></li>
+    <li><a href="#flow">§3 實際操作流程（三步）</a></li>
+    <li><a href="#compat">§4 舊規則相容性</a></li>
+  </ul>
+  <p class="note">視覺沿用 <code>devtools/ux_prototypes/phase3b/index.html</code>：#1e1e1e / #2d2d2d / #4a7ebb。</p>
+</div>
+
+<h2 id="a">§1 數值顯示</h2>
+<p class="note">問題：數值欄位 <code>setDecimals(15)</code>，Qt 會把小數點後全補滿 → <code>55.0000000000</code>。
+修法只改「顯示字串」（<code>textFromValue</code>），widget 值、存檔值、比較結果都不變。</p>
+<div class="row">
+  <div class="col">
+    <div class="panel bad">
+      <h3>改善前 <span class="pill bad">已修正</span></h3>
+      <div class="form">
+        <label>比較方式</label><select><option>大於等於（≥）</option></select>
+        <label>數值</label><input type="text" value="55.0000000000" readonly>
+      </div>
+      <p class="note">小數點後永遠 10 位，看不出重點；使用者常誤以為要自己算位數。</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="panel good">
+      <h3>改善後 <span class="pill good">現況</span></h3>
+      <div class="form">
+        <label>比較方式</label><select><option>大於等於（≥）</option></select>
+        <label>數值</label><input type="text" id="liveValue" value="55" oninput="syncVal(this.value)">
+      </div>
+      <p class="note">輸入 <code>55</code> → 顯示 <code>55</code>；<code>55.5</code> → <code>55.5</code>；<code>55.1234</code> → <code>55.1234</code>。可自行輸入試試。</p>
+      <div class="adv">
+        實際存檔值（精度不變）：<code id="stored">55.0</code><br>
+        <span class="note">顯示層去掉尾隨零，內部仍是完整浮點數；比較結果與改善前逐位相同。</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="box">
+  <b>邊界行為</b>
+  <table>
+    <tr><th>輸入值</th><th>顯示</th><th>存檔值</th></tr>
+    <tr><td>55.0</td><td><code>55</code></td><td><code>55.0</code></td></tr>
+    <tr><td>55.5</td><td><code>55.5</code></td><td><code>55.5</code></td></tr>
+    <tr><td>55.1234</td><td><code>55.1234</code></td><td><code>55.1234</code></td></tr>
+    <tr><td>-0.0</td><td><code>0</code></td><td><code>-0.0</code>（浮點等值 0）</td></tr>
+    <tr><td>正在編輯（未按 Enter）</td><td>保留使用者打的字</td><td>不變</td></tr>
+  </table>
+</div>
+
+<h2 id="b">§2 數字格式</h2>
+<p class="note">問題：欄位直接暴露 <code>-?\d+\.?\d*</code>，一般使用者無法判斷要改哪一段。
+修法：常用格式用白話選單，正規表示式收進「進階設定」，選「自訂格式」才需要碰。</p>
+<div class="row">
+  <div class="col">
+    <div class="panel bad">
+      <h3>改善前 <span class="pill bad">已修正</span></h3>
+      <div class="form">
+        <label>數字格式</label><input type="text" value="-?\d+\.?\d*" readonly>
+      </div>
+      <p class="note">只有一個輸入框。<code>\d</code>、<code>?</code>、<code>*</code> 對一般玩家沒有意義；
+      打錯也只變紅框，不知道怎麼改。</p>
+    </div>
+  </div>
+  <div class="col">
+    <div class="panel good">
+      <h3>改善後 <span class="pill good">現況</span></h3>
+      <div class="form">
+        <label>數字格式</label>
+        <div>
+          <select id="fmt" onchange="applyFmt()">
+            <option value="auto" selected>一般數字（整數或小數，例如 55、55.5、-12）</option>
+            <option value="int">整數（只取整數，例如 55）</option>
+            <option value="decimal">小數（一定要有小數點，例如 55.5）</option>
+            <option value="custom">自訂格式（進階）</option>
+          </select>
+          <div class="hint" id="fmtHint">從文字中找出第一個數字，整數與小數都支援。</div>
+        </div>
+      </div>
+      <div class="adv hide" id="advBox">
+        <div class="form">
+          <label>自訂格式</label>
+          <div>
+            <input type="text" id="regex" value="-?\d+\.?\d*" oninput="checkRegex(this)">
+            <div class="err" id="regexErr" style="display:none">格式不正確：括號或反斜線沒有配對，請檢查後再試。</div>
+          </div>
+        </div>
+        <p class="note">進階使用者直接寫正規表示式；一般使用者不需要打開這一區。</p>
+      </div>
+      <p class="note">切換格式時，下方「進階」欄位會同步顯示實際使用的正規表示式（可驗證、可再修改）。</p>
+    </div>
+  </div>
+</div>
+<div class="box">
+  <b>三種常用格式的實際匹配語意</b>
+  <table>
+    <tr><th>選項</th><th>使用的正規表示式</th><th>「Lv.55」</th><th>「55.5」</th><th>「-12」</th><th>「26%」</th></tr>
+    <tr><td>一般數字（預設）</td><td><code>-?\d+\.?\d*</code></td><td>55</td><td>55.5</td><td>-12</td><td>26</td></tr>
+    <tr><td>整數</td><td><code>-?\d+</code></td><td>55</td><td>55（只取整數段）</td><td>-12</td><td>26</td></tr>
+    <tr><td>小數</td><td><code>-?\d+\.\d+</code></td><td class="no">不匹配</td><td>55.5</td><td class="no">不匹配</td><td class="no">不匹配</td></tr>
+  </table>
+  <p class="note">沒有「百分比」選項：現行語意本來就不把 <code>%</code> 轉成數字（<code>26%</code> 取 26，不會變 0.26），
+  加一個只改名字的選項只會讓選單更難懂。</p>
+</div>
+
+<h2 id="flow">§3 實際操作流程</h2>
+<div class="box steps">
+  <div>新增／編輯「數字比對」步驟 → 選比較方式（≥ &gt; = ≠ …）→ 輸入數值（現在顯示 <code>55</code> 而不是 <code>55.0000000000</code>）。</div>
+  <div>「數字格式」維持預設<b>一般數字</b>即可涵蓋絕大多數情況；需要「只比整數」或「一定要有小數」時再切換。</div>
+  <div>只有選「自訂格式（進階）」才會打開正規表示式欄位；格式寫錯會在欄位下方直接說明怎麼修，存檔時保留你輸入的內容。</div>
+</div>
+<p class="note">舊規則開啟後：數值與格式都照原樣顯示，不動就不會改寫；按「儲存」也只會寫回原本的字串。</p>
+
+<h2 id="compat">§4 舊規則相容性</h2>
+<div class="box">
+  <table>
+    <tr><th>情境</th><th>行為</th><th>結果</th></tr>
+    <tr><td>舊規則 pattern = <code>-?\d+\.?\d*</code></td><td>選單顯示「一般數字」</td><td class="yes">存檔字串完全相同（未遷移）</td></tr>
+    <tr><td>舊規則 pattern = <code>\d{2,4}</code></td><td>選單顯示「自訂格式」，欄位保留原值</td><td class="yes">不覆寫、不改寫 JSON</td></tr>
+    <tr><td>舊規則 pattern 含前後空白</td><td>逐字保留（不再 <code>strip()</code>）</td><td class="yes">匹配行為不變</td></tr>
+    <tr><td>只開啟編輯器、不儲存</td><td>不寫入任何格式變更</td><td class="yes">原檔不動</td></tr>
+    <tr><td>使用者主動切換格式</td><td>欄位同步換成該選項的表示式，存檔即採用</td><td class="yes">可預期、可見</td></tr>
+  </table>
+  <p class="note">JSON schema 不變：仍只有 <code>pattern</code> 一個字串欄位，沒有新增欄位或資料遷移。</p>
+</div>
+
+<script>
+const PRESETS = {
+  auto: {regex: '-?\\d+\\.?\\d*', hint: '從文字中找出第一個數字，整數與小數都支援。'},
+  int: {regex: '-?\\d+', hint: '只取整數：「55.5」會讀成 55。'},
+  decimal: {regex: '-?\\d+\\.\\d+', hint: '一定要有小數點才匹配：「55」不算。'},
+  custom: {regex: null, hint: '自行輸入正規表示式，格式錯誤會在下方提示。'}
+};
+function applyFmt(){
+  const v = document.getElementById('fmt').value;
+  const p = PRESETS[v];
+  document.getElementById('fmtHint').textContent = p.hint;
+  const adv = document.getElementById('advBox');
+  adv.classList.toggle('hide', v !== 'custom' && !adv.dataset.pinned);
+  if (p.regex) document.getElementById('regex').value = p.regex;
+  checkRegex(document.getElementById('regex'));
+}
+function checkRegex(el){
+  const bad = !isValid(el.value);
+  el.classList.toggle('bad', bad);
+  document.getElementById('regexErr').style.display = bad ? 'block' : 'none';
+}
+function isValid(s){
+  try { new RegExp(s); return true; } catch (e) { return false; }
+}
+function syncVal(v){
+  const n = parseFloat(v);
+  document.getElementById('stored').textContent = isNaN(n) ? '（尚未輸入有效數字）' : String(n);
+}
+document.getElementById('fmt').addEventListener('change', () => {
+  document.getElementById('advBox').dataset.pinned = '1';
+  applyFmt();
+});
+applyFmt();
+</script>
+</body>
+</html>
