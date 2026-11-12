@@ -328,6 +328,10 @@ on_fail 只存在於感官型步驟（`detect`/`match_image`/`compare`）；動�
 - `_migrate_v1_to_v2()` 偵測 JSON 中無 `"steps"` 欄位時自動將舊格式轉換為新步驟結構，保障 v0.0.1 任務不遺失
 - Drag 舊 PX offset（`dx`/`dy`）：載入時於 `_normalize_step_params()` 自動標記 `_migration`（`kind=drag_endpoint`、`status=needs_repair`），保留原值、不自動轉換；`validate_drag_endpoint()` 可查狀態（valid／unset／incomplete／invalid／needs_repair）。既有檔案中的 marker 一律保留，不自動清洗
 - **GUI 消費端（UX3-02）**：`_DragStepForm` 只在 `validate_drag_endpoint()` 回 `needs_repair` 時顯示修復 banner（拾取終點 → 使用者確認 → 才移除 `dx/dy` 與 marker → 儲存 → reload 重檢）；`has_legacy_drag_offset()` 提供「是否帶舊欄位」的單一判定，GUI 不自寫 legacy 狀態機
+- **辨識面（UX3-02 補完）**：修復入口若只有 banner，使用者必須先展開到正確那顆步驟才看得到（等同找不到）→ 步驟清單摘要、規則列標籤都直接以 core 判定顯示；`_drag_needs_repair()` 只是 `validate_drag_endpoint(...)["status"] == "needs_repair"` 的顯示層轉接，不新增狀態機、不改 `params`
+  - `_step_summary()` 的 Drag 三態：需修復 →「⚠ 終點是舊格式，需要修復（點開此步驟）」；已有終點 →「→ (55%,66%)」；皆無 →「終點未設定」。**不再顯示 `dx/dy`**——舊值執行期不被採用，顯示它會讓人誤判規則可用
+  - `_StepListWidget._build_row()` 對需修復步驟的摘要套警示色（`#c0392b`），`_rule_tags()` 追加 `[拖曳待修復]`
+  - 顯示層只讀不寫：開啟編輯器或一般儲存都不會新增／改寫 `dx/dy`（`_DragStepForm.save()` 只在 `_dx_dirty/_dy_dirty` 為真時寫回），舊資料在修復前保持原狀
 
 ## 主循環資料流 — 群組兩層指標模型
 

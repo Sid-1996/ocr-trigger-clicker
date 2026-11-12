@@ -1,12 +1,38 @@
 <!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>UX3-02 Drag 修復（C-2a-2）</title>
-<style>body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px}.box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}.banner{background:#5a3a00;border:1px solid #ff9800;border-radius:6px;padding:12px;margin:10px 0}button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer}button:disabled{background:#555}.done{background:#1b4d2e;border-color:#4caf50}.note{color:#aaa;font-size:12px}code{background:#111;padding:2px 5px;border-radius:3px}</style></head><body>
+<style>body{font-family:"Microsoft JhengHei",sans-serif;background:#1e1e1e;color:#ddd;margin:20px;line-height:1.6}.box{background:#2d2d2d;border:1px solid #555;border-radius:6px;padding:14px;margin:14px 0}.banner{background:#5a3a00;border:1px solid #ff9800;border-radius:6px;padding:12px;margin:10px 0}button{background:#4a7ebb;color:#fff;border:0;border-radius:4px;padding:6px 14px;cursor:pointer}button:disabled{background:#555}.done{background:#1b4d2e;border-color:#4caf50}.note{color:#aaa;font-size:12px}code{background:#111;padding:2px 5px;border-radius:3px}.warn{color:#c0392b}.tree{font-size:13px;margin:6px 0}.tree div{padding:3px 6px;border-radius:4px}.sel{background:#3a3a3a}.step{border:1px solid #444;border-radius:4px;padding:6px 8px;margin:4px 0;display:flex;gap:8px;align-items:center}.step span{font-size:11px;flex:1}.toast{background:#333;border-left:3px solid #4a7ebb;padding:8px 10px;margin:10px 0;font-size:12px}table{border-collapse:collapse;font-size:12px;width:100%}th,td{border:1px solid #444;padding:5px 7px;text-align:left}th{background:#333}</style></head><body>
 <h1>UX3-02 Drag Legacy Marker 修復（C-2a-2）</h1>
-<div class="box"><b>現況</b><p class="note">舊任務 Drag 終點是 PX offset（<code>dx/dy</code>），載入時標 <code>_migration{kind=drag_endpoint,status=needs_repair}</code>（<code>rule_migration.py:482</code>）。編輯器無任何提示；執行期才 <code>drag_end_invalid</code> terminal。GUI 對 <code>_migration/needs_repair/validate_drag_endpoint</code> 零命中。</p></div>
-<div class="box" id="form"><b>拖曳步驟表單（修改後）</b>
+
+<div class="box"><b>原始問題</b><p class="note">舊任務 Drag 終點是像素偏移（<code>dx/dy</code>），載入時 core 標 <code>_migration{kind=drag_endpoint,status=needs_repair}</code>，執行期只認 <code>end_x/end_y</code> 所以必定 <code>drag_end_invalid</code>。修復表單（banner → 重拾終點 → 確認）已存在，但<strong>使用者找不到要修哪一條</strong>：步驟清單只顯示「拖曳 座標 → (30,20)」（執行期根本不採用），規則列沒有任何標記，載入提示只是短暫 toast。因此「GUI 修復入口」形同不可見。</p></div>
+
+<div class="box"><b>修改 1：規則清單（規則層標記）</b>
+<div class="tree" id="tree">
+  <div class="sel">▸ 每日委託 <span class="warn">[3步] [拖曳待修復]</span></div>
+  <div style="padding-left:18px">▸ 體力型跑馬 <span>[5步]</span></div>
+</div>
+<p class="note">標籤由 core <code>validate_drag_endpoint()</code> 統計，只要規則內任一 Drag 為 <code>needs_repair</code> 就出現；不需要展開規則。</p></div>
+
+<div class="box"><b>修改 2：步驟清單（步驟層摘要＋警示色）</b>
+<div class="step"><b>1</b><span class="note">偵測「開始」</span><button>編輯</button><button>刪除</button></div>
+<div class="step"><b>2</b><span class="warn">拖曳 座標 → ⚠ 終點是舊格式，需要修復（點開此步驟）</span><button onclick="document.getElementById('form').scrollIntoView()">編輯</button><button>刪除</button></div>
+<div class="step"><b>3</b><span class="note">等 500ms</span><button>編輯</button><button>刪除</button></div>
+<p class="note">修改前第 2 步顯示「拖曳 座標 → (30,20)」——數字看起來有效，實際不會被採用。新版／未設定終點的 Drag 現在分別顯示「拖曳 座標 → (55%,66%)」與「終點未設定」，不再出現沒有意義的 (+0,+0)。</p></div>
+
+<div class="box" id="form"><b>修改 3：步驟表單（原有修復流程，維持不變）</b>
 <div class="banner" id="banner"><b>⚠ 這條拖曳規則的終點是舊格式，需要修復後才能執行。</b><br><span class="note">舊格式用像素距離（dx/dy），新格式用視窗比例。請重新拾取一次終點，確認後會清除舊標記。</span><br><br>
 <button onclick="pick()">拾取終點</button> <button id="clearBtn" disabled onclick="fix()">確認並清除舊標記</button></div>
-<p class="note">終點（客戶區比例）：<code id="end">未設定</code>　|　舊格式欄位 dx/dy（相容保留）：<code>dx=30 dy=20</code></p>
+<p class="note">終點（客戶區比例）：<code id="end">未設定</code>　|　舊格式欄位 dx/dy（唯讀）：<code>dx=30 dy=20</code></p>
 <p class="note" id="stat">狀態：needs_repair（由 <code>validate_drag_endpoint()</code> 判定，GUI 不自行判斷）</p></div>
-<script>function pick(){document.getElementById('end').textContent='0.52, 0.61';document.getElementById('clearBtn').disabled=false;}function fix(){var b=document.getElementById('banner');b.className='banner done';b.innerHTML='<b>✓ 已修復</b>：終點已寫入比例座標，_migration 已清除並儲存。重新載入後自動重檢。';document.getElementById('stat').textContent='狀態：valid';}</script>
-<p class="note">紅線：不自動清洗假 marker（keep 決策）；清除必須經使用者確認；判定以 core <code>validate_drag_endpoint</code> 為唯一來源（GUI 現有 <code>_drag_end_state:494</code> 不可再寫第三套）。</p>
+
+<div class="toast" id="toast">任務載入時提示：<b>「2 個拖曳步驟的終點是舊格式，請開啟該步驟修復」</b>（仍為短暫提示，不搶焦點）</div>
+
+<div class="box"><b>資料安全（修改前後一致）</b>
+<table><tr><th>情境</th><th>dx/dy</th><th>end_x/end_y</th><th>_migration</th></tr>
+<tr><td>載入舊資料</td><td>保留</td><td>不加</td><td>自動補（core）</td></tr>
+<tr><td>只開啟／一般儲存，未修復</td><td>保留原值（含小數）</td><td>不加</td><td>保留</td></tr>
+<tr><td>拾取終點但取消確認</td><td>保留</td><td>不寫入</td><td>保留</td></tr>
+<tr><td>確認修復 → 儲存</td><td>移除</td><td>寫入比例</td><td>移除</td></tr>
+<tr><td>重載檢查</td><td>—</td><td>不變</td><td>不重現（valid）</td></tr></table>
+<p class="note">遇到無效資料（終點非比例、缺一軸）時按鈕維持停用，不動原資料。紅線：不自動清洗假 marker（keep 決策）；判定以 core <code>validate_drag_endpoint</code> 為唯一來源。</p></div>
+
+<script>function pick(){document.getElementById('end').textContent='0.52, 0.61';document.getElementById('clearBtn').disabled=false;}function fix(){var b=document.getElementById('banner');b.className='banner done';b.innerHTML='<b>✓ 已修復</b>：終點已寫入比例座標，_migration 已清除並儲存。重新載入後自動重檢。';document.getElementById('stat').textContent='狀態：valid';document.getElementById('toast').style.display='none';}</script>
 </body></html>

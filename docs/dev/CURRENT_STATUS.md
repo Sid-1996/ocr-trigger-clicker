@@ -24,7 +24,7 @@
 | **R-1** | Click PostMessage DOWN／UP 失敗原因 | ✅ **完成，已 commit**（`45aefbd`） |
 | **R-3** | 主循環啟動時在途 OCR Debug 驗證 worker | ✅ **完成，已 commit**（`45aefbd`） |
 | **R-5** | MainLoop 啟動與 OCR Debug 閘門的競態窗口 | ✅ **完成，已 commit**（`0f77931`） |
-| **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ✅ **完成，已 commit**（UX Phase 3C：修復 banner＋拾取終點＋使用者確認才清除 marker） |
+| **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ✅ **完成，已 commit**（UX Phase 3C：修復 banner＋拾取終點＋使用者確認才清除 marker；2026-11-12 補完辨識面：步驟清單警示文案＋紅字、規則列 `[拖曳待修復]`、新版顯示實際終點） |
 | **UX3-06** | Click／Drag 目標選項與驗證改善（target 白名單＋preflight 事前擋下、dry-run 不再靜默略過、Drag 專屬文案、cursor 目標停用抖動、custom 未設座標提示） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；`hold_ms` 死欄位與 validator 差異僅記錄事實，未改契約） |
 | **UX3-07** | 執行中「在跑什麼」可視化（狀態列顯示「群組／規則／步驟」、群組選擇對話框顯示啟用規則數） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；主按鈕圖示 enhancement 明確排除） |
 | **UX3-01／UX3-03** | 執行日誌定位（以 `rule_id` 區分＋定位到步驟）＋啟動前統一檢核（背景規則納入、逐步驟粒度、逐項可定位） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；主體早於本次，本次為深化） |
@@ -33,9 +33,9 @@
 ## 工作區狀態
 
 - branch：`master`
-- HEAD = UX3-01／UX3-03 批次（程式碼 `56b08aa` ＋ 本次文件 commit）；`origin/master` = `0af3cf0` → **ahead 2 / behind 0**，**尚未 push**
-- **staged：空**；工作區乾淨（2026-11-12 盤點）
-- 距上次發布（`v0.4.8`）累計 **96 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`，2026-11-12 核實）
+- HEAD = UX3-02 辨識面補完（`e745956`）；`origin/master` = `e74fe26` → **ahead 1 / behind 0**，本次 push 後同步
+- **staged：空**；工作區乾淨（2026-11-12 UX3-02 收尾）
+- 距上次發布（`v0.4.8`）累計 **97 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`，2026-11-12 核實）
 - **v0.4.9 尚未發布**：無 tag、無 GitHub Release（`gh release view v0.4.9` → not found）；`_version.py`／`pyproject.toml` 仍為 `0.4.8`，最新正式版仍是 `v0.4.8`（2026-10-24）
 
 ## 測試統計（實測）
@@ -57,7 +57,8 @@
 | `tests/test_ux3_06_target_validation.py`（新增，UX3-06） | 27 passed ✅ |
 | `tests/test_ux3_07_execution_visibility.py`（新增，UX3-07／UX3-07-F1） | 22 passed ✅ |
 | `tests/test_ux3_03_start_check.py`（新增，UX3-01／UX3-03） | 19 passed ✅ |
-| **完整套件** | **1828 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
+| `tests/test_drag_repair_ui.py`（UX3-02，含辨識面補完） | 26 passed ✅ |
+| **完整套件** | **1836 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
 
 ## 2026-11-05～11-07 補充（E2／P2 之後已落地）
 

@@ -99,12 +99,12 @@ Click／Drag 目標選項與驗證時機的查核與修正。實作細節見 `do
 | F-13 | P3 | ✅ 已修（文件） | Repeat／Loop／Parallel Once／背景 BLOCKED 語義已寫入 ARCHITECTURE.md；index.html 新增 FAQ |
 | **C2-1** | P2 | ⬜ 開放（另案） | 並行（∥）群組**全員停用（disabled）**時的 stall（同類等待語義，但全員停用是使用者明確選擇，不在本次範圍） |
 | **C2-2** | P2 | ⬜ 開放（產品決策已定 keep） | 既有任務檔內的假 `_migration` 不清洗；新資料不再產生假 marker。需要清洗時另案 |
-| **C2-3** | P2 | ✅ 已修（UX Phase 3C） | Drag Repair UI：`_migration`／`validate_drag_endpoint` 無 GUI 消費端。已補：舊版 Drag 開啟即顯示修復 banner（判定以 core `validate_drag_endpoint` 為唯一來源）→「重新拾取終點」→ 使用者確認後才移除 `dx/dy` 與 marker；未修復前舊欄位唯讀且原樣保留；任務載入時提示需修復的步驟數 |
+| **C2-3** | P2 | ✅ 已修（UX Phase 3C／2026-11-12 補完辨識面） | Drag Repair UI：`_migration`／`validate_drag_endpoint` 無 GUI 消費端。已補：舊版 Drag 開啟即顯示修復 banner（判定以 core `validate_drag_endpoint` 為唯一來源）→「重新拾取終點」→ 使用者確認後才移除 `dx/dy` 與 marker；未修復前舊欄位唯讀且原樣保留；任務載入時提示需修復的步驟數。**補完**：修復入口原本只有展開到該步驟才看得到，使用者找不到要修哪一條 → 步驟清單摘要改為「⚠ 終點是舊格式，需要修復（點開此步驟）」並套警示色、規則列加 `[拖曳待修復]` 標籤、新版顯示實際終點、未設定顯示「終點未設定」 |
 | F-08 | P3 | ⬜ 開放 | fingerprint 每幀每規則重算（fresh BLOCKED 3 次、detect 全文 `!r`）；效能可接受，未重構 |
 | F-09 | P3 | ⬜ 開放 | `_preflight_last_fingerprint` 死欄位（僅測試清空用） |
 | F-10 | P3 | ⬜ 開放 | `rule_preflight.py` 的 `Rule`、`05_main_loop.py` 的 `PreflightResult` 為 annotation-only 死綁定（ruff 無 F401；非 import） |
 | F-11 | — | ✅ 已解（2026-11-04） | 提交拆分：A（drag）／B（preflight）共用 2 檔需 hunk 級拆分 → 最終以單一整合 commit 收斂（C-2a-1＋E2＋P2＋診斷修正），不做高風險 hunk 手術 |
-| **BUG-1** | P2-注意 | ℹ️ 已知 | 每個經 GUI 存檔的 drag 都帶 `dx=0/dy=0`，reload 後被標 `mixed_legacy_and_endpoint`（舊檔 3d01f0a 之前已發生者保留原狀，keep 決策） |
+| **BUG-1** | P2-注意 | ✅ 已解（2026-11-12 實測） | 每個經 GUI 存檔的 drag 都帶 `dx=0/dy=0`，reload 後被標 `mixed_legacy_and_endpoint`。現行 `_DragStepForm.save()` 只在 `_dx_dirty/_dy_dirty`（使用者實際改過）時才寫回，初始化以 `blockSignals` 填值 → 新版 Drag 存檔不再產生 `dx/dy`；未修復的舊資料仍原樣保留（含小數）。回歸測試 `test_new_drag_save_does_not_inject_dx_dy`、`test_unrepaired_legacy_save_keeps_float_offsets` |
 
 ## 舊清單（E1-R / E1-R2-V，編號保留）
 

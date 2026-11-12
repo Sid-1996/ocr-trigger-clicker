@@ -412,3 +412,137 @@ def test_task_load_no_notice_without_legacy():
     )
     assert _GUI.MainWindow._notify_drag_legacy_steps(fake) == 0
     assert pushed == []
+
+
+# ── 8：辨識面（步驟清單／規則列）───────────────────────────────────────────
+
+
+def test_legacy_drag_step_summary_marks_repair():
+    """步驟清單摘要要直接說明「終點是舊格式、需要修復」，不可只顯示 dx/dy。
+
+    使用者不展開步驟也必須看得出哪一行要修；判定仍以 core 為準。
+    """
+    text = _GUI._step_summary(_legacy_step())
+    assert text == _T("summary.format_drag_needs_repair", base=_T("step_form.text_coord"))
+    assert "30" not in text and "20" not in text
+
+
+def test_new_drag_step_summary_shows_end_point():
+    """已修復／新版 Drag 的摘要顯示實際終點，不再是沒有意義的 dx/dy 偏移。"""
+    text = _GUI._step_summary(_new_step())
+    assert "⚠" not in text
+    assert text.startswith(
+        _T(
+            "summary.format_drag_to",
+            base=_T("step_form.text_coord"),
+            point=_GUI._fmt_point(0.5, 0.6),
+        )
+    )
+
+
+def test_unset_new_drag_summary_does_not_invent_offset():
+    """沒有終點也沒有 dx/dy 的新步驟：摘要不得顯示 (+0,+0)（會誤導成已設定）。"""
+    step = Step(type="drag", params={"target": "custom", "x": 0.2, "y": 0.3})
+    text = _GUI._step_summary(step)
+    assert text == _T("summary.format_drag_unset", base=_T("step_form.text_coord"))
+    assert "0,0" not in text
+
+
+def test_summary_switches_to_end_point_after_repair(step_list, qapp, monkeypatch):
+    """修復後清單摘要必須反映新終點（使用者可目視確認已修好）。"""
+    step = _legacy_step()
+    form = _build(step_list, step, pick=_picker((0.52, 0.61)))
+    try:
+        assert "⚠" in _GUI._step_summary(step)
+        form._repair_pick_btn.click()
+        monkeypatch.setattr(
+            _GUI.QMessageBox,
+            "question",
+            staticmethod(lambda *a, **k: _GUI.QMessageBox.StandardButton.Yes),
+        )
+        form._repair_clear_btn.click()
+        text = _GUI._step_summary(step)
+        assert "⚠" not in text
+        assert "52%" in text and "61%" in text
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_rule_tags_mark_drag_repair():
+    """規則列標籤要標出「有拖曳步驟待修復」，讓使用者不必逐條展開找。"""
+    broken = Rule(id="r1", name="R1", enabled=True, steps=[_new_step(), _legacy_step()])
+    assert _T("rule_summary.drag_needs_repair") in _GUI._rule_tags(broken)
+    healthy = Rule(id="r2", name="R2", enabled=True, steps=[_new_step()])
+    assert _T("rule_summary.drag_needs_repair") not in _GUI._rule_tags(healthy)
+
+
+def test_step_row_highlights_repair(step_list, qapp):
+    """步驟列摘要以警示色呈現（純顯示，不改資料）。"""
+    from PyQt6.QtWidgets import QLabel
+
+    legacy = _legacy_step()
+    row = step_list._build_row(0, legacy)
+    try:
+        labels = [
+            w.text() for w in row.findChildren(QLabel) if w.text() == _GUI._step_summary(legacy)
+        ]
+        assert labels, "步驟列找不到摘要標籤"
+        styles = [
+            w.styleSheet()
+            for w in row.findChildren(QLabel)
+            if w.text() == _GUI._step_summary(legacy)
+        ]
+        assert any("#c0392b" in s for s in styles)
+        # 資料未被顯示層改寫
+        assert legacy.params["dx"] == 30 and legacy.params["dy"] == 20
+    finally:
+        row.deleteLater()
+        qapp.processEvents()
+
+
+def test_new_drag_save_does_not_inject_dx_dy(step_list, qapp):
+    """BUG-1 回歸：新版 Drag 一般儲存不得被塞入 dx=0/dy=0。
+
+    一旦寫入（即使 0,0），reload 會被 core 判定 mixed_legacy_and_endpoint →
+    這條規則下次載入就變成待修復。存放路徑只能在使用者真的改過時才寫 dx/dy。
+    """
+    step = _new_step()
+    form = _build(step_list, step)
+    try:
+        assert form.save() is True
+        assert "dx" not in step.params and "dy" not in step.params
+        assert _MIG.validate_drag_endpoint(step.params)["status"] == "valid"
+    finally:
+        form.deleteLater()
+        qapp.processEvents()
+
+
+def test_unrepaired_legacy_save_keeps_float_offsets(step_list, qapp, tmp_path):
+    """舊資料未修復前的一般儲存：dx/dy 原值（含小數）與 marker 都不得被動到。"""
+    raw = Step(type="drag", params={"target": "custom", "x": 0.2, "y": 0.3})
+    raw.params.update({"dx": 12.5, "dy": -7})
+    path = tmp_path / "tasks.json"
+    _SER.save_rules([Rule(id="r1", name="R1", enabled=True, steps=[raw])], str(path))
+
+    # 模擬舊檔：移除 core 載入時才會補上的 marker
+    import json
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["rules"][0]["steps"][0]["params"].pop("_migration", None)
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    step = _SER.load_rules(str(path))[0].steps[0]
+    assert _MIG.validate_drag_endpoint(step.params)["status"] == "needs_repair"
+
+    form = _build(step_list, step)
+    try:
+        assert form.save() is True
+        assert step.params["dx"] == 12.5 and step.params["dy"] == -7
+        _SER.save_rules([Rule(id="r1", name="R1", enabled=True, steps=[step])], str(path))
+        reloaded = _SER.load_rules(str(path))[0].steps[0]
+        assert reloaded.params["dx"] == 12.5 and reloaded.params["dy"] == -7
+        assert _MIG.validate_drag_endpoint(reloaded.params)["status"] == "needs_repair"
+    finally:
+        form.deleteLater()
+        qapp.processEvents()

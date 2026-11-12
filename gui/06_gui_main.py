@@ -512,6 +512,15 @@ def _drag_end_state(x, y) -> str:
     return "ratio" if xf <= 1.0 and yf <= 1.0 else "pixel"
 
 
+def _drag_needs_repair(params) -> bool:
+    """此 Drag 參數是否需要修復舊版終點。
+
+    判定一律取自 core `validate_drag_endpoint`（唯一事實來源）；GUI 只負責
+    顯示與導引，不重寫 legacy 狀態機。
+    """
+    return _validate_drag_endpoint(params).get("status") == "needs_repair"
+
+
 def _end_spin_value(value):
     """終點軸在 0..1 SpinBox 裡可顯示的值；不可表示時回 None（不夾值）。"""
     if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -622,12 +631,25 @@ def _step_summary(step, rules_provider=None) -> str:
         return T("summary.format_jump", name=name)
     if t == "drag":
         target = p.get("target", "text_center")
-        dx, dy = p.get("dx", 0), p.get("dy", 0)
         base = {
             "text_center": T("summary.click_target"),
             "custom": T("step_form.text_coord"),
         }.get(target, "?")
-        parts = [T("summary.format_drag", base=base, dx=dx, dy=dy)]
+        # UX3-02：舊版終點（dx/dy）執行期不會被採用 → 清單就要標示需修復，
+        # 使用者不必逐一展開步驟才知道哪一條要修（修復入口在步驟表單內）。
+        if _drag_needs_repair(p):
+            parts = [T("summary.format_drag_needs_repair", base=base)]
+        elif p.get("end_x") is not None and p.get("end_y") is not None:
+            parts = [
+                T(
+                    "summary.format_drag_to",
+                    base=base,
+                    point=_fmt_point(p.get("end_x"), p.get("end_y")),
+                )
+            ]
+        else:
+            # 新式終點尚未設定：不顯示實際不存在的 dx/dy 偏移（會誤導成有設定）
+            parts = [T("summary.format_drag_unset", base=base)]
         ad = p.get("after_delay_ms", 0) or 0
         if ad > 0:
             parts.append(T("summary.format_after_delay", ms=ad))
@@ -675,7 +697,15 @@ def _rule_tags(rule) -> str:
     if not steps:
         return " " + T("rule_summary.empty")
     has_fail = False
+    needs_drag_repair = False
     for s in steps:
+        # UX3-02：舊版 Drag 終點在規則列就要看得出來（不必展開才知道要修復）
+        if (
+            getattr(s, "type", "") == "drag"
+            and isinstance(getattr(s, "params", None), dict)
+            and _drag_needs_repair(s.params)
+        ):
+            needs_drag_repair = True
         of = s.params.get("on_fail")
         if of is None:
             continue
@@ -696,6 +726,8 @@ def _rule_tags(rule) -> str:
     parts = [T("rule_summary.steps", count=len(steps))]
     if has_fail:
         parts.append(T("rule_summary.has_fail"))
+    if needs_drag_repair:
+        parts.append(T("rule_summary.drag_needs_repair"))
     return " " + " ".join(parts)
 
 
@@ -1027,7 +1059,11 @@ class _StepListWidget(QWidget):
 
         summary = _step_summary(step, self._rules_provider)
         sl = QLabel(summary)
-        sl.setStyleSheet("font-size:11px;")
+        if getattr(step, "type", "") == "drag" and _drag_needs_repair(step.params):
+            # UX3-02：需要修復的舊版終點在清單上直接看得出來（紅字＋⚠ 文案）
+            sl.setStyleSheet("font-size:11px; color:#c0392b;")
+        else:
+            sl.setStyleSheet("font-size:11px;")
         hl.addWidget(sl, 1)
 
         btn_up = QPushButton("↑")
