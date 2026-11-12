@@ -107,7 +107,8 @@ core/03_pynput_input                              （無外部依賴，螢幕邊
 | `core/00_logging_config.py` | 日誌設定 | `get_logger()`, `get_log_dir()`, `set_debug()`, `is_debug_enabled()` |
 | `gui/12_log_viewer.py` | 日誌檢視器（tail app.log、搜尋、捲動保持、清除） | `LogViewer` |
 | `gui/notification_stack.py` | 右下角暫時通知浮層 | `NotificationStack` |
-| `gui/execution_log_widget.py` | 執行紀錄表格（結果翻譯、著色與清除） | `ExecutionLogWidget` |
+| `gui/execution_log_widget.py` | 執行紀錄表格（結果翻譯、著色、清除與定位發射） | `ExecutionLogWidget` |
+| `gui/start_check_dialog.py` | 啟動前檢核清單（逐項列出阻擋問題並可定位到規則／步驟） | `StartCheckDialog` |
 | `gui/rule_tree_widget.py` | 規則樹拖放與重排通知 | `RuleTreeWidget` |
 | `gui/stop_groups_picker.py` | 步驟失敗時選擇停止群組 | `StopGroupsPicker` |
 | `core/00_global_hotkey.py` | 全域熱鍵（Win32 `RegisterHotKey`） | F8 熱鍵註冊（啟動／停止；暫停中按 F8 為繼續）＋ F9 熱鍵註冊（錄製開始/停止） |
@@ -418,6 +419,17 @@ v0.1.0 起採用**群組兩層指標模型**，由 `_group_queue_idx`（群組�
 - fp=None（規則內含非 canonical Step，例如測試替身物件）時，以問題分類做 fallback 去重；不會靜默、也不會每幀刷屏。
 - `isinstance(step, Step)` 嚴格驗證，不以 duck typing 或類別名稱代替。
 - Click／Drag 的未知 `target` 由 preflight 擋下（問題鍵 `unknown_click_target`／`unknown_drag_target`）→ 規則在開始前就不執行；執行期仍保留防禦性 stop（見上方「Click／Drag 的 target 白名單」）。
+
+### 啟動前檢核（GUI）與問題定位（UX3-03）
+
+GUI 的「開始」流程會在啟動前重跑**同一份 preflight**，與執行期 BLOCKED 同一來源：
+
+- **檢核範圍**＝所選群組內的規則 ＋ **背景監控規則**（背景規則不在任何群組，但每幀都會評估 → 問題同樣要在開始前讓使用者知道）。
+- **檢核對象是編輯器裡尚未存檔的步驟**（`_rule_for_check()`）：使用者改壞一步驟還沒存檔就按「開始」，也要被擋下。
+- 問題清單由 `gui/start_check_dialog.py` 呈現，**每一列都能定位到對應規則／步驟**；定位重用既有的 `locate_rule_target()`（只以 `rule_id` 比對）。
+- 有阻擋問題（severity=blocked）時**整個任務不啟動**；只提醒（severity=warning）的問題不擋。
+- `PreflightResult.issues` 是純附加欄位：`{key, step_idx, severity}`，`step_idx` 為 0-based 步驟位置（`None`＝規則層級的問題）。`status`／`problems`／`warnings` 的內容與順序不變，既有呼叫端不受影響。
+- 執行期 BLOCKED 的 execution log 也帶著同一個步驟位置 → 使用者點日誌即可跳到出問題的那一步。
 
 ### ctx.triggered 推進機制
 
@@ -864,8 +876,17 @@ ctx.ocr_elapsed_ms = elapsed_ms  # 在 handler 中設定
 ### 執行日誌 dedup 機制
 
 - `result == "completed"`（輪次完成）：同一規則 1 秒內只記一次
-- 其他 result：同一 `rule_name:step_idx` + 同一 `result+detail` 組合只記一次
-- `maxlen=10`：只保留最近 10 筆
+- 其他 result：同一 `rule_id:step_idx`（無 rule_id 的舊呼叫退回 `rule_name:step_idx`）+ 同一 `result+detail` 組合只記一次 → **同名不同規則不會互相抑制**
+- `maxlen=100`：只保留最近 100 筆
+
+### 執行日誌的問題定位（UX3-01／UX3-03）
+
+- 每筆 entry 帶 `rule_id`／`task`（任務檔名 stem）／`step_idx`（0-based）→ **以 id 定位**，同名規則不會互相錯位。
+- `gui/execution_log_widget.py` 把 `(task, rule_id, step_idx, rule_name)` 存在規則欄的 `UserRole`，點擊任一欄都發射 `locate_requested`。
+- 主視窗 `locate_rule_target()` 定位：只以 `rule_id` 比對；`step_idx` 為步驟**位置**（Step 沒有 id），`<0`／`None` 只定位規則。
+- 執行中點擊：先記 pending 並提示「停止後將定位到…」（編輯區在執行中停用），停止後由 `_stop_loop()` 自動套用。
+- 規則／步驟／任務已不存在、舊日誌無 `rule_id`、展開中的表單拒絕提交 → 都有明確訊息，不靜默失敗、不丟使用者輸入。
+- `preflight`（BLOCKED）類 entry 帶著出問題的步驟位置 → 點日誌直接跳到那一步；`completed`／`background` 類沒有對應步驟，只定位規則。
 
 ## 自動化測試（tests/）
 

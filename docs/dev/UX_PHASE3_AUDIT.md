@@ -147,6 +147,8 @@
 | 成本 | S |
 | 建議 | **本階段處理** |
 
+> **狀態更新（2026-11-12，UX3-01）**：**已實作**（主體於 `cb9000d`，本次為深化）。日誌 entry 攜帶 `rule_id`／`task`／`step_idx`（0-based），`ExecutionLogWidget` 以 `UserRole` 保存定位目標並在點擊時發射 `locate_requested`；主視窗以既有 `locate_rule_target()` 定位（只以 `rule_id` 比對 → 同名規則不錯位），執行中先記 pending、停止後自動定位，規則／步驟／任務已不存在時明講原因而非靜默失敗。**本次深化**：執行期 BLOCKED 日誌帶上第一個問題的步驟位置 → 點日誌可直接跳到出問題的那一步；日誌面板遇到非整數 `step_idx` 不再崩潰。**真機 GUI 驗證尚未完成**（僅自動化測試鎖定）。
+
 ### UX3-02 — Drag Legacy Marker 無 GUI 修復入口（C-2a-2）【P1】
 
 | 欄位 | 內容 |
@@ -176,6 +178,8 @@
 | 風險 | preflight 目前回傳的問題文字為內部 key，需補 i18n 白話對應；注意 BLOCKED 語意（parallel 等待）與啟動擋的區別，不可把等待語意改成錯誤 |
 | 成本 | S |
 | 建議 | **本階段處理**（與 UX3-01 共用「定位到編輯」機制） |
+
+> **狀態更新（2026-11-12，UX3-03）**：**已實作**（主體於 `cb9000d`，本次為深化）。GUI 啟動檢查與執行期 BLOCKED 同一來源（`core/rule_preflight.py`），不再是「GUI 只擋 2 項、core 擋 10 項」的落差。**本次深化**：(1) `PreflightResult` 新增 `issues`（key／0-based `step_idx`／severity），`status`／`problems`／`warnings` 的內容與順序完全不變；(2) 啟動前檢核改為逐項可定位的清單（新增 `gui/start_check_dialog.py`），每一列都能跳到對應規則／步驟；(3) 檢核範圍納入背景監控規則；(4) 檢核以「編輯器裡尚未存檔的步驟」為準 → 不再漏掉剛改壞的那一步。既有硬擋（自訂點擊 (0,0)）、BLOCKED 語意、執行期防禦與型別驗證**皆未改動**。**真機 GUI 驗證尚未完成**（19 項自動化測試鎖定）。
 
 ### UX3-04 — 規則測試無取消、結果不可回跳【P2】
 
@@ -379,6 +383,7 @@
 | 執行日誌定位（UX3-01/03 共用） | 修改前後對照 + 點擊日誌行→定位到規則/step 的操作流程 | `devtools/ux_prototypes/phase3/p1_exec_log_locate.html` |
 | Drag 修復 banner（UX3-02） | needs_repair 狀態的修復入口：banner、拾取終點、確認清除 marker、reload 重檢 | `devtools/ux_prototypes/phase3/p1_drag_repair.html` |
 | 啟動前檢核清單（UX3-03/04/05/07） | 啟動前全部問題清單（含可點跳轉）、測試取消、群組規則數、狀態列執行目標 | `devtools/ux_prototypes/phase3/p2_start_check.html` |
+| 執行日誌定位 ＋ 啟動前檢核（2026-11-12 深化版） | 逐項定位、執行中 pending、停止後自動定位、預檢清單、無法定位的退化提示 | `devtools/ux_prototypes/phase3/ux3_01_ux3_03_locate_preflight.html` |
 | 索引頁 | 三原型總覽 | `devtools/ux_prototypes/phase3/index.html` |
 
 原型僅用 HTML/CSS/JS 假資料，不連正式邏輯，瀏覽器直接開啟。

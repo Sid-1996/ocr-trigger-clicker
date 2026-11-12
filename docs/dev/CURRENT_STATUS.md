@@ -2,6 +2,7 @@
 
 > 最後更新：2026-11-12
 > 對應階段：**E2／P2 階段收斂 ＋ v0.4.9 發布前修正**（Global Stop／輸入取消／後台失敗回報／通知去重／R-1／R-3／R-5）
+> 2026-11-12 補充：UX3-01／UX3-03（執行日誌定位 ＋ 啟動前檢核深化）——詳見下方「本次完成」的 UX3-01／UX3-03 章節
 > 2026-11-12 補充：UX3-07（執行中「在跑什麼」可視化）——詳見下方「本次完成」的 UX3-07 章節
 > 2026-11-10 補充：UX3-06（Click／Drag 目標選項與驗證改善）——詳見下方「本次完成」的 UX3-06 章節
 > 2026-11-07 補充：AppCompat 自癒、OCR Debug UX、輸入整合驗證 harness（P0，未執行）、hybrid 啟動最小化、數字加總閘門、死碼清理——詳見下方「2026-11-05～11-07 補充」
@@ -26,14 +27,15 @@
 | **C-2a-2** | Drag Repair UI（`_migration` 消費端、needs_repair 修復流程） | ✅ **完成，已 commit**（UX Phase 3C：修復 banner＋拾取終點＋使用者確認才清除 marker） |
 | **UX3-06** | Click／Drag 目標選項與驗證改善（target 白名單＋preflight 事前擋下、dry-run 不再靜默略過、Drag 專屬文案、cursor 目標停用抖動、custom 未設座標提示） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；`hold_ms` 死欄位與 validator 差異僅記錄事實，未改契約） |
 | **UX3-07** | 執行中「在跑什麼」可視化（狀態列顯示「群組／規則／步驟」、群組選擇對話框顯示啟用規則數） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；主按鈕圖示 enhancement 明確排除） |
+| **UX3-01／UX3-03** | 執行日誌定位（以 `rule_id` 區分＋定位到步驟）＋啟動前統一檢核（背景規則納入、逐步驟粒度、逐項可定位） | ✅ **完成，已 commit**（**真機 GUI 驗證未完成**；主體早於本次，本次為深化） |
 | **真機驗證** | Frida 輸入取消／Release、frida／hybrid 拖曳 | ⬜ 未完成 |
 
 ## 工作區狀態
 
 - branch：`master`
-- HEAD = `7345ee8` = `origin/master`（ahead/behind **0/0**，2026-11-12 核實）；本次 UX3-07 變更完成後為 1 顆新 commit，**尚未 push**
+- HEAD = UX3-01／UX3-03 批次（程式碼 `56b08aa` ＋ 本次文件 commit）；`origin/master` = `0af3cf0` → **ahead 2 / behind 0**，**尚未 push**
 - **staged：空**；工作區乾淨（2026-11-12 盤點）
-- 距上次發布（`v0.4.8`）累計 **90 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`）
+- 距上次發布（`v0.4.8`）累計 **96 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`，2026-11-12 核實）
 - **v0.4.9 尚未發布**：無 tag、無 GitHub Release（`gh release view v0.4.9` → not found）；`_version.py`／`pyproject.toml` 仍為 `0.4.8`，最新正式版仍是 `v0.4.8`（2026-10-24）
 
 ## 測試統計（實測）
@@ -54,7 +56,8 @@
 | `tests/test_debug_gate_before_loop_start.py`（新增，R-5） | 11 passed ✅ |
 | `tests/test_ux3_06_target_validation.py`（新增，UX3-06） | 27 passed ✅ |
 | `tests/test_ux3_07_execution_visibility.py`（新增，UX3-07／UX3-07-F1） | 22 passed ✅ |
-| **完整套件** | **1809 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
+| `tests/test_ux3_03_start_check.py`（新增，UX3-01／UX3-03） | 19 passed ✅ |
+| **完整套件** | **1828 passed, 13 skipped**（2026-11-12 本次重跑，exit 0；13 skipped 為需桌面／環境的真實整合測試） |
 
 ## 2026-11-05～11-07 補充（E2／P2 之後已落地）
 
@@ -70,7 +73,7 @@
 | 關卡 | 狀態 | 備註 |
 |---|---|---|
 | `ruff check` | ✅ All checks passed | exit 0 |
-| 完整 pytest | ✅ 1783 passed, 13 skipped | 2026-11-10 本次重跑，exit 0；含 i18n 三語測試；13 skipped 為真實整合測試（需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行） |
+| 完整 pytest | ✅ 1828 passed, 13 skipped | 2026-11-12 本次重跑，exit 0；含 i18n 三語測試；13 skipped 為真實整合測試（需 `OTC_RUN_INPUT_INTEGRATION=1` 桌面執行） |
 | `git diff --check` | ✅ exit 0 | 僅既有 LF→CRLF warning |
 | core self-check（4 檔） | ✅ 全 exit=0 | `03_pynput_input`／`05_main_loop`／`16_bg_input`／`18_frida_bg` |
 | 座標校正 `--self-check` | ✅ passed | |
@@ -162,6 +165,30 @@
 **未完成（不得視為已驗證）**
 
 - **真機 GUI 驗證未完成**：本次只以自動化測試（13 項，含 4 項突變測試）鎖定行為，未在真實遊戲／真實 GUI 上逐項確認狀態列文字與對話框排版。
+
+### UX3-01／UX3-03（執行日誌定位 ＋ 啟動前檢核）
+
+**已實作（本次，程式碼 commit `56b08aa`；主體早於本次，本次為深化）**
+
+- **日誌帶定位資訊**：每筆 execution log entry 帶 `rule_id`／`task`／`step_idx`（0-based）→ 以 id 定位，同名規則不錯位。
+- **點日誌即定位**：`ExecutionLogWidget` 以 `UserRole` 保存定位目標並發射 `locate_requested`；主視窗重用既有 `locate_rule_target()`（規則／步驟／跨任務；找不到時明講原因）。執行中點擊先記 pending、停止後自動定位。
+- **BLOCKED 日誌可跳到出問題的那一步**：`_record_preflight_block()` 帶上第一個問題的步驟位置（規則層級問題維持 -1＝只定位規則）。
+- **preflight 附加 `issues`**：`PreflightResult` 新增 `{key, step_idx, severity}`；`status`／`problems`／`warnings` 的內容與順序**完全不變**（既有呼叫端不受影響）。
+- **啟動前檢核清單**：新增 `gui/start_check_dialog.py`，每一列都能定位到對應規則／步驟（取代原本只跳「第一個問題規則」的單一按鈕）。
+- **檢核涵蓋背景監控規則**：背景規則不在任何群組但每幀都會評估 → 開始前就要讓使用者知道。
+- **檢核以編輯器裡尚未存檔的步驟為準**：改壞一步驟還沒存檔就按開始，也會被擋（不再漏到執行期才 BLOCKED）。
+- **三語**：每語 +8 鍵（`start.check_*`），移除已不再使用的 `start.hard_problems_msg`。
+- **測試**：新增 `tests/test_ux3_03_start_check.py`（19 項：preflight issues 契約、BLOCKED 日誌步驟錨點、背景規則納入、未存檔編輯、對話框逐項定位、`_start_loop` 真的被擋下）。
+
+**未改動（刻意）**
+
+- Preflight 判定規則、型別驗證、BLOCKED 語意、執行期防禦、global stop／local on_fail、輸入 Release 語意、任務 JSON 格式**皆未改動**。
+- 啟動前硬擋仍維持「整個任務不啟動」（比執行期「跳過該規則、群組繼續」嚴格）→ 屬既有產品語意，本次不變更。
+- `_loader.load_sibling()` 與 canonical `rule_models` 載入路徑未動。
+
+**未完成（不得視為已驗證）**
+
+- **真機 GUI 驗證未完成**：本次以自動化測試（19 項）鎖定行為，未在真實遊戲／真實 GUI 上逐項點擊確認清單版面與定位手感。
 
 ## 明確延後（不在本次範圍）
 
