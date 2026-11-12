@@ -318,8 +318,15 @@ def test_locate_respects_unsaved_name_edit(
 # ── UX3-03：_rule_hard_problems 與 preflight 同步 ──
 
 
-def test_hard_problems_include_sum_gate_and_unknown_type(make_rule, make_step):
+def _fake_window():
+    """_rule_hard_problems 會呼叫 _rule_preflight_issues → 假視窗要提供這個入口。"""
     win = SimpleNamespace()
+    win._rule_preflight_issues = lambda rule: _gui.MainWindow._rule_preflight_issues(win, rule)
+    return win
+
+
+def test_hard_problems_include_sum_gate_and_unknown_type(make_rule, make_step):
+    win = _fake_window()
     sum_rule = make_rule(
         "r-sum",
         "加總規則",
@@ -337,7 +344,7 @@ def test_hard_problems_include_sum_gate_and_unknown_type(make_rule, make_step):
 
 
 def test_hard_problems_keep_legacy_zero_click_block(make_rule, make_step):
-    win = SimpleNamespace()
+    win = _fake_window()
     rule = make_rule(
         "r-zero",
         "零點擊規則",

@@ -829,7 +829,7 @@ def test_start_loop_aborts_when_flush_fails(tmp_path, monkeypatch):
             SimpleNamespace(id="g1", enabled=True, rule_ids=["r1"]),
             SimpleNamespace(id="g2", enabled=True, rule_ids=[]),
         ],
-        _rule_hard_problems=lambda r: [],
+        _collect_start_check_issues=lambda group_ids: [],
         _is_bg_mode=lambda: False,
         _current_task="task",
         _save_current_rule=lambda: None,

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UX3-01 + UX3-03 執行日誌定位 / 啟動前檢核（原型）</title>
+<style>
+  :root{
+    --bg:#14171c; --panel:#1e2229; --panel2:#262b34; --line:#39404b;
+    --fg:#e6e9ee; --dim:#9aa4b2; --accent:#5aa9ff; --ok:#4caf7d;
+    --warn:#e0a458; --bad:#e2564d; --chip:#2f3742;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:20px;background:var(--bg);color:var(--fg);
+    font-family:"Microsoft JhengHei","PingFang TC",system-ui,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:15px;margin:0 0 10px;color:var(--accent)}
+  .sub{color:var(--dim);font-size:12px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:16px}
+  .card h3{font-size:13px;color:var(--dim);margin:0 0 8px;font-weight:600;letter-spacing:.04em}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid #2a2f38;vertical-align:top}
+  tr.clickable{cursor:pointer}
+  tr.clickable:hover td{background:#2b323d}
+  tr.sel td{background:#2f3a49}
+  .mono{font-family:Consolas,"Courier New",monospace;font-size:12px}
+  .code{background:#0e1116;border:1px solid #2a2f38;border-radius:4px;padding:1px 5px;font-family:Consolas,monospace;font-size:12px;color:#9fd0ff}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)} .dim{color:var(--dim)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:var(--chip);color:var(--dim)}
+  .pill.run{background:#3a2a12;color:var(--warn)}
+  .pill.ok{background:#17321f;color:var(--ok)}
+  .pill.bad{background:#331a19;color:var(--bad)}
+  button{background:#2f6fbf;color:#fff;border:0;border-radius:5px;padding:6px 12px;cursor:pointer;font-size:13px}
+  button:hover{background:#3c86df}
+  button.ghost{background:#333c48}
+  button.ghost:hover{background:#414c5b}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .banner{border-radius:6px;padding:9px 12px;margin:10px 0;font-size:13px;border:1px solid}
+  .banner.warn{border-color:#6a4d1f;background:#2c2314;color:#f0c987}
+  .banner.info{border-color:#2f4f74;background:#182634;color:#b9d7f5}
+  .banner.bad{border-color:#6b2c28;background:#2b1a19;color:#f0b3ad}
+  .rule{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-bottom:8px}
+  .rule.hit{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .steps{margin:8px 0 0 0;padding:0;list-style:none}
+  .steps li{padding:4px 8px;border-radius:4px;color:var(--dim);font-size:12.5px}
+  .steps li.hit{background:#2f4a63;color:#cfe6ff}
+  .steps li.gone{color:#7b8494;text-decoration:line-through}
+  ul.issues{list-style:none;padding:0;margin:0}
+  ul.issues li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #2a2f38}
+  ul.issues li:last-child{border-bottom:0}
+  .who{flex:0 0 190px;color:var(--fg)}
+  .who .step{display:block;color:var(--dim);font-size:11.5px}
+  .what{flex:1}
+  .note{color:var(--dim);font-size:12px;margin-top:8px}
+  .foot{color:var(--dim);font-size:11.5px;border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+  .legend span{margin-right:14px}
+  .srcline{font-size:11.5px;color:#7f8b9c}
+</style>
+</head>
+<body>
+<h1>UX3-01 + UX3-03｜執行日誌定位 ＋ 啟動前檢核</h1>
+<div class="sub">
+  假資料原型，不連正式邏輯。對應實作：<span class="code">gui/execution_log_widget.py</span>、
+  <span class="code">gui/06_gui_main.py::locate_rule_target</span>、
+  <span class="code">core/rule_preflight.py::rule_preflight</span>。
+  調查基準：<span class="code">master @ 0af3cf0</span>。
+</div>
+
+<div class="card">
+  <h3>① 執行日誌 → 點擊定位規則／步驟</h3>
+  <div class="bar">
+    <button id="btn-run">開始執行（模擬執行中）</button>
+    <button id="btn-stop" class="ghost" disabled>停止</button>
+    <span class="pill" id="state-pill">已停止</span>
+    <span class="dim" style="font-size:12px">點「規則」欄 → 立刻定位到該規則／步驟</span>
+  </div>
+  <div id="pending-banner"></div>
+  <table id="log">
+    <thead><tr><th style="width:84px">時間</th><th style="width:150px">規則（可點）</th><th style="width:120px">步驟</th><th style="width:74px">結果</th><th>詳情</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="foot">
+    規則欄以 <span class="code">rule_id</span> 定位（同名規則不會認錯）；步驟以位置 <span class="code">step_idx</span> 定位（0-based 內部、畫面 1-based）。
+    舊日誌沒有 <span class="code">rule_id</span> → 點了會提示無法定位（見 ⑥）。
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3>② 目標：規則清單（定位結果）</h3>
+    <div id="rules"></div>
+    <div class="foot">重用既有「選取規則 → 展開該步驟表單 → 捲動到該列」，不另做第二套規則選取系統。</div>
+  </div>
+
+  <div class="card">
+    <h3>③ 啟動前檢核（Preflight）問題清單</h3>
+    <div class="bar">
+      <button id="btn-preflight" class="ghost">重新檢核</button>
+      <span class="dim" style="font-size:12px">與執行期 BLOCKED 同一來源（<span class="code">rule_preflight</span>）</span>
+    </div>
+    <ul class="issues" id="issues"></ul>
+    <div class="foot">
+      每個問題都標出具體步驟並可一鍵定位；點不到的地方（規則已刪除／步驟已不存在）直接標示，不假裝成功。
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>④ 無法定位時的退化提示</h3>
+  <ul class="issues" id="deg"></ul>
+  <div class="foot">退化一律「說清楚哪裡不對」：不靜默失敗、不指到別的規則、不丟使用者未完成的輸入。</div>
+</div>
+
+<script>
+const RULES = [
+  { id:'r-1', name:'跑馬規則',       steps:['偵測「開始」','點擊（文字中心）','等待 500ms','偵測「完成」'] },
+  { id:'r-2', name:'跑馬規則',       steps:['偵測「確定」','點擊（指定座標）'] },
+  { id:'r-3', name:'每日領取',       steps:['偵測「領取」','點擊（文字中心）'] },
+  { id:'r-4', name:'加總閘門規則',   steps:['加總閘門（未框選區域）','點擊（文字中心）'] },
+  { id:'r-5', name:'背景監控-體力',  steps:['偵測「體力」','通知'] },
+];
+const LOG = [
+  { ts:'10:02:31.120', rule_id:'r-1', rule_name:'跑馬規則',   step_idx:0, step_label:'步驟 1 偵測',   result:'停止',   detail:'沒有偵測到「開始」', cls:'bad' },
+  { ts:'10:02:33.004', rule_id:'r-4', rule_name:'加總閘門規則', step_idx:-1, step_label:'預檢',         result:'BLOCKED', detail:'加總閘門沒有框選區域', cls:'warn' },
+  { ts:'10:02:35.771', rule_id:'r-2', rule_name:'跑馬規則',   step_idx:1, step_label:'步驟 2 點擊',   result:'停止',   detail:'點擊失敗', cls:'bad' },
+  { ts:'10:02:40.010', rule_id:'r-3', rule_name:'每日領取',   step_idx:-1, step_label:'完成',         result:'完成',   detail:'', cls:'ok' },
+  { ts:'10:02:41.330', rule_id:'',   rule_name:'舊版規則',   step_idx:0, step_label:'步驟 1 偵測',   result:'停止',   detail:'沒有偵測到目標', cls:'bad', legacy:true },
+];
+const ISSUES = [
+  { rule_id:'r-4', rule_name:'加總閘門規則', step_idx:0, text:'加總閘門沒有框選區域' },
+  { rule_id:'r-1', rule_name:'跑馬規則',     step_idx:1, text:'點擊目標無法辨識（只支援：辨識到的文字中心／指定的比例座標／游標位置）' },
+  { rule_id:'r-9', rule_name:'已刪除的規則', step_idx:0, text:'無法辨識的步驟類型', missing:true },
+  { rule_id:'r-3', rule_name:'每日領取',     step_idx:7, text:'該步驟已不存在（可能被刪除或重排）', gone:true },
+];
+
+let running = false;
+let pending = null;
+let lastMsg = '';
+
+const $ = s => document.querySelector(s);
+const tbody = $('#log tbody');
+
+function renderLog(){
+  tbody.innerHTML = '';
+  LOG.forEach(e => {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.innerHTML =
+      '<td class="mono dim">'+e.ts+'</td>'+
+      '<td>'+(e.rule_name)+(e.rule_id?'':' <span class="pill">舊日誌</span>')+'</td>'+
+      '<td class="dim">'+e.step_label+'</td>'+
+      '<td class="'+e.cls+'">'+e.result+'</td>'+
+      '<td class="dim">'+e.detail+'</td>';
+    tr.onclick = () => onLogClick(e);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderRules(hitRuleId, hitStepIdx){
+  const box = $('#rules');
+  box.innerHTML = '';
+  RULES.forEach(r => {
+    const hit = r.id === hitRuleId;
+    const d = document.createElement('div');
+    d.className = 'rule' + (hit ? ' hit' : '');
+    let h = '<b>'+(hit?'▶ ':'')+r.name+'</b> <span class="pill">'+r.id+'</span>';
+    if (hit){
+      h += '<ul class="steps">';
+      r.steps.forEach((s,i) => {
+        const isHit = i === hitStepIdx;
+        const gone = isHit && i >= r.steps.length;
+        h += '<li class="'+(isHit?'hit':'')+(gone?' gone':'')+'">步驟 '+(i+1)+'　'+s+'</li>';
+      });
+      h += '</ul>';
+    }
+    d.innerHTML = h;
+    box.appendChild(d);
+  });
+  if (lastMsg) box.insertAdjacentHTML('beforeend','<div class="banner '+lastMsg.cls+'">'+lastMsg.text+'</div>');
+}
+
+function setMsg(cls, text){ lastMsg = {cls, text}; }
+
+function locate(rule_id, step_idx, rule_name){
+  const r = RULES.find(x => x.id === rule_id);
+  if (!rule_id){
+    setMsg('bad','這條日誌是舊版本記錄，無法定位到規則（新日誌會自動帶定位資訊）');
+    renderRules(null,null); return;
+  }
+  if (!r){
+    setMsg('bad','找不到規則「'+(rule_name||rule_id)+'」（可能已刪除），無法定位');
+    renderRules(null,null); return;
+  }
+  if (step_idx === null || step_idx === undefined || step_idx < 0){
+    setMsg('info','已定位到規則「'+r.name+'」');
+    renderRules(r.id,-1); return;
+  }
+  if (step_idx >= r.steps.length){
+    setMsg('warn','已定位到規則「'+r.name+'」，但該步驟已不存在（可能被刪除或重排）');
+    renderRules(r.id,-1); return;
+  }
+  setMsg('info','已定位到規則「'+r.name+'」的第 '+(step_idx+1)+' 步');
+  renderRules(r.id,step_idx);
+}
+
+function onLogClick(e){
+  if (running){
+    pending = { rule_id:e.rule_id, step_idx:e.step_idx, rule_name:e.rule_name };
+    renderPending();
+    return;
+  }
+  locate(e.rule_id, e.step_idx, e.rule_name);
+}
+
+function renderPending(){
+  const b = $('#pending-banner');
+  if (!pending){
+    b.innerHTML = '';
+    return;
+  }
+  const name = pending.rule_name || pending.rule_id;
+  b.innerHTML = '<div class="banner warn">⏸ 執行中先記錄：停止後將定位到「'+name+'」。'+
+    '<br><span class="dim">執行中不能切換規則與編輯（避免跑到一半被改壞），所以先記住你的選擇。</span></div>';
+}
+
+function renderIssues(){
+  const ul = $('#issues');
+  ul.innerHTML = '';
+  ISSUES.forEach(is => {
+    const li = document.createElement('li');
+    const who = is.missing
+      ? '<div class="who">'+is.rule_name+'<span class="step">步驟 '+(is.step_idx+1)+'（規則已不存在）</span></div>'
+      : '<div class="who">'+is.rule_name+'<span class="step">步驟 '+(is.step_idx+1)+'</span></div>';
+    li.innerHTML = who+
+      '<div class="what">'+is.text+'<div class="srcline">'+is.rule_id+'</div></div>';
+    const b = document.createElement('button');
+    b.textContent = is.missing ? '無法定位' : '定位到這一步';
+    b.disabled = !!is.missing;
+    b.onclick = () => locate(is.rule_id, is.step_idx, is.rule_name);
+    li.appendChild(b);
+    ul.appendChild(li);
+  });
+}
+
+function renderDeg(){
+  const ul = $('#deg');
+  ul.innerHTML = '';
+  [
+    { t:'找不到規則「已刪除的規則」（可能已刪除），無法定位', s:'規則被刪掉後，日誌仍留著那一列；點了要明講找不到，不能默默跳過或指到別條。' },
+    { t:'已定位到規則「每日領取」，但該步驟已不存在（可能被刪除或重排）', s:'規則還在、步驟被刪或重排 → 停在規則層級，不猜它對應到哪一步。' },
+    { t:'這條日誌是舊版本記錄，無法定位到規則（新日誌會自動帶定位資訊）', s:'沒有 rule_id 的舊日誌無法定位，提示使用者而不是無反應。' },
+    { t:'目前有未完成的步驟設定，無法先定位；請先完成或取消該步驟的編輯', s:'切換前先把展開中的步驟表單收工；表單拒絕提交就中止定位並保留輸入。' },
+    { t:'找不到任務「舊任務」，無法定位', s:'跨任務定位時任務已被改名／刪除 → 明講找不到，不擅自切到別的任務。' },
+  ].forEach(x => {
+    const li = document.createElement('li');
+    li.innerHTML = '<div class="what"><b>'+x.t+'</b><div class="srcline">'+x.s+'</div></div>';
+    ul.appendChild(li);
+  });
+}
+
+function setRunning(v){
+  running = v;
+  $('#btn-run').disabled = v;
+  $('#btn-stop').disabled = !v;
+  $('#state-pill').textContent = v ? '執行中' : '已停止';
+  $('#state-pill').className = 'pill' + (v ? ' run' : '');
+}
+
+$('#btn-run').onclick = () => { setRunning(true); pending = null; renderPending(); setMsg('info','執行中。點日誌的規則欄可先記下要定位的位置。'); renderRules(null,null); };
+$('#btn-stop').onclick = () => {
+  setRunning(false);
+  if (pending){
+    const p = pending; pending = null; renderPending();
+    setMsg('info','已停止，自動套用剛才記下的定位。');
+    locate(p.rule_id, p.step_idx, p.rule_name);
+  } else {
+    setMsg('info','已停止。'); renderRules(null,null);
+  }
+};
+$('#btn-preflight').onclick = () => { renderIssues(); setMsg('info','已重新檢核。'); renderRules(null,null); };
+
+renderLog(); renderRules(null,null); renderIssues(); renderDeg();
+</script>
+</body>
+</html>

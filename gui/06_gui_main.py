@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -5103,6 +5104,9 @@ LogViewer = _log_viewer_mod.LogViewer
 _execution_log_mod = load_sibling("execution_log_widget", "gui/execution_log_widget.py")
 ExecutionLogWidget = _execution_log_mod.ExecutionLogWidget
 
+_start_check_mod = load_sibling("start_check_dialog", "gui/start_check_dialog.py")
+StartCheckDialog = _start_check_mod.StartCheckDialog
+
 _preflight_mod = load_sibling("rule_preflight", "core/rule_preflight.py")
 
 # UX3-02（Drag 舊格式修復）：判定一律以 core 為唯一來源，GUI 不自寫 legacy 狀態機。
@@ -8659,28 +8663,146 @@ class MainWindow(QMainWindow):
         _main_loop_mod.log_main(T("status.task_saved", count=len(self._rules)))
         return True
 
-    def _rule_hard_problems(self, rule) -> list[str]:
-        """真正執行前須攔截的問題：以 core preflight 為準（UX3-03：與執行期
-        BLOCKED 同一來源，不再自寫子集），外加 preflight 只警告的自訂點擊 (0,0)
-        硬擋（舊行為保留，避免放寬驗證）。"""
-        problems = []
+    def _rule_preflight_issues(self, rule) -> list[dict]:
+        """這條規則的檢核問題（含定位資訊）。
+
+        每筆：{key, step_idx, severity, text}
+          severity：blocked＝會擋住執行；warning＝只提醒、不擋。
+          step_idx：0-based 步驟位置；None＝整條規則層級的問題。
+        來源是 core preflight（UX3-03：與執行期 BLOCKED 同一份判定），外加既有硬擋
+        「自訂點擊 (0,0)」（preflight 只警告，GUI 維持舊的硬擋行為，不放寬驗證）。
+        """
+        issues: list[dict] = []
+        steps = getattr(rule, "steps", None)
+        if not isinstance(steps, list):
+            steps = []
+        pre = None
         try:
             pre = _preflight_mod.rule_preflight(rule)
-            for key in pre.problems:
-                problems.append(T(f"exec_log.reason.{key}"))
         except Exception:
             logging.exception("rule_preflight failed; falling back to legacy checks")
-            pre = None
-        if pre is None:
-            for i, s in enumerate(rule.steps):
+        if pre is not None:
+            raw = getattr(pre, "issues", None)
+            if raw:
+                for it in raw:
+                    key = it.get("key", "")
+                    if key == "custom_click_at_origin":
+                        # 以 GUI 既有硬擋版本取代（同一問題不顯示兩次）
+                        continue
+                    issues.append(
+                        {
+                            "key": key,
+                            "step_idx": it.get("step_idx"),
+                            "severity": it.get("severity", "blocked"),
+                            "text": T(f"exec_log.reason.{key}"),
+                        }
+                    )
+            else:
+                # 沒有步驟資訊的 preflight（舊版或測試替身）：仍要擋，定位停在規則層級
+                for key in pre.problems or []:
+                    issues.append(
+                        {
+                            "key": key,
+                            "step_idx": None,
+                            "severity": "blocked",
+                            "text": T(f"exec_log.reason.{key}"),
+                        }
+                    )
+                for key in pre.warnings or []:
+                    if key == "custom_click_at_origin":
+                        continue
+                    issues.append(
+                        {
+                            "key": key,
+                            "step_idx": None,
+                            "severity": "warning",
+                            "text": T(f"exec_log.reason.{key}"),
+                        }
+                    )
+        else:
+            for i, s in enumerate(steps):
                 if s.type == "detect" and not str(s.params.get("text", "")).strip():
-                    problems.append(T("notif.rule_validation_empty_text", idx=i + 1))
-        for i, s in enumerate(rule.steps):
+                    issues.append(
+                        {
+                            "key": "empty_detect_text",
+                            "step_idx": i,
+                            "severity": "blocked",
+                            "text": T("notif.rule_validation_empty_text", idx=i + 1),
+                        }
+                    )
+        for i, s in enumerate(steps):
             if s.type == "click" and s.params.get("target", "") == "custom":
                 x, y = s.params.get("x", 0), s.params.get("y", 0)
                 if x == 0 and y == 0:
-                    problems.append(T("notif.rule_validation_zero_click", idx=i + 1))
-        return problems
+                    issues.append(
+                        {
+                            "key": "custom_click_at_origin",
+                            "step_idx": i,
+                            "severity": "blocked",
+                            "text": T("notif.rule_validation_zero_click", idx=i + 1),
+                        }
+                    )
+        return issues
+
+    def _rule_hard_problems(self, rule) -> list[str]:
+        """真正執行前須攔截的問題（純文字）：以 core preflight 為準（UX3-03：與執行期
+        BLOCKED 同一來源，不再自寫子集），外加 preflight 只警告的自訂點擊 (0,0)
+        硬擋（舊行為保留，避免放寬驗證）。"""
+        return [
+            it["text"] for it in self._rule_preflight_issues(rule) if it["severity"] == "blocked"
+        ]
+
+    def _rule_for_check(self, rule):
+        """檢核用的規則：目前正在編輯的那條改用編輯器裡的步驟。
+
+        使用者可能改壞一步驟還沒存檔就按「開始」；若檢核只看最後存檔的狀態，
+        會漏掉剛改壞的那一步，使用者要到執行期才看到 BLOCKED。
+        """
+        if getattr(self, "_selected_rule_id", None) != rule.id:
+            return rule
+        step_list = getattr(self, "_step_list", None)
+        if step_list is None:
+            return rule
+        steps = step_list.get_steps()  # 展開中的表單會先嘗試提交
+        if steps == rule.steps:
+            return rule
+        return replace(rule, steps=list(steps))
+
+    def _collect_start_check_issues(self, group_ids) -> list[dict]:
+        """啟動前檢核：本次會跑的規則有什麼問題。
+
+        範圍＝所選群組內的規則 ＋ 背景監控規則（背景規則不在任何群組，
+        但每幀都會評估 → 問題同樣要在開始前讓使用者知道）。
+        """
+        scope: list[str] = []
+        seen: set[str] = set()
+        for g in self._groups:
+            if g.id not in group_ids:
+                continue
+            for rid in g.rule_ids:
+                if rid not in seen:
+                    seen.add(rid)
+                    scope.append(rid)
+        for r in self._rules:
+            if getattr(r, "background", False) and r.id not in seen:
+                seen.add(r.id)
+                scope.append(r.id)
+        rules_by_id = {r.id: r for r in self._rules}
+        out: list[dict] = []
+        for rid in scope:
+            r = rules_by_id.get(rid)
+            if r is None or not r.enabled:
+                continue
+            for it in self._rule_preflight_issues(self._rule_for_check(r)):
+                out.append(
+                    {
+                        **it,
+                        "rule_id": r.id,
+                        "rule_name": r.name,
+                        "background": bool(getattr(r, "background", False)),
+                    }
+                )
+        return out
 
     def _save_current_rule(self):
         if self._task_load_failed:
@@ -9200,34 +9322,19 @@ class MainWindow(QMainWindow):
             uncat_count = self._group_selection_ctrl.uncat_enabled_count(self)
             if uncat_count:
                 self._status_bar.showMessage(T("dialog.uncat_skip_hint", count=uncat_count), 8000)
-        allowed_ids = {rid for g in self._groups if g.id in group_ids for rid in g.rule_ids}
-        rules_by_id = {r.id: r for r in self._rules}
-        # 防呆：檢查所選群組內的全部 preflight blocked 問題（UX3-03：與執行期
-        # BLOCKED 同一來源），執行前硬性攔截；對話框可一鍵定位到第一個問題規則
-        hard_problems = []
-        first_problem_rule_id = ""
-        for rid in allowed_ids:
-            r = rules_by_id.get(rid)
-            if not r or not r.enabled:
-                continue
-            for msg in self._rule_hard_problems(r):
-                if not first_problem_rule_id:
-                    first_problem_rule_id = r.id
-                hard_problems.append(f"  • {r.name}：{msg}")
-        if hard_problems:
-            box = QMessageBox(
-                QMessageBox.Icon.Warning,
-                T("dialog.warning"),
-                T("start.hard_problems_msg", items="\n".join(hard_problems)),
-                parent=self,
+        # 防呆：檢查本次會跑的規則（含背景監控）有沒有 preflight 問題
+        # （UX3-03：與執行期 BLOCKED 同一來源），執行前硬性攔截；
+        # 清單逐項可定位到對應規則／步驟。
+        issues = self._collect_start_check_issues(group_ids)
+        blocked = [it for it in issues if it["severity"] == "blocked"]
+        if blocked:
+            dialog = StartCheckDialog(
+                self, blocked, [it for it in issues if it["severity"] != "blocked"]
             )
-            locate_btn = box.addButton(
-                T("dialog.locate_problem"), QMessageBox.ButtonRole.ActionRole
-            )
-            box.addButton(T("ui.cancel"), QMessageBox.ButtonRole.RejectRole)
-            box.exec()
-            if box.clickedButton() is locate_btn and first_problem_rule_id:
-                self.locate_rule_target(self._current_task, first_problem_rule_id, None)
+            dialog.exec()
+            target = dialog.selected_target
+            if target:
+                self.locate_rule_target(self._current_task, target[0], target[1], target[2])
             return
         # 後台模式：啟動前先截一張測試幀，全黑 + 非系統管理員 → 彈窗（關鍵防線）
         if self._is_bg_mode():

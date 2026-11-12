@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -46,11 +46,16 @@ class PreflightResult:
         List of issues that definitely prevent execution (may be empty).
     warnings
         List of issues that do not prevent execution but are worth noting (may be empty).
+    issues
+        UX3-03：每個問題的定位資訊 {key, step_idx, severity}。step_idx 為 0-based
+        步驟位置，None 表示整條規則層級的問題。純附加欄位：problems／warnings
+        的內容與順序不變，既有呼叫端不受影響。
     """
 
     status: Literal["passed", "blocked"]
     problems: list[str]
     warnings: list[str]
+    issues: list[dict] = field(default_factory=list)
 
 
 # Valid step types recognised by the core _run_step dispatcher.
@@ -108,16 +113,31 @@ def rule_preflight(rule: Rule) -> PreflightResult:
     """
     problems: list[str] = []
     warnings: list[str] = []
+    # UX3-03：問題的定位資訊。problems／warnings 會保序去重（同一問題只留一筆），
+    # issues 保留每一次發生的位置 → 不同步驟的同類問題仍能分辨是哪一步。
+    issues: list[dict] = []
+
+    def _add_problem(key: str, step_idx: int | None = None) -> None:
+        problems.append(key)
+        issues.append({"key": key, "step_idx": step_idx, "severity": "blocked"})
+
+    def _add_warning(key: str, step_idx: int | None = None) -> None:
+        warnings.append(key)
+        issues.append({"key": key, "step_idx": step_idx, "severity": "warning"})
 
     # ── 0. Rule 結構防護 ────────────────────────────────────────────────
     if rule is None:
-        problems.append("invalid_rule")
-        return PreflightResult(status="blocked", problems=problems, warnings=warnings)
+        _add_problem("invalid_rule")
+        return PreflightResult(
+            status="blocked", problems=problems, warnings=warnings, issues=issues
+        )
 
     if not isinstance(getattr(rule, "steps", None), list):
         # 步驟列表非 list（可能為 None、dict 等），直接 blocked，不嘗試遍歷
-        problems.append("invalid_steps")
-        return PreflightResult(status="blocked", problems=problems, warnings=warnings)
+        _add_problem("invalid_steps")
+        return PreflightResult(
+            status="blocked", problems=problems, warnings=warnings, issues=issues
+        )
 
     # ── 1. Step 物件結構與內容防護 ──────────────────────────────────────
     # 加總閘門防呆：閘門開啟後，這條規則的成敗靠它，設定不完整就直接不執行。
@@ -130,7 +150,7 @@ def rule_preflight(rule: Rule) -> PreflightResult:
         # core.rule_models 是另一個 module 物件（另一個 class object），
         # 會被誤認為合法 Step，卻讓 fingerprint 回 None、cache 與 blocked 日誌靜默失效。
         if not isinstance(step, Step):
-            problems.append("invalid_step")
+            _add_problem("invalid_step", idx)
             continue
 
         step_type = step.type if isinstance(step.type, str) else "invalid"
@@ -142,22 +162,22 @@ def rule_preflight(rule: Rule) -> PreflightResult:
         if step_type == "detect":
             # 明確檢查 key 是否存在，避免 .get() 混淆「缺 key」與「值為 None」
             if "text" not in params:
-                problems.append("empty_detect_text")
+                _add_problem("empty_detect_text", idx)
             else:
                 text = params.get("text")
                 if text is None:
-                    problems.append("invalid_detect_text")
+                    _add_problem("invalid_detect_text", idx)
                 elif not isinstance(text, str):
-                    problems.append("invalid_detect_text")
+                    _add_problem("invalid_detect_text", idx)
                 elif text == "":
-                    problems.append("empty_detect_text")
+                    _add_problem("empty_detect_text", idx)
                 elif text.strip() == "":
-                    problems.append("empty_detect_text")
+                    _add_problem("empty_detect_text", idx)
             # 若 text 為非空白字串，則不產生任何問題
 
         # ── 3. 未知 Step 類型檢查 ───────────────────────────────────────
         if step_type not in _VALID_STEP_TYPES:
-            problems.append("unknown_step_type")
+            _add_problem("unknown_step_type", idx)
             # 一旦發現未知類型標記 blocked，但繼續累積其他問題
             # 我們不 break，是為為累積其他潛在問題；但跳過後續 type-specific 檢查
             continue
@@ -166,12 +186,12 @@ def rule_preflight(rule: Rule) -> PreflightResult:
         if step_type == "sum" and params.get("gate"):
             gate_sum_seen = True
             if not _roi_configured(params.get("roi")):
-                problems.append("sum_gate_roi_unset")
+                _add_problem("sum_gate_roi_unset", idx)
             if (
                 not _finite_number(params.get("value"))
                 or str(params.get("operator", ">=")) not in _SUM_GATE_OPERATORS
             ):
-                problems.append("sum_gate_value_invalid")
+                _add_problem("sum_gate_value_invalid", idx)
         elif step_type in _MATCH_SOURCE_STEP_TYPES:
             match_source_seen = True
         # 閘門成功不寫 ctx.matched_text（與 compare 不同），後續點擊辨識目標
@@ -182,7 +202,7 @@ def rule_preflight(rule: Rule) -> PreflightResult:
             and step_type in ("click", "drag")
             and params.get("target", "text_center") == "text_center"
         ):
-            problems.append("gate_sum_click_no_target")
+            _add_problem("gate_sum_click_no_target", idx)
 
         # ── 3c. Click／Drag 目標值合法性 ──────────────────────────────
         # 白名單來自 core/rule_migration（唯一事實來源），本模組不另寫一份。
@@ -191,7 +211,7 @@ def rule_preflight(rule: Rule) -> PreflightResult:
         if step_type in ("click", "drag"):
             target = params.get("target", "text_center")
             if not _migration.is_known_step_target(step_type, target):
-                problems.append(f"unknown_{step_type}_target")
+                _add_problem(f"unknown_{step_type}_target", idx)
 
         # ── 4. Custom Click (0,0) 警告 ────────────────────────────────
         if (
@@ -202,7 +222,7 @@ def rule_preflight(rule: Rule) -> PreflightResult:
             and params.get("x") == 0
             and params.get("y") == 0
         ):
-            warnings.append("custom_click_at_origin")
+            _add_warning("custom_click_at_origin", idx)
             # status 不變為 blocked，僅記錄警告
 
     # ── 5. 保序去重 ────────────────────────────────────────────────────
@@ -215,4 +235,4 @@ def rule_preflight(rule: Rule) -> PreflightResult:
     else:
         status = "passed"
 
-    return PreflightResult(status=status, problems=problems, warnings=warnings)
+    return PreflightResult(status=status, problems=problems, warnings=warnings, issues=issues)

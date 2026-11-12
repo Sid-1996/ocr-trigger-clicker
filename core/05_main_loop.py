@@ -2753,8 +2753,18 @@ class MainLoop:
 
         labels = [T(f"exec_log.reason.{p}") for p in (result.problems or ["invalid_rule"])]
         problems_text = "、".join(labels)
+        # UX3-03：BLOCKED 日誌帶上第一個問題的步驟位置 → 使用者點日誌就能直接跳到
+        # 出問題的那一步（問題在規則層級時維持 -1＝只定位規則）。
+        step_idx = -1
+        for issue in getattr(result, "issues", None) or []:
+            if issue.get("severity") != "blocked":
+                continue
+            idx = issue.get("step_idx")
+            if isinstance(idx, int) and idx >= 0:
+                step_idx = idx
+                break
         # 完整問題放 execution log（背景與前景皆寫）
-        self._log_exec(rule.name, -1, "preflight", "blocked", problems_text, rule_id=rule.id)
+        self._log_exec(rule.name, step_idx, "preflight", "blocked", problems_text, rule_id=rule.id)
         self._log(f"preflight blocked rule={rule.name} problems=[{problems_text}]")
         if background:
             return

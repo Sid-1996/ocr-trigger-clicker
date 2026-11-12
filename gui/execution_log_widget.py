@@ -79,7 +79,7 @@ class ExecutionLogWidget(QWidget):
     }
 
     def _populate(self, entries: list[dict]):
-        # 只補上新增的尾端列。日誌為 deque(maxlen=50) 且每 500ms 全量傳入，
+        # 只補上新增的尾端列。日誌為 deque(maxlen=100) 且每 500ms 全量傳入，
         # 全量重建（每列 5 個 QTableWidgetItem + ResizeToContents 重算）曾讓
         # GUI 執行緒吃掉整個行程的 GIL，主循環被餓死（實測 217ms/幀 → 574ms/幀）。
         # deque 滾出前端時改走滑動窗口對齊，避免整表重建。
@@ -107,6 +107,9 @@ class ExecutionLogWidget(QWidget):
             result_label = T(self._RESULT_KEYS.get(result, result))
             detail = e.get("detail", "")
             step_idx = e.get("step_idx", 0)
+            # 定位索引只認整數：帶 None 或其他型別的舊資料不可讓整個面板爆掉。
+            if not isinstance(step_idx, int) or isinstance(step_idx, bool):
+                step_idx = -1
             step_type = e.get("step_type", "")
             if step_idx < 0 or step_type in ("completed", "background"):
                 step_label = T(f"exec_log.type.{step_type}")
@@ -127,11 +130,9 @@ class ExecutionLogWidget(QWidget):
                     # 規則欄存定位識別（同名規則以 id 區分；舊日誌無 id 存空字串）。
                     # 完成／預檢／常駐類日誌無對應步驟，step_idx 記 -1 → 僅定位規則，
                     # 不假裝能定位到步驟。
-                    _locate_step = (
-                        step_idx
-                        if step_type not in ("completed", "preflight", "background")
-                        else -1
-                    )
+                    # UX3-03：preflight（BLOCKED）帶著出問題的步驟 → 直接跳到那一步；
+                    # completed／background 類日誌本來就沒有對應步驟（step_idx=-1），只定位規則。
+                    _locate_step = -1 if step_type == "background" else step_idx
                     item.setData(
                         Qt.ItemDataRole.UserRole,
                         (
