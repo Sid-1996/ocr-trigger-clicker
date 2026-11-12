@@ -33,7 +33,7 @@
 ## 工作區狀態
 
 - branch：`master`
-- HEAD = UX3-02 辨識面補完（`e745956`）；`origin/master` = `e74fe26` → **ahead 1 / behind 0**，本次 push 後同步
+- HEAD = UX3-02 辨識面補完（`64afb39`）；`origin/master` = `64afb39`（2026-11-12 已 push，ahead 0 / behind 0）
 - **staged：空**；工作區乾淨（2026-11-12 UX3-02 收尾）
 - 距上次發布（`v0.4.8`）累計 **97 顆** commit 未發布（`git rev-list --count v0.4.8..HEAD`，2026-11-12 核實）
 - **v0.4.9 尚未發布**：無 tag、無 GitHub Release（`gh release view v0.4.9` → not found）；`_version.py`／`pyproject.toml` 仍為 `0.4.8`，最新正式版仍是 `v0.4.8`（2026-10-24）
