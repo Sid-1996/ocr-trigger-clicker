@@ -91,20 +91,7 @@
 
 通過標準：所有組 0 miss、偏差 ≤3px、三模式不得 fallback；模板尺度維持 5 段候選，不因跨解析度退化成 13 段全掃。Bug fix 必須先重現失敗案例，再補對應 T 層；只跑 T1 不可宣稱跨解析度已修好。
 
-4. **add + commit + push**（一次完成）：
-   ```powershell
-   pwsh -Command "
-     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-     Set-Location 'C:\Code play first\ocr-trigger-clicker'
-     git add -A
-     '類型: 說明' | Out-File -FilePath __commit_msg.txt -Encoding utf8
-     git commit -F __commit_msg.txt
-     Remove-Item __commit_msg.txt
-     git push origin master
-   "
-   ```
-
-commit 訊息格式：`feat` / `fix` / `refactor` / `docs` / `chore` + 冒號 + 中文說明。
+4. **add + commit + push**（一次完成）：指令見「Shell / Git 指令規範 → 提交流程」。commit 訊息格式：`feat` / `fix` / `refactor` / `docs` / `chore` + 冒號 + 中文說明。
 
 ---
 
@@ -139,16 +126,14 @@ cmd /c "git log --oneline -5"
 
 ### 提交流程
 
-中文 commit 訊息用 `-F` 暫存檔方式，避免引號截斷：
+中文 commit 訊息直接用 `-m`（單引號包住，避免引號截斷）；訊息含單引號時才改用 `-F` 暫存檔：
 
 ```powershell
 pwsh -Command "
   [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
   Set-Location 'C:\Code play first\ocr-trigger-clicker'
   git add -A
-  '類型: 說明' | Out-File -FilePath __commit_msg.txt -Encoding utf8
-  git commit -F __commit_msg.txt
-  Remove-Item __commit_msg.txt
+  git commit -m 'feat: 中文說明'
   git push origin master
 "
 ```
@@ -268,25 +253,15 @@ rg "pattern" -n -i
 ```
 
 ### Ruff
-**Lint 和格式化一律用 `ruff`，不用 flake8 / black / isort。**強制執行時機見上方「工作完成規範」清單第 1 步，這裡只列常用指令：
+**Lint 和格式化一律用 `ruff`，不用 flake8 / black / isort。**強制執行時機見「工作完成規範」第 1 步：
 
 ```powershell
-# 檢查整個專案
-uv run ruff check "C:\Code play first\ocr-trigger-clicker"
-
-# 自動修復可修的問題
-uv run ruff check --fix "C:\Code play first\ocr-trigger-clicker"
-
-# 格式化
-uv run ruff format "C:\Code play first\ocr-trigger-clicker"
+uv run ruff check --fix .
+uv run ruff format .
 ```
 
 ### 自檢測試
-強制執行時機與判斷方式見上方「工作完成規範」清單第 2 步（依實際改動的檔案動態判斷，不要對照固定清單）。單一檔案的執行語法：
-
-```powershell
-uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路徑>', run_name='__main__')"
-```
+強制執行時機與判斷方式見「工作完成規範」第 2 步（依實際改動的檔案動態判斷，不要對照固定清單）。單檔執行：把 `<檔案路徑>` 換成實際改動的檔名後跑 `uv run python -c "import sys,runpy; sys.path.insert(0,'.'); runpy.run_path('<檔案路徑>', run_name='__main__')"`。
 
 ### 任務模擬器（`sim_task.py`）
 以固定 seed 隨機切換 `tests/data` 實境幀，餵給真規則引擎（`MainLoop._process_rules`），動作只計數不執行（`_send_click/_send_key/_send_scroll/_activate_window` 全為 stub，不碰真滑鼠與真視窗），輸出幀耗／OCR 成本／每規則命中、從未命中、從未被評估清單。
@@ -400,3 +375,15 @@ docs/dev/CHANGELOG.md 是 release notes 的唯一事實來源。
 ## CodeGraph
 
 專案已用 `codegraph init` 建過索引（`.codegraph/`），透過 MCP server 自動接給 agent 使用，不需要在這裡寫使用規則——`codegraph_explore` 由 agent 依需求自行判斷呼叫，索引也由檔案監控自動同步，commit 流程不需要任何額外步驟。
+
+---
+
+## 結案檢討機制（Post-Mortem）
+
+**觸發詞**：使用者輸入「進行結案檢討」。收到後一次做完下面三件事，不反覆確認、不順手改程式碼：
+
+1. **找浪費瓶頸**：逐條指名本次對話的 Token 浪費點（重複失敗的指令嘗試、一次讀整包大檔、`Read` 未帶 `offset`/`limit`、同一件事問兩次、需求落差造成返工等）。沒有明顯浪費就寫「本次無明顯浪費」，不要編。
+2. **提規則更新**：最多 3 條極簡規則（每條一行、能被檢索驗證），直接輸出可覆寫進本檔案的 unified diff（`--- a/AGENTS.md` / `+++ b/AGENTS.md`）。**只輸出不自動套用**；使用者確認後才寫入本檔，並依「工作完成規範」第 4 步 commit。
+3. **順手瘦身**：檢視本檔案長度與重複段落（同一段指令出現兩處以上、已存在其他文件卻又抄一份、廢話鋪陳），一併精簡。刪掉的內容必須本來就冗餘或能在別處找到。
+
+規則本身要遵守本檔「最小主義」：第 2 步的 diff 若只讓本檔變長而沒換來可驗證的行為改變，就不要提。
