@@ -33,7 +33,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 向持劍石像祈禱。 → 力量+20、體力-20、石像之劍+1（旅程結束時可轉換為 8 潛力點數）\n② 向持花石像祈禱。 → 體力+20、力量-20、石像之花+1（旅程結束時可轉換為 8 潛力點數）\n③ 不祈禱。 → 無"
     },
     {
       "id": "rule_3665983a",
@@ -74,7 +74,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "力量+12、韌性+8 \n獲得潛能「速度星痕」\n獲得潛能「攻擊天賦」（9折）"
+      "notes": "力量+12、韌性+8 \n獲得潛能「速度星痕」\n獲得潛能「攻擊天賦」（9折）\n【選項獎勵・ESPR.gg】\n《白月溫煦如陽光》\n① （心懷感謝地收下。） → 力量+12、韌性+8、攻擊天賦、速度星痕\n② （…委婉地拒絕。） → 體力+12、韌性+8、生命天賦、速度星痕"
     },
     {
       "id": "rule_c9a5e4b1",
@@ -111,7 +111,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】選營養劑吧 力量 +10"
+      "notes": "【選項1】選營養劑吧 力量 +10\n【選項獎勵・ESPR.gg】\n① 選營養劑吧。 → 力量+10、滿意度調查+1（旅程結束時可轉換為 8 潛力點數）\n② 選蓬鬆的枕頭吧。 → 體力+10、滿意度調查+1（旅程結束時可轉換為 8 潛力點數）\n③ 選香辣的食物吧。 → 韌性+10、滿意度調查+1（旅程結束時可轉換為 8 潛力點數）"
     },
     {
       "id": "rule_1b96306e",
@@ -159,7 +159,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】對攻擊有幫助的祕術書"
+      "notes": "【選項1】對攻擊有幫助的祕術書\n【選項獎勵・ESPR.gg】\n① 對攻擊有幫助的祕術書。（花 古幣 30） → 攻擊技巧 或 攻擊技巧×2\n② 對生存有幫助的祕術書。（花 古幣 30） → 生命技巧 或 生命技巧×2\n③ 有對所有情況都有幫助的祕術書嗎？（花 古幣 50） → 速度技巧 或 速度技巧×2\n④ 全部都不需要。 → 專注技巧 或 保護技巧"
     },
     {
       "id": "rule_9e495d04",
@@ -242,7 +242,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】﻿\n﻿體力+8、潛質點數+10"
+      "notes": "【選項1】\n體力+8、潛質點數+10\n【選項獎勵・ESPR.gg】\n《暴龍的襲擊》\n① 加油啊，絲卡蕾！我很期待哦！ → 體力+8、潛力點數+10\n② 危險啊，絲卡蕾…！ → 體力+3、耐力-10、生命感知\n《超厲害的兔女郎》\n① 加油啊，絲卡蕾！我很期待哦！ → 力量+10\n② 危險啊，絲卡蕾…！ → 耐力+15、肌肉拉傷3回合（最好不要動。力量訓練經驗值獲得量減少。）"
     },
     {
       "id": "rule_3f5b190a",
@@ -324,7 +324,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 向持劍石像祈禱。 → 力量+20、體力-20、石像之劍+1（旅程結束時可轉換為 8 潛力點數）\n② 向持花石像祈禱。 → 體力+20、力量-20、石像之花+1（旅程結束時可轉換為 8 潛力點數）\n③ 不祈禱。 → 無"
     },
     {
       "id": "rule_8d157ffb",
@@ -365,7 +365,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "體力+12、韌性+8\n獲得潛能「速度星痕」\n獲得潛能「生命天賦」（9折）"
+      "notes": "體力+12、韌性+8\n獲得潛能「速度星痕」\n獲得潛能「生命天賦」（9折）\n【選項獎勵・ESPR.gg】\n《白月溫煦如陽光》\n① （心懷感謝地收下。） → 力量+12、韌性+8、攻擊天賦、速度星痕\n② （…委婉地拒絕。） → 體力+12、韌性+8、生命天賦、速度星痕"
     },
     {
       "id": "rule_cb51fe40",
@@ -402,7 +402,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "選蓬鬆的枕頭吧 生命 +10"
+      "notes": "選蓬鬆的枕頭吧 生命 +10\n【選項獎勵・ESPR.gg】\n① 選營養劑吧。 → 力量+10、滿意度調查+1（旅程結束時可轉換為 8 潛力點數）\n② 選蓬鬆的枕頭吧。 → 體力+10、滿意度調查+1（旅程結束時可轉換為 8 潛力點數）\n③ 選香辣的食物吧。 → 韌性+10、滿意度調查+1（旅程結束時可轉換為 8 潛力點數）"
     },
     {
       "id": "rule_4244141f",
@@ -439,7 +439,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項2】對生存有幫助的祕術書"
+      "notes": "【選項2】對生存有幫助的祕術書\n【選項獎勵・ESPR.gg】\n① 對攻擊有幫助的祕術書。（花 古幣 30） → 攻擊技巧 或 攻擊技巧×2\n② 對生存有幫助的祕術書。（花 古幣 30） → 生命技巧 或 生命技巧×2\n③ 有對所有情況都有幫助的祕術書嗎？（花 古幣 50） → 速度技巧 或 速度技巧×2\n④ 全部都不需要。 → 專注技巧 或 保護技巧"
     },
     {
       "id": "rule_f3d9b024",
@@ -477,7 +477,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項2】\n﻿﻿體力+3、耐力-10﻿\n﻿獲得『生命感知』潛力"
+      "notes": "【選項2】\n體力+3、耐力-10\n獲得『生命感知』潛力\n【選項獎勵・ESPR.gg】\n《暴龍的襲擊》\n① 加油啊，絲卡蕾！我很期待哦！ → 體力+8、潛力點數+10\n② 危險啊，絲卡蕾…！ → 體力+3、耐力-10、生命感知\n《超厲害的兔女郎》\n① 加油啊，絲卡蕾！我很期待哦！ → 力量+10\n② 危險啊，絲卡蕾…！ → 耐力+15、肌肉拉傷3回合（最好不要動。力量訓練經驗值獲得量減少。）"
     },
     {
       "id": "rule_1f0ba11f",
@@ -512,7 +512,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦選項1，韌性+15\n因為選項2，5回合無法獲得體力"
+      "notes": "推薦選項1，韌性+15\n因為選項2，5回合無法獲得體力\n【選項獎勵・ESPR.gg】\n《上天的考驗》\n① 講些孩子們喜歡聽的故事吧。 → 韌性+15\n② 堅持下去吧！ → 韌性+5、耐力+25、過勞5回合（熱情過頭，結果燃燒殆盡。訓練中無法獲得體力。）、防禦感知"
     },
     {
       "id": "rule_06448311",
@@ -547,7 +547,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】力量+5、體力+5、耐力+10\n【選項2】力量+15、體力+15"
+      "notes": "【選項1】力量+5、體力+5、耐力+10\n【選項2】力量+15、體力+15\n【選項獎勵・ESPR.gg】\n《樓閣之上，迎接玻璃月》\n① 等等，我先確認看看。 → 保護+25、耐力-10\n② …裡面該不會有奇怪的東西吧？ → 保護+10、潛力點數+15\n《白月溫煦如陽光》\n① 等等，我先確認看看。 → 力量+5、體力+5、耐力+10\n② …裡面該不會有奇怪的東西吧？ → 力量+15、體力+15"
     },
     {
       "id": "rule_8b8c97c8",
@@ -582,7 +582,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "唯一推薦【選項1】『鋒利成長』最大生命值 6% 暴擊率 6%"
+      "notes": "唯一推薦【選項1】『鋒利成長』最大生命值 6% 暴擊率 6%\n【選項獎勵・ESPR.gg】\n《完美的兔女郎》\n① 老實坦白。 → 力量+5、體力+10、耐力-10、潛力點數+15、銳利成長\n　失敗 → 力量+5、體力+5、耐力-10、潛力點數+10、銳利成長\n② 隨便敷衍過去。 → 耐力+10、潛力點數+10、生命天賦"
     },
     {
       "id": "rule_123b3bbe",
@@ -619,7 +619,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "耐力-5、力量+10、體力+8\n旅程增益責任感（3回合）"
+      "notes": "耐力-5、力量+10、體力+8\n旅程增益責任感（3回合）\n【選項獎勵・ESPR.gg】\n《補強缺點客製化訓練》\n① 嗯，今天就早點回去吧。 → 耐力+15\n② 但還是要遵守打烊時間才行。 → 力量+10、體力+8、耐力-5、責任感3回合（即便面對種種無理取鬧的奧客，依然秉持著責任感並堅持工作到最後一刻。訓練失敗率減少。）"
     },
     {
       "id": "rule_9778b7cc",
@@ -677,7 +677,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "心情BEST時，選項1，耐力+10 韌性+5\n否則，自動選項2，狀態+1 韌性+5\n"
+      "notes": "心情BEST時，選項1，耐力+10 韌性+5\n否則，自動選項2，狀態+1 韌性+5\n【選項獎勵・ESPR.gg】\n《兔子鎮》\n① 住手，克拉麗莎…！ → 耐力+10、韌性+5\n② 聽說有模仿兔子的魔獸在活動！ → 狀態+1、韌性+5"
     },
     {
       "id": "rule_6a1ce4d4",
@@ -714,7 +714,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦選項1，體力+5、耐力+15\n選項2，體力+15"
+      "notes": "推薦選項1，體力+5、耐力+15\n選項2，體力+15\n【選項獎勵・ESPR.gg】\n《某個騎士的誓言》\n① 叫住跑走的夏爾。 → 體力+5、耐力+15\n② 等待夏爾回來。 → 體力+15\n《笨拙的慾望宣洩法》\n① 叫住跑走的夏爾。 → 力量+10、狀態+1\n② 等待夏爾回來。 → 潛力點數+30、速度技巧"
     },
     {
       "id": "rule_fb521c79",
@@ -751,7 +751,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦【選項1】耐力-5、潛質點數+20"
+      "notes": "推薦【選項1】耐力-5、潛質點數+20\n【選項獎勵・ESPR.gg】\n《慵懶午後的空閒》\n① 好啊，那給我一碗吧？ → 耐力-5、潛力點數+20\n② 不，平民用的就夠了… → 共鳴能力（能夠深刻理解他人心意的旅程團員。訓練中獲得的羈絆點數增加。）\n《玻璃窗外的夜景》\n① 好啊，那給我一碗吧？ → 保護+5、自信心2回合（沒有人能阻止你。訓練失敗率減少。）\n② 不，平民用的就夠了… → 保護+5、狀態+1"
     },
     {
       "id": "rule_5b25e998",
@@ -788,7 +788,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦選項1\n【成功】韌性+20、狀態+1，獲得3回合旅行buff：作戰指令，獲得潛能『防禦技巧』\n【失敗】耐力-10、體力+25\n"
+      "notes": "推薦選項1\n【成功】韌性+20、狀態+1，獲得3回合旅行buff：作戰指令，獲得潛能『防禦技巧』\n【失敗】耐力-10、體力+25\n【選項獎勵・ESPR.gg】\n《鄉愁的反擊》\n① 收下凌準備的物品。 → 狀態+1、韌性+20、防禦技巧、作戰方針3回合（以熟練的指揮調度現場。訓練失敗率減少。）\n　失敗 → 體力+25、耐力-10\n② 指向散落在地上的玩偶。 → 耐力+15、狀態+1"
     },
     {
       "id": "rule_72c557ea",
@@ -825,7 +825,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "選項1\n耐力-10、韌性+25、潛質點數+20\n獲得潛能『沉默盾牌（坦克專用）』"
+      "notes": "選項1\n耐力-10、韌性+25、潛質點數+20\n獲得潛能『沉默盾牌（坦克專用）』\n【選項獎勵・ESPR.gg】\n《鄉愁的反擊》\n① 裝作受傷！ → 耐力-10、韌性+25、潛力點數+20、沉默盾牌\n② 用歪理糊弄過去！ → 力量+5、體力+10、沉默盾牌"
     },
     {
       "id": "rule_44623fad",
@@ -862,7 +862,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "唯一推薦選項1，耐力+10"
+      "notes": "唯一推薦選項1，耐力+10\n【選項獎勵・ESPR.gg】\n《心滿意足的一餐》\n① 打開書看看。 → 耐力+10\n② 讓給薇絲塔。 → 體力+8、專注+8、保護+12、耐力-10\n　失敗 → 保護+15、耐力-10"
     },
     {
       "id": "rule_f00f2cad",
@@ -899,7 +899,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦選項1"
+      "notes": "推薦選項1\n【選項獎勵・ESPR.gg】\n《心滿意足的一餐》\n① 阻止薇絲塔。 → 體力+8、專注+8、保護+15、強韌意志\n　失敗 → 體力+8、專注+8、保護+15、耐力-20、強韌意志\n② 只是旁觀。 → 保護+15、強韌意志"
     },
     {
       "id": "rule_0baa8286",
@@ -936,7 +936,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦選項1，失敗報酬仍可接受"
+      "notes": "推薦選項1，失敗報酬仍可接受\n【選項獎勵・ESPR.gg】\n《玻璃窗外的夜景》\n① 好吧，我會盡量寫得奇怪一點。 → 韌性+8、保護+12\n② 我有個更好的主意… → 保護+10、狀態+1\n《慵懶午後的空閒》\n① 好吧，我會盡量寫得奇怪一點。 → 體力+5、生命技巧\n　失敗 → 體力+20、耐力-5、生命技巧×2\n② 我有個更好的主意… → 潛力點數+15、生命感知"
     },
     {
       "id": "rule_1e71c233",
@@ -971,7 +971,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】韌性+10 獲得潛能『洞察技巧』\n【選項2】韌性+10 獲得潛能『破壞技巧』"
+      "notes": "【選項1】韌性+10 獲得潛能『洞察技巧』\n【選項2】韌性+10 獲得潛能『破壞技巧』\n【選項獎勵・ESPR.gg】\n《致群花之死》\n① 一起享用下午茶。 → 韌性+10、洞察技巧\n② …還是暫時離開一下比較好。 → 韌性+10、破壞技巧"
     },
     {
       "id": "rule_a362f608",
@@ -1035,7 +1035,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "[選項一]力量+8，耐力+12，耐力-5\n[選項二]狀態+1，耐力-5"
+      "notes": "[選項一]力量+8，耐力+12，耐力-5\n[選項二]狀態+1，耐力-5\n【選項獎勵・ESPR.gg】\n《今日的一步》\n① 翻地的事就交給我吧。 → 力量+8、體力+12、耐力-5\n② 搬土的事就交給我吧。 → 狀態+1、耐力-5"
     },
     {
       "id": "rule_903aeb41",
@@ -1072,7 +1072,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "[選項一]力量+10，耐力+12\n[選項二]耐力 +12，「釋放潛能」感知的破壞（九折）"
+      "notes": "[選項一]力量+10，耐力+12\n[選項二]耐力 +12，「釋放潛能」感知的破壞（九折）\n【選項獎勵・ESPR.gg】\n《今日的一步》\n① 靜靜聆聽兩人的對話。 → 力量+10、體力+12\n② 泡了一壺簡單的茶。 → 體力+12、破壞感知"
     },
     {
       "id": "rule_619df031",
@@ -1109,7 +1109,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《今日的一步》\n① …要繼續貼看板嗎？ → 力量+10、體力+10、耐力-5、孤高的求道者\n　失敗 → 體力+20、耐力-5、孤高的求道者\n② …要休息一下再來嗎？ → 體力+5、孤高的求道者"
     },
     {
       "id": "rule_730da255",
@@ -1144,7 +1144,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "選擇2，不賭!\n[彈性加速]回合開始時自身的速度10每次增加. 最多3次疊加，力量+5"
+      "notes": "選擇2，不賭!\n[彈性加速]回合開始時自身的速度10每次增加. 最多3次疊加，力量+5\n【選項獎勵・ESPR.gg】\n《跟綺拉一樣可愛！》\n① 用力量強行打開。 → 力量+12、專注+8、彈力加速\n　失敗 → 力量+10、耐力-10、彈力加速\n② 接受命運。 → 力量+5、彈力加速"
     },
     {
       "id": "rule_06f755dc",
@@ -1179,7 +1179,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《貓不會笑》\n① 小心翼翼地試著摸摸頭吧。 → 專注+8、保護+5、狀態+1\n　失敗 → 專注+8、耐力-10\n② 就是現在！像亞瑟菈那樣摸摸肚子！ → 專注+8、耐力+5\n《度假準備，先從購物開始！》\n① 小心翼翼地試著摸摸頭吧。 → 力量+10、潛力點數+10\n② 就是現在！像亞瑟菈那樣摸摸肚子！ → 專注+20、潛力點數+10"
     },
     {
       "id": "rule_22f35e28",
@@ -1216,7 +1216,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】韌性+10、專注+12\n【選項2】獲得潛能‘破壞感知’"
+      "notes": "【選項1】韌性+10、專注+12\n【選項2】獲得潛能‘破壞感知’\n【選項獎勵・ESPR.gg】\n《致群花之死》\n① 還是老實認錯反省吧！ → 韌性+10、專注+12\n② 既然這樣，也只能試著裝可憐蒙混過去了！ → 破壞感知"
     },
     {
       "id": "rule_704966f4",
@@ -1251,7 +1251,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "推薦選項1，失敗或成功都不錯。"
+      "notes": "推薦選項1，失敗或成功都不錯。\n【選項獎勵・ESPR.gg】\n《永恆束縛之枷》\n① 這絕對是在演戲。 → 力量+15、體力+8、專注+12、專注技巧×2\n　失敗 → 力量+15、專注+8、專注技巧\n② 是不是應該先道個歉？ → 力量+15、專注+12、狀態+1\n　失敗 → 力量+15、專注+12"
     },
     {
       "id": "rule_2a5de40a",
@@ -1307,7 +1307,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】力量+12、專注+8、耐力+10、潛點+20『觸發層疊’潛力\n【選項2】力量+12、專注+8、狀態+1、潛質點數+20『觸發層疊’潛力\n如果狀態不是BEST就選2"
+      "notes": "【選項1】力量+12、專注+8、耐力+10、潛點+20『觸發層疊’潛力\n【選項2】力量+12、專注+8、狀態+1、潛質點數+20『觸發層疊’潛力\n如果狀態不是BEST就選2\n【選項獎勵・ESPR.gg】\n《虛數開拓者》\n① 繼續觀察。 → 力量+12、專注+8、耐力+10、潛力點數+20、觸發層疊\n② 阻止奧米嘉。 → 力量+12、專注+8、狀態+1、潛力點數+20、觸發層疊"
     },
     {
       "id": "rule_b8099b5a",
@@ -1363,7 +1363,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "如果心情不是 BEST 選2 心情+1"
+      "notes": "如果心情不是 BEST 選2 心情+1\n【選項獎勵・ESPR.gg】\n《資深傭兵》\n① 換個工作試試吧！ → 耐力+15\n② 吃點好吃的忘掉吧！ → 狀態+1、潛力點數+10"
     },
     {
       "id": "rule_1f22301b",
@@ -1398,7 +1398,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《無歸之旅》\n① 細細品味香氣後喝下。 → 狀態+1、體力+8\n② 大口大口地喝下。 → 體力+10、潛力點數+15、破壞技巧"
     },
     {
       "id": "rule_e5d066f0",
@@ -1454,7 +1454,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《文件堆上的責任感》\n① 要不要問問看發生什麼事了？ → 狀態+1、災難應對協議\n② 她看起來很忙，還是別打擾了… → 耐力+15、災難應對協議"
     },
     {
       "id": "rule_76c92607",
@@ -1489,7 +1489,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "[1]成功；+10 韌性 +10 專注\n[2]成功；專注感知"
+      "notes": "[1]成功；+10 韌性 +10 專注\n[2]成功；專注感知\n【選項獎勵・ESPR.gg】\n《耽溺者的消遣》\n① 會不會是授課主題的問題？ → 韌性+10、專注+10\n② 會不會是授課方式的問題？ → 專注感知"
     },
     {
       "id": "rule_3ed0eaf1",
@@ -1524,7 +1524,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "[1]成功；+12 韌性 +8 體力 速度技巧\n[2]成功；+12 韌性 +8 體力 洞察技巧"
+      "notes": "[1]成功；+12 韌性 +8 體力 速度技巧\n[2]成功；+12 韌性 +8 體力 洞察技巧\n【選項獎勵・ESPR.gg】\n《耽溺者的消遣》\n① 給克溫。 → 韌性+12、體力+8、速度技巧\n② 給教授。 → 韌性+12、體力+8、洞察技巧"
     },
     {
       "id": "rule_a6dd0387",
@@ -1559,7 +1559,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《耽溺者的消遣》\n① 粉紅研究：知曉未來的預言者 → 韌性+15、潛力點數+20、敏捷姿態\n② 粉紅研究：莫諾利斯教團的聖女 → 專注+18、專注天賦、敏捷姿態"
     },
     {
       "id": "rule_0b7697d7",
@@ -1594,7 +1594,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《自稱資深偵探的調查手法》\n① 保持沉默。 → 力量+10、耐力+5、潛力點數+10、攻擊感知×2\n② 指向克溫。 → 體力+10、潛力點數+10、攻擊技巧"
     },
     {
       "id": "rule_fd1fa04b",
@@ -1629,7 +1629,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】﻿﻿專注+5、潛質點數+10﻿﻿，『集中技巧』潛力﻿\n﻿【選項2】﻿﻿力量+5、潛質點數+10，﻿﻿『集中技巧』潛力"
+      "notes": "【選項1】專注+5、潛質點數+10，『集中技巧』潛力\n【選項2】力量+5、潛質點數+10，『集中技巧』潛力\n【選項獎勵・ESPR.gg】\n《深切哀悼》\n① 我覺得你的石頭比較漂亮耶？ → 專注+5、潛力點數+10、專注技巧\n② 我們去找找看吧！ → 力量+5、潛力點數+10、專注技巧"
     },
     {
       "id": "rule_74a72fd7",
@@ -1664,7 +1664,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《深切哀悼》\n① 你不會用危險的巫術吧？ → 力量+10、專注+15、潛力點數+15、蠶食的陰影\n　失敗 → 力量+8、專注+12、潛力點數+10、蠶食的陰影\n② 貝爾·莉絲。把藥給我，跑起來。 → 耐力+20"
     },
     {
       "id": "rule_732f4ffe",
@@ -1744,7 +1744,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "獲得旅行buff：商店打折（1回合）\n心情+0~1 舊硬幣+30"
+      "notes": "獲得旅行buff：商店打折（1回合）\n心情+0~1 舊硬幣+30\n【選項獎勵・ESPR.gg】\n① 代為購買。（花 古幣 30） → 月光香水試用品+1（旅程結束時可轉換為 4 潛力點數）、保護+15–20\n② 為了旅程省下。 → 無"
     },
     {
       "id": "rule_8161bd35",
@@ -1789,20 +1789,18 @@
       "enabled": true,
       "steps": [
         {
-          "type": "match_image",
+          "type": "detect",
           "params": {
-            "template": "",
-            "template_data": "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8C8lJiZarVYAM2fO3LVrF0TLly+fOnVqeXn5lClTiouLIdq6detf/vKXc+fOGY1GAImJiVarVa1WZ2dnr1y5MkzJ6w0tAJBOb6ivd/l9PgDnz5+Pi4sD4HK5PB4Px3G3b99+9dVXi4uLk5OTs7Ky2rdvv3v37okTJ1osFrPZ7HA4MjMzbTbbF198MXDgwBs3brzxxhtHjhzhJBKd3gAQRB53vbveBWD9+vUxMTEQKZXKvn37qlQqACdOnKisrETI+fPnFy1aRMQplCqligdQ7awIBgPLly//4x//2KZNm/bt2ysUCgBVVVXffffdvn37evTooVKpEMLzfK9evSIiIs6fP//TTz8JgoAQxpjdbl+wYAGA3NzcFi1aaDSa7t27Azh//nxtbS1EPM/37Nmztrb2woULt27dmjBhAoAdO3a88MILx44dGzBgAIAxY8asX79eqVQuXrz4/ffflys1+ohIAKTTGwBUVzkBbN68+bHHHgsGg0T06KOPdu3a9cKFC926dQNQWFg4aNCg69evv/TSS+fOnbNYLGaz2eFwZGZm2my2wYMHb9y4MSYm5uuvvzaZTADC5AperQFQXVUpBIO4z+uvv75w4cKWLVteunRpyZIle/bswYMQkSGiRV1trc/rHjFixMaNG6OjoyG6cuXK7t27Fy1a1LNnT4vF0rVrVyICQES4D2MMorq6ugMHDrzwwgsAPv/882effZbjONyLMUZEEHm93rNnz/bv3x9Afn7+8OHDv/zyy2HDhgGYNGnSO++8ExYWNn/+/C1btih4rc4QCYB0egOAurraYCCAZj755BOTyXTy5Mnhw4fn5OSMGjVKLpdv37592rRpACwWi9lsdjgcmZmZNpsNwAcffPDCCy8Eg8Ht27fPmzcPgCG8BQjOirt4EJvNNmHCBAAFBQUbN27cv38/HkKh5DmO6l11AL755hu32x0eHh4XF3fx4kWj0QjRvn37VCoVAJlM1qlTp1atWqGZa9euXb9+HSGlpaUzZswAsHLlyueee65du3bFxcWlpaUdOnSIi4s7c+ZMWVnZ0KFDfT5fcXGx1+stLy/Pzs4GcPz48T59+nz66afJyckAXn/99cWLFxNRenr6J598ouS1WkMEQKTTGwB4PB6vx41mTp482a5duz179ni93tGjR7dv3/748eP9+/eHyGKxmM1mh8ORmZlps9kg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",
+            "text": "迷宮探勘",
             "roi": {
-              "x": 0.1125,
-              "y": 0.19074074074074074,
-              "w": 0.0796875,
-              "h": 0.06851851851851852,
+              "x": 0.110625,
+              "y": 0.18777777777777777,
+              "w": 0.084375,
+              "h": 0.07555555555555556,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
-            "match_color": false,
-            "color_tolerance": 100,
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
             "on_fail": "stop",
             "after_delay_ms": 0
           }
@@ -1826,7 +1824,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 這個金額夠嗎？（花 古幣 50） → 耐力+15 / +20、未知的文物+1（旅程結束時可轉換為 4 潛力點數）\n② 自己開起重機怎麼樣？（需求 保護 50/70/90） → 韌性+15 / +20、潛力點數+15\n③ 得找找看有沒有替代路線了。 → 無"
     },
     {
       "id": "rule_24bb4634",
@@ -1871,22 +1869,22 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】命中/抗+10 技能點+20【速度的感覺】20%打折\n(省體力通常建議先選項2或3)\n"
+      "notes": "【選項1】命中/抗+10 技能點+20【速度的感覺】20%打折\n(省體力通常建議先選項2或3)\n【選項獎勵・ESPR.gg】\n① 利用地形甩開它。（消耗 耐力 20） → 專注+10、保護+10、潛力點數+20、速度感知×2\n② 沉著加強防禦。（需求 韌性 125/150/175） → 專注+10、保護+10、潛力點數+20、狀態+1\n③ 逃往上層。 → 無"
     },
     {
       "id": "rule_aabbabec",
-      "name": "突髮遭遇史萊姆",
+      "name": "突發遭遇一史萊姆",
       "enabled": true,
       "steps": [
         {
           "type": "detect",
           "params": {
-            "text": "突髮遭遇一史萊姆",
+            "text": "突發遭遇一史萊姆",
             "roi": {
-              "x": 0.11354166666666667,
-              "y": 0.1925925925925926,
-              "w": 0.13333333333333333,
-              "h": 0.06481481481481481,
+              "x": 0.110625,
+              "y": 0.18888888888888888,
+              "w": 0.139375,
+              "h": 0.07333333333333333,
               "roi_coord": "client"
             },
             "match_mode": "fuzzy",
@@ -1906,7 +1904,7 @@
         {
           "type": "key",
           "params": {
-            "key": "3",
+            "key": "2",
             "hold_ms": 0,
             "after_delay_ms": 0
           }
@@ -1914,7 +1912,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "優先【選項1】力量 +5 生命 +5 防禦 +5 技能點 +25\n能力不足時【選項3】"
+      "notes": "優先【選項1】力量 +5 生命 +5 防禦 +5 技能點 +25\n能力不足時【選項3】\n【選項獎勵・ESPR.gg】\n① 趕走史萊姆吧。（需求 專注 60/80/100） → 潛力點數+10、力量+5、體力+5、韌性+5\n② 幫忙疏散吧。（消耗 耐力 10） → 古幣+30\n③ 不要牽扯進去。 → 無\n① 趕走史萊姆吧。（需求 保護 60/80/100） → 潛力點數+10、力量+5、體力+5、韌性+5\n② 幫忙疏散吧。（消耗 耐力 10） → 古幣+30\n③ 不要牽扯進去。 → 無"
     },
     {
       "id": "rule_c3dd5e71",
@@ -1980,7 +1978,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "如果心情是【BSET】，則優先使用【選項2】，否則使用【選項1】。\n找不到【BSET】時，優先使用【選項1】補充心情+1。"
+      "notes": "如果心情是【BSET】，則優先使用【選項2】，否則使用【選項1】。\n找不到【BSET】時，優先使用【選項1】補充心情+1。\n【選項獎勵・ESPR.gg】\n① 有熊騎怎麼能忍！（需求 體力 200/300/500） → 力量+10、保護+10、狀態+1、潛力點數+20\n② 是體驗傳統料理的好機會！（需求 保護 100/125/150） → 力量+20 / +30、潛力點數+20\n③ 現在得先回住處。（消耗 耐力 20） → 保護+20 / +30、潛力點數+20\n④ 先溜為上！ → 耐力+5 / +10"
     },
     {
       "id": "rule_c0f4b79f",
@@ -2044,7 +2042,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【選項1】: 心情+ 1，失敗: 無\n【選項2】: 體力+10，失敗: 無"
+      "notes": "【選項1】: 心情+ 1，失敗: 無\n【選項2】: 體力+10，失敗: 無\n【選項獎勵・ESPR.gg】\n① 將抽獎券投入左邊的箱子。（莉賽特的抽獎券 1） → 古幣+150、狀態+1\n② 將抽獎券投入右邊的箱子。（莉賽特的抽獎券 1） → 古幣+150、耐力+10\n③ 等待下次機會。 → 無"
     },
     {
       "id": "rule_5906ac59",
@@ -2087,7 +2085,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 去幫忙吧。（消耗 耐力 20） → 一日打工生1回合（啟示錄商團的每日救援者，交易時商品購買價格會降低。）、古幣+30\n　失敗 → 一日打工生1回合（啟示錄商團的每日救援者，交易時商品購買價格會降低。）、古幣+50\n② 再等一下看看。 → 無"
     },
     {
       "id": "rule_e47d7d64",
@@ -2130,7 +2128,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 邊找邊逛的時間也會很有趣的。（消耗 耐力 20） → 古典鑰匙+1（旅程結束時可轉換為 8 潛力點數）、專注+30、保護+15、與莉賽特的回憶5回合（想起像棉花糖般甜蜜的回憶。訓練失敗率減少。）\n② 這附近就有。 → 專注+10、耐力+5"
     },
     {
       "id": "rule_7e785de2",
@@ -2173,7 +2171,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 你說的保險箱鑰匙，是不是這個？（古典鑰匙 1） → 莉賽特的存錢筒+1（旅程結束時可轉換為 12 潛力點數）、潛力點數+20\n② 找個手藝好的鎖匠來怎麼樣？ → 潛力點數+15"
     },
     {
       "id": "rule_3a1aecb4",
@@ -2210,7 +2208,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "選項1，旅程結束回收時 +50 潛力點\n選項2，潛力點 +10"
+      "notes": "選項1，旅程結束回收時 +50 潛力點\n選項2，潛力點 +10\n【選項獎勵・ESPR.gg】\n① 決定收下。 → 老舊的沙漏+1（旅程結束時可轉換為 50 潛力點數）\n② 拒絕。 → 潛力點數+10"
     },
     {
       "id": "rule_2b0e12f4",
@@ -2247,7 +2245,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《不屈的傑作》\n① 預測芙蕾赢。 → 力量+10、耐力+15、潛力點數+20、堅固的破壞\n　失敗 → 力量+10、耐力+15、傾家蕩產3回合（耗盡所有財產後，完全提不起勁。訓練中獲得的力量減少。）、潛力點數+30、堅固的破壞\n② 預測露娜赢。 → 體力+10、韌性+10、潛力點數+10、堅固的破壞"
     },
     {
       "id": "rule_ceb446a7",
@@ -2305,7 +2303,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "心情為BEST時，【選項1】耐力 +10 ~15，\n否則，【選項2】心情 +1力量 +15 >【選項1】\n"
+      "notes": "心情為BEST時，【選項1】耐力 +10 ~15，\n否則，【選項2】心情 +1力量 +15 >【選項1】\n【選項獎勵・ESPR.gg】\n① 購買一把。（花 古幣 50） → 耐力+10 / +15、傳說之劍仿冒品+1（旅程結束時可轉換為 4 潛力點數）\n② 找出弱點。（需求 專注 30/50/70） → 狀態+1、力量+15、傳說之劍仿冒品+1（旅程結束時可轉換為 4 潛力點數）\n③ 正式挑戰。（消耗 耐力 20） → 傳說的救援者3回合（今天感覺就像成為了傳說中的救援者。訓練中獲得的潛力點數增加。）、力量+20、傳說之劍仿冒品+1（旅程結束時可轉換為 4 潛力點數）\n④ 直接走過。 → 耐力+5 / +10"
     },
     {
       "id": "rule_9c72ffe3",
@@ -2313,20 +2311,18 @@
       "enabled": true,
       "steps": [
         {
-          "type": "match_image",
+          "type": "detect",
           "params": {
-            "template": "",
-            "template_data": "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",
+            "text": "沙灘排球比賽預賽",
             "roi": {
-              "x": 0.11354166666666667,
-              "y": 0.1925925925925926,
-              "w": 0.134375,
-              "h": 0.06481481481481481,
+              "x": 0.110625,
+              "y": 0.18555555555555556,
+              "w": 0.14,
+              "h": 0.07777777777777778,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
-            "match_color": false,
-            "color_tolerance": 100,
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
             "on_fail": "stop",
             "after_delay_ms": 0
           }
@@ -2371,7 +2367,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "心情【BEST】優先【選項2】>【選項1】，【選項2】能力不夠時，500ms後自動【選項1】\n心情不為【BEST】時優先【選項1】心情+1"
+      "notes": "心情【BEST】優先【選項2】>【選項1】，【選項2】能力不夠時，500ms後自動【選項1】\n心情不為【BEST】時優先【選項1】心情+1\n【選項獎勵・ESPR.gg】\n① 攻擊對手的弱點。（需求 力量 200/300/500） → 體力+10、專注+10、狀態+1、潛力點數+20\n② 發揮我方的優勢。（需求 專注 100/125/150） → 體力+20 / +30、潛力點數+20\n③ 用氣勢壓倒對方。（消耗 耐力 20） → 專注+20 / +30、潛力點數+20\n④ …總會有辦法的！ → 耐力+5 / +10"
     },
     {
       "id": "rule_d12547ea",
@@ -2408,7 +2404,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【推薦】一般選1選項開賭，就算失敗了代價也可以接受\n【成功】力量 or 生命 or 防禦 +20，命中 or 命抗 +20，心情 +1\n【失敗】心情 -1"
+      "notes": "【推薦】一般選1選項開賭，就算失敗了代價也可以接受\n【成功】力量 or 生命 or 防禦 +20，命中 or 命抗 +20，心情 +1\n【失敗】心情 -1\n【選項獎勵・ESPR.gg】\n① 用適當的力量施加衝擊。（未知的文物 1） → 力量+20 或 體力+20 或 韌性+20、專注+20 或 保護+20、狀態+1\n　失敗 → 狀態-1\n② 發動強力攻擊。（未知的文物 1） → 力量+10 或 體力+10 或 韌性+10、專注+10 或 保護+10\n③ 文物就應該要好好珍藏。 → 潛力點數+10"
     },
     {
       "id": "rule_3b2ddcb6",
@@ -2445,7 +2441,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "選項2，潛在要點+15~30 獲得「特別海報」\n選項4，耐力+5~10"
+      "notes": "選項2，潛在要點+15~30 獲得「特別海報」\n選項4，耐力+5~10\n【選項獎勵・ESPR.gg】\n① 一起去吃限定甜點吧！（花 古幣 50） → 狀態+1 / +2、潛力點數+10\n② 一起去看新上映的電影吧！（花 古幣 30） → 潛力點數+15 / +30、特典海報+1（旅程結束時可轉換為 8 潛力點數）\n③ 要不要帶著三明治去野餐？（消耗 耐力 20） → 力量+10 / +20 或 體力+10 / +20 或 韌性+10 / +20、專注+5 / +10 或 保護+5 / +10\n④ 今天就這樣好好休息吧。 → 耐力+5 / +10"
     },
     {
       "id": "rule_d3b31cb3",
@@ -2482,7 +2478,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 雖然會費點力氣…挖挖看吧！（消耗 耐力 10） → 可疑的箱子+1（旅程結束時可轉換為 8 潛力點數）、潛力點數+10\n② 不能在這種地方浪費體力！ → 無"
     },
     {
       "id": "rule_d0fab7fb",
@@ -2540,7 +2536,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 問卷評價：良好 → 古幣+10、狀態+1\n② 問卷評價：普通 → 古幣+30、耐力-10、體力+10\n③ 問卷評價：不佳 → 古幣+20、狀態-1、潛力點數+20\n④ 今天有點… → 無"
     },
     {
       "id": "rule_62514638",
@@ -2583,7 +2579,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 使用懷爐吧。（手暖爐 1） → 力量+20 或 體力+20 或 韌性+20、專注+20 或 保護+20、狀態+1、耐力+10\n② 忍耐寒冷…或許也算是訓練！？ → 力量+10 或 體力+10 或 韌性+10、專注+10 或 保護+10、耐力-10、解除增益狀態"
     },
     {
       "id": "rule_c13265b6",
@@ -2626,7 +2622,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 把他們解決掉！（需求 體力 300/400/600） → 潛力點數+10、力量+10\n② 今後也請多多關照。（花 古幣 20） → 專注+10 或 保護+10\n③ 策略性撤退！ → 無"
     },
     {
       "id": "rule_717a1cb7",
@@ -2669,7 +2665,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 拿起石像的劍。（石像之劍 1） → 力量+20、體力+20\n　失敗 → 力量+20、體力+10、力量的養分3回合（正在為後代提供可繼承的力量。訓練中獲得的體力減少。）\n② 維持原狀不動。 → 無\n① 拿起石像的花。（石像之花 1） → 體力+20、力量+20\n　失敗 → 體力+20、力量+10、體力的養分3回合（正在為後代提供可繼承的體力。訓練中獲得的力量減少。）\n② 維持原狀不動。 → 無"
     },
     {
       "id": "rule_d7316328",
@@ -2706,7 +2702,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "選項1開賭!"
+      "notes": "選項1開賭!\n【選項獎勵・ESPR.gg】\n① 相信努力就會有回報！（消耗 耐力 10） → 力量+10 或 體力+10 或 韌性+10、期限效應5回合（壓力也能帶來正向影響。訓練中獲得的潛力點數增加。）\n　失敗 → 力量+5 或 體力+5 或 韌性+5、貪欲5回合（過度訓練反而成了毒藥。訓練失敗率增加。）\n② 再堅持一下吧。（消耗 耐力 10） → 力量+5 或 體力+5 或 韌性+5\n③ 現在這樣已經足夠了。 → 無"
     },
     {
       "id": "rule_2b282d8b",
@@ -2749,7 +2745,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "无脑选1选项，要不就选3选项放弃"
+      "notes": "无脑选1选项，要不就选3选项放弃\n【選項獎勵・ESPR.gg】\n① 給他們點顏色瞧瞧！（需求 力量 300/400/600） → 潛力點數+10、體力+10\n② 用言語說服他們。（潛力點數 10） → 耐力-10、專注+10\n③ 裝死算了。 → 無"
     },
     {
       "id": "rule_09d71a37",
@@ -2784,7 +2780,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "一般不賭，選4選項回體力；賭了贏了起飛，輸了就可以準備殺了"
+      "notes": "一般不賭，選4選項回體力；賭了贏了起飛，輸了就可以準備殺了\n【選項獎勵・ESPR.gg】\n① 詭異的紅色藥水。（花 古幣 20） → 空藥罐+1（旅程結束時可轉換為 8 潛力點數）、力量+20、體力+20、韌性+20、專注+20、保護+20\n　失敗 → 空藥罐+1（旅程結束時可轉換為 8 潛力點數）、力量-10、體力-10、韌性-10、專注-10、保護-10、耐力-20、魔力耗盡5回合（因體力不濟，連站著都很吃力。訓練失敗率大幅增加。）\n② 冰冷的藍色藥水。（花 古幣 20） → 空藥罐+1（旅程結束時可轉換為 8 潛力點數）、戈耳狄俄斯之劍5回合（任何難關都不足為懼。訓練失敗率減少。）、狀態+1、耐力+10\n　失敗 → 空藥罐+1（旅程結束時可轉換為 8 潛力點數）、耐力-20、狀態-1\n③ 耀眼的黃色藥水。（花 古幣 20） → 空藥罐+1（旅程結束時可轉換為 8 潛力點數）、潛力點數+20、古幣+30、耐力+10\n　失敗 → 空藥罐+1（旅程結束時可轉換為 8 潛力點數）、突發性低潮5回合（回頭一看，真是虛度的一生。訓練失敗率增加。）\n④ 放在旁邊的普通飲料。 → 耐力+10"
     },
     {
       "id": "rule_64893aa5",
@@ -2827,7 +2823,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "有電扇就用，先按1在按2。"
+      "notes": "有電扇就用，先按1在按2。\n【選項獎勵・ESPR.gg】\n① 使用手持電風扇吧。（手持隨身風扇 1） → 力量+20 或 體力+20 或 韌性+20、專注+20 或 保護+20、狀態+1、耐力+10\n② 沒辦法，只能忍耐了。 → 力量+10 或 體力+10 或 韌性+10、專注+10 或 保護+10、狀態-1、解除增益狀態"
     },
     {
       "id": "rule_f63b13d8",
@@ -2862,7 +2858,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 趕快打開吧。（可疑的箱子 1） → 力量+10、體力+10、韌性+10\n② 下次再打開吧。 → 無"
     },
     {
       "id": "rule_235dfd96",
@@ -2905,7 +2901,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n① 將文物賣給教團。（未知的文物 1） → 古幣+80\n② 想自己留著。 → 無"
     },
     {
       "id": "rule_6f3b53ec",
@@ -3230,6 +3226,23 @@
       "enabled": true,
       "steps": [
         {
+          "type": "detect",
+          "params": {
+            "text": "力量訓練",
+            "roi": {
+              "x": 0.80625,
+              "y": 0.22111111111111112,
+              "w": 0.08125,
+              "h": 0.07555555555555556,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
           "type": "compare",
           "params": {
             "roi": {
@@ -3239,7 +3252,7 @@
               "h": 0.034140969162995596,
               "roi_coord": "client"
             },
-            "pattern": "-?\\d+\\.?\\d*",
+            "pattern": "-?\\d+",
             "operator": ">=",
             "value": 55.0,
             "on_fail": "stop"
@@ -3270,20 +3283,18 @@
       "enabled": true,
       "steps": [
         {
-          "type": "match_image",
+          "type": "detect",
           "params": {
-            "template": "",
-            "template_data": "iVBORw0KGgoAAAANSUhEUgAAAHcAAAAYCAIAAABP+fVSAAARIUlEQVRoBe3BeXDTBaIH8O8vv9xnm6RN7yRNL1OpWBcXUQ5ZEUUoRhgdrK4Vl0ucIVNcDkF2oKsU5IoHVNBiWIehiMjaLofHsmypEkC6yNU2PaD3leY+f/n9fo/Jm7xpH/Lc94dv3h9+PoTNaMSvfmGEzWjEr35hhM1oxB0IDofMzeWmpnLVaq5azUtM5KtUfKWS4HJ7Pvoo/M9/4qcQUinXYMBdUJcvI0ZWWqr+3e+c58+7qqpwB15RUebrr4Nl2196CWNx8/NTX3st2NU1vHUrgNS33uIplSPffksIBIL09OGtW3EXhERCpqSQGg2pVHJVKl5iIk+t5iuVpFDYbbFQly8jTv7CC4mPPBLo7Bx6+23chfSZZ8jERPfHH+PfRtiMRgCaDRuEGRkcPp/D45ECAUcgIIVCUigk+XyWpplolGUYhqIor9dz40b/unUAsnbv5ggEiGMiEdrrTSwuZmkatxEEweGwNI3bCILyeFrmz0eMxGTSL18ecjjaFi1iPR6MxSsqyt+1i3K7m00mjKVetSrzmWccjY2dy5YB0O3bl/Tb39rffTfhoYdkBsPIxYu9q1axDIMYSUmJZt48Uizm8HgcHo/D4wEgRSImFGIRw7Jhp9Nz5crgn/+MONnzz2tfeYWJRDq2bw9+8w3iuPn54gcfFOfnS3Q6SVYWQ1F9tbWOXbvwUwRTpuC2SCR87hxiCJvRCEC5YkXa3LkMRTEUxUQiTCQCgOBwIk5nqL+fGhmhPR5xTk54YMB/8WL4u+8A5B05IkxK4vD5pFBIeTwRr9d7/XrKjBlD586BYXgKhSQry3XlCgCJXs9Go00lJYjh3nOPZtEieUFB72efuffvx1i8oqICiyXscrWYTBiNz8/99FNJRkZ7VZXnwAEAWVVVmocftr/7bvDatbTFixMKC0cuXep6801mcBAx2qoqgsdjaZqhKCYc5nC5qgcf7P/mm0Bra3R4mOrpoRobMRaZnp5SXq6aMKH/668HKyrETz6ZMH26KDVVoFbzFQoQBENRwf5+f0eH5+JF3+HD+Cm5R46IkpOHv/uud80axBA2oxEx4lmzspYuZaLRWzt3huvr5WVluoUL3U1NtxYvBiCYPDlnwwYAHTt3Bo4fByCcOhUkmbFkiVCluvXRR1RfX8KMGemzZrW+957n4MGM7dsT7r235Y03wDD6devAsk0lJcl/+lPi+PEYK9jf3/X666zfjxjRE0/krF4ddrk63nyTunoVcUlr1+oWLBi+dKmjrAwxme+9lzp9euuePSPvv09mZGRs2BD1+Xo3bmTdbvFTT5EyGUcsBssCYFkWLCspKNA8+mjfyZP+a9fAMBiF9nrlDz8sv+ce/BSuVBpxOhX5+cM2m+PUKf+XX+J/VFBbK8/O7q6t7V2zBjGEzWhEXOrmzZqpU/tOnhzYtInU6Qw7dnAlEvvKldTVq2mVlakzZvScONG/fj1Gya2pEahUNxYtojs6NBs3Zs6dO3T+PBiGp1BIMjNdV68CkGZn06FQU0mJevVqiV7PYiyGkWRlYRSRRkP5/VGfL+J2t5WWAhA88oh+zRpRUtLNTz5x7tkDgJOenlpenv7EE53HjlEOBymT8aRSUioFy3a++qpm06akhx8GQSCOL5WyDMOTyQIDA/hvWHbw9GmwrOyeezAWS9PD337rr69PMJm0CxYMNjR0m834OfnHjilyczuPHetftw4xhM1oBJD2zjtcqRSAUKOJOJ1MJAKAFInAMHQ4DECel8fStLetDQDlcvWtXYuY3JoagUrVtGxZ1G7XbNyY+fTTvs5OAKRAwJPJQsPDAHhSKeX1NpWUAEj58585XC7imGiUCYdVEycSHA7ihMnJ0UAg6vOFHY62F14AoK2q0kyeHPX7B+rrhRoNKRKRQiEpEok1mmggQHC5JJ/P0nQ0GAz09jabTKrycq5cjtsIghQK+Uql8v773Xa7wmAYqK/nyeVMJEKHQnQoxFIUAMrpHLFYVCtXckgSo3gvXAidPg1AZTZrS0sHGxq6zWb8nNzDhxMLC28eOjRYUYEYwmY0AsitqVEUFETcbvwcnlw+fP78rcWLNRs2cGUyaV4eX6FwnD9PB4MAMubMaduzx1tXl7ZuXcK997Zt3UqPjOjXrQPLNpWUANDu3SvLzkZcxOXqqKhgQyFeRgbV1xdtbhbPmmUoLw+7XLe2bAlfuACaTnnrrdTHH+eJxRGPZ+jcOeX48UwkQofDdCiUWFg4ZLMFe3tpj4dl2Uh/f7ijI3z2LGJIrTbBZFJOmiROT3ddu0Y5nclTpw6eOSNMTZVotSxFeex2z6VLns8/Z0ZGAGQfOKDIz0ccHQ7f/Phjj9UKQGU2a0tLBxsaus1m/JzsAwfUDzzQvn//8LZtiCFsRiOA3JoavlLZsXMn7Xbj7kTjxmWVlrpv3Li1eLG+ujph3DiuQECQJOX3O69cCXZ3Z8yZ03nkCO3zKe67T2ow9B8/zkSjSdOng2GaSkoASObOBUFgFH9trXLZMqnROPjZZ6HTp3lFRQUWS9jlajGZAMiefz7r5Ze5YrGntVVuMHQeOhRqaaG6u6PXr8vLynKWL3ddv97+0ksAtFVVwpSUgRMnXB9+KJ4zR1pcrCgsFKemUn6/49w5T3294tFHUx57rOfo0aGtWxUvv6x48EF5Xh7B4QR6elyXLjl27EhYsgQEgVGiTifV10dwONLf/CbrueeGzp0bOnqUpWnEUE1NzOAg7qDbty950iT77t3ODz5ADGEzGgEYDh4UJCb2nzhBSiS4CyYcpj2erBdfdDc331q8WPb88wSHo5kzR6BS3dq/Hywrzs/Xzp+Pn+JubW2eOxeAvrpaZjAgLux0dmzapJg5M232bGdjY+drr/GKigoslrDL1WIyIUa3b19oYECUmSk3GOyVlYG6OsQIJk/Oq6iIuN32pUsVJpP2xReDAwNta9dGb9xI375dM2VKxO12Xbs2cupU4Pjx1M2bBWq1IDl5+MwZx44dAMSzZwt0OmlenjQ3N9TX17FwYfaBA3ylEv+FYUZ++CFp0iSCywUgTkkJ9PdjlIFTp4a2bsUdsnbv1kyZ0rJ9u3v/fsQQNqMRgHLFChCEQKPJnDMHBIGfQodC3XV1UbebpekRiwUxuTU1ApWqacmSaFubdP58fno6YlSTJsmys7u++IL2+xEzYrEAUK9cCYLAKMPbtgHIrakRpaa2v/deuLW1YMeOsMvVYjIhRvT449GenoxVq+QGg72yMlBXh7j8Y8f4CQm9X36ZNG2aMCmp89ChEYsFgOzZZ4V6fbi3lwkEaI9HoNNlLlhAU1TvF19Eh4ejDgcIQvXkk8lTp/YePx5sbWUiEd/hw2mVlSAIjBIZGRFrtQAIDkf1wAPOK1foUAhxvubmEYsFd8jYuVMzbVrzW2/5jhxBDGEzGhGX8Ic/aGbPFqrVg/X1Ua8XcaKMjKSJE70dHW1mM93VhVFya2oEKlXTsmVRu51rMBByOQAyISH9lVfkeXntVVWBxkbEUI2NAPTV1aRYjBiCIOhQ6NYbb9A9PUlr1mTOmzdw9qzz7383lJeHXa4Wkwmj6K1WucFgr6wM1NUhTrdvn3L8eN+tW1KdbuDMmZ6VKxGj27dPlpuLOA6PJ0hICDkcLMMgjiuR8MTi4PAwWNbX3t6xcGH6tm3gcDCK78oV9/79AFTl5doFCwYbGrrNZvyc1M2blcXF7Tt3Bk+eRAxhMxoxinLFivSnn6b8/r7PP3fv3w9AtXJl6lNPERxO51/+4v74Y4yVW1MjUKnaLRbZAw8IkpPlBQWI4QqFfIUiMDCAuLYtW4KnTumrqyVabXBgAABPKiVFoqayMrqnhzd+vP7NNwOdnZ7GRu3LL4ddrhaTCaPorVa5wWCvrAzU1SFOs3Gjdv58AIPffXdzyRJCKGQDAQDp27aBw8FtBMFPTFSOH++8fDnscCBOoFari4sHv/+e8noBsJFI75o12VZrYlFRxO0GQHA4PJnsptXq2LULgMps1paWDjY0dJvN+DmkVktqNJHz5xFH2IxGjJW8fn3qk08ykchQQwOHy02ePJmJRnu+/NKxfTvGkj33XMr8+fLs7GgwSPl8zh9+EKSkIEagVkuzskYaG1mWxW0MM/DZZ8GvvtJXVwtTUuyvvx69fl1fXS3OzGwqK6N7egAIp00L/eMf/Pvvz9+xI+xytZhMGEVvtcoNBntlZaCuDjGJy5cnP/64IifH19XVVlERbmhIWLpUmp/vqKsLfvstYpLWrs00mfzd3QNffRW8fDn8/fcAktauTS8pobzem7t3+48dQ1y21SrR6W7u3RtualI/+2zazJkdn3zi2LULgMps1paWDjY0dJvNAOQvvSTMyHB99VXkwgXcQTh9uqigwLl7N+IIm9GIsQiFQrVokWbmTElaGgBPR8fQ6dMje/eyXi/i+BMmZJrNMr2ew+MxFOXr7PTZ7Y6aGurqVdzG5xuqq+V5ec0VFYHaWoyir64WpqR0vPNO+MIF3bvvijMzm8rK6J4exPGKigoslrDL1WIyYRS91So3GOyVlYG6OvGsWeqnnkosKiIFAn9fnyQtrfPw4eF33lH/8Y8ZzzzTeejQiMUCQDRjRtK8ebLsbIIkCYKgI5HQwADl8yVNmBDxeHpra0csFoySbbVKdLq2LVsCx4+nbdmSNnNmxyefOHbtAqAym7WlpYMNDd1mM4CEpUv1Cxf2ff11/7p1GIsQCnMPHlTk5vacONG7ahViCJvRiBhufr7wvvtEOTkSvV6i0/FlsmgwyOFySYEg7HYHurr8N2+GOjpCN25ELl4EYPj0Uw6f77XbfZcuBW22hGefJUgScQnFxfKcnJ7aWjoYRAwdDDrff19fXS3PzaV8PgAcPp9lmKayMrqnByQpf/FFNhLhCARZv/992OVqMZkwit5qlRsMPceOibTahMJCYXKy7+bNwdOnQdNZCxYE+vs79+xRPvZY8pQprTt2eA8dQgzvvvuEhYVCvV6Uni4vKBBrNIjxdXUFurr87e3+H38M/O1viMm2WmUGw8i//gWAn5ioHDeuvbrasWsXAOWKFdoXXnCcP9+9cSPjciWvXp05b15nTc3Q5s0Yi9TpCvbulaSn95850/nqq4ghbEajxGRKfe45fmIiXy7ny+VRv9/f0+NtaXHV15NyecJDD0kNBnFqKsnnRwOBiMcT7OtrX7JEOGlS8Ouv8Z8IoqC2VpScjDiCwyG4XCYSQZzzypWbr7yir66WZGV5W1sRQ4fDvW+/zQwMAMi2WhPHjSM4HJZlRxobOxYuxCh6q1VuMHQfPap86CGhWu1sbBw6ejR89iwA7YcfqidODPb1ccViyudree01YVGRxmQixWJSKORJpTyZjCBJyuMJ9PV5m5s5fL5ErxdpNEKVKuxy+bu63JcvD2/dmm21JhQWRlwuxLA03Xf8+IjFAkBeVpazfHk0GKS8XpZleWIxweV2fPCBt6YGd1CVl4u0WkdtbfCbbxBD2IxGAMkbNiQWF4cdjlBvr7+pyV9Xx7jdiOPm5UmnTZPk5Ag0GlIs7v/iC+/BgxhLVV5OkCTujvb5nHv2JK9fT3A4A5s24Q5Jb7whNRgYigoPDztPngyfPYtR9NXVQo3m1p49pFTKBIP+v/4VcdyCgnSzWZ6fz1DUUH39YEUFAN2+faL09KjfH/V6I05nuL8/0NQUqK1FnHj2bNmECbL8fF9ra//69QC0H37IlUiGTp0KnDuHmKjdjriMnTslOh1BkgBYhvE2N/euXo1/D2EzGvG/QpKgafyf4xcXA4hcuoS7EEycyAQC1I8/IobMyGD9fsbpxP8DhM1oxK9+YYTNaMSvfmGEzWjEr35hhM1oxK9+Yf8BPDjNOqz8aSIAAAAASUVORK5CYII=",
+            "text": "受理討伐委託！",
             "roi": {
-              "x": 0.8234375,
-              "y": 0.5166666666666667,
-              "w": 0.0828125,
-              "h": 0.05925925925925926,
+              "x": 0.820625,
+              "y": 0.5111111111111111,
+              "w": 0.089375,
+              "h": 0.07,
               "roi_coord": "client"
             },
-            "threshold": 0.8,
-            "match_color": false,
-            "color_tolerance": 100,
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
             "on_fail": "stop",
             "after_delay_ms": 250
           }
@@ -3395,7 +3406,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《禁忌之物Vol.1》\n① 不是啊，要說是夢也太真實了。 → 力量+5、體力+5、韌性+5\n② 嗯，所以才會做那樣的夢吧。 → 耐力+5、潛力點數+5"
     },
     {
       "id": "rule_79bae8fc",
@@ -3430,7 +3441,7 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": ""
+      "notes": "【選項獎勵・ESPR.gg】\n《嚴酷的試煉》\n① 沒關係，現在我自己一個人也可以了。 → 體力+12、韌性+8、熟練加速、生命技巧\n② 嗯，謝謝妳。 → 體力+8、韌性+12、熟練加速、防禦技巧"
     },
     {
       "id": "rule_40edab8d",
@@ -3450,6 +3461,7 @@
             },
             "match_mode": "fuzzy",
             "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
             "after_delay_ms": 0
           }
         },
@@ -3464,7 +3476,77 @@
       ],
       "background": false,
       "quiet": false,
-      "notes": "【选项2】﻿﻿+12 力量 +8 体力 +15 耐力﻿\n﻿『虚空之召（莉迪亚专用）』潜力"
+      "notes": "【选项2】+12 力量 +8 体力 +15 耐力\n『虚空之召（莉迪亚专用）』潜力\n【選項獎勵・ESPR.gg】\n《這也算衣服嗎？》\n① 這樣就夠了，到此為止吧。 → 力量+12、體力+8、潛力點數+20、虛空之召\n② 答應了就是答應了…再堅持一下吧。 → 力量+12、體力+8、耐力+15、虛空之召"
+    },
+    {
+      "id": "rule_d338b2b8",
+      "name": "觀賞舞台劇2",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "觀賞舞台劇2",
+            "roi": {
+              "x": 0.109375,
+              "y": 0.18444444444444444,
+              "w": 0.1075,
+              "h": 0.0811111111111111,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "1",
+            "hold_ms": 0,
+            "after_delay_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "quiet": false,
+      "notes": "【選項獎勵・ESPR.gg】\n《褪色之夢》\n① 至少要那種程度才看起來夠強吧？ → 體力+12、狀態+1、片刻的幸福8回合（回憶起與珍視之人共度的平凡日常，心中泛起一絲小小的幸福。力量訓練經驗值獲得量增加。）\n② 看起來的確有點誇張。 → 力量+10、耐力+10、片刻的幸福8回合（回憶起與珍視之人共度的平凡日常，心中泛起一絲小小的幸福。力量訓練經驗值獲得量增加。）"
+    },
+    {
+      "id": "rule_1ef305be",
+      "name": "下一步",
+      "enabled": true,
+      "steps": [
+        {
+          "type": "detect",
+          "params": {
+            "text": "下一步",
+            "roi": {
+              "x": 0.11125,
+              "y": 0.18777777777777777,
+              "w": 0.069375,
+              "h": 0.07555555555555556,
+              "roi_coord": "client"
+            },
+            "match_mode": "fuzzy",
+            "fuzzy_threshold": 0.8,
+            "on_fail": "stop",
+            "after_delay_ms": 0
+          }
+        },
+        {
+          "type": "key",
+          "params": {
+            "key": "2",
+            "hold_ms": 0,
+            "after_delay_ms": 0
+          }
+        }
+      ],
+      "background": false,
+      "quiet": false,
+      "notes": "選項1:攻擊技巧\n選項2:洞察技巧\n【選項獎勵・ESPR.gg】\n《褪色之夢》\n① 下次再來試試其他餐點吧。 → 力量+10、體力+8、攻擊技巧\n② 吃完之後，我們要不要去吃甜點？ → 力量+8、體力+10、洞察技巧"
     }
   ],
   "groups": [
@@ -3542,7 +3624,9 @@
         "rule_74a72fd7",
         "rule_56856c03",
         "rule_79bae8fc",
-        "rule_40edab8d"
+        "rule_40edab8d",
+        "rule_d338b2b8",
+        "rule_1ef305be"
       ],
       "order": "parallel"
     },
@@ -3616,8 +3700,10 @@
   ],
   "_collapsed_groups": [
     "group_ab1510a9",
+    "group_b96d8712",
+    "group_65292e04",
     "group_aaf9e64a",
-    "group_65292e04"
+    "group_c12c5d3c"
   ],
   "window_title": "StarSavior",
   "capture_size": [
