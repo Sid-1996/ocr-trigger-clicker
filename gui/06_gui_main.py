@@ -237,6 +237,22 @@ def _num_to_finite_float(raw, default):
     return float(raw) if _num_is_finite(raw) else default
 
 
+def _notes_height(doc_h) -> int:
+    """備註框高度：短備註維持 60px，隨內容長高但最多 240px（約 10 行）。"""
+    return max(60, min(240, int(doc_h) + 10))
+
+
+def _notes_doc_height(doc) -> float:
+    """備註內容的實際像素高（含長句折行），不用文件回傳的行數。"""
+    layout = doc.documentLayout()
+    height = 0.0
+    block = doc.begin()
+    while block.isValid():
+        height += layout.blockBoundingRect(block).height()
+        block = block.next()
+    return height
+
+
 class _RawValue:
     """數值欄位的「原始值保全」：使用者沒改過就寫回原始值。
 
@@ -6403,13 +6419,15 @@ class MainWindow(QMainWindow):
         name_row.addWidget(self._edit_quiet)
         edit_layout.addLayout(name_row)
 
-        notes_row = QHBoxLayout()
+        notes_row = QVBoxLayout()
         notes_row.addWidget(QLabel(T("main.notes")))
         self._edit_notes = QPlainTextEdit()
         self._edit_notes.setPlaceholderText(T("format.notes"))
-        self._edit_notes.setMaximumHeight(60)
+        self._edit_notes.setMinimumHeight(60)
+        self._edit_notes.textChanged.connect(self._auto_size_notes)
         notes_row.addWidget(self._edit_notes, 1)
         edit_layout.addLayout(notes_row)
+        self._auto_size_notes()
 
         edit_layout.addWidget(QLabel(T("main.step_list")))
 
@@ -8070,6 +8088,7 @@ class MainWindow(QMainWindow):
         self._edit_notes.blockSignals(True)
         self._edit_notes.setPlainText(getattr(rule, "notes", ""))
         self._edit_notes.blockSignals(False)
+        self._auto_size_notes()
         self._step_list.setVisible(True)
         self._step_list.set_rule_id(rule.id)
         self._step_list.set_steps(rule.steps)
@@ -8129,6 +8148,10 @@ class MainWindow(QMainWindow):
         if self._loop:
             self._loop.reload_rules()
         self._refresh_rule_list()
+
+    def _auto_size_notes(self):
+        doc_h = _notes_doc_height(self._edit_notes.document()) + 12
+        self._edit_notes.setFixedHeight(_notes_height(doc_h))
 
     def _on_notes_changed(self):
         rule = self._get_current_rule()
